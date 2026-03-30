@@ -810,6 +810,147 @@ async fn http_upload_binary(url: String, data: Vec<u8>, timeout_ms: Option<u64>)
     resp.text().await.map_err(|e| format!("Failed to read response: {e}"))
 }
 
+// ── Firmware Update Check (GitHub API) ──────────────────────────────
+
+#[derive(serde::Serialize)]
+struct FirmwareUpdateInfo {
+    available: bool,
+    latest_version: String,
+    current_version: String,
+    download_url: String,
+    file_size: u64,
+    release_notes: String,
+}
+
+#[tauri::command]
+async fn check_firmware_update(repo: String, current_version: String) -> Result<FirmwareUpdateInfo, String> {
+    let url = format!("https://api.github.com/repos/{}/releases/latest", repo);
+    let client = http_client()?;
+
+    let resp = client
+        .get(&url)
+        .header("User-Agent", "RDM7-Desktop")
+        .header("Accept", "application/vnd.github.v3+json")
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| format!("GitHub API request failed: {e}"))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("GitHub API returned {}", resp.status().as_u16()));
+    }
+
+    let body: serde_json::Value = resp.json().await
+        .map_err(|e| format!("Failed to parse GitHub response: {e}"))?;
+
+    let tag = body["tag_name"].as_str().unwrap_or("").trim_start_matches('v');
+    let notes = body["body"].as_str().unwrap_or("");
+
+    // Find the .bin asset
+    let mut download_url = String::new();
+    let mut file_size: u64 = 0;
+    if let Some(assets) = body["assets"].as_array() {
+        for asset in assets {
+            let name = asset["name"].as_str().unwrap_or("");
+            if name.ends_with(".bin") {
+                download_url = asset["browser_download_url"].as_str().unwrap_or("").to_string();
+                file_size = asset["size"].as_u64().unwrap_or(0);
+                break;
+            }
+        }
+    }
+
+    // Compare versions using semver
+    let latest = semver::Version::parse(tag).unwrap_or(semver::Version::new(0, 0, 0));
+    let current_clean = current_version.trim_start_matches('v')
+        .split('-').next().unwrap_or("0.0.0");
+    let current = semver::Version::parse(current_clean).unwrap_or(semver::Version::new(0, 0, 0));
+
+    Ok(FirmwareUpdateInfo {
+        available: latest > current && !download_url.is_empty(),
+        latest_version: tag.to_string(),
+        current_version: current_version,
+        download_url,
+        file_size,
+        release_notes: notes.to_string(),
+    })
+}
+
+#[tauri::command]
+async fn download_firmware_binary(url: String) -> Result<Vec<u8>, String> {
+    let client = http_client()?;
+
+    let resp = client
+        .get(&url)
+        .header("User-Agent", "RDM7-Desktop")
+        .timeout(Duration::from_secs(120))
+        .send()
+        .await
+        .map_err(|e| format!("Firmware download failed: {e}"))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Download failed: HTTP {}", resp.status().as_u16()));
+    }
+
+    resp.bytes().await
+        .map(|b| b.to_vec())
+        .map_err(|e| format!("Failed to read firmware: {e}"))
+}
+
+#[tauri::command]
+async fn check_desktop_update(repo: String, current_version: String) -> Result<FirmwareUpdateInfo, String> {
+    // Reuse same GitHub API check for desktop releases
+    let url = format!("https://api.github.com/repos/{}/releases/latest", repo);
+    let client = http_client()?;
+
+    let resp = client
+        .get(&url)
+        .header("User-Agent", "RDM7-Desktop")
+        .header("Accept", "application/vnd.github.v3+json")
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| format!("GitHub API request failed: {e}"))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("GitHub API returned {}", resp.status().as_u16()));
+    }
+
+    let body: serde_json::Value = resp.json().await
+        .map_err(|e| format!("Failed to parse GitHub response: {e}"))?;
+
+    let tag = body["tag_name"].as_str().unwrap_or("").trim_start_matches('v');
+    let notes = body["body"].as_str().unwrap_or("");
+
+    // Find installer asset (.msi or .exe)
+    let mut download_url = String::new();
+    let mut file_size: u64 = 0;
+    if let Some(assets) = body["assets"].as_array() {
+        for asset in assets {
+            let name = asset["name"].as_str().unwrap_or("");
+            if name.ends_with(".msi") || name.ends_with(".exe") {
+                download_url = asset["browser_download_url"].as_str().unwrap_or("").to_string();
+                file_size = asset["size"].as_u64().unwrap_or(0);
+                break;
+            }
+        }
+    }
+
+    let latest = semver::Version::parse(tag).unwrap_or(semver::Version::new(0, 0, 0));
+    let current_clean = current_version.trim_start_matches('v')
+        .split('-').next().unwrap_or("0.0.0");
+    let current = semver::Version::parse(current_clean).unwrap_or(semver::Version::new(0, 0, 0));
+
+    Ok(FirmwareUpdateInfo {
+        available: latest > current && !download_url.is_empty(),
+        latest_version: tag.to_string(),
+        current_version,
+        download_url,
+        file_size,
+        release_notes: notes.to_string(),
+    })
+}
+
 // ── App Entry Point ─────────────────────────────────────────────────
 
 pub fn run() {
@@ -817,6 +958,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             discover_devices,
             read_binary_file,
@@ -833,6 +975,9 @@ pub fn run() {
             http_fetch,
             http_fetch_binary,
             http_upload_binary,
+            check_firmware_update,
+            download_firmware_binary,
+            check_desktop_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

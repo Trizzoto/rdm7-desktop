@@ -1976,11 +1976,13 @@
 
 <body>
     <!-- Boot splash removed — app boots straight to editor -->
-    <div id="draftToast">
-        <span>⚠️ Unsaved draft detected!</span>
-        <button onclick="restoreDraft()">Restore Draft</button>
-        <button onclick="discardDraft()"
-            style="background:transparent; border:1px solid #1a1a1a; color:#1a1a1a;">Discard</button>
+    <!-- Draft toast removed -->
+    <!-- Update banner -->
+    <div id="updateBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:10000;background:linear-gradient(135deg,#1a3a2a,#1a2a3a);border-bottom:1px solid #2e5e3e;padding:10px 20px;display:none;align-items:center;gap:12px;font-size:12px;color:#ccc;">
+        <span id="updateIcon" style="font-size:16px;"></span>
+        <span id="updateMessage" style="flex:1;"></span>
+        <button id="updateInstallBtn" onclick="_installUpdate()" style="background:#4ade80;border:none;border-radius:6px;padding:5px 14px;color:#111;font-size:11px;font-weight:600;cursor:pointer;">Install</button>
+        <button onclick="_skipUpdate()" style="background:transparent;border:1px solid #555;border-radius:6px;padding:5px 14px;color:#aaa;font-size:11px;cursor:pointer;">Skip</button>
     </div>
     <div id="toastContainer" class="toast-container"></div>
     <div id="dlProgress" class="dl-progress-overlay">
@@ -2734,6 +2736,8 @@
                 await loadLayout(activeName);
 
                 _startHealthCheck();
+                /* Check for firmware updates after successful connection */
+                setTimeout(_checkFirmwareUpdate, 2000);
             } catch (e) {
                 _connectionOk = false;
                 label.style.color = '#f44';
@@ -6119,6 +6123,15 @@
                     }
                 });
             }
+            /* Remove signals not bound to any widget */
+            if (payload.signals && payload.widgets) {
+                const used = new Set();
+                payload.widgets.forEach(w => {
+                    if (w.signal) used.add(w.signal);
+                    if (w.config && w.config.signal_name) used.add(w.config.signal_name);
+                });
+                payload.signals = payload.signals.filter(s => used.has(s.name));
+            }
             return payload;
         }
 
@@ -7786,42 +7799,10 @@
             if (document.getElementById('livePreviewToggle').checked) triggerPreview();
         }
 
-        /* Draft Recovery Engine */
-        function checkDraft() {
-            try {
-                const draftStr = localStorage.getItem('rdm7_draft');
-                if (draftStr) {
-                    const draftObj = JSON.parse(draftStr);
-                    if (JSON.stringify(currentLayout) !== JSON.stringify(draftObj)) {
-                        document.getElementById('draftToast').style.display = 'flex';
-                    }
-                }
-            } catch (e) { }
-        }
-
-        function restoreDraft() {
-            try {
-                const draftStr = localStorage.getItem('rdm7_draft');
-                if (draftStr) {
-                    currentLayout = JSON.parse(draftStr);
-                    if (!currentLayout.signals) currentLayout.signals = [];
-                    history = [draftStr];
-                    historyIndex = 0;
-                    renderEditor();
-                    renderSignals();
-                    updateInspector();
-                    populateEcuContextSelect();
-                    document.getElementById('draftToast').style.display = 'none';
-                    updateStatus('Draft Restored');
-                    if (document.getElementById('livePreviewToggle').checked) triggerPreview();
-                }
-            } catch (e) { }
-        }
-
-        function discardDraft() {
-            try { localStorage.removeItem('rdm7_draft'); } catch (e) { }
-            document.getElementById('draftToast').style.display = 'none';
-        }
+        /* Draft system removed */
+        function checkDraft() { }
+        function restoreDraft() { }
+        function discardDraft() { }
 
         /* ── Signal Manager ───────────────────────────────────────────── */
 
@@ -8394,6 +8375,21 @@
         }
 
         async function saveActiveLayout() {
+            /* Prune unused signals from in-memory layout before saving */
+            if (currentLayout.signals && currentLayout.widgets) {
+                const used = new Set();
+                currentLayout.widgets.forEach(w => {
+                    if (w.signal) used.add(w.signal);
+                    if (w.config && w.config.signal_name) used.add(w.config.signal_name);
+                });
+                const before = currentLayout.signals.length;
+                currentLayout.signals = currentLayout.signals.filter(s => used.has(s.name));
+                const removed = before - currentLayout.signals.length;
+                if (removed > 0) {
+                    showToast(`Removed ${removed} unused signal${removed > 1 ? 's' : ''}`, 'success');
+                    renderSignals();
+                }
+            }
             const payload = buildFirmwarePayload();
             const isSplash = currentScreenMode === 'splash';
             const layoutName = currentLayout.name || 'default';
@@ -10138,6 +10134,127 @@
                 if (!existing) RDM.setImageData('RDM', _RDM_LOGO_RDMIMG_B64);
             }).catch(() => {});
         }
+
+        /* ── Auto-Update System ──────────────────────────────────────── */
+        const _UPDATE_DESKTOP_REPO = 'Trizzoto/rdm7-desktop';
+        const _UPDATE_FIRMWARE_REPO = 'Trizzoto/potato-jubilee';
+        const _DESKTOP_VERSION = '0.1.0';
+        let _pendingUpdate = null; /* { type, info } */
+
+        async function _checkDesktopUpdate() {
+            if (!RDM.isTauri()) return;
+            try {
+                const info = await _tauriCall('check_desktop_update', {
+                    repo: _UPDATE_DESKTOP_REPO,
+                    currentVersion: _DESKTOP_VERSION
+                });
+                if (info && info.available) {
+                    _showUpdateBanner('desktop', info);
+                }
+            } catch (e) { console.log('Desktop update check skipped:', e); }
+        }
+
+        async function _checkFirmwareUpdate() {
+            if (!RDM.isTauri()) return;
+            try {
+                /* Get current device firmware version */
+                const deviceInfo = await _tauriCall('serial_request', {
+                    method: 'device.info', params: {}
+                });
+                const deviceVersion = (deviceInfo && deviceInfo.result)
+                    ? (deviceInfo.result.app_version || deviceInfo.result.version || '0.0.0')
+                    : '0.0.0';
+
+                const info = await _tauriCall('check_firmware_update', {
+                    repo: _UPDATE_FIRMWARE_REPO,
+                    currentVersion: deviceVersion
+                });
+                if (info && info.available) {
+                    _showUpdateBanner('firmware', info);
+                }
+            } catch (e) { console.log('Firmware update check skipped:', e); }
+        }
+
+        function _showUpdateBanner(type, info) {
+            const skipped = localStorage.getItem('rdm7_skip_update_' + type);
+            if (skipped === info.latest_version) return; /* already skipped this version */
+
+            _pendingUpdate = { type, info };
+            const banner = document.getElementById('updateBanner');
+            const icon = document.getElementById('updateIcon');
+            const msg = document.getElementById('updateMessage');
+
+            if (type === 'desktop') {
+                icon.textContent = '\u{1F504}';
+                msg.innerHTML = `Desktop update available: <strong>v${info.latest_version}</strong> (current: v${info.current_version})`;
+            } else {
+                icon.textContent = '\u{1F527}';
+                const sizeMB = (info.file_size / 1048576).toFixed(1);
+                msg.innerHTML = `Firmware update: <strong>v${info.latest_version}</strong> (current: v${info.current_version}) \u2014 ${sizeMB} MB`;
+            }
+            banner.style.display = 'flex';
+        }
+
+        async function _installUpdate() {
+            if (!_pendingUpdate) return;
+            const { type, info } = _pendingUpdate;
+            const banner = document.getElementById('updateBanner');
+
+            if (type === 'desktop') {
+                /* Desktop: open download URL in browser for manual install */
+                try {
+                    await _tauriCall('plugin:shell|open', { path: info.download_url });
+                } catch (e) {
+                    window.open(info.download_url, '_blank');
+                }
+                banner.style.display = 'none';
+                _pendingUpdate = null;
+            } else {
+                /* Firmware: download .bin then flash via serial */
+                try {
+                    banner.querySelector('#updateMessage').innerHTML = 'Downloading firmware...';
+                    banner.querySelector('#updateInstallBtn').disabled = true;
+
+                    const binData = await _tauriCall('download_firmware_binary', {
+                        url: info.download_url
+                    });
+
+                    banner.querySelector('#updateMessage').innerHTML = 'Flashing firmware...';
+
+                    /* Use existing chunked upload for OTA */
+                    await _tauriCall('serial_upload_chunked', {
+                        uploadType: 'ota',
+                        name: 'firmware',
+                        data: Array.from(new Uint8Array(binData))
+                    });
+
+                    banner.style.display = 'none';
+                    _pendingUpdate = null;
+                    showToast('Firmware updated! Device is rebooting...', 'success');
+                } catch (e) {
+                    banner.querySelector('#updateMessage').innerHTML = 'Update failed: ' + (e.message || e);
+                    banner.querySelector('#updateInstallBtn').disabled = false;
+                    showToast('Firmware update failed: ' + (e.message || e), 'error');
+                }
+            }
+        }
+
+        function _skipUpdate() {
+            if (_pendingUpdate) {
+                localStorage.setItem('rdm7_skip_update_' + _pendingUpdate.type, _pendingUpdate.info.latest_version);
+            }
+            document.getElementById('updateBanner').style.display = 'none';
+            _pendingUpdate = null;
+        }
+
+        function _tauriCall(cmd, args) {
+            const t = window.__TAURI_INTERNALS__ || (window.__TAURI__ && window.__TAURI__.core);
+            if (!t || !t.invoke) return Promise.reject('Not a Tauri app');
+            return t.invoke(cmd, args || {});
+        }
+
+        /* Check for desktop update on launch (delayed to not block UI) */
+        setTimeout(_checkDesktopUpdate, 3000);
 
         /* Start */
         initScreenSizeSelector();
