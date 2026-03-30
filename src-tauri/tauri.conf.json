@@ -1,0 +1,27 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegui/tauri-v2-schema/main/tauri.conf.json",
+  "productName": "RDM-7 Visual Designer",
+  "version": "0.1.0",
+  "identifier": "com.rdm7.designer",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "RDM-7 Visual Designer",
+        "width": 1400,
+        "height": 900,
+        "maximized": true,
+        "resizable": true,
+        "minWidth": 1024,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data: blob: http://* https://*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' http://* https://* ws://* wss://*; img-src 'self' data: blob: http://* https://*",
+      "dangerousDisableAssetCspModification": true
+    }
+  },
+  "plugins": {}
+}

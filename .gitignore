@@ -1,0 +1,14 @@
+# Rust / Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/
+
+# Node modules (if any)
+node_modules/
+
+# WASM build artifacts (copied from rdm7-wasm-editor)
+src/build/index.js
+src/build/index.wasm
+
+# OS files
+.DS_Store
+Thumbs.db
