@@ -2266,6 +2266,8 @@
                     <div class="layout-menu-item" onclick="openSignalDashboard(); closeLayoutMenu()">Signal Dashboard...</div>
                     <div class="layout-menu-item" onclick="openDataLogger(); closeLayoutMenu()">Data Logger...</div>
                     <div class="layout-menu-item" onclick="openFuelCalibration(); closeLayoutMenu()">Fuel Calibration...</div>
+                    <div style="border-top:1px solid var(--border);margin:4px 0;"></div>
+                    <div class="layout-menu-item" onclick="openMarketplace(); closeLayoutMenu()">Marketplace...</div>
                     <div class="layout-menu-sep"></div>
                     <div class="layout-menu-item" onclick="deleteCurrentLayout(); closeLayoutMenu()" style="color:hsl(0,70%,60%)">Delete Layout</div>
                 </div>
@@ -2307,6 +2309,8 @@
             <div class="header-divider"></div>
             <button class="btn" id="saveBtn" onclick="saveActiveLayout()" style="white-space:nowrap;">Save</button>
             <button class="btn btn-secondary" id="saveAsBtn" onclick="saveAsNewLayout()" style="white-space:nowrap;">Save As</button>
+            <div class="header-divider"></div>
+            <button class="btn btn-secondary" onclick="screenshotCanvas()" style="white-space:nowrap;" title="Save canvas as PNG">&#128247; Screenshot</button>
         </div>
         <!-- Hidden elements for JS compatibility -->
         <select id="ecuContextSelect" style="display:none;" onchange="onEcuContextChange(this.value)"><option value="">Custom</option></select>
@@ -8867,6 +8871,23 @@
             } catch(e) {}
         }
 
+        function screenshotCanvas() {
+            const canvas = document.getElementById('canvas');
+            if (!canvas) { showToast('Canvas not found', 'error'); return; }
+            canvas.toBlob(function(blob) {
+                if (!blob) { showToast('Screenshot failed', 'error'); return; }
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'rdm7-screenshot.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('Screenshot saved!');
+            }, 'image/png');
+        }
+
         function showToast(msg, type = 'success') {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
@@ -10743,6 +10764,12 @@
         /* ── Fuel Calibration ───────────────────────────────────────── */
 
         let _fcTimer = null;
+
+        function openMarketplace() {
+            const url = 'https://marketplace.realtimedatamonitoring.com.au';
+            try { window.__TAURI_INTERNALS__?.invoke('plugin:shell|open', { path: url }); }
+            catch (e) { window.open(url, '_blank'); }
+        }
 
         async function openFuelCalibration() {
             document.getElementById('fuelCalModal').style.display = 'flex';
