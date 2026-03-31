@@ -2255,8 +2255,9 @@
                     <div class="layout-menu-item" onclick="layoutEditorNew(); closeLayoutMenu()">New Layout...</div>
                     <div class="layout-menu-item" onclick="renameCurrentLayout(); closeLayoutMenu()">Rename...</div>
                     <div class="layout-menu-sep"></div>
-                    <div class="layout-menu-item" onclick="importRdm(); closeLayoutMenu()">Import .rdm</div>
-                    <div class="layout-menu-item" onclick="exportRdm(); closeLayoutMenu()">Export .rdm</div>
+                    <div class="layout-menu-item" onclick="importRdm(); closeLayoutMenu()">Import Layout</div>
+                    <div class="layout-menu-item" onclick="exportRdm(); closeLayoutMenu()">Export Layout</div>
+                    <div class="layout-menu-item" onclick="screenshotCanvas(); closeLayoutMenu()">Screenshot</div>
                     <div class="layout-menu-sep"></div>
                     <div class="layout-menu-item" id="importToDeviceItem" onclick="importLocalToDevice(); closeLayoutMenu()" style="display:none;">Import Local to Device...</div>
                     <div class="layout-menu-item" id="otaUpdateItem" onclick="otaFirmwareUpdate(); closeLayoutMenu()" style="display:none;">Update Firmware (OTA)...</div>
@@ -2309,8 +2310,6 @@
             <div class="header-divider"></div>
             <button class="btn" id="saveBtn" onclick="saveActiveLayout()" style="white-space:nowrap;">Save</button>
             <button class="btn btn-secondary" id="saveAsBtn" onclick="saveAsNewLayout()" style="white-space:nowrap;">Save As</button>
-            <div class="header-divider"></div>
-            <button class="btn btn-secondary" onclick="screenshotCanvas()" style="white-space:nowrap;" title="Save canvas as PNG">&#128247; Screenshot</button>
         </div>
         <!-- Hidden elements for JS compatibility -->
         <select id="ecuContextSelect" style="display:none;" onchange="onEcuContextChange(this.value)"><option value="">Custom</option></select>
