@@ -56,6 +56,15 @@
         ]
     };
 
+    /* ── Default splash (first-boot fallback — centred RDM logo) ──── */
+    const _DEFAULT_SPLASH = {
+        schema_version: 11, name: "_splash_Default", screen_w: 800, screen_h: 480,
+        widgets: [
+            { type:"image", id:"image_splash_0", x:0, y:0, w:120, h:62, config:{ image_name:"RDM", image_scale:256, opacity:255 }}
+        ],
+        signals: []
+    };
+
     /* ── Helpers ──────────────────────────────────────────────────── */
 
     function _isTauri() {
@@ -179,7 +188,9 @@
 
         async loadSplash(name) {
             const raw = localStorage.getItem('rdm7_layout__splash_' + name);
-            return raw ? JSON.parse(raw) : null;
+            if (raw) return JSON.parse(raw);
+            if (!name || name === 'Default') return JSON.parse(JSON.stringify(_DEFAULT_SPLASH));
+            return null;
         },
 
         async saveSplash(name, data) {
@@ -412,6 +423,16 @@
             async loadLayout(name) {
                 /* Use /api/layout/raw to read without changing the active layout on device */
                 return await api('/api/layout/raw?name=' + encodeURIComponent(name || 'default'));
+            },
+
+            async setActiveLayout(name) {
+                /* POST /api/layout/set with {name} — firmware calls layout_manager_set_active()
+                 * then lv_async_calls the screen reload so the dashboard swaps to the new layout. */
+                await api('/api/layout/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name }),
+                });
             },
 
             async saveLayout(name, data) {
@@ -693,10 +714,8 @@
                 try { return await apiBlob('/api/log/download?name=' + encodeURIComponent(name)); } catch (e) { return null; }
             },
             async deleteLog(name) {
-                await api('/api/log/delete', {
+                await api('/api/log/delete?name=' + encodeURIComponent(name), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name }),
                 });
             },
 
@@ -780,19 +799,19 @@
                 return r.files || r;
             },
 
-            async copySdFile(src, dst) {
+            async copySdFile(type, name, direction) {
                 await api('/api/sd/copy', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ source: src, dest: dst }),
+                    body: JSON.stringify({ type, name, direction }),
                 });
             },
 
-            async deleteSdFile(path) {
+            async deleteSdFile(type, name) {
                 await api('/api/sd/delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path }),
+                    body: JSON.stringify({ type, name }),
                 });
             },
 
@@ -1042,7 +1061,12 @@
             async listLogs() {
                 try { return await rpc('log.list') || []; } catch (e) { return []; }
             },
-            async downloadLog() { return null; /* WiFi recommended for log download */ },
+            async downloadLog(name) {
+                try {
+                    const bytes = await _tauriInvoke('serial_download_log', { name });
+                    return new Blob([new Uint8Array(bytes)]);
+                } catch (e) { return null; }
+            },
             async deleteLog(name) { await rpc('log.delete', { name }); },
 
             /* ── Fuel Calibration ─────────────────────────────── */
@@ -1065,7 +1089,8 @@
             },
 
             async previewOnDevice(data) {
-                /* Preview not supported over serial (too large) */
+                /* Live preview — apply layout JSON on device without saving. */
+                await rpc('layout.preview', { data });
             },
 
             async testConnection() {
@@ -1088,10 +1113,18 @@
             async getOtaStatus() { return null; },
 
             /* ── SD Card ───────────────────────────────────────── */
-            async getSdStatus() { return null; },
-            async listSdFiles() { return []; },
-            async copySdFile() { },
-            async deleteSdFile() { },
+            async getSdStatus() {
+                try { return await rpc('sd.status'); } catch (e) { return null; }
+            },
+            async listSdFiles() {
+                try { return await rpc('sd.files') || []; } catch (e) { return []; }
+            },
+            async copySdFile(type, name, direction) {
+                await rpc('sd.copy', { type, name, direction });
+            },
+            async deleteSdFile(type, name) {
+                await rpc('sd.delete', { type, name });
+            },
 
             /* ── Bundle ────────────────────────────────────────── */
             async exportRdmBundle(layout) { return layout; },
@@ -1306,8 +1339,8 @@
 
         async getSdStatus() { return this._transport.getSdStatus(); },
         async listSdFiles() { return this._transport.listSdFiles(); },
-        async copySdFile(s, d) { return this._transport.copySdFile(s, d); },
-        async deleteSdFile(p) { return this._transport.deleteSdFile(p); },
+        async copySdFile(type, name, direction) { return this._transport.copySdFile(type, name, direction); },
+        async deleteSdFile(type, name) { return this._transport.deleteSdFile(type, name); },
 
         async exportRdmBundle(l) { return this._transport.exportRdmBundle(l); },
         async importRdmBundle(d) { return this._transport.importRdmBundle(d); },

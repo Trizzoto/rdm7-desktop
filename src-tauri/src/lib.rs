@@ -714,6 +714,80 @@ async fn serial_download_base64(
     result
 }
 
+// ── Log Download (chunked binary over serial) ──────────────────────────
+
+#[tauri::command]
+async fn serial_download_log(
+    app: tauri::AppHandle,
+    name: String,
+) -> Result<Vec<u8>, String> {
+    let mut conn = SERIAL.lock().map_err(|e| format!("Lock error: {e}"))?;
+    let mut port = conn.port.take().ok_or("Not connected")?;
+
+    let result = (|| -> Result<Vec<u8>, String> {
+        /* Step 1: log.download.start — get metadata */
+        conn.request_id += 1;
+        let resp = serial_rpc_locked(
+            &mut port, conn.request_id, "log.download.start",
+            serde_json::json!({"name": name}),
+            Duration::from_secs(5),
+        )?;
+
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(format!("Device error: {err}"));
+        }
+        let result_obj = resp.get("result").ok_or("Missing result")?;
+        let size = result_obj.get("size").and_then(|v| v.as_u64())
+            .ok_or("Missing size")? as usize;
+        let chunks = result_obj.get("chunks").and_then(|v| v.as_u64())
+            .ok_or("Missing chunks")? as usize;
+
+        /* Step 2: download chunks — binary frames */
+        let mut data = Vec::with_capacity(size);
+
+        for i in 0..chunks {
+            conn.request_id += 1;
+            let request = serde_json::json!({
+                "id": conn.request_id,
+                "method": "log.download.chunk",
+                "params": {"name": name, "index": i},
+            });
+            let json_str = serde_json::to_string(&request)
+                .map_err(|e| format!("JSON error: {e}"))?;
+            let frame = build_json_frame(&json_str);
+            port.write_all(&frame).map_err(|e| format!("Write error: {e}"))?;
+            port.flush().map_err(|e| format!("Flush error: {e}"))?;
+
+            let payload = read_frame(&mut port, Duration::from_secs(10))
+                .map_err(|e| format!("Log chunk {i}/{chunks}: {e}"))?;
+
+            if payload.is_empty() {
+                return Err(format!("Log chunk {i}: empty response"));
+            }
+
+            if payload[0] == PAYLOAD_BINARY {
+                data.extend_from_slice(&payload[1..]);
+            } else if payload[0] == PAYLOAD_JSON {
+                let s = std::str::from_utf8(&payload[1..]).unwrap_or("?");
+                let r: serde_json::Value = serde_json::from_str(s).unwrap_or_default();
+                let msg = r.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+                return Err(format!("Log chunk {i}: {msg}"));
+            } else {
+                return Err(format!("Log chunk {i}: unexpected type 0x{:02X}", payload[0]));
+            }
+
+            let _ = app.emit("download-progress", serde_json::json!({
+                "chunk": i + 1, "total": chunks, "name": name,
+            }));
+        }
+
+        Ok(data)
+    })();
+
+    conn.port = Some(port);
+    result
+}
+
 // ── HTTP Proxy (bypasses WebView CORS) ──────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -972,6 +1046,7 @@ pub fn run() {
             serial_request,
             serial_upload_chunked,
             serial_download_base64,
+            serial_download_log,
             http_fetch,
             http_fetch_binary,
             http_upload_binary,

@@ -277,6 +277,11 @@
             border-radius: 50%;
         }
 
+        .display-bezel.bezel-on.bezel-round {
+            border-radius: 50%;
+            padding: 50px;
+        }
+
         #screenshotCanvas {
             width: 100%;
             height: 100%;
@@ -3082,11 +3087,10 @@
 
         /* Screen presets */
         const SCREEN_PRESETS = [
-            { id: '800x480_rect',  w: 800, h: 480, shape: 'rect',  label: '800×480 Rectangle' },
-            { id: '480x480_rect',  w: 480, h: 480, shape: 'rect',  label: '480×480 Square' },
-            { id: '480x480_round', w: 480, h: 480, shape: 'round', label: '480×480 Round' },
-            { id: '720x720_rect',  w: 720, h: 720, shape: 'rect',  label: '720×720 Square' },
-            { id: '720x720_round', w: 720, h: 720, shape: 'round', label: '720×720 Round' },
+            { id: '800x480_rect',  w: 800, h: 480, shape: 'rect',  label: 'RDM-7 inch' },
+            { id: '720x720_round', w: 720, h: 720, shape: 'round', label: '4 inch Round' },
+            { id: '800x800_round', w: 800, h: 800, shape: 'round', label: '3.4 inch Round' },
+            { id: '480x480_round', w: 480, h: 480, shape: 'round', label: '2.8 inch Round' },
         ];
         let _screenShape = 'rect';
         let _deviceScreenId = null;
@@ -4603,9 +4607,10 @@
                     { name: "major_tick_width", label: "Major Tick Width", type: "stepper", min: 1, max: 20, def: 4, cat: "appearance" },
                     { name: "major_tick_length", label: "Major Tick Length", type: "stepper", min: 1, max: 50, def: 15, cat: "appearance" },
                     { name: "major_tick_color", label: "Major Tick Color", type: "color", def: 0xFFFFFF, cat: "appearance" },
-                    { name: "label_gap", label: "Label Gap", type: "stepper", min: -20, max: 50, def: 10, cat: "appearance" },
-                    { name: "tick_label_font", label: "Tick Label Font", type: "font", def: "", cat: "appearance" },
-                    { name: "tick_label_color", label: "Tick Label Color", type: "color", def: 0xFFFFFF, cat: "appearance" },
+                    { name: "show_tick_labels", label: "Show Tick Labels", type: "checkbox", def: true, cat: "appearance" },
+                    { name: "label_gap", label: "Label Gap", type: "stepper", min: -20, max: 50, def: 10, cat: "appearance", enabledBy: "show_tick_labels" },
+                    { name: "tick_label_font", label: "Tick Label Font", type: "font", def: "", cat: "appearance", enabledBy: "show_tick_labels" },
+                    { name: "tick_label_color", label: "Tick Label Color", type: "color", def: 0xFFFFFF, cat: "appearance", enabledBy: "show_tick_labels" },
                     { name: "needle_image_name", label: "Needle Image", type: "image_picker", def: "", cat: "appearance" },
                     { name: "needle_pivot_x", label: "Needle Pivot X", type: "stepper", min: -400, max: 400, def: 0, cat: "appearance" },
                     { name: "needle_pivot_y", label: "Needle Pivot Y", type: "stepper", min: -400, max: 400, def: 0, cat: "appearance" },
@@ -4668,6 +4673,7 @@
                     { name: "tx_bit_start", label: "Bit Start", type: "select", def: 0, cat: "data", options: Array.from({length:64},(_,i)=>({v:i,l:String(i)})) },
                     { name: "tx_bit_length", label: "Bit Length", type: "select", def: 1, cat: "data", options: Array.from({length:32},(_,i)=>({v:i+1,l:String(i+1)})) },
                     { name: "tx_endian", label: "Endian", type: "select", def: 1, cat: "data", options: [{v:0,l:"Big Endian"},{v:1,l:"Little Endian"}] },
+                    { name: "tx_rate_hz", label: "TX Rate (Hz)", type: "stepper", min: 0, max: 50, def: 0, cat: "data" },
                     { name: "image_name", label: "Image", type: "image_picker", def: "", cat: "appearance" },
                     { name: "active_color", label: "Active Color", type: "color", def: 0x00FF00, cat: "appearance" },
                     { name: "inactive_color", label: "Inactive Color", type: "color", def: 0x555555, cat: "appearance" },
@@ -4690,6 +4696,7 @@
                     { name: "tx_bit_start", label: "Bit Start", type: "select", def: 0, cat: "data", options: Array.from({length:64},(_,i)=>({v:i,l:String(i)})) },
                     { name: "tx_bit_length", label: "Bit Length", type: "select", def: 1, cat: "data", options: Array.from({length:32},(_,i)=>({v:i+1,l:String(i+1)})) },
                     { name: "tx_endian", label: "Endian", type: "select", def: 1, cat: "data", options: [{v:0,l:"Big Endian"},{v:1,l:"Little Endian"}] },
+                    { name: "tx_rate_hz", label: "TX Rate (Hz)", type: "stepper", min: 0, max: 50, def: 0, cat: "data" },
                     { name: "tx_send_release", label: "Send on Release", type: "checkbox", def: false, cat: "data", enabledBy: "!latch" },
                     { name: "image_name", label: "Image", type: "image_picker", def: "", cat: "appearance" },
                     { name: "bg_color", label: "Background", type: "color", def: 0x333333, cat: "appearance" },
@@ -4965,7 +4972,7 @@
                 /* Load appropriate layout and sync device */
                 if (mode === 'splash') {
                     await fetchSplashes();
-                    /* Tell device to show the active splash */
+                    /* Tell device to display the active splash */
                     const splashName = document.getElementById('splashSelect').value || 'Default';
                     try { await RDM.setActiveLayout('_splash_' + splashName); } catch (e) { }
                 } else {
@@ -4992,7 +4999,14 @@
             try {
                 let splashes = await RDM.listSplashes();
                 const deviceActive = splashes._active || null;
-                if (splashes.length === 0) splashes.push('Default');
+                /* If device has no splashes at all, create the default one */
+                if (splashes.length === 0) {
+                    const defaultSplash = { name: '_splash_Default', schema_version: 11, screen_w: 800, screen_h: 480, widgets: [
+                        { type:"image", id:"image_splash_0", x:0, y:0, w:120, h:62, config:{ image_name:"RDM", image_scale:256, opacity:255 }}
+                    ], signals: [] };
+                    try { await RDM.saveSplash('Default', defaultSplash); } catch (e) { /* local-only is fine */ }
+                    splashes.push('Default');
+                }
                 const sel = document.getElementById('splashSelect');
                 sel.innerHTML = '';
                 splashes.forEach(s => {
@@ -5094,6 +5108,10 @@
             const sel = document.getElementById('splashSelect');
             const name = sel.value;
             if (!name) return;
+            if (name === 'Default') {
+                showToast('Cannot delete default splash', 'error');
+                return;
+            }
             _showConfirmOverlay(
                 'Delete Splash',
                 'Are you sure you want to delete <strong style="color:#e0e0e0;">"' + name + '"</strong>? This action cannot be undone.',
@@ -5956,10 +5974,15 @@
             isPanning = false;
             workspaceViewport.style.cursor = 'default';
             if (isDragging || isResizing) {
+                const didMove = _dragMoved;
                 isDragging = false;
                 isResizing = false;
                 guideX.style.display = 'none';
                 guideY.style.display = 'none';
+                /* Commit the post-drag state to history so undo/redo work
+                 * correctly even after mid-history edits. pushHistory is a
+                 * no-op if nothing changed. */
+                if (didMove) pushHistory();
                 updateInspector();
                 if (document.getElementById('livePreviewToggle').checked) triggerPreview();
             }
@@ -6142,7 +6165,16 @@
             if (previewTimer) clearTimeout(previewTimer);
             previewTimer = setTimeout(() => {
                 updateWasmPreview();
-            }, 250); // 250ms debounce
+                /* Also push to connected device so edits reflect live. */
+                if (RDM.mode !== 'local') {
+                    try {
+                        const payload = buildFirmwarePayload();
+                        RDM.previewOnDevice(payload).catch(e => {
+                            console.warn('Live preview failed:', e.message);
+                        });
+                    } catch (e) { }
+                }
+            }, 150); // 150ms debounce
         }
 
         function renderFieldHTML(f, val, disabledAttr) {
@@ -8200,6 +8232,10 @@
                     try {
                         await RDM.deleteLayout(name);
                         showToast('Deleted "' + name + '"', 'success');
+                        /* Pick the next layout to load (first remaining, preferring non-default) */
+                        const remaining = (await RDM.listLayouts()).filter(l => l !== name);
+                        const nextName = remaining.find(l => l !== 'default') || remaining[0] || 'default';
+                        currentLayout.name = nextName;
                         fetchLayouts();
                     } catch (e) { showToast('Delete failed', 'error'); }
                 }
@@ -8311,7 +8347,9 @@
                 if (currentScreenMode === 'splash') {
                     const splashName = (splashSel && splashSel.value) ? splashSel.value : 'Default';
                     data = await RDM.loadSplash(splashName);
-                    if (!data) data = { name: '_splash_' + splashName, widgets: [], signals: [] };
+                    if (!data) data = { name: '_splash_' + splashName, screen_w: 800, screen_h: 480, widgets: [
+                        { type:"image", id:"image_splash_0", x:0, y:0, w:120, h:62, config:{ image_name:"RDM", image_scale:256, opacity:255 }}
+                    ], signals: [] };
                 } else {
                     data = await RDM.loadLayout(name || 'default');
                     if (!data) data = { name: name || 'default', widgets: [], signals: [] };
@@ -8557,10 +8595,20 @@
                 let rightHTML;
                 const sd = storageInfo.sd;
                 if (sd && sd.mounted) {
+                    let sdFiles = {};
+                    try { sdFiles = await RDM.listSdFiles(); } catch(e) { /* empty */ }
+                    const sdLayouts = sdFiles.layouts || [];
+                    const sdImages = sdFiles.images || [];
+                    const sdFonts = sdFiles.fonts || [];
                     rightHTML = `<div style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; overflow-y:auto; max-height:calc(90vh - 160px);">
                         <div style="font-size:12px; font-weight:600; margin-bottom:4px;">SD Card</div>
                         ${_usageBarHTML(sd.used || 0, sd.total || 0)}
-                        <div style="font-size:11px; color:var(--text-muted); padding:4px 0;">Use SD card for backup and transfer.</div>
+                        <div style="font-size:11px; font-weight:600; margin:8px 0 4px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">Layouts</div>
+                        ${_fileListHTML(sdLayouts, 'layout', 'sd')}
+                        <div style="font-size:11px; font-weight:600; margin:8px 0 4px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">Images</div>
+                        ${_fileListHTML(sdImages, 'image', 'sd')}
+                        <div style="font-size:11px; font-weight:600; margin:8px 0 4px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">Fonts</div>
+                        ${_fileListHTML(sdFonts, 'font', 'sd')}
                     </div>`;
                 } else {
                     const reason = isDevice ? 'No SD card detected' : 'SD card not available in standalone mode';
@@ -8576,15 +8624,37 @@
         }
 
         async function _smCopyToSD(type, name) {
-            showToast('SD card not available in standalone mode', 'error');
+            try {
+                updateStatus('Copying to SD...');
+                await RDM.copySdFile(type, name, 'to_sd');
+                showToast(`Copied "${name}" to SD`, 'success');
+                await _smRefresh();
+            } catch (e) {
+                showToast('Copy to SD failed: ' + (e.message || e), 'error');
+            }
         }
 
         async function _smCopyFromSD(type, name) {
-            showToast('SD card not available in standalone mode', 'error');
+            try {
+                updateStatus('Copying from SD...');
+                await RDM.copySdFile(type, name, 'from_sd');
+                showToast(`Copied "${name}" from SD`, 'success');
+                await _smRefresh();
+                if (type === 'layout') await fetchLayoutsKeepCurrent();
+            } catch (e) {
+                showToast('Copy from SD failed: ' + (e.message || e), 'error');
+            }
         }
 
         async function _smDeleteFromSD(type, name) {
-            showToast('SD card not available in standalone mode', 'error');
+            if (!confirm(`Delete "${name}" from SD card?`)) return;
+            try {
+                await RDM.deleteSdFile(type, name);
+                showToast(`Deleted "${name}" from SD`, 'success');
+                await _smRefresh();
+            } catch (e) {
+                showToast('Delete from SD failed: ' + (e.message || e), 'error');
+            }
         }
 
         async function _smDeleteInternal(type, name) {
@@ -9562,11 +9632,18 @@
 
             /* Warn if there are unsaved edits — BEFORE switching */
             if (hasUnsavedEdits()) {
-                layoutSelect.value = prevName; /* revert immediately */
+                /* Revert the dropdown to the previous layout so it stays in sync
+                 * with currentLayout until the user confirms. If they selected the
+                 * currently-active layout, revert is a no-op but the confirmation
+                 * still makes sense as "reload and discard changes?". */
+                layoutSelect.value = prevName;
+                const sameLayout = (name === prevName);
                 _showConfirmOverlay(
-                    'Unsaved Changes',
-                    `You have unsaved changes to "${prevName}". Switch to "${name}" and lose them?`,
-                    'Switch',
+                    sameLayout ? 'Discard Changes?' : 'Unsaved Changes',
+                    sameLayout
+                        ? `Reload "${prevName}" from device and discard your unsaved changes?`
+                        : `You have unsaved changes to "${prevName}". Switch to "${name}" and lose them?`,
+                    sameLayout ? 'Discard' : 'Switch',
                     async () => { await _doLayoutSwitch(name); }
                 );
                 return;
