@@ -23,10 +23,30 @@
       "dangerousDisableAssetCspModification": true
     }
   },
+  "bundle": {
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["rdm"],
+        "name": "RDM-7 Layout",
+        "description": "RDM-7 Visual Designer layout bundle",
+        "role": "Editor",
+        "mimeType": "application/x-rdm"
+      }
+    ]
+  },
   "plugins": {
     "updater": {
       "pubkey": "",
-      "endpoints": []
+      "endpoints": [
+        "https://github.com/Trizzoto/rdm7-desktop/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

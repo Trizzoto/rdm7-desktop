@@ -1032,6 +1032,19 @@
             align-items: center;
             justify-content: center;
         }
+        .help-tabs { display:flex; gap:2px; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:0; }
+        .help-tab { padding:7px 14px; cursor:pointer; background:transparent; border:none; border-bottom:2px solid transparent; color:var(--text-muted); font-size:11px; font-family:'JetBrains Mono',monospace; font-weight:500; transition:color 0.15s,border-color 0.15s; }
+        .help-tab:hover { color:var(--text); }
+        .help-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+        .help-panel { display:none; font-size:12px; line-height:1.6; color:var(--text-muted); }
+        .help-panel.active { display:block; }
+        .help-panel h3 { font-size:12px; font-weight:600; color:#e0e0e0; margin:14px 0 6px; text-transform:uppercase; letter-spacing:0.04em; }
+        .help-panel h3:first-child { margin-top:0; }
+        .help-step { display:flex; gap:10px; margin:8px 0; }
+        .help-step-num { flex-shrink:0; width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+        .help-step-text { flex:1; }
+        .help-widget-row { padding:4px 0; border-bottom:1px solid var(--border); }
+        .help-widget-name { color:#e0e0e0; font-weight:500; }
 
         .modal-content {
             background: var(--panel-elevated);
@@ -2172,37 +2185,101 @@
     </div>
 
     <div id="helpModal" onclick="this.style.display='none'">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <h2>Keyboard Shortcuts</h2>
-            <div class="shortcut-grid">
-                <div><span class="kbd">Ctrl</span>+<span class="kbd">Scroll</span></div>
-                <div>Zoom Canvas In/Out</div>
-                <div><span class="kbd">Space</span>+<span class="kbd">Drag</span></div>
-                <div>Pan Canvas Workspace</div>
-                <div><span class="kbd">Shift</span>+<span class="kbd">Arrows</span></div>
-                <div>Nudge Widget 10px (Snap Size)</div>
-                <div><span class="kbd">Ctrl</span>+<span class="kbd">C</span> / <span class="kbd">V</span></div>
-                <div>Copy / Paste Widget</div>
-                <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">C</span> / <span
-                        class="kbd">V</span></div>
-                <div>Copy / Paste Style (Appearance)</div>
-                <div><span class="kbd">Ctrl</span>+<span class="kbd">D</span></div>
-                <div>Duplicate Widget</div>
-                <div><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> / <span class="kbd">Y</span></div>
-                <div>Undo / Redo</div>
-                <div><span class="kbd">Del</span></div>
-                <div>Delete Widget</div>
-                <div><span class="kbd">Right-Click</span></div>
-                <div>Show Context Menu</div>
-                <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">S</span></div>
-                <div>Signal Manager (Advanced)</div>
-                <div><span class="kbd">Ctrl</span>+<span class="kbd">S</span></div>
-                <div>Save/Apply Layout</div>
-                <div><span class="kbd">Ctrl</span>+<span class="kbd">O</span></div>
-                <div>Import RDM File</div>
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width:min(620px,90vw);min-height:400px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <h2 style="margin:0;">Help</h2>
+                <button onclick="document.getElementById('helpModal').style.display='none'" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">&times;</button>
             </div>
-            <p style="margin-top:20px; font-size:12px; color:hsl(0, 0%, 53%); text-align:center;">Press any key or click outside to
-                close</p>
+            <div class="help-tabs">
+                <button class="help-tab active" onclick="_helpTab('start',this)">Quick Start</button>
+                <button class="help-tab" onclick="_helpTab('shortcuts',this)">Shortcuts</button>
+                <button class="help-tab" onclick="_helpTab('widgets',this)">Widgets</button>
+                <button class="help-tab" onclick="_helpTab('signals',this)">Signals</button>
+                <button class="help-tab" onclick="_helpTab('connect',this)">Connection</button>
+            </div>
+
+            <!-- Quick Start -->
+            <div class="help-panel active" id="help-start">
+                <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text"><strong>Choose your display</strong> &mdash; Select your target screen from the dropdown in the toolbar (RDM-7 inch, 4 inch Round, etc.).</div></div>
+                <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text"><strong>Add widgets</strong> &mdash; Drag widgets from the palette on the right onto the canvas. Panels, bars, gauges, images, text and more.</div></div>
+                <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text"><strong>Position &amp; resize</strong> &mdash; Click a widget to select it. Drag to move, use corner handles to resize. Use the alignment bar for precision.</div></div>
+                <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text"><strong>Configure properties</strong> &mdash; Select a widget and open the Properties tab on the right to change colours, fonts, labels, and behaviour.</div></div>
+                <div class="help-step"><div class="help-step-num">5</div><div class="help-step-text"><strong>Map CAN signals</strong> &mdash; In the Properties tab, assign a signal to each widget so it displays live data (RPM, coolant temp, speed, etc.).</div></div>
+                <div class="help-step"><div class="help-step-num">6</div><div class="help-step-text"><strong>Connect &amp; save</strong> &mdash; Connect to your RDM-7 via USB or WiFi, then hit Save. Your layout is pushed directly to the device.</div></div>
+                <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
+                    <button class="btn btn-secondary" onclick="document.getElementById('helpModal').style.display='none';startTour();" style="font-size:11px;">Replay Getting Started Tour</button>
+                </div>
+            </div>
+
+            <!-- Shortcuts -->
+            <div class="help-panel" id="help-shortcuts">
+                <div class="shortcut-grid">
+                    <div><span class="kbd">Ctrl</span>+<span class="kbd">S</span></div><div>Save layout</div>
+                    <div><span class="kbd">Ctrl</span>+<span class="kbd">O</span></div><div>Import RDM file</div>
+                    <div><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> / <span class="kbd">Y</span></div><div>Undo / Redo</div>
+                    <div><span class="kbd">Ctrl</span>+<span class="kbd">C</span> / <span class="kbd">V</span></div><div>Copy / Paste widget</div>
+                    <div><span class="kbd">Ctrl</span>+<span class="kbd">D</span></div><div>Duplicate widget</div>
+                    <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">C</span> / <span class="kbd">V</span></div><div>Copy / Paste style</div>
+                    <div><span class="kbd">Del</span></div><div>Delete widget</div>
+                    <div><span class="kbd">Arrow</span> keys</div><div>Nudge 1px</div>
+                    <div><span class="kbd">Shift</span>+<span class="kbd">Arrow</span></div><div>Nudge 10px</div>
+                    <div><span class="kbd">Ctrl</span>+<span class="kbd">Scroll</span></div><div>Zoom in / out</div>
+                    <div><span class="kbd">Space</span>+<span class="kbd">Drag</span></div><div>Pan canvas</div>
+                    <div><span class="kbd">Alt</span>+<span class="kbd">Drag</span></div><div>Clone widget</div>
+                    <div><span class="kbd">Ctrl</span>+Click</div><div>Multi-select</div>
+                    <div><span class="kbd">Right-Click</span></div><div>Context menu</div>
+                    <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">S</span></div><div>Signal Manager</div>
+                </div>
+            </div>
+
+            <!-- Widgets -->
+            <div class="help-panel" id="help-widgets">
+                <div class="help-widget-row"><span class="help-widget-name">Panel</span> &mdash; Numeric readout with label, unit, and high/low colour alerts.</div>
+                <div class="help-widget-row"><span class="help-widget-name">Bar Graph</span> &mdash; Horizontal fill bar with min/max scaling and threshold colours.</div>
+                <div class="help-widget-row"><span class="help-widget-name">RPM Bar</span> &mdash; Full-width RPM bar with redline and limiter flash effects.</div>
+                <div class="help-widget-row"><span class="help-widget-name">Meter</span> &mdash; Circular analogue gauge with needle, ticks, and scale labels.</div>
+                <div class="help-widget-row"><span class="help-widget-name">Arc</span> &mdash; Partial arc gauge with fill animation and image overlays.</div>
+                <div class="help-widget-row"><span class="help-widget-name">Shift Light</span> &mdash; LED bar that fills with RPM and flashes at redline.</div>
+                <div class="help-widget-row"><span class="help-widget-name">Text / Value</span> &mdash; Static text or live signal value with custom font and rotation.</div>
+                <div class="help-widget-row"><span class="help-widget-name">Image</span> &mdash; Display a PNG/JPG from your image library. Supports scale and tint.</div>
+                <div class="help-widget-row"><span class="help-widget-name">Shape Panel</span> &mdash; Decorative rectangle with background colour, border, and shadow.</div>
+                <div class="help-widget-row"><span class="help-widget-name">Indicator</span> &mdash; Turn signal indicator (left/right) with animation.</div>
+                <div class="help-widget-row"><span class="help-widget-name">Warning Light</span> &mdash; Circular alert icon that activates on a signal threshold.</div>
+                <div class="help-widget-row"><span class="help-widget-name">Toggle Switch</span> &mdash; Tap to send a CAN value. Supports latch and custom graphics.</div>
+                <div class="help-widget-row"><span class="help-widget-name">Button</span> &mdash; Momentary or latching CAN-transmit button with custom styling.</div>
+                <h3>Conditional Rules</h3>
+                <div style="color:var(--text-muted);">Most widgets support rules &mdash; change appearance when a signal crosses a threshold. Example: turn a panel red when coolant temp exceeds 100&deg;C. Add rules in the Properties tab under "Rules".</div>
+            </div>
+
+            <!-- Signals -->
+            <div class="help-panel" id="help-signals">
+                <h3>What are signals?</h3>
+                <div>Signals map CAN bus messages to widget values. Each signal defines: CAN ID, bit position, bit length, scale, offset, and endianness.</div>
+                <h3>ECU Presets</h3>
+                <div>Select an ECU (e.g. MaxxECU) from the dropdown in the toolbar. Pre-configured signals are loaded automatically &mdash; just assign them to widgets.</div>
+                <h3>DBC Import</h3>
+                <div>Import a .dbc file (CAN database) via the Signal Manager (<span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">S</span>). Signals are extracted and made available for binding.</div>
+                <h3>Custom Signals</h3>
+                <div>Create signals manually in the Signal Manager. Define the CAN ID (hex), bit start, bit length, scale factor, offset, and whether it's little-endian or signed.</div>
+                <h3>Assigning to Widgets</h3>
+                <div>Select a widget, open Properties, and pick a signal from the Signal dropdown. The widget will display that signal's live value when connected to a device.</div>
+            </div>
+
+            <!-- Connection -->
+            <div class="help-panel" id="help-connect">
+                <h3>USB Serial</h3>
+                <div>Plug in the RDM-7 via USB. Select <strong>USB Serial</strong> from the connection dropdown in the toolbar. The port is auto-detected. Most reliable for large file transfers.</div>
+                <h3>WiFi</h3>
+                <div>Select <strong>WiFi</strong> from the dropdown. Enter the device IP address (shown on the RDM-7 screen or in Device Settings). Best for live preview and data logging.</div>
+                <h3>ESP32 Hotspot</h3>
+                <div>The RDM-7 can broadcast its own WiFi network. Connect your PC to the hotspot, then select <strong>ESP32 Hotspot</strong>. No router needed &mdash; ideal for track-side use.</div>
+                <h3>Offline (Local)</h3>
+                <div>Design layouts without a device. Everything is saved to your PC. Connect later to push layouts to the RDM-7.</div>
+                <h3>Storage &amp; SD Card</h3>
+                <div>Open Storage Manager from the menu to view internal storage and SD card contents. Copy layouts, images, and fonts between internal storage and SD card for backup.</div>
+            </div>
+
+            <p style="margin-top:16px; font-size:11px; color:hsl(0,0%,40%); text-align:center;">Click outside to close</p>
         </div>
     </div>
     <div id="ecuModal" style="display:none; position:fixed; inset:0; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); z-index:2000; align-items:center; justify-content:center;">
@@ -2264,6 +2341,9 @@
                     <div class="layout-menu-item" onclick="exportRdm(); closeLayoutMenu()">Export Layout</div>
                     <div class="layout-menu-item" onclick="screenshotCanvas(); closeLayoutMenu()">Screenshot</div>
                     <div class="layout-menu-sep"></div>
+                    <div class="layout-menu-item" onclick="backupAllDeviceLayouts(); closeLayoutMenu()" id="backupAllItem" style="display:none;">Backup all layouts to file...</div>
+                    <div class="layout-menu-item" onclick="restoreAllDeviceLayouts(); closeLayoutMenu()" id="restoreAllItem" style="display:none;">Restore layouts from file...</div>
+                    <div class="layout-menu-sep" id="backupRestoreSep" style="display:none;"></div>
                     <div class="layout-menu-item" id="importToDeviceItem" onclick="importLocalToDevice(); closeLayoutMenu()" style="display:none;">Import Local to Device...</div>
                     <div class="layout-menu-item" id="otaUpdateItem" onclick="otaFirmwareUpdate(); closeLayoutMenu()" style="display:none;">Update Firmware (OTA)...</div>
                     <div class="layout-menu-sep" id="importToDeviceSep" style="display:none;"></div>
@@ -2274,6 +2354,8 @@
                     <div class="layout-menu-item" onclick="openFuelCalibration(); closeLayoutMenu()">Fuel Calibration...</div>
                     <div style="border-top:1px solid var(--border);margin:4px 0;"></div>
                     <div class="layout-menu-item" onclick="openMarketplace(); closeLayoutMenu()">Marketplace...</div>
+                    <div class="layout-menu-sep"></div>
+                    <div class="layout-menu-item" onclick="startTour(); closeLayoutMenu()">Getting Started Tour</div>
                     <div class="layout-menu-sep"></div>
                     <div class="layout-menu-item" onclick="deleteCurrentLayout(); closeLayoutMenu()" style="color:hsl(0,70%,60%)">Delete Layout</div>
                 </div>
@@ -2795,9 +2877,15 @@
             const importItem = document.getElementById('importToDeviceItem');
             const importSep = document.getElementById('importToDeviceSep');
             const otaItem = document.getElementById('otaUpdateItem');
+            const backupAllItem = document.getElementById('backupAllItem');
+            const restoreAllItem = document.getElementById('restoreAllItem');
+            const backupRestoreSep = document.getElementById('backupRestoreSep');
             if (importItem) importItem.style.display = isConnected ? '' : 'none';
             if (importSep) importSep.style.display = isConnected ? '' : 'none';
             if (otaItem) otaItem.style.display = isConnected ? '' : 'none';
+            if (backupAllItem) backupAllItem.style.display = isConnected ? '' : 'none';
+            if (restoreAllItem) restoreAllItem.style.display = isConnected ? '' : 'none';
+            if (backupRestoreSep) backupRestoreSep.style.display = isConnected ? '' : 'none';
             const liveBtn = document.getElementById('screenshotFeedBtn');
             if (liveBtn) liveBtn.style.display = isConnected ? '' : 'none';
             if (!isConnected) stopScreenshotFeed();
@@ -2849,6 +2937,33 @@
             const scanBtn = document.getElementById('scanDevicesBtn');
             if (scanBtn) scanBtn.style.display = '';
         }
+
+        /* ── File association handler (#23) ────────────────────────────
+           The Rust backend emits 'file-opened' with { paths: [...] } when the user
+           double-clicks a .rdm file or drops one onto the running app window.
+           Listen once and pipe the first .rdm through the existing import pipeline. */
+        (async function _setupFileOpenListener() {
+            if (typeof window.__TAURI__?.event?.listen !== 'function') return;
+            try {
+                await window.__TAURI__.event.listen('file-opened', async (e) => {
+                    const paths = (e.payload && e.payload.paths) || [];
+                    const first = paths.find(p => typeof p === 'string' && p.toLowerCase().endsWith('.rdm'));
+                    if (!first) return;
+                    try {
+                        const bytes = await RDM.readFile(first);
+                        if (typeof _processRdmBytes === 'function') {
+                            await _processRdmBytes(bytes, first.split(/[\\/]/).pop() || 'imported.rdm');
+                        }
+                    } catch (err) {
+                        if (typeof showToast === 'function') {
+                            showToast('Failed to open file: ' + (err.message || err), 'error');
+                        }
+                    }
+                });
+            } catch (err) {
+                console.warn('file-opened listener failed to bind:', err);
+            }
+        })();
 
         /* Auto-restore last connection on startup */
         (function _restoreConnection() {
@@ -3133,6 +3248,13 @@
         }
 
 
+        function _helpTab(id, btn) {
+            document.querySelectorAll('.help-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.help-panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('help-' + id).classList.add('active');
+        }
+
         function toggleLayoutMenu() {
             const menu = document.getElementById('layoutMenu');
             menu.classList.toggle('open');
@@ -3400,6 +3522,48 @@
             {ecu:"MaxxECU",version:"1.3",label:"VVT INTAKE CAM 2 POS",can_id:"541",endianess:1,bit_start:32,bit_length:16,scale:0.1,offset:0,decimals:0,is_signed:false},
             {ecu:"MaxxECU",version:"1.3",label:"WASTEGATE PRESSURE",can_id:"537",endianess:1,bit_start:16,bit_length:16,scale:0.1,offset:0,decimals:0,is_signed:false},
             {ecu:"MaxxECU",version:"1.3",label:"WHEEL SLIP",can_id:"523",endianess:1,bit_start:32,bit_length:16,scale:0.1,offset:0,decimals:0,is_signed:false},
+            /* Link ECU — Generic Dash (Base CAN ID = 0x3E8) */
+            {ecu:"Link ECU",version:"Generic Dash",label:"ENGINE SPEED",can_id:"3E8",endianess:1,bit_start:16,bit_length:16,scale:1.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"MAP",can_id:"3E8",endianess:1,bit_start:32,bit_length:16,scale:1.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"MGP",can_id:"3E8",endianess:1,bit_start:48,bit_length:16,scale:1.0,offset:-100,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"BARO PRESSURE",can_id:"3E9",endianess:1,bit_start:16,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"TPS",can_id:"3E9",endianess:1,bit_start:32,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"INJECTOR DC",can_id:"3E9",endianess:1,bit_start:48,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"INJECTOR DC (SEC)",can_id:"3EA",endianess:1,bit_start:16,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"INJ PULSE WIDTH",can_id:"3EA",endianess:1,bit_start:32,bit_length:16,scale:0.001,offset:0,decimals:3,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"COOLANT TEMP",can_id:"3EA",endianess:1,bit_start:48,bit_length:16,scale:1.0,offset:-50,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"IAT",can_id:"3EB",endianess:1,bit_start:16,bit_length:16,scale:1.0,offset:-50,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"ECU VOLTS",can_id:"3EB",endianess:1,bit_start:32,bit_length:16,scale:0.01,offset:0,decimals:2,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"MAF",can_id:"3EB",endianess:1,bit_start:48,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"GEAR POSITION",can_id:"3EC",endianess:1,bit_start:16,bit_length:16,scale:1.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"INJECTOR TIMING",can_id:"3EC",endianess:1,bit_start:32,bit_length:16,scale:1.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"IGNITION TIMING",can_id:"3EC",endianess:1,bit_start:48,bit_length:16,scale:0.1,offset:-100,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"CAM INLET BANK 1",can_id:"3ED",endianess:1,bit_start:16,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"CAM INLET BANK 2",can_id:"3ED",endianess:1,bit_start:32,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"CAM EXHAUST BANK 1",can_id:"3ED",endianess:1,bit_start:48,bit_length:16,scale:-0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"CAM EXHAUST BANK 2",can_id:"3EE",endianess:1,bit_start:16,bit_length:16,scale:-0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"LAMBDA 1",can_id:"3EE",endianess:1,bit_start:32,bit_length:16,scale:0.001,offset:0,decimals:3,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"LAMBDA 2",can_id:"3EE",endianess:1,bit_start:48,bit_length:16,scale:0.001,offset:0,decimals:3,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"TRIG 1 ERROR COUNT",can_id:"3EF",endianess:1,bit_start:16,bit_length:16,scale:1.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"FAULT CODES",can_id:"3EF",endianess:1,bit_start:32,bit_length:16,scale:1.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"FUEL PRESSURE",can_id:"3EF",endianess:1,bit_start:48,bit_length:16,scale:1.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"OIL TEMP",can_id:"3F0",endianess:1,bit_start:16,bit_length:16,scale:1.0,offset:-50,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"OIL PRESSURE",can_id:"3F0",endianess:1,bit_start:32,bit_length:16,scale:1.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"LF WHEEL SPEED",can_id:"3F0",endianess:1,bit_start:48,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"LR WHEEL SPEED",can_id:"3F1",endianess:1,bit_start:16,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"RF WHEEL SPEED",can_id:"3F1",endianess:1,bit_start:32,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"RR WHEEL SPEED",can_id:"3F1",endianess:1,bit_start:48,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"KNOCK LEVEL 1",can_id:"3F2",endianess:1,bit_start:16,bit_length:16,scale:5.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"KNOCK LEVEL 2",can_id:"3F2",endianess:1,bit_start:32,bit_length:16,scale:5.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"KNOCK LEVEL 3",can_id:"3F2",endianess:1,bit_start:48,bit_length:16,scale:5.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"KNOCK LEVEL 4",can_id:"3F3",endianess:1,bit_start:16,bit_length:16,scale:5.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"KNOCK LEVEL 5",can_id:"3F3",endianess:1,bit_start:32,bit_length:16,scale:5.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"KNOCK LEVEL 6",can_id:"3F3",endianess:1,bit_start:48,bit_length:16,scale:5.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"KNOCK LEVEL 7",can_id:"3F4",endianess:1,bit_start:16,bit_length:16,scale:5.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"KNOCK LEVEL 8",can_id:"3F4",endianess:1,bit_start:32,bit_length:16,scale:5.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"LIMITS FLAGS",can_id:"3F4",endianess:1,bit_start:48,bit_length:16,scale:1.0,offset:0,decimals:0,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"APS (MAIN)",can_id:"3F5",endianess:1,bit_start:16,bit_length:16,scale:0.1,offset:0,decimals:1,is_signed:false},
+            {ecu:"Link ECU",version:"Generic Dash",label:"ETHANOL %",can_id:"3F5",endianess:1,bit_start:32,bit_length:16,scale:1.0,offset:0,decimals:0,is_signed:false},
             /* RDM-7 GPIO */
             {ecu:"RDM-7",version:"GPIO",label:"FUEL SENDER V",can_id:"0",endianess:1,bit_start:0,bit_length:16,scale:1.0,offset:0,decimals:2,is_signed:false},
             {ecu:"RDM-7",version:"GPIO",label:"INDICATOR LEFT",can_id:"0",endianess:1,bit_start:0,bit_length:8,scale:1.0,offset:0,decimals:0,is_signed:false},
@@ -5402,7 +5566,7 @@
         }
 
         /** Max slot count per widget type that uses slots. */
-        const SLOT_LIMITS = { panel: 8, bar: 2, indicator: 2, warning: 8 };
+        const SLOT_LIMITS = { panel: 16, bar: 2, indicator: 2, warning: 8 };
 
         /** Find next available slot for a widget type, or -1 if all taken. */
         function nextAvailableSlot(type) {
@@ -9028,6 +9192,88 @@
          *     [N+4..]   Data: raw bytes
          */
 
+        /* ── Bulk backup/restore of on-device layouts (#25) ───────────────
+           Pulls every layout off the dash into a single .rdmbackup file and
+           restores an entire set back. Uses the Rust helpers zip_layouts /
+           unzip_layouts for packaging; layouts themselves travel over the
+           existing transport (serial or HTTP). */
+
+        async function backupAllDeviceLayouts() {
+            if (RDM.mode === 'local' || !_connectionOk) {
+                showToast('Connect to a device first', 'error');
+                return;
+            }
+            try {
+                showToast('Listing device layouts...', 'info');
+                const list = await RDM.getLayouts(); /* [{ name }, ...] */
+                if (!list || list.length === 0) {
+                    showToast('No layouts on device to back up', 'info');
+                    return;
+                }
+                const entries = [];
+                for (let i = 0; i < list.length; i++) {
+                    const name = list[i].name || list[i];
+                    try {
+                        const layoutJson = await RDM.getLayout(name);
+                        const str = JSON.stringify(layoutJson);
+                        const bytes = new TextEncoder().encode(str);
+                        entries.push({ name: String(name), data: Array.from(bytes) });
+                    } catch (e) {
+                        console.warn('Skipping layout "' + name + '":', e);
+                    }
+                }
+                if (entries.length === 0) { showToast('Backup failed: no layouts readable', 'error'); return; }
+                const bundle = await _tauriCall('zip_layouts', { entries });
+                /* Prompt save path */
+                const path = await _tauriCall('plugin:dialog|save', {
+                    options: {
+                        defaultPath: 'rdm7-layouts-' + new Date().toISOString().slice(0,10) + '.rdmbackup',
+                        filters: [{ name: 'RDM Backup', extensions: ['rdmbackup'] }]
+                    }
+                });
+                const finalPath = typeof path === 'string' ? path : (path && path.path);
+                if (!finalPath) return; /* user cancelled */
+                await RDM.writeFile(finalPath, new Uint8Array(bundle));
+                showToast('Backed up ' + entries.length + ' layouts', 'success');
+            } catch (e) {
+                showToast('Backup failed: ' + (e.message || e), 'error');
+            }
+        }
+
+        async function restoreAllDeviceLayouts() {
+            if (RDM.mode === 'local' || !_connectionOk) {
+                showToast('Connect to a device first', 'error');
+                return;
+            }
+            try {
+                const path = await RDM.openFileDialog([{ name: 'RDM Backup', extensions: ['rdmbackup'] }]);
+                if (!path) return;
+                const bytes = await RDM.readFile(path);
+                const entries = await _tauriCall('unzip_layouts', { data: Array.from(bytes) });
+                if (!entries || entries.length === 0) {
+                    showToast('Backup file contained no layouts', 'error');
+                    return;
+                }
+                if (!confirm('Restore ' + entries.length + ' layout(s) to the connected dash? Existing layouts with matching names will be overwritten.')) return;
+                let restored = 0;
+                for (const e of entries) {
+                    try {
+                        const str = new TextDecoder().decode(new Uint8Array(e.data));
+                        const obj = JSON.parse(str);
+                        if (!obj.name) obj.name = e.name;
+                        await RDM.saveLayout(obj.name, obj);
+                        restored++;
+                    } catch (err) {
+                        console.warn('Skipping entry "' + e.name + '":', err);
+                    }
+                }
+                await fetchLayoutsKeepCurrent();
+                showToast('Restored ' + restored + ' / ' + entries.length + ' layouts', 'success');
+            } catch (e) {
+                showToast('Restore failed: ' + (e.message || e), 'error');
+            }
+        }
+
         async function importLocalToDevice() {
             if (RDM.mode === 'local') {
                 showToast('Connect to a device first', 'error');
@@ -10298,14 +10544,45 @@
             const banner = document.getElementById('updateBanner');
 
             if (type === 'desktop') {
-                /* Desktop: open download URL in browser for manual install */
+                /* Silent in-place self-update (#22). Tries the Tauri updater plugin first;
+                   if that fails (unsigned build, no endpoint, offline), falls back to the
+                   old behaviour — open the download page in the user's browser. */
+                const msgEl = banner.querySelector('#updateMessage');
+                const btnEl = banner.querySelector('#updateInstallBtn');
                 try {
-                    await _tauriCall('plugin:shell|open', { path: info.download_url });
-                } catch (e) {
-                    window.open(info.download_url, '_blank');
+                    btnEl.disabled = true;
+                    msgEl.innerHTML = 'Checking for update...';
+                    /* Listen for progress events from the Rust side */
+                    const unlisten = window.__TAURI__?.event?.listen
+                        ? await window.__TAURI__.event.listen('self-update-progress', (e) => {
+                              const p = e.payload || {};
+                              if (p.phase === 'downloading' && p.total) {
+                                  const pct = Math.round((p.downloaded || 0) / p.total * 100);
+                                  msgEl.innerHTML = `Downloading update... ${pct}%`;
+                              } else if (p.phase === 'installing') {
+                                  msgEl.innerHTML = 'Installing... App will restart.';
+                              } else if (p.phase === 'error' && p.error) {
+                                  msgEl.innerHTML = 'Update failed: ' + p.error;
+                              }
+                          })
+                        : null;
+                    await _tauriCall('self_update_install', {});
+                    /* Restart is triggered from Rust; this line typically won't run. */
+                    if (unlisten) unlisten();
+                    banner.style.display = 'none';
+                    _pendingUpdate = null;
+                } catch (err) {
+                    msgEl.innerHTML = 'In-place update unavailable — opening download page';
+                    /* Fallback: manual download path */
+                    try {
+                        await _tauriCall('plugin:shell|open', { path: info.download_url });
+                    } catch (e) {
+                        window.open(info.download_url, '_blank');
+                    }
+                    btnEl.disabled = false;
+                    banner.style.display = 'none';
+                    _pendingUpdate = null;
                 }
-                banner.style.display = 'none';
-                _pendingUpdate = null;
             } else {
                 /* Firmware: download .bin then flash via serial */
                 try {
@@ -10954,6 +11231,166 @@
             } catch (e) {
                 updateStatus('Failed to save dimmer settings', true);
             }
+        }
+
+        /* ── Onboarding Tour ─────────────────────────────────────────── */
+
+        const _TOUR_STEPS = [
+            {
+                target: '#paletteList',
+                title: 'Widget Palette',
+                text: 'Drag widgets from here onto the canvas to build your dashboard. Panels, bars, gauges, images, text and more.',
+                pos: 'left',
+            },
+            {
+                target: '#canvasContainer',
+                title: 'Canvas',
+                text: 'This is your live preview. Click widgets to select them, drag to move, and use corner handles to resize.',
+                pos: 'top',
+            },
+            {
+                target: '.right-sidebar-tab:nth-child(2)',
+                title: 'Properties Inspector',
+                text: 'Select a widget then switch to this tab to configure its appearance, signal mapping, colours, and behaviour.',
+                pos: 'left',
+            },
+            {
+                target: '#screenSizeSelect',
+                title: 'Display Size',
+                text: 'Choose your target display \u2014 RDM-7 inch, 4 inch Round, 3 inch Round, or 2.8 inch Round.',
+                pos: 'bottom',
+            },
+            {
+                target: '#layoutSelect',
+                title: 'Layout Switcher',
+                text: 'Switch between layouts or create new ones. Use the menu button next to it for import, export, and device options.',
+                pos: 'bottom',
+            },
+            {
+                target: '#connectionBar',
+                title: 'Device Connection',
+                text: 'Connect to your RDM-7 via USB Serial or WiFi to push layouts, download logs, and preview live on the device.',
+                pos: 'bottom',
+            },
+            {
+                target: '#saveBtn',
+                title: 'Save',
+                text: 'Save your layout. When connected to a device, it saves directly to the RDM-7 internal storage.',
+                pos: 'bottom',
+            },
+        ];
+
+        let _tourOverlay = null;
+        let _tourTip = null;
+
+        function _tourCleanup() {
+            if (_tourOverlay) { _tourOverlay.remove(); _tourOverlay = null; }
+            if (_tourTip) { _tourTip.remove(); _tourTip = null; }
+        }
+
+        function _tourShow(step) {
+            if (step >= _TOUR_STEPS.length) { _tourEnd(); return; }
+            const s = _TOUR_STEPS[step];
+            const el = document.querySelector(s.target);
+            if (!el) { _tourShow(step + 1); return; }
+
+            _tourCleanup();
+
+            const rect = el.getBoundingClientRect();
+            const pad = 6;
+
+            /* Layer 1: Full-screen click shield (blocks all interaction) */
+            _tourOverlay = document.createElement('div');
+            _tourOverlay.style.cssText = 'position:fixed;inset:0;z-index:8000;background:transparent;';
+            document.body.appendChild(_tourOverlay);
+
+            /* Layer 2: Highlight cutout (visual only — darkens everything except target) */
+            const hl = document.createElement('div');
+            hl.style.cssText = `position:fixed;left:${rect.left - pad}px;top:${rect.top - pad}px;width:${rect.width + pad * 2}px;height:${rect.height + pad * 2}px;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.72);z-index:8001;pointer-events:none;`;
+            document.body.appendChild(hl);
+            /* Store on overlay for cleanup */
+            _tourOverlay._hl = hl;
+
+            /* Layer 3: Tooltip (on top of everything, receives clicks) */
+            _tourTip = document.createElement('div');
+            _tourTip.style.cssText = 'position:fixed;z-index:8002;background:#1a1b1e;border:1px solid #3a3b40;border-radius:10px;padding:16px 20px;width:300px;box-shadow:0 12px 40px rgba(0,0,0,0.5);font-family:"JetBrains Mono",monospace;';
+
+            /* Position tooltip — pick best side, clamp to viewport */
+            const gap = 14;
+            const tipW = 300, tipH = 160; /* approximate */
+            let tx, ty;
+            if (s.pos === 'bottom') {
+                tx = rect.left + rect.width / 2 - tipW / 2;
+                ty = rect.bottom + pad + gap;
+            } else if (s.pos === 'top') {
+                tx = rect.left + rect.width / 2 - tipW / 2;
+                ty = rect.top - pad - gap - tipH;
+            } else if (s.pos === 'left') {
+                tx = rect.left - pad - gap - tipW;
+                ty = rect.top + rect.height / 2 - tipH / 2;
+            } else { /* right */
+                tx = rect.right + pad + gap;
+                ty = rect.top + rect.height / 2 - tipH / 2;
+            }
+            /* Clamp to viewport */
+            tx = Math.max(8, Math.min(tx, window.innerWidth - tipW - 8));
+            ty = Math.max(8, Math.min(ty, window.innerHeight - tipH - 8));
+            _tourTip.style.left = tx + 'px';
+            _tourTip.style.top = ty + 'px';
+
+            const progress = `${step + 1} / ${_TOUR_STEPS.length}`;
+            const isLast = step === _TOUR_STEPS.length - 1;
+            _tourTip.innerHTML = `
+                <div style="font-size:13px;font-weight:600;color:#e0e0e0;margin-bottom:6px;">${s.title}</div>
+                <div style="font-size:11px;color:#999;line-height:1.5;margin-bottom:14px;">${s.text}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:10px;color:#555;">${progress}</span>
+                    <div style="display:flex;gap:6px;">
+                        <button class="_tourBtn" data-action="skip" style="padding:5px 12px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:#777;font-size:11px;font-family:inherit;">Skip</button>
+                        ${step > 0 ? '<button class="_tourBtn" data-action="prev" style="padding:5px 12px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:#999;font-size:11px;font-family:inherit;">Back</button>' : ''}
+                        <button class="_tourBtn" data-action="next" style="padding:5px 14px;cursor:pointer;background:#3b82f6;border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:500;font-family:inherit;">${isLast ? 'Done' : 'Next'}</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(_tourTip);
+
+            /* Button handlers via delegation */
+            _tourTip.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-action]');
+                if (!btn) return;
+                const action = btn.dataset.action;
+                if (action === 'skip') _tourEnd();
+                else if (action === 'next') _tourShow(step + 1);
+                else if (action === 'prev') _tourShow(step - 1);
+            });
+        }
+
+        function _tourEnd() {
+            _tourCleanup();
+            try { localStorage.setItem('rdm7_tour_done', '1'); } catch (e) { }
+        }
+
+        /* Override cleanup to also remove highlight */
+        const _origTourCleanup = _tourCleanup;
+        _tourCleanup = function () {
+            if (_tourOverlay && _tourOverlay._hl) _tourOverlay._hl.remove();
+            _origTourCleanup();
+        };
+
+        function startTour() {
+            try { localStorage.removeItem('rdm7_tour_done'); } catch (e) { }
+            _tourShow(0);
+        }
+
+        /* Auto-launch tour on first visit (after WASM + layouts loaded) */
+        {
+            const origFetchLayouts = fetchLayouts;
+            fetchLayouts = async function () {
+                await origFetchLayouts();
+                if (!localStorage.getItem('rdm7_tour_done')) {
+                    setTimeout(() => _tourShow(0), 600);
+                }
+                fetchLayouts = origFetchLayouts;
+            };
         }
 
     </script>

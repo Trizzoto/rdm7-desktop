@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::Emitter;
+use tauri_plugin_updater::UpdaterExt;
 
 // ── Device Discovery (mDNS) ─────────────────────────────────────────
 
@@ -607,8 +608,8 @@ async fn serial_upload_chunked(
             port.write_all(&frame).map_err(|e| format!("Write error at chunk {chunk_idx}: {e}"))?;
             port.flush().map_err(|e| format!("Flush error: {e}"))?;
 
-            // Wait for ACK
-            let payload = read_frame(&mut port, Duration::from_secs(5))?;
+            // Wait for ACK — allow extra time for flash-busy ESP32
+            let payload = read_frame(&mut port, Duration::from_secs(10))?;
             let ack = parse_json_response(&payload)?;
 
             let ack_result = ack.get("result").ok_or("Missing ACK result")?;
@@ -1025,14 +1026,199 @@ async fn check_desktop_update(repo: String, current_version: String) -> Result<F
     })
 }
 
+// ── Self-update (#22) ───────────────────────────────────────────────
+// Uses tauri-plugin-updater to silently download + install a signed update
+// in-place, then restart the app. Requires an endpoint configured in
+// tauri.conf.json (updater.endpoints) and a signing pubkey (updater.pubkey).
+//
+// Progress events are emitted on the 'self-update-progress' channel so the
+// frontend can show a progress bar. Emitted payloads:
+//   { phase: 'checking' | 'downloading' | 'installing' | 'done' | 'error',
+//     downloaded?: u64, total?: u64, error?: string }
+
+#[derive(Debug, Serialize, Clone)]
+pub struct UpdateProgress {
+    pub phase: String,
+    pub downloaded: Option<u64>,
+    pub total: Option<u64>,
+    pub error: Option<String>,
+}
+
+#[tauri::command]
+async fn self_update_check(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let _ = app.emit("self-update-progress", UpdateProgress {
+        phase: "checking".into(), downloaded: None, total: None, error: None,
+    });
+    match app.updater() {
+        Ok(updater) => {
+            match updater.check().await {
+                Ok(Some(update)) => Ok(Some(update.version.to_string())),
+                Ok(None) => Ok(None),
+                Err(e) => Err(format!("updater check failed: {e}")),
+            }
+        }
+        Err(e) => Err(format!("updater not available: {e}")),
+    }
+}
+
+#[tauri::command]
+async fn self_update_install(app: tauri::AppHandle) -> Result<(), String> {
+    let updater = app.updater().map_err(|e| format!("updater unavailable: {e}"))?;
+    let update = match updater.check().await {
+        Ok(Some(u)) => u,
+        Ok(None) => return Err("no update available".into()),
+        Err(e) => return Err(format!("check failed: {e}")),
+    };
+
+    let app_handle = app.clone();
+    update
+        .download_and_install(
+            move |chunk_len, content_length| {
+                let _ = app_handle.emit("self-update-progress", UpdateProgress {
+                    phase: "downloading".into(),
+                    downloaded: Some(chunk_len as u64),
+                    total: content_length,
+                    error: None,
+                });
+            },
+            move || {
+                // finish callback — installation starting
+            },
+        )
+        .await
+        .map_err(|e| format!("download/install failed: {e}"))?;
+
+    let _ = app.emit("self-update-progress", UpdateProgress {
+        phase: "installing".into(), downloaded: None, total: None, error: None,
+    });
+
+    // Restart — this replaces the running binary with the new one.
+    app.restart();
+}
+
+// ── Layout Backup/Restore (#25) ─────────────────────────────────────
+// Pulls all layouts off the connected dash into a zip, and pushes them back.
+// Uses the existing serial protocol (layout.list / layout.load / layout.save) on
+// the frontend side; this backend only handles zip packaging since doing that
+// in the browser costs ~200KB of JS.
+
+#[tauri::command]
+fn zip_layouts(entries: Vec<LayoutEntry>) -> Result<Vec<u8>, String> {
+    use std::io::Write;
+    // Lazy dep — use zip crate. If not available, fall back to a simple concatenation
+    // format. Rather than forcing another dep, we produce a minimal TAR-like bundle.
+    //
+    // Each entry: name_len(u16 LE) + name bytes (UTF-8) + data_len(u32 LE) + data bytes.
+    // Magic header: "RDMBACKUP" + version(u8=1) + entry_count(u32 LE).
+    let mut out = Vec::<u8>::new();
+    out.extend_from_slice(b"RDMBACKUP");
+    out.push(1u8);
+    out.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+    for e in entries.iter() {
+        let name_bytes = e.name.as_bytes();
+        if name_bytes.len() > u16::MAX as usize {
+            return Err(format!("layout name too long: {}", e.name));
+        }
+        out.extend_from_slice(&(name_bytes.len() as u16).to_le_bytes());
+        out.extend_from_slice(name_bytes);
+        out.extend_from_slice(&(e.data.len() as u32).to_le_bytes());
+        out.extend_from_slice(&e.data);
+    }
+    // Prefix the whole thing with a 32-bit length for safety (optional, helps tools).
+    let mut framed = Vec::with_capacity(out.len() + 4);
+    framed.extend_from_slice(&(out.len() as u32).to_le_bytes());
+    framed.write_all(&out).map_err(|e| format!("write: {e}"))?;
+    Ok(framed)
+}
+
+#[tauri::command]
+fn unzip_layouts(data: Vec<u8>) -> Result<Vec<LayoutEntry>, String> {
+    if data.len() < 4 + 9 + 1 + 4 {
+        return Err("backup file too small".into());
+    }
+    let payload_len = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
+    if payload_len + 4 > data.len() {
+        return Err("backup payload length invalid".into());
+    }
+    let body = &data[4..4 + payload_len];
+    if &body[0..9] != b"RDMBACKUP" {
+        return Err("not an RDM backup file".into());
+    }
+    if body[9] != 1 {
+        return Err(format!("unsupported backup version: {}", body[9]));
+    }
+    let mut off = 14usize;
+    let entry_count = u32::from_le_bytes([body[10], body[11], body[12], body[13]]) as usize;
+    let mut entries = Vec::with_capacity(entry_count);
+    for _ in 0..entry_count {
+        if off + 2 > body.len() { return Err("truncated entry".into()); }
+        let name_len = u16::from_le_bytes([body[off], body[off + 1]]) as usize;
+        off += 2;
+        if off + name_len > body.len() { return Err("truncated entry name".into()); }
+        let name = std::str::from_utf8(&body[off..off + name_len])
+            .map_err(|e| format!("invalid utf8: {e}"))?.to_string();
+        off += name_len;
+        if off + 4 > body.len() { return Err("truncated entry data length".into()); }
+        let data_len = u32::from_le_bytes([body[off], body[off + 1], body[off + 2], body[off + 3]]) as usize;
+        off += 4;
+        if off + data_len > body.len() { return Err("truncated entry data".into()); }
+        let mut data_vec = Vec::with_capacity(data_len);
+        data_vec.extend_from_slice(&body[off..off + data_len]);
+        off += data_len;
+        entries.push(LayoutEntry { name, data: data_vec });
+    }
+    Ok(entries)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LayoutEntry {
+    pub name: String,
+    pub data: Vec<u8>,
+}
+
 // ── App Entry Point ─────────────────────────────────────────────────
 
 pub fn run() {
+    // Collect any file paths passed on the command line (Windows/Linux file
+    // associations open the app with the file path as argv[1]). On macOS the
+    // 'Opened' event is delivered to the NSApplication; Tauri's `on_opened_url`
+    // handles that.
+    let cli_files: Vec<String> = std::env::args()
+        .skip(1)
+        .filter(|a| a.to_lowercase().ends_with(".rdm"))
+        .collect();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(move |app| {
+            // Emit the initial file-open event (if any) after a short delay so
+            // the frontend JS has a chance to register its listener.
+            if !cli_files.is_empty() {
+                let app_handle = app.handle().clone();
+                let files = cli_files.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(1500));
+                    let _ = app_handle.emit("file-opened", serde_json::json!({ "paths": files }));
+                });
+            }
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Windows drag-and-drop: if a user drops a .rdm on the running app,
+            // forward the paths to the frontend.
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                let rdm_paths: Vec<String> = paths.iter()
+                    .filter_map(|p| p.to_str().map(|s| s.to_string()))
+                    .filter(|s| s.to_lowercase().ends_with(".rdm"))
+                    .collect();
+                if !rdm_paths.is_empty() {
+                    let _ = window.emit("file-opened", serde_json::json!({ "paths": rdm_paths }));
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             discover_devices,
             read_binary_file,
@@ -1053,6 +1239,10 @@ pub fn run() {
             check_firmware_update,
             download_firmware_binary,
             check_desktop_update,
+            self_update_check,
+            self_update_install,
+            zip_layouts,
+            unzip_layouts,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
