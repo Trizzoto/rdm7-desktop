@@ -4802,6 +4802,17 @@
             const sweep = Math.max(1, Math.min(360, c.sweep_degrees | 0));
             c.start_angle = start;
             c.end_angle   = (start + sweep) % 360;
+
+            /* Non-linear scale curve. UX field is `scale_curve` (decimal, e.g.
+             * 0.5 / 1.0 / 2.0); firmware reads `scale_curve_milli` (int). */
+            if (typeof c.scale_curve === 'number' && isFinite(c.scale_curve)) {
+                let g = c.scale_curve;
+                if (g < 0.1) g = 0.1; else if (g > 5.0) g = 5.0;
+                c.scale_curve_milli = Math.round(g * 1000);
+            } else if (c.scale_curve_milli == null) {
+                c.scale_curve_milli = 1000;
+                c.scale_curve = 1.0;
+            }
         }
         /* Reverse sync: when a layout is loaded that only has the legacy
          * fields (saved by the firmware or an older editor), populate the
@@ -4840,6 +4851,10 @@
             if (c.major_tick_step == null && typeof c.minor_tick_step === 'number'
                 && typeof c.major_tick_every === 'number') {
                 c.major_tick_step = c.minor_tick_step * c.major_tick_every;
+            }
+            if (c.scale_curve == null) {
+                c.scale_curve = (typeof c.scale_curve_milli === 'number')
+                    ? c.scale_curve_milli / 1000 : 1.0;
             }
         }
 
@@ -4970,9 +4985,19 @@
                     { name: "max", label: "Max Value", type: "number", def: 100, cat: "data" },
                     { name: "start_position", label: "Start Position", type: "select", def: "bottom-left", cat: "data", options: _METER_POSITION_OPTIONS },
                     { name: "sweep_degrees", label: "Sweep", type: "select", def: 270, cat: "data", options: _METER_SWEEP_OPTIONS },
-                    { name: "auto_ticks", label: "Auto Tick Spacing", type: "checkbox", def: true, cat: "data" },
-                    { name: "minor_tick_step", label: "Tick Step (units)", type: "number", def: 10, cat: "data" },
-                    { name: "major_tick_step", label: "Major Tick Step (units)", type: "number", def: 50, cat: "data" },
+                    /* auto_ticks lives in w.config but is no longer exposed in
+                     * the inspector — it stays true on widget creation so the
+                     * initial step is auto-derived from the range, then is
+                     * flipped off the first time the user edits a step value
+                     * (handled in updateWidgetConfigField). */
+                    { name: "minor_tick_step", label: "Minor Tick Spacing", type: "number", def: 10, cat: "data" },
+                    { name: "major_tick_step", label: "Major Tick Spacing", type: "number", def: 50, cat: "data" },
+                    /* Non-linear scale (gamma): 1.0 = linear, <1 expands the
+                     * low end (more needle motion at low values — e.g. boost
+                     * gauges), >1 compresses the low end. Stored as decimal
+                     * here; firmware reads scale_curve_milli written by
+                     * _meterSyncDerived. */
+                    { name: "scale_curve", label: "Scale Curve (1.0 = linear)", type: "number", def: 1.0, cat: "data" },
                     { name: "meter_bg_color", label: "Background Color", type: "color", def: 0x3D3D3D, cat: "appearance", nightOverridable: true },
                     { name: "meter_bg_opa", label: "Background Opacity", type: "stepper", min: 0, max: 255, def: 255, cat: "appearance" },
                     { name: "bg_image_name", label: "Background Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
@@ -4997,6 +5022,7 @@
                     { name: "needle_width", label: "Needle Width", type: "stepper", min: 1, max: 20, def: 4, cat: "appearance" },
                     { name: "needle_color", label: "Needle Color", type: "color", def: 0xFFFFFF, cat: "appearance", nightOverridable: true },
                     { name: "needle_r_mod", label: "Needle Length Trim", type: "stepper", min: -100, max: 100, def: -10, cat: "appearance" },
+                    { name: "needle_rear_length", label: "Needle Rear Length", type: "stepper", min: 0, max: 100, def: 0, cat: "appearance" },
                     { name: "needle_ball_size", label: "Needle Ball Size", type: "stepper", min: 0, max: 40, def: 10, cat: "appearance" },
                     { name: "needle_ball_color", label: "Needle Ball Color", type: "color", def: 0xFFFFFF, cat: "appearance", nightOverridable: true }
                 ]
@@ -6526,6 +6552,15 @@
         let previewTimer = null;
         function buildFirmwarePayload() {
             const payload = JSON.parse(JSON.stringify(currentLayout));
+            /* Drop widgets the user has toggled invisible in the layers panel
+             * — this is what "hide" should mean end-to-end (WASM preview AND
+             * the device payload). Hidden widgets stay in currentLayout so
+             * the user can flip them back on within the same editing session,
+             * but they don't survive a reload (firmware doesn't honor a
+             * "hidden" flag). Treat as "temporarily exclude". */
+            if (Array.isArray(payload.widgets)) {
+                payload.widgets = payload.widgets.filter(w => !w.hidden);
+            }
             /* Tag layout with target screen dimensions */
             payload.screen_w = CANVAS_W;
             payload.screen_h = CANVAS_H;
@@ -7991,6 +8026,7 @@
             const METER_TRIGGERS = new Set([
                 'min', 'max', 'start_position', 'sweep_degrees',
                 'auto_ticks', 'minor_tick_step', 'major_tick_step',
+                'scale_curve',
             ]);
             if (w.type === 'meter' && METER_TRIGGERS.has(field)) {
                 /* Manually editing a step input means the user wants their
