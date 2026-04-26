@@ -3239,6 +3239,17 @@
                 if (_wasmCrashed) return;
                 const json = buildLayoutJson();
                 wasmModule.ccall('load_layout_json', null, ['string'], [json]);
+                /* load_layout_json calls signal_registry_reset() under the
+                 * hood, which wipes any test injections the user had set via
+                 * the Test Value slider. Replay them so a property edit
+                 * (which triggers this preview rebuild) doesn't blank out
+                 * the active test value the user is reading from. */
+                if (typeof _testValues === 'object') {
+                    for (const sigName of Object.keys(_testValues)) {
+                        const v = _testValues[sigName];
+                        if (typeof v === 'number') injectWasmSignal(sigName, v);
+                    }
+                }
             } catch(e) {
                 console.warn('[WASM] Preview update failed:', e);
                 if (e instanceof WebAssembly.RuntimeError) {
