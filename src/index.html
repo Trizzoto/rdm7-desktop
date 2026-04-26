@@ -4978,8 +4978,8 @@
                     { name: "border_opa", label: "Border Opacity", type: "stepper", min: 0, max: 255, def: 255, cat: "appearance" },
                     { name: "scale_padding", label: "Scale Padding", type: "stepper", min: 0, max: 100, def: 0, cat: "appearance" },
                     { name: "auto_ticks", label: "Auto Tick Spacing", type: "checkbox", def: true, cat: "appearance" },
-                    { name: "minor_tick_step", label: "Tick Step (units)", type: "number", def: 10, cat: "appearance", enabledBy: "!auto_ticks" },
-                    { name: "major_tick_step", label: "Major Tick Step (units)", type: "number", def: 50, cat: "appearance", enabledBy: "!auto_ticks" },
+                    { name: "minor_tick_step", label: "Tick Step (units)", type: "number", def: 10, cat: "appearance" },
+                    { name: "major_tick_step", label: "Major Tick Step (units)", type: "number", def: 50, cat: "appearance" },
                     { name: "minor_tick_width", label: "Tick Width", type: "stepper", min: 1, max: 20, def: 2, cat: "appearance" },
                     { name: "minor_tick_length", label: "Tick Length", type: "stepper", min: 1, max: 50, def: 10, cat: "appearance" },
                     { name: "minor_tick_color", label: "Tick Color", type: "color", def: 0x9E9E9E, cat: "appearance", nightOverridable: true },
@@ -7993,6 +7993,17 @@
                 'auto_ticks', 'minor_tick_step', 'major_tick_step',
             ]);
             if (w.type === 'meter' && METER_TRIGGERS.has(field)) {
+                /* Manually editing a step input means the user wants their
+                 * value to stick — flip Auto off before the sync runs, so
+                 * _meterSyncDerived's auto branch doesn't immediately
+                 * overwrite the value the user just typed. */
+                if (field === 'minor_tick_step' || field === 'major_tick_step') {
+                    if (w.config.auto_ticks) {
+                        w.config.auto_ticks = false;
+                        /* Auto checkbox state changed — repaint after sync. */
+                        setTimeout(updateInspector, 0);
+                    }
+                }
                 _meterSyncDerived(w.config);
                 if (field === 'auto_ticks' || field === 'min' || field === 'max') {
                     /* Auto-step values just changed → repaint inputs. */
