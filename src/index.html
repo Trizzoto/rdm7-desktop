@@ -4715,6 +4715,134 @@
         }
 
 
+        /* ── Meter "simplified config" helpers ────────────────────────────────
+         * The firmware stores meters with start_angle / end_angle (LVGL coords:
+         * 0°=right, 90°=down, 180°=left, 270°=up; clockwise sweep) and with
+         * tick layout as minor_tick_count + major_tick_every (count of "every
+         * Nth minor tick is major"). Both are awkward to dial in by hand.
+         *
+         * The inspector instead exposes:
+         *   - start_position  one of 8 cardinals — where the arc begins
+         *   - sweep_degrees   how far the arc spans (clockwise)
+         *   - auto_ticks      checkbox — let the editor pick nice round steps
+         *   - minor_tick_step in DATA units (e.g. "every 500 RPM")
+         *   - major_tick_step in DATA units
+         * The legacy fields are still written on every change so the firmware
+         * keeps reading what it expects. _meterDeriveNewFromLegacy() reverses
+         * the mapping when an old layout (no new fields) is loaded. */
+        const _METER_POSITION_TO_START_ANGLE = {
+            'top': 270, 'top-right': 315, 'right': 0, 'bottom-right': 45,
+            'bottom': 90, 'bottom-left': 135, 'left': 180, 'top-left': 225,
+        };
+        const _METER_POSITION_OPTIONS = [
+            { v: 'bottom-left',  l: 'Bottom-Left' },
+            { v: 'bottom',       l: 'Bottom' },
+            { v: 'bottom-right', l: 'Bottom-Right' },
+            { v: 'left',         l: 'Left' },
+            { v: 'right',        l: 'Right' },
+            { v: 'top-left',     l: 'Top-Left' },
+            { v: 'top',          l: 'Top' },
+            { v: 'top-right',    l: 'Top-Right' },
+        ];
+        const _METER_SWEEP_OPTIONS = [
+            { v: 90,  l: '90°' },
+            { v: 120, l: '120°' },
+            { v: 180, l: '180°' },
+            { v: 210, l: '210°' },
+            { v: 240, l: '240°' },
+            { v: 270, l: '270°' },
+            { v: 300, l: '300°' },
+            { v: 330, l: '330°' },
+            { v: 360, l: '360° (Full)' },
+        ];
+        const _METER_NICE_STEPS = [
+            0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50,
+            100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000, 20000, 50000,
+        ];
+        function _meterNiceStep(range, targetCount) {
+            if (!isFinite(range) || range <= 0) return 1;
+            const ideal = range / Math.max(1, targetCount);
+            for (const s of _METER_NICE_STEPS) if (s >= ideal) return s;
+            return _METER_NICE_STEPS[_METER_NICE_STEPS.length - 1];
+        }
+        /* Forward sync: given the new fields in c, write the legacy fields
+         * (start_angle, end_angle, minor_tick_count, major_tick_every) so the
+         * firmware payload still has what it expects. Idempotent — safe to
+         * call on every config update. */
+        function _meterSyncDerived(c) {
+            if (!c) return;
+            if (c.start_position == null) c.start_position = 'bottom-left';
+            if (c.sweep_degrees == null)  c.sweep_degrees  = 270;
+            if (c.auto_ticks == null)     c.auto_ticks     = true;
+
+            const min = (typeof c.min === 'number') ? c.min : 0;
+            const max = (typeof c.max === 'number') ? c.max : 100;
+            const range = Math.max(0, max - min);
+
+            if (c.auto_ticks) {
+                c.minor_tick_step = _meterNiceStep(range, 10);
+                c.major_tick_step = c.minor_tick_step * 5;
+            } else {
+                if (!(typeof c.minor_tick_step === 'number') || c.minor_tick_step <= 0)
+                    c.minor_tick_step = _meterNiceStep(range, 10);
+                if (!(typeof c.major_tick_step === 'number') || c.major_tick_step <= 0)
+                    c.major_tick_step = c.minor_tick_step * 5;
+            }
+
+            const minorStep = Math.max(1e-6, c.minor_tick_step);
+            const majorStep = Math.max(minorStep, c.major_tick_step);
+            /* Clamp to the firmware widget's accepted range (matches the
+             * limits that used to be on the raw stepper fields). */
+            c.minor_tick_count  = Math.min(100, Math.max(2,
+                                  Math.round(range / minorStep) + 1));
+            c.major_tick_every  = Math.min(50, Math.max(1,
+                                  Math.round(majorStep / minorStep)));
+
+            const start = _METER_POSITION_TO_START_ANGLE[c.start_position] ?? 135;
+            const sweep = Math.max(1, Math.min(360, c.sweep_degrees | 0));
+            c.start_angle = start;
+            c.end_angle   = (start + sweep) % 360;
+        }
+        /* Reverse sync: when a layout is loaded that only has the legacy
+         * fields (saved by the firmware or an older editor), populate the
+         * new fields so the inspector renders sensible values. */
+        function _meterDeriveNewFromLegacy(c) {
+            if (!c) return;
+            if (c.start_position == null && typeof c.start_angle === 'number') {
+                const a = ((c.start_angle % 360) + 360) % 360;
+                let bestPos = 'bottom-left';
+                let bestDiff = 360;
+                for (const [pos, refA] of Object.entries(_METER_POSITION_TO_START_ANGLE)) {
+                    let d = Math.abs(refA - a);
+                    d = Math.min(d, 360 - d);
+                    if (d < bestDiff) { bestDiff = d; bestPos = pos; }
+                }
+                c.start_position = bestPos;
+            }
+            if (c.sweep_degrees == null &&
+                typeof c.start_angle === 'number' &&
+                typeof c.end_angle === 'number') {
+                const s = ((c.start_angle % 360) + 360) % 360;
+                const e = ((c.end_angle   % 360) + 360) % 360;
+                const sweep = (e - s + 360) % 360;
+                c.sweep_degrees = sweep === 0 ? 360 : sweep;
+            }
+            /* If the user previously hand-tuned tick_count, treat as manual.
+             * Otherwise default to auto. */
+            if (c.auto_ticks == null) {
+                c.auto_ticks = (c.minor_tick_count == null);
+            }
+            if (c.minor_tick_step == null && typeof c.minor_tick_count === 'number') {
+                const min = (typeof c.min === 'number') ? c.min : 0;
+                const max = (typeof c.max === 'number') ? c.max : 100;
+                c.minor_tick_step = (max - min) / Math.max(1, c.minor_tick_count - 1);
+            }
+            if (c.major_tick_step == null && typeof c.minor_tick_step === 'number'
+                && typeof c.major_tick_every === 'number') {
+                c.major_tick_step = c.minor_tick_step * c.major_tick_every;
+            }
+        }
+
         const WIDGET_DEFS = {
             "rpm_bar": {
                 displayName: "RPM Bar", defW: CANVAS_W, defH: 55, defY: -ORIGIN_Y + Math.round(55 / 2), singleton: true,
@@ -4840,8 +4968,8 @@
                 fields: [
                     { name: "min", label: "Min Value", type: "number", def: 0, cat: "data" },
                     { name: "max", label: "Max Value", type: "number", def: 100, cat: "data" },
-                    { name: "start_angle", label: "Start angle", type: "number", def: 135, cat: "data" },
-                    { name: "end_angle", label: "End angle", type: "number", def: 45, cat: "data" },
+                    { name: "start_position", label: "Start Position", type: "select", def: "bottom-left", cat: "data", options: _METER_POSITION_OPTIONS },
+                    { name: "sweep_degrees", label: "Sweep", type: "select", def: 270, cat: "data", options: _METER_SWEEP_OPTIONS },
                     { name: "meter_bg_color", label: "Background Color", type: "color", def: 0x3D3D3D, cat: "appearance", nightOverridable: true },
                     { name: "meter_bg_opa", label: "Background Opacity", type: "stepper", min: 0, max: 255, def: 255, cat: "appearance" },
                     { name: "bg_image_name", label: "Background Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
@@ -4849,11 +4977,12 @@
                     { name: "border_width", label: "Border Width", type: "stepper", min: 0, max: 20, def: 0, cat: "appearance" },
                     { name: "border_opa", label: "Border Opacity", type: "stepper", min: 0, max: 255, def: 255, cat: "appearance" },
                     { name: "scale_padding", label: "Scale Padding", type: "stepper", min: 0, max: 100, def: 0, cat: "appearance" },
-                    { name: "minor_tick_count", label: "Tick Count", type: "stepper", min: 2, max: 100, def: 21, cat: "appearance" },
+                    { name: "auto_ticks", label: "Auto Tick Spacing", type: "checkbox", def: true, cat: "appearance" },
+                    { name: "minor_tick_step", label: "Tick Step (units)", type: "number", def: 10, cat: "appearance", enabledBy: "!auto_ticks" },
+                    { name: "major_tick_step", label: "Major Tick Step (units)", type: "number", def: 50, cat: "appearance", enabledBy: "!auto_ticks" },
                     { name: "minor_tick_width", label: "Tick Width", type: "stepper", min: 1, max: 20, def: 2, cat: "appearance" },
                     { name: "minor_tick_length", label: "Tick Length", type: "stepper", min: 1, max: 50, def: 10, cat: "appearance" },
                     { name: "minor_tick_color", label: "Tick Color", type: "color", def: 0x9E9E9E, cat: "appearance", nightOverridable: true },
-                    { name: "major_tick_every", label: "Major Tick Every", type: "stepper", min: 1, max: 50, def: 5, cat: "appearance" },
                     { name: "major_tick_width", label: "Major Tick Width", type: "stepper", min: 1, max: 20, def: 4, cat: "appearance" },
                     { name: "major_tick_length", label: "Major Tick Length", type: "stepper", min: 1, max: 50, def: 15, cat: "appearance" },
                     { name: "major_tick_color", label: "Major Tick Color", type: "color", def: 0xFFFFFF, cat: "appearance", nightOverridable: true },
@@ -7854,6 +7983,23 @@
 
             w.config[field] = finalVal;
 
+            /* Meter: any change to range, sweep position, or tick step needs
+             * to re-derive the legacy LVGL angles + tick count that the
+             * firmware actually consumes. _meterSyncDerived is idempotent
+             * and cheap. Toggling auto_ticks also requires re-render so the
+             * step inputs become enabled / disabled. */
+            const METER_TRIGGERS = new Set([
+                'min', 'max', 'start_position', 'sweep_degrees',
+                'auto_ticks', 'minor_tick_step', 'major_tick_step',
+            ]);
+            if (w.type === 'meter' && METER_TRIGGERS.has(field)) {
+                _meterSyncDerived(w.config);
+                if (field === 'auto_ticks' || field === 'min' || field === 'max') {
+                    /* Auto-step values just changed → repaint inputs. */
+                    updateInspector();
+                }
+            }
+
             /* If this field is a toggle that controls sub-fields, re-render inspector */
             if (fieldDef && fieldDef.type === 'checkbox') {
                 const hasChildren = def.fields.some(f => f.enabledBy === field || f.enabledBy === '!' + field);
@@ -8227,6 +8373,11 @@
             def.fields.forEach(f => {
                 config[f.name] = f.def;
             });
+            /* Meter: derive the legacy LVGL angles + tick count from the
+             * inspector-friendly start_position / sweep / step fields so the
+             * firmware payload has what it expects from the moment the
+             * widget is created. */
+            if (type === 'meter') _meterSyncDerived(config);
             const widgetId = nextWidgetId(type);
             const newWidget = {
                 type: type,
@@ -8790,6 +8941,17 @@
                     if ('endian' in s) {
                         s.is_little_endian = s.endian === 1;
                         delete s.endian;
+                    }
+                });
+                /* Meter widgets: if the layout was saved by the firmware (or
+                 * an older editor) it only has start_angle/end_angle and
+                 * minor_tick_count/major_tick_every. Derive the inspector
+                 * fields, then re-sync to make sure both representations
+                 * agree (round-trip safety). */
+                (currentLayout.widgets || []).forEach(w => {
+                    if (w.type === 'meter' && w.config) {
+                        _meterDeriveNewFromLegacy(w.config);
+                        _meterSyncDerived(w.config);
                     }
                 });
                 /* Bridge firmware→web */
