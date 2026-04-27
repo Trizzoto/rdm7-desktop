@@ -1133,6 +1133,85 @@
     }
 
     /* ═══════════════════════════════════════════════════════════════
+     *  USB API proxy — maps /api/* URLs to UsbTransport methods
+     * ═══════════════════════════════════════════════════════════════ */
+
+    async function _usbRouteApiCall(url, method, body, t) {
+        const qIdx = url.indexOf('?');
+        const pathname = qIdx >= 0 ? url.slice(0, qIdx) : url;
+        const qs = qIdx >= 0 ? url.slice(qIdx + 1) : '';
+        const params = {};
+        if (qs) qs.split('&').forEach(p => {
+            const eq = p.indexOf('=');
+            if (eq >= 0) params[p.slice(0, eq)] = decodeURIComponent(p.slice(eq + 1));
+        });
+
+        if (pathname === '/api/layout/list') return t.listLayouts();
+        if (pathname === '/api/layout/current') return t.loadCurrentLayout ? t.loadCurrentLayout() : null;
+        if (pathname === '/api/layout/raw') return t.loadLayout(params.name || 'default');
+        if (pathname === '/api/layout/save' && method === 'POST') {
+            await t.saveLayout(body.name || 'default', body); return { ok: true };
+        }
+        if (pathname === '/api/layout/set' && method === 'POST') {
+            await t.setActiveLayout(body.name); return { ok: true };
+        }
+        if (pathname === '/api/layout/delete' && method === 'POST') {
+            await t.deleteLayout(body.name); return { ok: true };
+        }
+        if (pathname === '/api/layout/rename' && method === 'POST') {
+            await t.renameLayout(body.old_name, body.new_name); return { ok: true };
+        }
+        if (pathname === '/api/layout/preview' && method === 'POST') {
+            await t.previewOnDevice(body); return { ok: true };
+        }
+        if (pathname === '/api/layout/version') return t.testConnection();
+        if (pathname === '/api/device/info') return t.getDeviceInfo();
+        if (pathname === '/api/image/list') return { images: await t.listImages() };
+        if (pathname === '/api/font/list') return { fonts: await t.listFonts() };
+        if (pathname === '/api/storage/info') return t.getStorageInfo();
+        if (pathname === '/api/signals/values') return t.getSignalValues();
+        if (pathname === '/api/signal/simulate') {
+            if (method === 'POST') return t.toggleSimulation(body && body.enable);
+            return t.getSimulationStatus();
+        }
+        if (pathname === '/api/signal/inject' && method === 'POST') {
+            await t.injectSignal(body.name, body.value); return { ok: true };
+        }
+        if (pathname === '/api/signal/clear') return { ok: true };
+        if (pathname === '/api/fuel/status') return t.getFuelStatus();
+        if (pathname === '/api/fuel/set-empty') { await t.setFuelEmpty(); return { ok: true }; }
+        if (pathname === '/api/fuel/set-full') { await t.setFuelFull(); return { ok: true }; }
+        if (pathname === '/api/splash/list') return { splashes: await t.listSplashes() };
+        if (pathname === '/api/splash/set') return { ok: true };
+        if (pathname === '/api/splash/fade') return { ok: true };
+        if (pathname === '/api/splash/delete') { await t.deleteSplash(body.name); return { ok: true }; }
+        if (pathname === '/api/sd/files') return { files: await t.listSdFiles() };
+        if (pathname === '/api/sd/copy') { await t.copySdFile(body.type, body.name, body.direction); return { ok: true }; }
+        if (pathname === '/api/sd/delete') { await t.deleteSdFile(body.type, body.name); return { ok: true }; }
+        if (pathname === '/api/system/health') return t.getSystemHealth();
+        if (pathname === '/api/log/status') return t.getLogStatus();
+        if (pathname === '/api/log/list') return await t.listLogs();
+        if (pathname === '/api/log/start') { await t.startLogging(); return { ok: true }; }
+        if (pathname === '/api/log/stop') { await t.stopLogging(); return { ok: true }; }
+        if (pathname === '/api/log/delete') { await t.deleteLog(params.name); return { ok: true }; }
+        if (pathname === '/api/brightness') {
+            if (method === 'POST') { await t.setBrightness(body.brightness); return { ok: true }; }
+            return t.getBrightness();
+        }
+        if (pathname === '/api/screenshot' || pathname === '/api/touch') return null;
+        if (pathname.startsWith('/api/can/')) return { ok: true };
+        if (pathname.startsWith('/api/ecu/')) return { ok: true };
+        if (pathname.startsWith('/api/presets')) return {};
+        if (pathname.startsWith('/api/ota/')) return { ok: true };
+        if (pathname.startsWith('/api/indicator/') || pathname.startsWith('/api/warning/')) return { ok: true };
+        if (pathname.startsWith('/api/replay/')) return { ok: true };
+        if (pathname.startsWith('/api/gear/')) return { ok: true };
+        if (pathname.startsWith('/api/wifi/')) return { ok: true };
+        if (pathname.startsWith('/api/dimmer/')) return { ok: true };
+        throw new Error('USB: unmapped endpoint: ' + pathname);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
      *  RDM Global Object — public API
      * ═══════════════════════════════════════════════════════════════ */
 
@@ -1345,6 +1424,51 @@
         async exportRdmBundle(l) { return this._transport.exportRdmBundle(l); },
         async importRdmBundle(d) { return this._transport.importRdmBundle(d); },
 
+        /* ── API proxy — routes raw /api/* fetches through the active transport ── */
+        async proxyApiCall(url, init) {
+            const method = (init && init.method) || 'GET';
+            let bodyText = null;
+            if (init && init.body) {
+                bodyText = typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
+            }
+            let bodyObj = null;
+            if (bodyText) { try { bodyObj = JSON.parse(bodyText); } catch (e) { bodyObj = null; } }
+
+            const makeResp = (data, status) => {
+                const s = status || 200;
+                const text = typeof data === 'string' ? data : JSON.stringify(data);
+                return {
+                    ok: s >= 200 && s < 300, status: s,
+                    headers: { get: (h) => h.toLowerCase() === 'content-type' ? 'application/json' : null },
+                    text: () => Promise.resolve(text),
+                    json: () => Promise.resolve(typeof data === 'object' && data !== null ? data : JSON.parse(text)),
+                    blob: () => Promise.resolve(new Blob([text])),
+                };
+            };
+
+            const t = this._transport;
+            if (t.name === 'wifi' || t.name === 'hotspot') {
+                const fullUrl = (t.baseUrl || 'http://192.168.4.1') + url;
+                try {
+                    const resp = await _tauriInvoke('http_fetch', {
+                        req: { url: fullUrl, method, body: bodyText, timeout_ms: 15000 }
+                    });
+                    return makeResp(resp.body, resp.status);
+                } catch (e) {
+                    return makeResp({ error: String(e) }, 0);
+                }
+            }
+            if (t.name === 'usb') {
+                try {
+                    const result = await _usbRouteApiCall(url, method, bodyObj, t);
+                    return makeResp(result);
+                } catch (e) {
+                    return makeResp({ error: String(e) }, 503);
+                }
+            }
+            return makeResp({ error: 'No device connected' }, 503);
+        },
+
         /* ── Native File Dialogs (Tauri only, falls back to browser) ── */
 
         /**
@@ -1409,4 +1533,20 @@
     };
 
     window.RDM = RDM;
+
+    /* ── fetch interceptor: route /api/* through RDM transport when in Tauri ──
+       Without this, firmware's raw fetch('/api/...') calls resolve to
+       tauri://localhost/api/... instead of the connected device.
+       Local mode passes through so error handling in each function still fires. */
+    if (typeof window.__TAURI_INTERNALS__ !== 'undefined' || typeof window.__TAURI__ !== 'undefined') {
+        const _origFetch = window.fetch.bind(window);
+        window.fetch = async function(input, init) {
+            const url = typeof input === 'string' ? input
+                : (input instanceof Request ? input.url : String(input));
+            if (url.startsWith('/api/') && RDM.mode !== 'local') {
+                return RDM.proxyApiCall(url, init);
+            }
+            return _origFetch(input, init);
+        };
+    }
 })();

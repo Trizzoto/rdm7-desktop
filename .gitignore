@@ -9,6 +9,13 @@ node_modules/
 src/build/index.js
 src/build/index.wasm
 
+# Python bytecode (from tools/*.py)
+__pycache__/
+*.pyc
+
 # OS files
 .DS_Store
 Thumbs.db
+
+# Claude Code session data
+.claude/
