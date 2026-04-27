@@ -1,0 +1,42 @@
+name: Widget Schema Drift Check
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "schema/**"
+      - "tools/codegen_widget_defs.py"
+      - "tools/validate_widget_schema.py"
+      - "tools/check_widget_codegen.py"
+      - "tools/requirements.txt"
+      - "src/index.html"
+      - ".github/workflows/widget-schema-check.yml"
+  pull_request:
+    paths:
+      - "schema/**"
+      - "tools/codegen_widget_defs.py"
+      - "tools/validate_widget_schema.py"
+      - "tools/check_widget_codegen.py"
+      - "tools/requirements.txt"
+      - "src/index.html"
+      - ".github/workflows/widget-schema-check.yml"
+
+jobs:
+  schema-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install validator deps
+        run: pip install -r tools/requirements.txt
+
+      - name: Validate schema
+        run: python tools/validate_widget_schema.py
+
+      - name: Drift check (schema vs src/index.html)
+        run: python tools/check_widget_codegen.py
