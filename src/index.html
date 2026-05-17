@@ -3,6 +3,7 @@
 
 <head>
     <title>RDM-7 Visual Designer</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
@@ -441,7 +442,6 @@
         }
         @media (max-width: 1199px) {
             header #screenModeSelect,
-            header #ecuSelect,
             header #splashSelect,
             header #splashFadeLabel {
                 display: none !important;
@@ -476,7 +476,11 @@
         /* Hamburger menu — ALWAYS visible across phone/tablet/laptop/desktop.
          * Previously hidden at >=1400px (desktop full-inline header), but the
          * SVG-icon slide-in panel is the canonical "all options" surface so
-         * we keep it accessible at every viewport width. */
+         * we keep it accessible at every viewport width.
+         *
+         * margin-right:auto anchors it next to the logo on every viewport —
+         * without it, the header's `justify-content: space-between` pushes
+         * the burger toward the middle of the bar, away from the logo. */
         .mobile-burger {
             display: inline-flex;
             width: 34px; height: 34px;
@@ -488,6 +492,7 @@
             align-items: center; justify-content: center;
             cursor: pointer;
             flex-shrink: 0;
+            margin-right: auto;
         }
         .mobile-burger:hover { background: var(--bg); }
 
@@ -617,7 +622,6 @@
             header > .title img { height: 22px; }
             header .header-divider { display: none; }
             header #screenModeSelect,
-            header #ecuSelect,
             header #layoutSelect,
             header #pillAutoSync,
             header #pillSimulate,
@@ -910,6 +914,18 @@
             height: 1px;
             background: var(--border);
             margin: 4px 0;
+        }
+        /* Section label inside the hamburger menu — uppercase grey heading
+         * above a group of related items. Non-interactive. */
+        .layout-menu-label {
+            padding: 6px 14px 2px 14px;
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            pointer-events: none;
+            opacity: 0.75;
         }
 
         /* Right sidebar tabs */
@@ -2562,6 +2578,89 @@
             overflow: hidden; margin-top: 4px; }
         .dm-bar-fill { height: 100%; background: var(--accent); border-radius: 3px;
             transition: width 0.3s; }
+
+        /* ── Serial Logs drawer (USB-only) ─────────────────────────── */
+        #logsToggleBtn {
+            position: fixed; bottom: 16px; right: 16px; z-index: 1900;
+            width: 40px; height: 40px; border-radius: 50%;
+            background: var(--panel-elevated); border: 1px solid var(--border);
+            color: var(--text-muted); cursor: pointer;
+            display: none; align-items: center; justify-content: center;
+            box-shadow: var(--shadow-md);
+            transition: color .15s, border-color .15s;
+        }
+        #logsToggleBtn.visible { display: flex; }
+        #logsToggleBtn:hover { color: var(--text); border-color: var(--text-muted); }
+        #logsToggleBtn svg { width: 18px; height: 18px; }
+        #logsToggleBtn .logs-new-dot {
+            position: absolute; top: 6px; right: 6px;
+            width: 8px; height: 8px; border-radius: 50%;
+            background: hsl(160, 70%, 50%); display: none;
+            box-shadow: 0 0 0 2px var(--panel-elevated);
+        }
+        #logsToggleBtn.has-new .logs-new-dot { display: block; }
+
+        #logsDrawer {
+            position: fixed; top: 0; right: 0; bottom: 0;
+            width: min(420px, 95vw);
+            background: var(--panel-elevated); border-left: 1px solid var(--border);
+            box-shadow: -4px 0 20px rgba(0,0,0,0.4);
+            z-index: 1950;
+            display: flex; flex-direction: column;
+            transform: translateX(100%); transition: transform .2s ease-out;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        #logsDrawer.open { transform: translateX(0); }
+        .logs-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 12px 14px; border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .logs-header h3 {
+            margin: 0; flex: 1;
+            font-size: 11px; font-weight: 700;
+            letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--text);
+        }
+        .logs-header button {
+            background: none; border: 1px solid var(--border);
+            color: var(--text-muted); cursor: pointer;
+            font-size: 10px; padding: 4px 8px; border-radius: var(--radius-sm);
+            font-family: inherit; text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .logs-header button:hover { color: var(--text); border-color: var(--text-muted); }
+        .logs-header .logs-close {
+            border: none; font-size: 18px; padding: 0 4px;
+            line-height: 1;
+        }
+        .logs-list {
+            flex: 1; overflow-y: auto; overflow-x: hidden;
+            padding: 8px 0; font-size: 11px; line-height: 1.45;
+            background: var(--bg);
+        }
+        .logs-list .log-line {
+            padding: 1px 14px; white-space: pre-wrap; word-break: break-word;
+            color: var(--text);
+        }
+        .logs-list .log-line.lvl-w { color: hsl(38, 90%, 60%); }
+        .logs-list .log-line.lvl-e { color: hsl(0, 75%, 65%); }
+        .logs-list .log-line.lvl-d { color: hsl(0, 0%, 50%); }
+        .logs-list .log-line.lvl-v { color: hsl(0, 0%, 38%); }
+        .logs-empty {
+            padding: 16px 14px; color: var(--text-muted);
+            font-size: 11px; font-style: italic;
+        }
+        .logs-paused-banner {
+            display: none;
+            position: absolute; bottom: 12px; left: 50%;
+            transform: translateX(-50%);
+            background: hsl(38, 60%, 45%); color: white;
+            padding: 4px 10px; border-radius: 12px;
+            font-size: 10px; cursor: pointer;
+            box-shadow: var(--shadow-md);
+            text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .logs-paused-banner.visible { display: block; }
     </style>
 
     <!-- Desktop: WASM preview engine + transport layer loaded before main script -->
@@ -2887,7 +2986,7 @@
         <div class="top-controls">
             <div class="header-toggles">
                 <button class="header-pill active" id="pillBezel" onclick="toggleHeaderPill(this, 'bezel')">Bezel</button>
-                <button class="header-pill" id="pillWidgets" onclick="toggleHeaderPill(this, 'widgets')">Widgets</button>
+                <button class="header-pill active" id="pillWidgets" onclick="toggleHeaderPill(this, 'widgets')">Widgets</button>
             </div>
             <!-- Hidden elements for JS compatibility. The firmware-hosted editor
                  only runs on the 7" dash, so screenSizeSelect is hidden; the JS
@@ -2900,12 +2999,6 @@
                 style="background:var(--bg); color:var(--text); border:1px solid var(--border); padding:5px 8px; border-radius:var(--radius-sm); font-size:11px; font-family:'JetBrains Mono', monospace; font-weight:600;">
                 <option value="dashboard">Dashboard</option>
                 <option value="splash">Splash Screen</option>
-            </select>
-            <div class="header-divider"></div>
-            <select id="ecuSelect" onchange="onEcuChange(this.value)"
-                title="Auto-configure default layout for your ECU"
-                style="background:var(--bg); color:var(--text); border:1px solid var(--border); padding:5px 8px; border-radius:var(--radius-sm); font-size:11px; font-family:'JetBrains Mono', monospace; max-width:160px;">
-                <option value="">None</option>
             </select>
             <div class="header-divider"></div>
             <select id="layoutSelect"
@@ -2923,8 +3016,21 @@
                     <div class="layout-menu-item" onclick="openDeviceInfo(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r="0.8" fill="currentColor" stroke="none"/></svg>Device Info...</div>
                     <div class="layout-menu-item" onclick="openSignalDashboard(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>Signal Dashboard...</div>
                     <div class="layout-menu-item" onclick="openDataLogger(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>Data Logger...</div>
-                    <div class="layout-menu-item" onclick="openFuelCalibration(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><path d="M3 22h12V4a2 2 0 00-2-2H5a2 2 0 00-2 2v18z"/><path d="M15 8h3a2 2 0 012 2v7a2 2 0 01-2 2h-3"/><line x1="7" y1="10" x2="11" y2="10"/></svg>Fuel Calibration...</div>
                     <div class="layout-menu-item" onclick="openDimmerSettings(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Dimmer Settings...</div>
+                    <div class="layout-menu-sep"></div>
+                    <!-- OBD2 diagnostics section — vehicle-side tools that talk
+                         to the ECU. Setup is the entry point; Trouble Codes is
+                         the DTC reader; Vehicle Info shows VIN/ECU name;
+                         Custom PIDs is the forum-PID editor. Mirrors firmware. -->
+                    <div class="layout-menu-label">OBD2</div>
+                    <div class="layout-menu-item" onclick="openObd2Setup(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Setup...</div>
+                    <div class="layout-menu-item" onclick="openTroubleCodes(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>Trouble Codes...</div>
+                    <div class="layout-menu-item" onclick="openVehicleInfo(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><path d="M5 11l1.5-4.5a2 2 0 011.9-1.5h7.2a2 2 0 011.9 1.5L19 11"/><path d="M5 11h14v6a1 1 0 01-1 1h-1a1 1 0 01-1-1v-1H8v1a1 1 0 01-1 1H6a1 1 0 01-1-1v-6z"/><circle cx="7.5" cy="14.5" r="0.8" fill="currentColor" stroke="none"/><circle cx="16.5" cy="14.5" r="0.8" fill="currentColor" stroke="none"/></svg>Vehicle Info...</div>
+                    <!-- Custom PIDs item is omitted here — the firmware web
+                         editor has the modal + WIDGET_DEFS for it, but the
+                         desktop fork hasn't backported that feature yet.
+                         When customPidsModal + openCustomPids land here,
+                         re-add the menu item from main/web/index.html. -->
                     <div class="layout-menu-sep"></div>
                     <div class="layout-menu-item" onclick="openDbcImportModal(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import DBC...</div>
                     <div class="layout-menu-item" onclick="openMarketplace(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Marketplace</div>
@@ -2971,7 +3077,7 @@
             <button class="btn btn-secondary btn-icon" onclick="undo()" title="Undo (Ctrl+Z)">↶</button>
             <button class="btn btn-secondary btn-icon" onclick="redo()" title="Redo (Ctrl+Y)">↷</button>
             <button class="btn btn-secondary" id="resetBtnHdr" onclick="resetView()">Reset</button>
-            <button class="btn btn-secondary btn-icon" id="helpBtn" onclick="document.getElementById('helpModal').style.display='flex'" title="Help">?</button>
+            <button class="btn btn-secondary btn-icon" id="helpBtn" onclick="document.getElementById('helpModal').style.display='flex'" title="Keyboard Shortcuts">?</button>
             <button class="btn btn-secondary" id="syncBtn" onclick="captureScreenshot()" title="Refresh the device preview thumbnail (runs automatically on Save; use this to force a refresh when the on-device screen changes)">Sync</button>
 
             <div class="header-divider"></div>
@@ -2999,18 +3105,11 @@
         <!-- Hidden sigList kept for renderSignals() compatibility -->
         <div id="sigList" style="display:none;"></div>
 
-        <!-- Left Sidebar: live Signals panel -->
+        <!-- Left Sidebar: Widget palette -->
         <aside class="sidebar sidebar-left" style="position:relative;">
             <button class="sidebar-collapse-toggle" id="leftCollapseBtn" onclick="toggleLeftSidebar()" title="Collapse sidebar">&laquo;</button>
-            <div class="sidebar-header" style="padding-right:36px;">
-                Signals <span id="sigCardsCount" style="color:var(--text-muted); font-weight:400; margin-left:6px;"></span>
-            </div>
-            <div style="padding:6px 10px; border-bottom:1px solid var(--border);">
-                <input id="sigCardsFilter" placeholder="Filter..." style="width:100%; padding:4px 6px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:3px; font-size:11px;" oninput="renderLiveSignalCards()">
-            </div>
-            <div id="sigCardsList" style="flex:1; overflow:auto; min-height:0;">
-                <div style="padding:14px; color:var(--text-muted); font-size:11px;">Loading signals...</div>
-            </div>
+            <div class="sidebar-header" style="padding-right:36px;">Widgets</div>
+            <div id="paletteList" style="flex:1; overflow-y:auto; min-height:0;"></div>
         </aside>
 
         <!-- Left Resize Handle -->
@@ -3042,8 +3141,8 @@
                              style="display:none; position:absolute; top:0; left:0; width:800px; height:480px; pointer-events:auto; cursor:crosshair; user-select:none; -webkit-user-drag:none;"
                              draggable="false" alt="Live dashboard stream">
                         <!-- hide-crosshair matches the removed pill's default;
-                             hide-widgets matches the Widgets pill starting deselected. -->
-                        <div id="interactionLayer" class="hide-crosshair hide-widgets">
+                             Widgets pill defaults active, so no hide-widgets here. -->
+                        <div id="interactionLayer" class="hide-crosshair">
                             <div id="guideX" class="smart-guide-x"></div>
                             <div id="guideY" class="smart-guide-y"></div>
                         </div>
@@ -3055,17 +3154,13 @@
         <!-- Right Resize Handle -->
         <div class="sidebar-resize" id="rightResize" data-side="right"></div>
 
-        <!-- Right Sidebar: Widgets + Properties + Layers -->
+        <!-- Right Sidebar: Properties + Layers -->
         <aside class="sidebar sidebar-right">
             <div class="right-sidebar-tabs">
-                <button class="right-sidebar-tab active" onclick="switchRightTab('widgets')">Widgets</button>
-                <button class="right-sidebar-tab" onclick="switchRightTab('properties')">Properties</button>
+                <button class="right-sidebar-tab active" onclick="switchRightTab('properties')">Properties</button>
                 <button class="right-sidebar-tab" onclick="switchRightTab('layers')">Layers</button>
             </div>
-            <div class="right-tab-content active" id="rightTabWidgets" style="overflow:hidden;">
-                <div id="paletteList" style="flex:1; overflow-y:auto; min-height:0;"></div>
-            </div>
-            <div class="right-tab-content" id="rightTabProperties">
+            <div class="right-tab-content active" id="rightTabProperties">
             <div id="inspectorContent" class="inspector-group" style="flex:1; overflow-y:auto; min-height:0;">
                 <div class="inspector-empty">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -3102,17 +3197,103 @@
                 <span style="font-weight:600; font-size:14px;">Device Info</span>
                 <button class="close-btn" onclick="closeDeviceInfo()" style="font-size:18px;">&times;</button>
             </div>
-            <!-- Sync Screen button: mobile users can't easily see the editor's
-                 canvas while this modal is open, so surface the preview refresh
-                 here too. Identical action to the header's Sync button. -->
-            <button class="btn btn-secondary" onclick="captureScreenshot(); showToast('Screen synced', 'success');"
-                    style="flex:0 0 auto; margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:6px; font-size:12px; padding:8px 12px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                Sync Screen
-            </button>
             <div id="deviceInfoBody" style="display:grid; grid-template-columns:auto 1fr; row-gap:6px; column-gap:16px; font-size:12px; overflow-y:auto; flex:1 1 auto; padding-right:4px;">
                 <span style="color:var(--text-muted);">Loading...</span>
             </div>
+        </div>
+    </div>
+
+    <!-- OBD2 Setup modal — entry point into the OBD2 toolkit. Mirrors firmware. -->
+    <div id="obd2SetupModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeObd2Setup()">
+        <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:560px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <span style="font-weight:600; font-size:14px;">OBD2 Setup</span>
+                <button class="close-btn" onclick="closeObd2Setup()" style="font-size:18px;">&times;</button>
+            </div>
+            <div style="display:grid; grid-template-columns:auto 1fr; row-gap:8px; column-gap:16px; font-size:12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:14px;">
+                <span style="color:var(--text-muted);">CAN bus</span>
+                <span id="obd2SetupCan" style="font-family:'JetBrains Mono', monospace;">…</span>
+                <span style="color:var(--text-muted);">ECU preset</span>
+                <span id="obd2SetupEcu" style="font-family:'JetBrains Mono', monospace;">…</span>
+                <span style="color:var(--text-muted);">Enabled signals</span>
+                <span id="obd2SetupEnabled" style="font-family:'JetBrains Mono', monospace;">…</span>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
+                <b style="color:var(--text);">1.</b> Pick your ECU in the header dropdown.<br>
+                <b style="color:var(--text);">2.</b> Bind OBD2 signals to widgets via the Properties tab.<br>
+                <b style="color:var(--text);">3.</b> Read Trouble Codes when the check-engine light is on.
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <button class="btn btn-secondary" style="padding:10px 12px; text-align:left; display:flex; flex-direction:column; align-items:flex-start; gap:3px;" onclick="closeObd2Setup(); openTroubleCodes();">
+                    <span style="font-size:12px; font-weight:600; color:var(--text);">Trouble Codes</span>
+                    <span style="font-size:10px; color:var(--text-muted);">Read &amp; clear DTCs</span>
+                </button>
+                <button class="btn btn-secondary" style="padding:10px 12px; text-align:left; display:flex; flex-direction:column; align-items:flex-start; gap:3px;" onclick="closeObd2Setup(); openVehicleInfo();">
+                    <span style="font-size:12px; font-weight:600; color:var(--text);">Vehicle Info</span>
+                    <span style="font-size:10px; color:var(--text-muted);">VIN, ECU name</span>
+                </button>
+                <button class="btn btn-secondary" style="padding:10px 12px; text-align:left; display:flex; flex-direction:column; align-items:flex-start; gap:3px;" onclick="closeObd2Setup(); openSignalDashboard();">
+                    <span style="font-size:12px; font-weight:600; color:var(--text);">Signal Dashboard</span>
+                    <span style="font-size:10px; color:var(--text-muted);">Watch live values</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trouble Codes (DTC reader) — tabs Stored / Pending / Permanent + Clear. -->
+    <div id="troubleCodesModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeTroubleCodes()">
+        <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; width:640px; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex:0 0 auto;">
+                <span style="font-weight:600; font-size:14px;">Trouble Codes
+                    <span id="dtcCount" style="color:var(--text-muted); font-weight:400; font-size:11px; margin-left:6px;"></span>
+                </span>
+                <button class="close-btn" onclick="closeTroubleCodes()" style="font-size:18px;">&times;</button>
+            </div>
+            <div style="display:flex; gap:6px; margin-bottom:10px; flex:0 0 auto;">
+                <button id="dtcTabStored" class="btn" style="font-size:11px; padding:6px 12px;" onclick="_dtcSelectTab('stored')">Stored</button>
+                <button id="dtcTabPending" class="btn btn-secondary" style="font-size:11px; padding:6px 12px;" onclick="_dtcSelectTab('pending')">Pending</button>
+                <button id="dtcTabPermanent" class="btn btn-secondary" style="font-size:11px; padding:6px 12px;" onclick="_dtcSelectTab('permanent')">Permanent</button>
+                <button class="btn btn-secondary" style="font-size:11px; padding:6px 12px; margin-left:auto;" onclick="_dtcRefresh()">↻ Refresh</button>
+            </div>
+            <div id="dtcStatus" style="font-size:11px; color:var(--text-muted); margin-bottom:8px; font-family:'JetBrains Mono', monospace; min-height:14px; flex:0 0 auto;"></div>
+            <div style="flex:1; overflow:auto; border:1px solid var(--border); border-radius:var(--radius-md); min-height:200px;">
+                <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                    <thead style="position:sticky; top:0; background:var(--panel-elevated); z-index:1;">
+                        <tr style="text-align:left;">
+                            <th style="padding:8px 10px; border-bottom:1px solid var(--border); width:90px; font-family:'JetBrains Mono', monospace;">Code</th>
+                            <th style="padding:8px 10px; border-bottom:1px solid var(--border);">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dtcBody"></tbody>
+                </table>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; flex:0 0 auto;">
+                <span style="font-size:10px; color:var(--text-muted);">Codes come from <code>Mode 03/07/0A</code>. Clear fires <code>Mode 04</code>.</span>
+                <button id="dtcClearBtn" class="btn" style="background:hsl(0,55%,50%); border-color:hsl(0,55%,40%); font-size:11px; padding:6px 14px;" onclick="_dtcClearTap()">Clear Codes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vehicle Info — VIN + ECU name. -->
+    <div id="vehicleInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeVehicleInfo()">
+        <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:480px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <span style="font-weight:600; font-size:14px;">Vehicle Info</span>
+                <button class="close-btn" onclick="closeVehicleInfo()" style="font-size:18px;">&times;</button>
+            </div>
+            <div style="display:grid; grid-template-columns:auto 1fr; row-gap:10px; column-gap:14px; font-size:12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px; margin-bottom:12px;">
+                <span style="color:var(--text-muted);">VIN</span>
+                <span id="vinValue" style="font-family:'JetBrains Mono', monospace; word-break:break-all;">…</span>
+                <span style="color:var(--text-muted);">ECU name</span>
+                <span id="ecuNameValue" style="font-family:'JetBrains Mono', monospace;">…</span>
+                <span style="color:var(--text-muted);">Last read</span>
+                <span id="vehInfoTime" style="font-family:'JetBrains Mono', monospace; color:var(--text-muted);">never</span>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button id="vehInfoCopy" class="btn btn-secondary" style="font-size:11px; padding:6px 14px;" onclick="_vehInfoCopyVin()">Copy VIN</button>
+                <button class="btn" style="font-size:11px; padding:6px 14px;" onclick="_vehInfoRefresh()">↻ Read from ECU</button>
+            </div>
+            <div id="vehInfoStatus" style="font-size:11px; color:var(--text-muted); margin-top:10px; min-height:14px;"></div>
         </div>
     </div>
 
@@ -3148,7 +3329,7 @@
                 <span style="font-weight:600; font-size:14px;">Data Logger</span>
                 <button class="close-btn" onclick="closeDataLogger()" style="font-size:18px;">&times;</button>
             </div>
-            <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:12px;">
+            <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:6px;">
                 <label style="font-size:11px; color:var(--text-muted); flex:1;">Sample Rate
                     <select id="logRateSelect" style="width:100%; margin-top:2px; padding:5px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
                         <option value="1">1 Hz</option>
@@ -3162,10 +3343,42 @@
                         <option value="0">Max</option>
                     </select>
                 </label>
-                <button id="logToggleBtn" class="btn" style="padding:7px 16px;" onclick="toggleDataLogger()">Start</button>
+                <button id="logToggleBtn" class="btn" style="padding:7px 16px;" onclick="toggleDataLogger()" title="Sample every signal at the chosen rate (decoded values, regular intervals)">Start Signal Log</button>
+                <!-- Raw CAN: writes every frame (no decoding) to its own
+                     *.csv so users can ship the trace off-device for DBC-
+                     side analysis. Mutually exclusive with signal logging. -->
+                <button id="canrawToggleBtn" class="btn btn-secondary" style="padding:7px 16px;" onclick="toggleCanRaw()" title="Capture every CAN frame for offline decoding in SavvyCAN">Start Raw CAN</button>
+            </div>
+            <!-- Picker hint — explains when to use which logger so users
+                 don't pick the wrong one for their use case. -->
+            <div style="font-size:10px; color:var(--text-muted); margin-bottom:10px; line-height:1.5;">
+                <b>Signal Log</b> &mdash; decoded values at a fixed rate. Good for plotting + replaying through dashboard widgets.<br>
+                <b>Raw CAN</b> &mdash; every frame, exact timing, SavvyCAN-compatible CSV. Good for offline DBC decoding.
             </div>
             <div id="logStatusLine" style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">Idle</div>
-            <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Logs on SD card</div>
+            <!-- Replay status — visible only while a replay is running. Lets
+                 the user track progress and stop early. -->
+            <div id="logReplayLine" style="display:none; font-size:11px; color:var(--text-muted); margin-bottom:10px; padding:6px 10px; background:var(--bg); border:1px solid var(--border); border-radius:4px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                <span id="logReplayInfo">Replaying...</span>
+                <button class="btn btn-secondary" style="padding:3px 10px; font-size:10px;" onclick="stopReplay()">Stop</button>
+            </div>
+            <!-- Upload + replay-speed controls. Upload streams a CSV to
+                 internal flash (capped at LFS_MAX_BYTES) so users can drop
+                 in a log from another device and play it back. -->
+            <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                <input id="logUploadFile" type="file" accept=".csv,text/csv" style="flex:1; font-size:11px; color:var(--text-muted);">
+                <label style="font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:4px;">Speed
+                    <select id="logReplaySpeed" style="background:var(--bg); color:var(--text); border:1px solid var(--border); padding:3px 6px; border-radius:4px; font-size:11px;">
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="2">2x</option>
+                        <option value="5">5x</option>
+                        <option value="10">10x</option>
+                    </select>
+                </label>
+                <button class="btn btn-secondary" style="padding:5px 12px; font-size:11px;" onclick="uploadLogFile()">Upload</button>
+            </div>
+            <div id="logStorageLine" style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Logs</div>
             <div id="logList" style="flex:1; overflow:auto; border:1px solid var(--border); border-radius:var(--radius-md); font-size:11px; min-height:120px; max-height:260px;"></div>
         </div>
     </div>
@@ -3205,8 +3418,8 @@
             </div>
             <div style="display:flex; flex-direction:column; gap:10px;">
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                    <label style="font-size:11px; color:var(--text-muted);">Wheel Circumference (m)
-                        <input id="gearWheelM" type="number" step="0.001" min="0.3" max="4" value="1.95"
+                    <label style="font-size:11px; color:var(--text-muted);">Wheel Circumference (mm)
+                        <input id="gearWheelM" type="number" step="1" min="300" max="4000" value="1950"
                                style="width:100%; margin-top:2px; padding:5px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
                     </label>
                     <label style="font-size:11px; color:var(--text-muted);">Final Drive Ratio
@@ -3236,6 +3449,52 @@
                     <input id="gearEnabled" type="checkbox" style="width:14px; height:14px;"> Enabled — publish CALCULATED_GEAR
                 </label>
                 <button class="btn" style="margin-top:6px; padding:8px;" onclick="saveGearSetup()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fuel Sender Setup modal — configures the FUEL_SENDER_V analog input.
+         Sets min (empty) and max (full) voltage + full-tank value. Opened via
+         the hamburger "Fuel Sender Setup..." item, or automatically the first
+         time a widget picks FUEL_SENDER_V as its data source. -->
+    <div id="fuelSenderSetupModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeFuelSenderSetup()">
+        <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:460px; max-width:92vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span style="font-weight:600; font-size:14px;">Fuel Sender Setup &mdash; Voltage Range</span>
+                <button class="close-btn" onclick="closeFuelSenderSetup()" style="font-size:18px;">&times;</button>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); margin-bottom:12px; line-height:1.4;">
+                Map the fuel sender's analog voltage to a tank reading. Enter the voltage at empty and full,
+                and the value at full (e.g. <b>100</b> for percent, or tank capacity in litres). Use
+                <b>Use Current</b> with a known tank level to snapshot the live voltage.
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:4px;">
+                    <span style="font-size:11px; color:var(--text-muted);">Live Voltage</span>
+                    <span id="fuelSetupLiveV" style="font-size:13px; font-family:monospace; color:var(--text);">-- V</span>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr auto; gap:8px; align-items:end;">
+                    <label style="font-size:11px; color:var(--text-muted);">Min Voltage (Empty)
+                        <input id="fuelSetupEmptyV" type="number" step="0.001" min="0" max="5" value="0.500"
+                               style="width:100%; margin-top:2px; padding:5px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
+                    </label>
+                    <button class="btn btn-secondary" style="font-size:11px; padding:6px 10px; white-space:nowrap;" onclick="_fuelSetupUseCurrent('empty')">Use Current</button>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr auto; gap:8px; align-items:end;">
+                    <label style="font-size:11px; color:var(--text-muted);">Max Voltage (Full)
+                        <input id="fuelSetupFullV" type="number" step="0.001" min="0" max="5" value="3.000"
+                               style="width:100%; margin-top:2px; padding:5px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
+                    </label>
+                    <button class="btn btn-secondary" style="font-size:11px; padding:6px 10px; white-space:nowrap;" onclick="_fuelSetupUseCurrent('full')">Use Current</button>
+                </div>
+                <label style="font-size:11px; color:var(--text-muted);">Full Value <span style="font-size:10px; opacity:0.7;">(units at max voltage)</span>
+                    <input id="fuelSetupFullValue" type="number" step="0.1" min="0" value="100"
+                           style="width:100%; margin-top:2px; padding:5px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
+                </label>
+                <label style="font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+                    <input id="fuelSetupEnabled" type="checkbox" style="width:14px; height:14px;"> Enabled &mdash; publish calibrated FUEL_SENDER_V
+                </label>
+                <button class="btn" style="margin-top:6px; padding:8px;" onclick="saveFuelSenderSetup()">Save</button>
             </div>
         </div>
     </div>
@@ -3357,10 +3616,6 @@
 
     <!-- Mobile bottom nav (icons open slide-up sheets for Widgets / Properties / Layers / More) -->
     <nav id="mobileActionBar" role="toolbar" aria-label="Primary actions">
-        <button data-action="widgets" aria-label="Widgets">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            <span>Widgets</span>
-        </button>
         <button data-action="properties" aria-label="Properties" aria-disabled="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="8.01"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
             <span>Properties</span>
@@ -5125,9 +5380,10 @@
         }
         function _meterSyncDerived(c) {
             if (!c) return;
-            if (c.start_position == null) c.start_position = 'bottom-left';
-            if (c.sweep_degrees == null)  c.sweep_degrees  = 270;
-            if (c.auto_ticks == null)     c.auto_ticks     = true;
+            if (c.start_angle_user == null) c.start_angle_user = 225;
+            if (c.sweep_degrees == null)    c.sweep_degrees    = 270;
+            if (c.reverse == null)          c.reverse          = false;
+            if (c.auto_ticks == null)       c.auto_ticks       = true;
 
             const min = (typeof c.min === 'number') ? c.min : 0;
             const max = (typeof c.max === 'number') ? c.max : 100;
@@ -5150,24 +5406,26 @@
             c.major_tick_every  = Math.min(50, Math.max(1,
                                   Math.round(majorStep / minorStep)));
 
-            const start = _METER_POSITION_TO_START_ANGLE[c.start_position] ?? 135;
-            const sweep = Math.max(1, Math.min(360, c.sweep_degrees | 0));
-            c.start_angle = start;
-            c.end_angle   = (start + sweep) % 360;
-
+            /* User: 0° = 12 o'clock, CW positive.
+             * LVGL: 0° = 3 o'clock, CW. → lvgl = (user + 270) % 360. */
+            const userStart = (((c.start_angle_user | 0) % 360) + 360) % 360;
+            const sweep     = Math.max(1, Math.min(360, c.sweep_degrees | 0));
+            const lvglStart = (userStart + 270) % 360;
+            c.start_angle = lvglStart;
+            c.end_angle   = (lvglStart + sweep) % 360;
         }
         function _meterDeriveNewFromLegacy(c) {
             if (!c) return;
-            if (c.start_position == null && typeof c.start_angle === 'number') {
+            /* Legacy v1: start_position cardinal → start_angle_user. */
+            if (c.start_angle_user == null && c.start_position != null) {
+                const lvgl = _METER_POSITION_TO_START_ANGLE[c.start_position] ?? 135;
+                c.start_angle_user = (lvgl + 90) % 360;
+                delete c.start_position;
+            }
+            /* Older legacy: only LVGL start_angle persisted. */
+            if (c.start_angle_user == null && typeof c.start_angle === 'number') {
                 const a = ((c.start_angle % 360) + 360) % 360;
-                let bestPos = 'bottom-left';
-                let bestDiff = 360;
-                for (const [pos, refA] of Object.entries(_METER_POSITION_TO_START_ANGLE)) {
-                    let d = Math.abs(refA - a);
-                    d = Math.min(d, 360 - d);
-                    if (d < bestDiff) { bestDiff = d; bestPos = pos; }
-                }
-                c.start_position = bestPos;
+                c.start_angle_user = (a + 90) % 360;
             }
             if (c.sweep_degrees == null &&
                 typeof c.start_angle === 'number' &&
@@ -5274,6 +5532,7 @@
                             { name: "label_font", label: "Label Font", type: "font", def: "", cat: "appearance" },
                             { name: "value_font", label: "Value Font", type: "font", def: "", cat: "appearance" },
                             { name: "bar_bg_color", label: "Track Color", type: "color", def: 0x2E2F2E, cat: "appearance", nightOverridable: true },
+                            { name: "bar_bg_opa", label: "Track Opacity", type: "slider", def: 255, min: 0, max: 255, cat: "appearance" },
                             { name: "bar_radius", label: "Bar Radius", type: "stepper", def: 5, cat: "appearance", min: 0, max: 50 },
                             { name: "bar_border_width", label: "Border Width", type: "stepper", def: 2, cat: "appearance", min: 0, max: 20 },
                             { name: "bar_border_color", label: "Border Color", type: "color", def: 0x2E2F2E, cat: "appearance", nightOverridable: true },
@@ -5351,8 +5610,12 @@
                         fields: [
                             { name: "min", label: "Min Value", type: "number", def: 0, cat: "data" },
                             { name: "max", label: "Max Value", type: "number", def: 100, cat: "data" },
-                            { name: "start_position", label: "Start Position", type: "select", def: "bottom-left", cat: "data", options: _METER_POSITION_OPTIONS },
+                            /* User-coord start angle: 0° = 12 o'clock, CW positive.
+                             * _meterSyncDerived translates this into the LVGL
+                             * start_angle/end_angle pair the firmware reads. */
+                            { name: "start_angle_user", label: "Start Angle (°)", type: "stepper", def: 225, cat: "data", min: 0, max: 359, step: 5 },
                             { name: "sweep_degrees", label: "Sweep", type: "select", def: 270, cat: "data", options: _METER_SWEEP_OPTIONS },
+                            { name: "reverse", label: "Reverse Direction", type: "checkbox", def: false, cat: "data" },
                             /* auto_ticks lives in w.config but is NOT in the inspector
                              * - see _meterSyncDerived. Min/Major Tick Spacing replace
                              * the old count-based fields. */
@@ -5366,6 +5629,12 @@
                             { name: "anchor_enabled", label: "Anchor Curve", type: "checkbox", def: false, cat: "data" },
                             { name: "anchor_value", label: "Anchor Value", type: "number", def: 50, cat: "data", enabledBy: "anchor_enabled" },
                             { name: "anchor_position", label: "Anchor Position (%)", type: "slider", def: 50, cat: "data", min: 0, max: 100, enabledBy: "anchor_enabled" },
+                            /* Invert Direction: swaps the value endpoints so
+                             * max lands at the start position and min at the
+                             * end of the sweep. Mirrors a Top-start meter
+                             * to a Bottom-feel and vice versa. JSON key kept
+                             * as "reverse" for stability across firmware. */
+                            { name: "reverse", label: "Invert Direction", type: "checkbox", def: false, cat: "data" },
                             /* Redline zone: visual cues drawn between threshold and
                              * max. Show Arc + Recolor Ticks default ON so enabling
                              * the master toggle gives an immediate visible result. */
@@ -5391,9 +5660,13 @@
                             { name: "major_tick_length", label: "Major Tick Length", type: "stepper", def: 15, cat: "appearance", min: 1, max: 50, enabledBy: "show_ticks" },
                             { name: "major_tick_color", label: "Major Tick Color", type: "color", def: 0xFFFFFF, cat: "appearance", enabledBy: "show_ticks", nightOverridable: true },
                             { name: "show_tick_labels", label: "Show Tick Labels", type: "checkbox", def: true, cat: "appearance" },
-                            { name: "label_gap", label: "Label Gap", type: "stepper", def: 10, cat: "appearance", min: -20, max: 50, enabledBy: "show_tick_labels" },
+                            { name: "label_gap", label: "Label Gap", type: "stepper", def: 10, cat: "appearance", min: -150, max: 150, enabledBy: "show_tick_labels" },
                             { name: "tick_label_font", label: "Tick Label Font", type: "font", def: "", cat: "appearance", enabledBy: "show_tick_labels" },
                             { name: "tick_label_color", label: "Tick Label Color", type: "color", def: 0xFFFFFF, cat: "appearance", enabledBy: "show_tick_labels", nightOverridable: true },
+                            /* Tick label divisor: divides each tick label by
+                             * this factor for display. e.g. tach 0..7000
+                             * with divisor=1000 reads "0..7". 1 = no scaling. */
+                            { name: "tick_label_divisor", label: "Tick Label Divisor", type: "number", def: 1, cat: "appearance", enabledBy: "show_tick_labels" },
                             { name: "needle_image_name", label: "Needle Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
                             { name: "needle_pivot_x", label: "Needle Pivot X", type: "stepper", def: 0, cat: "appearance", min: -400, max: 400, enabledBy: "needle_image_name" },
                             { name: "needle_pivot_y", label: "Needle Pivot Y", type: "stepper", def: 0, cat: "appearance", min: -400, max: 400, enabledBy: "needle_image_name" },
@@ -5442,7 +5715,7 @@
                                       default: return 0;
                                   }
                               } },
-                            { name: "needle_ball_size", label: "Needle Ball Size", type: "stepper", def: 10, cat: "appearance", min: 0, max: 40 },
+                            { name: "needle_ball_size", label: "Needle Ball Size", type: "stepper", def: 10, cat: "appearance", min: 0, max: 80 },
                             { name: "needle_ball_color", label: "Needle Ball Color", type: "color", def: 0xFFFFFF, cat: "appearance", nightOverridable: true }
                         ]
                     },
@@ -5481,7 +5754,6 @@
                             { name: "bg_opa", label: "Opacity (0-255)", type: "stepper", def: 255, cat: "appearance", min: 0, max: 255 },
                             { name: "border_color", label: "Border Color", type: "color", def: 0x2E2F2E, cat: "appearance", nightOverridable: true },
                             { name: "border_width", label: "Border Width", type: "stepper", def: 0, cat: "appearance", min: 0, max: 20 },
-                            { name: "border_radius", label: "Border Radius", type: "stepper", def: 10, cat: "appearance", min: 0, max: 200 },
                             { name: "shadow_width", label: "Shadow Width", type: "stepper", def: 0, cat: "appearance", min: 0, max: 50 },
                             { name: "shadow_color", label: "Shadow Color", type: "color", def: 0x000000, cat: "appearance", nightOverridable: true },
                             { name: "shadow_opa", label: "Shadow Opacity", type: "stepper", def: 128, cat: "appearance", min: 0, max: 255 },
@@ -5519,7 +5791,48 @@
                             { name: "bg_arc_width", label: "Track Width", type: "stepper", def: 10, cat: "appearance", min: 1, max: 50 },
                             { name: "rounded_ends", label: "Rounded Ends", type: "checkbox", def: false, cat: "appearance" },
                             { name: "arc_image", label: "Track Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
-                            { name: "arc_image_full", label: "Fill Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true }
+                            { name: "arc_image_full", label: "Fill Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
+                            /* Redline zone — a static red arc segment from
+                             * redline_threshold to signal_max, drawn on top
+                             * of the track. The moving fill also recolors
+                             * red while value >= threshold when
+                             * redline_recolor_fill is true. */
+                            { name: "redline_enabled", label: "Redline", type: "checkbox", def: false, cat: "alerts" },
+                            { name: "redline_threshold", label: "Redline Threshold", type: "number", def: 80, cat: "alerts", enabledBy: "redline_enabled" },
+                            { name: "redline_color", label: "Redline Color", type: "color", def: 0xFF0000, cat: "alerts", enabledBy: "redline_enabled", nightOverridable: true },
+                            { name: "redline_arc_width", label: "Redline Width", type: "stepper", def: 0, cat: "alerts", min: 0, max: 50, enabledBy: "redline_enabled", help: "0 = match Arc Width" },
+                            { name: "redline_recolor_fill", label: "Recolor Fill in Zone", type: "checkbox", def: true, cat: "alerts", enabledBy: "redline_enabled" },
+                            /* Limiter — applied when value >= limiter_value.
+                             * Effect 0=None, 1=Flash (toggles every flash_speed_ms),
+                             * 2=Solid (steady limiter_color). */
+                            { name: "limiter_effect", label: "Limiter Effect", type: "select", def: 0, cat: "alerts",
+                              options: [
+                                  { v: 0, l: "None" },
+                                  { v: 1, l: "Flash" },
+                                  { v: 2, l: "Solid" }
+                              ] },
+                            { name: "limiter_value", label: "Limiter Value", type: "number", def: 90, cat: "alerts", enabledBy: "limiter_effect" },
+                            { name: "limiter_color", label: "Limiter Color", type: "color", def: 0xFF0000, cat: "alerts", enabledBy: "limiter_effect" },
+                            { name: "flash_speed_ms", label: "Flash Speed (ms)", type: "select", def: 200, cat: "alerts", enabledBy: "limiter_effect",
+                              options: [
+                                  { v: 50,  l: "50 ms (very fast)" },
+                                  { v: 100, l: "100 ms (fast)" },
+                                  { v: 150, l: "150 ms" },
+                                  { v: 200, l: "200 ms (default)" },
+                                  { v: 300, l: "300 ms" },
+                                  { v: 500, l: "500 ms (slow)" },
+                                  { v: 1000, l: "1 s (very slow)" }
+                              ] },
+                            /* Center value text overlay — optional label
+                             * showing current value with optional decimals
+                             * and unit suffix. Sits on top of the arc at
+                             * value_y_offset from center. */
+                            { name: "show_value", label: "Show Value", type: "checkbox", def: false, cat: "appearance" },
+                            { name: "value_font", label: "Value Font", type: "font", def: "", cat: "appearance", enabledBy: "show_value" },
+                            { name: "value_color", label: "Value Color", type: "color", def: 0xFFFFFF, cat: "appearance", enabledBy: "show_value", nightOverridable: true },
+                            { name: "value_y_offset", label: "Value Y Offset", type: "stepper", def: 0, cat: "appearance", min: -200, max: 200, enabledBy: "show_value" },
+                            { name: "value_decimals", label: "Decimals", type: "stepper", def: 0, cat: "appearance", min: 0, max: 4, enabledBy: "show_value" },
+                            { name: "value_unit", label: "Unit Suffix", type: "text", def: "", cat: "appearance", enabledBy: "show_value", help: "e.g. RPM, °C, kPa" }
                         ]
                     },
                     "toggle": {
@@ -5536,7 +5849,7 @@
                                   { v: 0, l: "Big Endian" },
                                   { v: 1, l: "Little Endian" }
                               ] },
-                            { name: "tx_rate_hz", label: "TX Rate (Hz)", type: "stepper", def: 0, cat: "data", min: 0, max: 50 },
+                            { name: "tx_rate_hz", label: "TX Rate (Hz)", type: "stepper", def: 10, cat: "data", min: 0, max: 50 },
                             { name: "image_name", label: "Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
                             { name: "active_color", label: "Active Color", type: "color", def: 0x00FF00, cat: "appearance", nightOverridable: true },
                             { name: "inactive_color", label: "Inactive Color", type: "color", def: 0x555555, cat: "appearance", nightOverridable: true },
@@ -5568,9 +5881,10 @@
                                   { v: 0, l: "Big Endian" },
                                   { v: 1, l: "Little Endian" }
                               ] },
-                            { name: "tx_rate_hz", label: "TX Rate (Hz)", type: "stepper", def: 0, cat: "data", min: 0, max: 50 },
+                            { name: "tx_rate_hz", label: "TX Rate (Hz)", type: "stepper", def: 10, cat: "data", min: 0, max: 50 },
                             { name: "tx_send_release", label: "Send on Release", type: "checkbox", def: false, cat: "data", enabledBy: "!latch" },
                             { name: "image_name", label: "Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
+                            { name: "pressed_image_name", label: "Pressed Image", type: "image_picker", def: "", cat: "appearance" },
                             { name: "bg_color", label: "Background", type: "color", def: 0x333333, cat: "appearance", nightOverridable: true },
                             { name: "text_color", label: "Text Color", type: "color", def: 0xFFFFFF, cat: "appearance", nightOverridable: true },
                             { name: "pressed_color", label: "Pressed Color", type: "color", def: 0x555555, cat: "appearance", nightOverridable: true },
@@ -5697,11 +6011,6 @@
                 dupBtn.innerText = 'Duplicate (Ctrl+D)';
                 dupBtn.onclick = () => { duplicateWidget(); contextMenu.style.display = 'none'; };
 
-                const toFrontBtn = document.createElement('div');
-                toFrontBtn.className = 'cm-item';
-                toFrontBtn.innerText = 'Bring to Front';
-                toFrontBtn.onclick = () => { bumpZOrder('front'); contextMenu.style.display = 'none'; };
-
                 const fwdBtn = document.createElement('div');
                 fwdBtn.className = 'cm-item';
                 fwdBtn.innerText = 'Bring Forward';
@@ -5712,39 +6021,38 @@
                 bckBtn.innerText = 'Send Backward';
                 bckBtn.onclick = () => { bumpZOrder(-1); contextMenu.style.display = 'none'; };
 
-                const toBackBtn = document.createElement('div');
-                toBackBtn.className = 'cm-item';
-                toBackBtn.innerText = 'Send to Back';
-                toBackBtn.onclick = () => { bumpZOrder('back'); contextMenu.style.display = 'none'; };
-
                 const delBtn = document.createElement('div');
                 delBtn.className = 'cm-item';
                 delBtn.style.color = 'hsl(0, 100%, 63%)';
                 delBtn.innerText = 'Delete (Del)';
                 delBtn.onclick = () => { deleteWidget(); contextMenu.style.display = 'none'; };
 
-                const copyAlertsBtn = document.createElement('div');
-                copyAlertsBtn.className = 'cm-item';
-                copyAlertsBtn.innerText = 'Copy Alerts';
-                copyAlertsBtn.onclick = () => { copyWarnings(); contextMenu.style.display = 'none'; };
+                /* Style copy/paste — copies "appearance" fields (colors, borders,
+                 * fonts, opacities) between same-type widgets. Paste is greyed
+                 * out unless the clipboard's source type matches the selection.
+                 * Backed by clipboardProperties (also driven by Ctrl+Shift+C/V). */
+                const selW = currentLayout.widgets[selectedIndex];
+                const copyStyleBtn = document.createElement('div');
+                copyStyleBtn.className = 'cm-item';
+                copyStyleBtn.innerText = 'Copy Style';
+                copyStyleBtn.onclick = () => { copyStyle(); contextMenu.style.display = 'none'; };
 
-                const pasteAlertsBtn = document.createElement('div');
-                pasteAlertsBtn.className = 'cm-item';
-                pasteAlertsBtn.innerText = 'Paste Alerts';
-                if (!_warningClipboard) { pasteAlertsBtn.style.opacity = '0.4'; pasteAlertsBtn.style.pointerEvents = 'none'; }
-                pasteAlertsBtn.onclick = () => { pasteWarnings(); contextMenu.style.display = 'none'; };
+                const pasteStyleBtn = document.createElement('div');
+                pasteStyleBtn.className = 'cm-item';
+                pasteStyleBtn.innerText = 'Paste Style';
+                const styleCompatible = clipboardProperties && clipboardProperties.style && selW && clipboardProperties._type === selW.type;
+                if (!styleCompatible) { pasteStyleBtn.style.opacity = '0.4'; pasteStyleBtn.style.pointerEvents = 'none'; }
+                pasteStyleBtn.onclick = () => { pasteStyle(); contextMenu.style.display = 'none'; };
 
                 contextMenu.appendChild(copyBtn);
                 contextMenu.appendChild(dupBtn);
-                contextMenu.appendChild(toFrontBtn);
                 contextMenu.appendChild(fwdBtn);
                 contextMenu.appendChild(bckBtn);
-                contextMenu.appendChild(toBackBtn);
                 const divider = document.createElement('div');
                 divider.className = 'cm-divider';
                 contextMenu.appendChild(divider);
-                contextMenu.appendChild(copyAlertsBtn);
-                contextMenu.appendChild(pasteAlertsBtn);
+                contextMenu.appendChild(copyStyleBtn);
+                contextMenu.appendChild(pasteStyleBtn);
                 const divider2 = document.createElement('div');
                 divider2.className = 'cm-divider';
                 contextMenu.appendChild(divider2);
@@ -5765,9 +6073,19 @@
             }
 
             if (contextMenu.children.length > 0) {
+                /* Show first so we can measure, then flip if it would overflow
+                 * past the bottom / right edge of the viewport. Keeps the menu
+                 * fully on-screen no matter where the user right-clicks. */
                 contextMenu.style.display = 'block';
                 contextMenu.style.left = `${x}px`;
-                contextMenu.style.top = `${y}px`;
+                contextMenu.style.top  = `${y}px`;
+                const rect = contextMenu.getBoundingClientRect();
+                const vw = window.innerWidth, vh = window.innerHeight;
+                let nx = x, ny = y;
+                if (y + rect.height > vh) ny = Math.max(4, y - rect.height);
+                if (x + rect.width  > vw) nx = Math.max(4, x - rect.width);
+                if (nx !== x) contextMenu.style.left = `${nx}px`;
+                if (ny !== y) contextMenu.style.top  = `${ny}px`;
             } else {
                 contextMenu.style.display = 'none';
             }
@@ -6173,22 +6491,15 @@
                         const shapeType = w.config.shape_type || 'rectangle';
                         const bdrW = w.config.border_width || 0;
                         const bdrHex = bdrW > 0 ? Number(w.config.border_color != null ? w.config.border_color : 0x2E2F2E).toString(16).padStart(6,'0') : null;
-                        const radius = Math.min(w.config.border_radius != null ? w.config.border_radius : 10, Math.min(w.w, w.h) / 2);
                         if (shapeType === 'rectangle' || shapeType === 'circle') {
                             let st = `background:rgba(${r},${g},${b},${a});`;
                             if (bdrW > 0) st += `border:${bdrW}px solid #${bdrHex};box-sizing:border-box;`;
-                            st += shapeType === 'circle'
-                                ? 'border-radius:50%;'
-                                : `border-radius:${radius}px;`;
+                            st += shapeType === 'circle' ? 'border-radius:50%;' : '';
                             shapePreview = `<div style="position:absolute;inset:3px;pointer-events:none;${st}"></div>`;
                         } else {
-                            /* Polygon shapes: render as inline SVG path with
-                             * rounded corners derived from border_radius. CSS
-                             * clip-path:polygon() can't round corners; the
-                             * SVG path uses quadratic Bezier curves at each
-                             * vertex so border_radius works on every shape. */
+                            /* Polygon shapes: sharp corners (radius feature removed — caused firmware crash). */
                             const pts = _shapePanelPolygonPts(shapeType, w.w - 6, w.h - 6, w.config);
-                            const pathD = _roundedPolygonPath(pts, radius);
+                            const pathD = _roundedPolygonPath(pts, 0);
                             const fill = `rgba(${r},${g},${b},${a})`;
                             const stroke = bdrW > 0
                                 ? ` stroke="#${bdrHex}" stroke-width="${bdrW}" stroke-linejoin="round"`
@@ -6197,21 +6508,7 @@
                         }
                     }
 
-                    /* line: draw an SVG line spanning the bounding box */
-                    if (w.type === 'line') {
-                        const lHex = Number(w.config.line_color != null ? w.config.line_color : 0xFFFFFF).toString(16).padStart(6,'0');
-                        const lOpa = ((w.config.line_opa != null ? w.config.line_opa : 255) / 255).toFixed(2);
-                        const orientation = w.config.orientation || 'horizontal';
-                        const cap = w.config.rounded ? 'round' : 'butt';
-                        const dashGap = w.config.dash_gap || 0;
-                        const dashAttr = dashGap > 0 ? `stroke-dasharray="${dashGap * 2} ${dashGap}"` : '';
-                        let x1, y1, x2, y2;
-                        if      (orientation === 'vertical')     { x1=50; y1=2;  x2=50;  y2=98; }
-                        else if (orientation === 'diagonal_fwd') { x1=2;  y1=98; x2=98;  y2=2;  }
-                        else if (orientation === 'diagonal_bwd') { x1=2;  y1=2;  x2=98;  y2=98; }
-                        else                                     { x1=2;  y1=50; x2=98;  y2=50; }
-                        shapePreview = `<svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#${lHex}" stroke-opacity="${lOpa}" stroke-width="8" stroke-linecap="${cap}" ${dashAttr}/></svg>`;
-                    }
+                    /* line: rendered by device screenshot, not in canvas */
                 }
 
                 const sigTag = w.signal ? ` <span style="color:hsl(120, 100%, 50%);font-size:9px;">\u2192 ${w.signal}</span>` : '';
@@ -6461,19 +6758,30 @@
             if (document.getElementById('livePreviewToggle').checked) triggerPreview();
         }
 
-        /** Max slot count per widget type that uses slots. */
-        const SLOT_LIMITS = { panel: 16, bar: 2, indicator: 2, warning: 8 };
+        /** Slot limits per widget type.
+         *  Positive = hard cap. 0 = unlimited (finds next free slot, up to 256). undefined = not slotted.
+         *
+         *  panel: 0 (unlimited) — firmware widget_panel.c doesn't cap; slots
+         *    8+ just don't get auto-positioned (s_panel_default_x is 8 long),
+         *    user positions them by hand. Was 16 before; the limit blocked
+         *    copy-paste once the user wanted 16+ panels on a dense layout.
+         *  bar: 0 (unlimited).
+         *  indicator: 2 — firmware caps in widget_indicator.c at `slot >= 2`.
+         *  warning: 8 — firmware caps in widget_warning.c at `slot >= 8`.
+         */
+        const SLOT_LIMITS = { panel: 0, bar: 0, indicator: 2, warning: 8 };
 
         /** Find next available slot for a widget type, or -1 if all taken. */
         function nextAvailableSlot(type) {
             const max = SLOT_LIMITS[type];
-            if (!max) return -1;
+            if (max === undefined) return -1;
             const used = new Set(
                 (currentLayout.widgets || [])
                     .filter(w => w.type === type && w.config && w.config.slot !== undefined)
                     .map(w => w.config.slot)
             );
-            for (let i = 0; i < max; i++) {
+            const limit = max > 0 ? max : 256;
+            for (let i = 0; i < limit; i++) {
                 if (!used.has(i)) return i;
             }
             return -1;
@@ -6501,7 +6809,7 @@
         }
 
         function assignSlot(w) {
-            if (!SLOT_LIMITS[w.type]) return true;
+            if (SLOT_LIMITS[w.type] === undefined) return true;
             if (!w.config) w.config = {};
             const slot = nextAvailableSlot(w.type);
             if (slot < 0) return false;
@@ -6541,81 +6849,6 @@
             if (document.getElementById('livePreviewToggle').checked) triggerPreview();
         }
 
-        /* ── Warning threshold copy/paste (cross-widget-type) ──────── */
-        let _warningClipboard = null;
-
-        function _extractWarnings(w) {
-            const c = w.config || {};
-            if (w.type === 'panel') {
-                return {
-                    high_enabled: !!c.warning_high_enabled,
-                    high_threshold: c.warning_high_threshold || 0,
-                    high_color: c.warning_high_color || 0xFF0000,
-                    low_enabled: !!c.warning_low_enabled,
-                    low_threshold: c.warning_low_threshold || 0,
-                    low_color: c.warning_low_color || 0x0000FF
-                };
-            }
-            if (w.type === 'bar') {
-                return {
-                    high_enabled: !!c.bar_alerts_enabled,
-                    high_threshold: c.bar_high || 100,
-                    high_color: c.bar_high_color || 0xFF0000,
-                    low_enabled: !!c.bar_alerts_enabled,
-                    low_threshold: c.bar_low || 0,
-                    low_color: c.bar_low_color || 0x0000FF
-                };
-            }
-            return null;
-        }
-
-        function _applyWarnings(w, warnings) {
-            if (!w.config) w.config = {};
-            const c = w.config;
-            if (w.type === 'panel') {
-                c.warning_high_enabled = warnings.high_enabled;
-                c.warning_high_threshold = warnings.high_threshold;
-                c.warning_high_color = warnings.high_color;
-                c.warning_low_enabled = warnings.low_enabled;
-                c.warning_low_threshold = warnings.low_threshold;
-                c.warning_low_color = warnings.low_color;
-            } else if (w.type === 'bar') {
-                c.bar_alerts_enabled = warnings.high_enabled || warnings.low_enabled;
-                c.bar_high = warnings.high_threshold;
-                c.bar_high_color = warnings.high_color;
-                c.bar_low = warnings.low_threshold;
-                c.bar_low_color = warnings.low_color;
-            } else {
-                updateStatus('This widget type does not support alerts', true);
-                return false;
-            }
-            return true;
-        }
-
-        function copyWarnings() {
-            if (selectedIndex < 0) return;
-            const w = currentLayout.widgets[selectedIndex];
-            const data = _extractWarnings(w);
-            if (!data) {
-                updateStatus('This widget type has no alerts to copy', true);
-                return;
-            }
-            _warningClipboard = data;
-            const def = WIDGET_DEFS[w.type];
-            updateStatus(`Copied alerts from ${def ? def.displayName : w.type}`);
-        }
-
-        function pasteWarnings() {
-            if (selectedIndex < 0 || !_warningClipboard) return;
-            pushHistory();
-            const w = currentLayout.widgets[selectedIndex];
-            if (_applyWarnings(w, _warningClipboard)) {
-                const def = WIDGET_DEFS[w.type];
-                updateStatus(`Pasted alerts to ${def ? def.displayName : w.type}`);
-                updateInspector();
-                if (document.getElementById('livePreviewToggle').checked) triggerPreview();
-            }
-        }
 
         function copyToClipboard() {
             if (selectedIndex === -1) return;
@@ -6974,10 +7207,37 @@
                     newW = sz; newH = sz;
                 }
 
+                /* Image with auto_size: lock resize to native aspect ratio */
+                if (w.type === 'image' && w.config && w.config.auto_size) {
+                    const imgInfo = (_cachedImageList || []).find(img => img.name === w.config.image_name);
+                    if (imgInfo && imgInfo.width && imgInfo.height) {
+                        const aspect = imgInfo.width / imgInfo.height;
+                        const isH = resizeHandle.includes('e') || resizeHandle.includes('w');
+                        const isV = resizeHandle.includes('n') || resizeHandle.includes('s');
+                        if (isH && !isV) {
+                            newH = Math.max(5, Math.round(newW / aspect));
+                        } else if (isV && !isH) {
+                            newW = Math.max(5, Math.round(newH * aspect));
+                        } else {
+                            if (Math.abs(dx) * imgInfo.height >= Math.abs(dy) * imgInfo.width) {
+                                newH = Math.max(5, Math.round(newW / aspect));
+                            } else {
+                                newW = Math.max(5, Math.round(newH * aspect));
+                            }
+                        }
+                    }
+                }
+
                 // Snap
                 newW = Math.round(newW / SNAP_SIZE) * SNAP_SIZE;
                 newH = Math.round(newH / SNAP_SIZE) * SNAP_SIZE;
                 if (w.type === 'meter') { const sq = Math.min(Math.max(newW, newH), 800); newW = sq; newH = sq; }
+                if (w.type === 'image' && w.config && w.config.auto_size) {
+                    const imgInfo = (_cachedImageList || []).find(img => img.name === w.config.image_name);
+                    if (imgInfo && imgInfo.width && imgInfo.height) {
+                        newH = Math.max(5, Math.round(newW / (imgInfo.width / imgInfo.height)));
+                    }
+                }
                 newX = Math.round(newX / SNAP_SIZE) * SNAP_SIZE;
                 newY = Math.round(newY / SNAP_SIZE) * SNAP_SIZE;
 
@@ -7132,7 +7392,7 @@
 
             if (selectedIndex === -1 && selectedIndices.size === 0) return;
 
-            if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (e.key === 'Delete') {
                 deleteWidget();
                 return;
             }
@@ -7165,6 +7425,10 @@
             }
         };
 
+        /* Copy EVERY appearance field — including ones still at their default —
+         * plus the per-widget night-override block. Pasting then fully
+         * replicates the source's visual style instead of only patching the
+         * fields that happened to be overridden. */
         function copyStyle() {
             if (selectedIndex === -1) return;
             const w = currentLayout.widgets[selectedIndex];
@@ -7172,10 +7436,17 @@
             if (!def) return;
             const style = {};
             def.fields.filter(f => f.cat === 'appearance').forEach(f => {
-                if (w.config[f.name] !== undefined) style[f.name] = w.config[f.name];
+                const v = (w.config && w.config[f.name] !== undefined) ? w.config[f.name] : f.def;
+                if (v !== undefined) style[f.name] = JSON.parse(JSON.stringify(v));
             });
-            clipboardProperties = { _type: w.type, style };
-            updateStatus('Style Copied');
+            /* Night overrides live in w.config.night — clone the whole block so
+             * paste reproduces day + night identically. Empty / missing = no
+             * night customisations, which we preserve by storing null. */
+            const night = (w.config && w.config.night && typeof w.config.night === 'object')
+                ? JSON.parse(JSON.stringify(w.config.night)) : null;
+            clipboardProperties = { _type: w.type, style, night };
+            const n = Object.keys(style).length;
+            updateStatus(`Style Copied (${n} field${n === 1 ? '' : 's'}${night ? ' + night' : ''})`);
             showToast('Style copied', 'success');
         }
 
@@ -7188,12 +7459,22 @@
                 if (!w) return;
                 const def = WIDGET_DEFS[w.type];
                 if (!def) return;
+                if (!w.config) w.config = {};
                 const appearNames = new Set(def.fields.filter(f => f.cat === 'appearance').map(f => f.name));
                 Object.keys(clipboardProperties.style).forEach(key => {
                     if (appearNames.has(key)) {
-                        w.config[key] = clipboardProperties.style[key];
+                        w.config[key] = JSON.parse(JSON.stringify(clipboardProperties.style[key]));
                     }
                 });
+                /* Mirror the source's night block (or clear it if the source
+                 * had none). Same-type paste means key names line up 1:1. */
+                if (w.type === clipboardProperties._type) {
+                    if (clipboardProperties.night) {
+                        w.config.night = JSON.parse(JSON.stringify(clipboardProperties.night));
+                    } else {
+                        delete w.config.night;
+                    }
+                }
             });
             renderEditor();
             updateInspector();
@@ -7525,8 +7806,10 @@
             } else if (f.type === 'textarea') {
                 const escaped = String(val || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
                 html += `<textarea rows="3" style="resize:vertical; width:100%; font-size:12px; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:var(--radius-sm); padding:4px 6px; font-family:inherit;" oninput="updateWidgetConfigField('${f.name}', this.value, false)" ${disabledAttr}>${escaped}</textarea>`;
+            } else if (f.type === 'number') {
+                html += `<input type="number" value="${val}" onblur="updateWidgetConfigField('${f.name}', this.value, true)" onkeydown="if(event.key==='Enter') this.blur()" ${disabledAttr}>`;
             } else {
-                html += `<input type="${f.type === 'number' ? 'number' : 'text'}" value="${val}" oninput="updateWidgetConfigField('${f.name}', this.value, ${f.type === 'number'})" ${disabledAttr}>`;
+                html += `<input type="text" value="${val}" oninput="updateWidgetConfigField('${f.name}', this.value, false)" ${disabledAttr}>`;
             }
             html += `</div>`;
             return html;
@@ -8026,6 +8309,16 @@
                 window._gearSetupPrompted = true;
                 setTimeout(() => {
                     if (typeof openGearSetup === 'function') openGearSetup();
+                }, 250);
+            }
+
+            /* Same pattern for FUEL_SENDER_V — open the Fuel Sender Setup modal
+             * so the user can configure min/max voltage + full value. Once per
+             * page load. */
+            if (sigName === 'FUEL_SENDER_V' && !window._fuelSenderSetupPrompted) {
+                window._fuelSenderSetupPrompted = true;
+                setTimeout(() => {
+                    if (typeof openFuelSenderSetup === 'function') openFuelSenderSetup();
                 }, 250);
             }
         }
@@ -8671,7 +8964,7 @@
              * firmware actually consumes. Editing a tick step also flips
              * auto_ticks off so the value sticks across subsequent syncs. */
             const METER_TRIGGERS = new Set([
-                'min', 'max', 'start_position', 'sweep_degrees',
+                'min', 'max', 'start_angle_user', 'sweep_degrees',
                 'minor_tick_step', 'major_tick_step',
             ]);
             if (w.type === 'meter' && METER_TRIGGERS.has(field)) {
@@ -8718,6 +9011,22 @@
                     clearTestValue(sig);
                 }
                 if (typeof _wstUpdate === 'function') _wstUpdate();
+            }
+
+            /* Line: swap W/H when switching orientation so the bounding box
+             * matches the line direction on device (a 200x4 box can't show
+             * a vertical or diagonal line at any useful size). */
+            if (w.type === 'line' && field === 'orientation') {
+                if (finalVal === 'vertical' && w.w > w.h) {
+                    const tmp = w.w; w.w = w.h; w.h = tmp;
+                    updateInspector();
+                } else if (finalVal === 'horizontal' && w.h > w.w) {
+                    const tmp = w.w; w.w = w.h; w.h = tmp;
+                    updateInspector();
+                } else if (finalVal === 'diagonal_fwd' || finalVal === 'diagonal_bwd') {
+                    const sz = Math.max(w.w, w.h);
+                    if (w.w !== sz || w.h !== sz) { w.w = sz; w.h = sz; updateInspector(); }
+                }
             }
 
             pushHistory();
@@ -8816,81 +9125,112 @@
             if (!file) return;
             input.value = '';
 
-            const img = new Image();
-            img.onload = () => {
-                const origW = img.width, origH = img.height;
-                const aspect = origW / origH;
-                /* If widget already has an image assigned to this field, default to same name (replace) */
-                let existingName = '';
-                if (selectedIndex >= 0 && currentLayout.widgets[selectedIndex]) {
-                    existingName = currentLayout.widgets[selectedIndex].config[fieldName] || '';
-                }
-                const suggestedName = existingName || file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 27);
+            const imgEl = new Image();
+            imgEl.onload = () => {
+                const origW = imgEl.width, origH = imgEl.height;
+                const SCREEN_W = 800, SCREEN_H = 480;
 
-                /* Build modal */
+                let existingName = '';
+                if (selectedIndex >= 0 && currentLayout.widgets[selectedIndex])
+                    existingName = currentLayout.widgets[selectedIndex].config[fieldName] || '';
+                const suggestedName = existingName ||
+                    file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 27);
+
+                /* Default: scale to fit within device screen, no upscaling */
+                const fitPct = Math.min(100, Math.floor(Math.min(SCREEN_W / origW, SCREEN_H / origH) * 100));
+
                 const overlay = document.createElement('div');
-                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+                overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(3px);display:flex;flex-direction:column;font-family:inherit;';
                 overlay.innerHTML = `
-                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:320px;color:var(--text);">
-                        <h3 style="margin:0 0 12px 0;font-size:15px;">Upload Image</h3>
-                        <div style="margin-bottom:8px;font-size:13px;color:var(--text-muted);">Original: ${origW} x ${origH}</div>
-                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-                            <label style="width:50px;font-size:13px;">Name:</label>
-                            <input id="imgDlgName" type="text" value="${suggestedName}" style="flex:1;" maxlength="27">
+                    <div id="iio-stage" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:24px 24px 12px;">
+                        <div id="iio-frame" style="position:relative;border:1px solid rgba(255,255,255,0.18);border-radius:3px;overflow:hidden;background:#000;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,0.06),0 16px 56px rgba(0,0,0,0.8);">
+                            <img id="iio-preview" src="${imgEl.src}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:block;">
+                            <div style="position:absolute;bottom:4px;right:6px;font-size:10px;color:rgba(255,255,255,0.3);pointer-events:none;font-family:monospace;">800×480</div>
                         </div>
-                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-                            <label style="width:50px;font-size:13px;">Width:</label>
-                            <input id="imgDlgW" type="number" value="${origW}" min="1" max="800" style="width:80px;">
-                            <label style="width:50px;font-size:13px;">Height:</label>
-                            <input id="imgDlgH" type="number" value="${origH}" min="1" max="480" style="width:80px;">
+                    </div>
+                    <div style="background:rgba(12,12,20,0.97);border-top:1px solid rgba(255,255,255,0.08);padding:12px 20px 16px;display:flex;flex-direction:column;gap:10px;">
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                            <span style="color:#888;font-size:12px;width:38px;flex-shrink:0;">Name</span>
+                            <input id="iio-name" type="text" value="${suggestedName}" maxlength="27"
+                                style="width:180px;padding:5px 8px;background:#1a1a2e;border:1px solid #444;border-radius:4px;color:#fff;font-size:13px;">
+                            <span style="margin-left:auto;color:#555;font-size:11px;white-space:nowrap;">${origW} × ${origH} original</span>
                         </div>
-                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
-                            <label style="font-size:13px;"><input id="imgDlgLock" type="checkbox" checked> Lock aspect ratio</label>
+                        <div style="display:flex;gap:10px;align-items:center;">
+                            <span style="color:#888;font-size:12px;width:38px;flex-shrink:0;">Scale</span>
+                            <input id="iio-slider" type="range" min="5" max="100" value="${fitPct}" style="flex:1;cursor:pointer;accent-color:#2979ff;">
+                            <span id="iio-pct" style="color:#bbb;font-size:12px;width:30px;text-align:right;flex-shrink:0;font-family:monospace;"></span>
+                            <span style="color:#444;font-size:12px;">·</span>
+                            <span id="iio-dims" style="color:#bbb;font-size:12px;width:90px;flex-shrink:0;font-family:monospace;"></span>
+                            <span style="color:#444;font-size:12px;">·</span>
+                            <span id="iio-kb" style="font-size:12px;width:58px;flex-shrink:0;text-align:right;font-family:monospace;font-weight:600;"></span>
                         </div>
-                        <div id="imgDlgSize" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;"></div>
-                        <div style="display:flex;gap:8px;justify-content:flex-end;">
-                            <button id="imgDlgCancel" style="padding:6px 14px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">Cancel</button>
-                            <button id="imgDlgUpload" style="padding:6px 14px;cursor:pointer;background:var(--accent);border:none;border-radius:4px;color:#fff;">Upload</button>
+                        <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:2px;">
+                            <button id="iio-cancel" style="padding:7px 18px;cursor:pointer;background:transparent;border:1px solid #555;border-radius:4px;color:#ccc;font-size:13px;">Cancel</button>
+                            <button id="iio-upload" style="padding:7px 22px;cursor:pointer;background:#2979ff;border:none;border-radius:4px;color:#fff;font-size:13px;font-weight:600;">Upload</button>
                         </div>
                     </div>`;
                 document.body.appendChild(overlay);
 
-                const wInput = document.getElementById('imgDlgW');
-                const hInput = document.getElementById('imgDlgH');
-                const lockCb = document.getElementById('imgDlgLock');
-                const sizeInfo = document.getElementById('imgDlgSize');
+                const stage   = document.getElementById('iio-stage');
+                const frame   = document.getElementById('iio-frame');
+                const preview = document.getElementById('iio-preview');
+                const slider  = document.getElementById('iio-slider');
+                const pctEl   = document.getElementById('iio-pct');
+                const dimsEl  = document.getElementById('iio-dims');
+                const kbEl    = document.getElementById('iio-kb');
 
-                function updateSizeInfo() {
-                    const w = parseInt(wInput.value) || 1;
-                    const h = parseInt(hInput.value) || 1;
-                    const bytes = 12 + w * h * 3;
-                    sizeInfo.textContent = `Output: ${w} x ${h} = ${(bytes / 1024).toFixed(1)} KB`;
-                    if (bytes > 200 * 1024) sizeInfo.style.color = '#f44';
-                    else sizeInfo.style.color = 'var(--text-muted)';
+                function layoutFrame() {
+                    const stageW = stage.clientWidth - 48;
+                    const stageH = stage.clientHeight - 24;
+                    const fScale = Math.min(1, stageW / SCREEN_W, stageH / SCREEN_H);
+                    frame.style.width  = Math.round(SCREEN_W * fScale) + 'px';
+                    frame.style.height = Math.round(SCREEN_H * fScale) + 'px';
+
+                    const pct  = parseInt(slider.value);
+                    const outW = Math.max(1, Math.round(origW * pct / 100));
+                    const outH = Math.max(1, Math.round(origH * pct / 100));
+                    preview.style.width  = Math.round(outW * fScale) + 'px';
+                    preview.style.height = Math.round(outH * fScale) + 'px';
+
+                    const bytes = 12 + outW * outH * 3;
+                    const kb = bytes / 1024;
+                    pctEl.textContent  = pct + '%';
+                    dimsEl.textContent = outW + ' × ' + outH;
+                    kbEl.textContent   = kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.round(kb) + ' KB';
+                    kbEl.style.color   = bytes > 1100 * 1024 ? '#f66' : bytes > 400 * 1024 ? '#fa8' : '#6d6';
                 }
-                updateSizeInfo();
 
-                wInput.addEventListener('input', () => {
-                    if (lockCb.checked) { hInput.value = Math.round((parseInt(wInput.value) || 1) / aspect); }
-                    updateSizeInfo();
-                });
-                hInput.addEventListener('input', () => {
-                    if (lockCb.checked) { wInput.value = Math.round((parseInt(hInput.value) || 1) * aspect); }
-                    updateSizeInfo();
-                });
+                requestAnimationFrame(layoutFrame);
+                slider.addEventListener('input', layoutFrame);
+                window.addEventListener('resize', layoutFrame);
 
-                document.getElementById('imgDlgCancel').onclick = () => { URL.revokeObjectURL(img.src); overlay.remove(); };
-                document.getElementById('imgDlgUpload').onclick = async () => {
-                    const targetW = Math.max(1, Math.min(800, parseInt(wInput.value) || origW));
-                    const targetH = Math.max(1, Math.min(480, parseInt(hInput.value) || origH));
-                    const name = (document.getElementById('imgDlgName').value || suggestedName).replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 27);
+                const closeOverlay = () => {
                     overlay.remove();
-                    await doImageUpload(img, name, targetW, targetH, fieldName);
-                    URL.revokeObjectURL(img.src);
+                    window.removeEventListener('resize', layoutFrame);
+                    document.removeEventListener('keydown', onKey);
+                };
+                const onKey = e => { if (e.key === 'Escape') { URL.revokeObjectURL(imgEl.src); closeOverlay(); } };
+                document.addEventListener('keydown', onKey);
+
+                document.getElementById('iio-cancel').onclick = () => { URL.revokeObjectURL(imgEl.src); closeOverlay(); };
+                /* Click on the stage background (outside the frame) also cancels */
+                stage.addEventListener('click', e => {
+                    if (!frame.contains(e.target)) { URL.revokeObjectURL(imgEl.src); closeOverlay(); }
+                });
+
+                document.getElementById('iio-upload').onclick = async () => {
+                    const pct    = parseInt(slider.value);
+                    const targetW = Math.max(1, Math.round(origW * pct / 100));
+                    const targetH = Math.max(1, Math.round(origH * pct / 100));
+                    const name = (document.getElementById('iio-name').value || suggestedName)
+                        .replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 27);
+                    closeOverlay();
+                    await doImageUpload(imgEl, name, targetW, targetH, fieldName);
+                    URL.revokeObjectURL(imgEl.src);
                 };
             };
-            img.onerror = () => { URL.revokeObjectURL(img.src); alert('Failed to load image'); };
-            img.src = URL.createObjectURL(file);
+            imgEl.onerror = () => { URL.revokeObjectURL(imgEl.src); alert('Failed to load image'); };
+            imgEl.src = URL.createObjectURL(file);
         }
 
         async function doImageUpload(img, name, targetW, targetH, fieldName) {
@@ -9926,6 +10266,11 @@
                 history = [JSON.stringify(currentLayout)];
                 historyIndex = 0;
                 _lastDeviceSnapshot = rawDeviceSnap;
+                /* Baseline for factory-default protection: snapshot the widget
+                 * array as loaded, so a later save can detect widget changes
+                 * (and ignore signal-only changes) before deciding whether to
+                 * keep the "default" name or fork to "default_modified[_N]". */
+                _baselineWidgetsFp = _widgetsFingerprint(currentLayout.widgets);
                 renderEditor();
                 renderSignals();
                 updateInspector();
@@ -9933,6 +10278,92 @@
                 updateStatus(currentScreenMode === 'splash' ? 'Loaded splash screen' : `Loaded ${name}`);
                 if (currentScreenMode !== 'splash') checkDraft();
             } catch (e) { updateStatus(`Error loading layout ${name}`, true); }
+        }
+
+        /* ── Factory-default protection ───────────────────────────────────
+         * The factory "default" dashboard and "_splash_Default" splash get
+         * protected when widget changes are about to be saved. Signal-only
+         * (or other non-widget) edits still go through to the factory file
+         * so users can configure CAN signals once without forking. Widget
+         * edits fork to "default_modified" (or "default_modified_2" etc.
+         * if a previous fork already exists).
+         *
+         * Auto-save: silently picks the next free name (no prompt cascade).
+         * Manual save: prompts the user to overwrite the existing fork OR
+         * save as the next numbered sibling.
+         */
+        let _baselineWidgetsFp = '';
+
+        function _widgetsFingerprint(widgets) {
+            /* Strip signal bindings before hashing so signal renames (which
+             * propagate to w.signal / config.signal_name) don't count as
+             * widget changes — the user said this protection applies to
+             * widget edits only, not signal edits. */
+            const arr = (widgets || []).map(w => {
+                const c = JSON.parse(JSON.stringify(w));
+                delete c.signal;
+                if (c.config) delete c.config.signal_name;
+                return c;
+            });
+            return JSON.stringify(arr);
+        }
+
+        function _nextFreeName(existing, base) {
+            /* base, base_2, base_3, ... Returns the first one not in `existing`. */
+            if (!existing.includes(base)) return base;
+            for (let i = 2; i < 1000; i++) {
+                const n = `${base}_${i}`;
+                if (!existing.includes(n)) return n;
+            }
+            return `${base}_${Date.now()}`;
+        }
+
+        function _resolveProtectedName(intendedName, isSplash, silent) {
+            const dashGuarded = (!isSplash && intendedName === 'default');
+            const splashGuarded = (isSplash && intendedName === '_splash_Default');
+            if (!dashGuarded && !splashGuarded) return intendedName;
+
+            /* Widget-only check — ignore signal edits. */
+            const currentFp = _widgetsFingerprint(currentLayout.widgets);
+            if (currentFp === _baselineWidgetsFp) return intendedName;
+
+            /* Build the candidate name + the list of existing siblings. */
+            const base = dashGuarded ? 'default_modified' : '_splash_Default_modified';
+            let existing = [];
+            if (dashGuarded) {
+                existing = Array.from(layoutSelect.options).map(o => o.value);
+            } else {
+                const splashSel = document.getElementById('splashSelect');
+                existing = splashSel
+                    ? Array.from(splashSel.options).map(o => '_splash_' + o.value)
+                    : [];
+            }
+            const baseExists = existing.includes(base);
+            const nextFree   = _nextFreeName(existing, base);
+
+            if (silent) {
+                /* Auto-save: don't nag — pick the next-free silently. Once
+                 * currentLayout.name flips to that, subsequent auto-saves
+                 * skip this branch entirely (intendedName won't match). */
+                return nextFree;
+            }
+
+            /* Manual save: prompt the user. */
+            const displayName = base.startsWith('_splash_') ? base.slice(8) : base;
+            const displayNext = nextFree.startsWith('_splash_') ? nextFree.slice(8) : nextFree;
+            if (!baseExists) {
+                const msg = isSplash
+                    ? `Save widget changes to a new splash layout "${displayName}"?\n\nFactory "_splash_Default" stays untouched.`
+                    : `Save widget changes to a new layout "${displayName}"?\n\nFactory "default" stays untouched.`;
+                return confirm(msg) ? base : null;
+            }
+            /* base already exists → overwrite vs. next-numbered. */
+            const overwrite = confirm(
+                `"${displayName}" already exists.\n\n` +
+                `OK  = Overwrite "${displayName}"\n` +
+                `Cancel = Save as "${displayNext}" instead`
+            );
+            return overwrite ? base : nextFree;
         }
 
         async function saveActiveLayout(opts) {
@@ -9953,8 +10384,38 @@
                 payload.name = '_splash_' + (splashSel && splashSel.value ? splashSel.value : 'Default');
             }
 
+            /* Factory-default protection — see _resolveProtectedName above.
+             * Rewrites payload.name / currentLayout.name / splashSelect when
+             * widget changes are about to overwrite a factory file. Null
+             * return = user cancelled the manual save prompt. */
+            const intended = payload.name;
+            const resolved = _resolveProtectedName(intended, isSplash, silent);
+            if (resolved === null) {
+                updateStatus('Save cancelled');
+                return;
+            }
+            const wasRedirected = (resolved !== intended);
+            if (wasRedirected) {
+                payload.name = resolved;
+                if (isSplash) {
+                    const bare = resolved.startsWith('_splash_') ? resolved.slice(8) : resolved;
+                    const splashSel = document.getElementById('splashSelect');
+                    if (splashSel) {
+                        let opt = Array.from(splashSel.options).find(o => o.value === bare);
+                        if (!opt) {
+                            opt = document.createElement('option');
+                            opt.value = bare; opt.textContent = bare;
+                            splashSel.appendChild(opt);
+                        }
+                        splashSel.value = bare;
+                    }
+                } else {
+                    currentLayout.name = resolved;
+                }
+            }
+
             /* Confirm which layout will be overwritten (skip for splash and auto-save). */
-            if (!isSplash && !silent) {
+            if (!isSplash && !silent && !wasRedirected) {
                 const deviceActive = layoutSelect.value || '';
                 if (deviceActive && deviceActive !== layoutName) {
                     if (!confirm(`This will save and overwrite "${layoutName}" (not "${deviceActive}"). Continue?`)) return;
@@ -9997,12 +10458,23 @@
                     }
                     throw new Error();
                 }
-                updateStatus(isSplash ? 'Splash saved' : 'Saved to device');
-                showToast(isSplash ? 'Splash saved' : 'Saved to device', 'success');
+                if (wasRedirected) {
+                    const what = isSplash ? 'factory splash' : 'factory default';
+                    const display = resolved.startsWith('_splash_') ? resolved.slice(8) : resolved;
+                    showToast(`Saved as "${display}" — ${what} preserved`, 'success');
+                    updateStatus(`Saved to "${display}" (${what} preserved)`);
+                } else {
+                    updateStatus(isSplash ? 'Splash saved' : 'Saved to device');
+                    showToast(isSplash ? 'Splash saved' : 'Saved to device', 'success');
+                }
                 _editingActive = false;
                 history = [JSON.stringify(currentLayout)];
                 historyIndex = 0;
                 _lastDeviceSnapshot = JSON.stringify(payload);
+                /* After a successful save the on-disk state matches what's
+                 * in the editor — reset the baseline so further widget edits
+                 * are measured against this point, not the original load. */
+                _baselineWidgetsFp = _widgetsFingerprint(currentLayout.widgets);
                 try { localStorage.removeItem('rdm7_draft'); } catch (e) { }
                 if (!isSplash) await fetchLayoutsKeepCurrent();
                 setTimeout(captureScreenshot, 1500);
@@ -10020,7 +10492,7 @@
                  * browser upscales to the canvas. Full-res stays reserved for the
                  * LIVE preview's own polling loop (which users opt into and isn't
                  * running simultaneously with edit invalidations). */
-                const response = await fetch('/api/screenshot?smooth=1&q=75&t=' + Date.now(),
+                const response = await fetch('/api/screenshot?smooth=1&q=100&t=' + Date.now(),
                                               { cache: 'no-store' });
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const blob = await response.blob();
@@ -10273,16 +10745,11 @@
             while (_liveControlOn && token === _liveLoopToken && img) {
                 const t0 = performance.now();
                 try {
-                    /* Half-res 400x240, q=75, smooth=2x2 box-average. Encode is
-                     * ~35 ms best-case vs ~140 ms for full-res — 4x less CPU.
-                     * Full-res + q=85 looked good in ideal conditions but
-                     * stretched to 10–15 s encodes under real load (CONTROL
-                     * poll + widget updates + sim + layout save in parallel),
-                     * tripping the 15 s task-watchdog and forcing reboots.
-                     * Half-res still looks crisp after CSS upscale; sharpness
-                     * isn't the bottleneck — responsiveness is. For
-                     * screen-recording at full-res, use /api/capture/stream. */
-                    const r = await fetch('/api/screenshot?q=75&smooth=1&t=' + Date.now(), { cache: 'no-store' });
+                    /* Half-res 400x240, q=100, smooth=2x2 box-average. Full-res
+                     * stretched to 10–15 s encodes under real load — half-res
+                     * keeps responsiveness while q=100 gives max JPEG fidelity.
+                     * For screen-recording at full-res, use /api/capture/stream. */
+                    const r = await fetch('/api/screenshot?q=100&smooth=1&t=' + Date.now(), { cache: 'no-store' });
                     if (!r.ok) throw new Error('HTTP ' + r.status);
                     const blob = await r.blob();
                     /* Bail if the user toggled off during the fetch */
@@ -12385,16 +12852,20 @@
                 if (wanted) sel.value = wanted;
             });
         }
+        /* Storage format keeps ratios[0] = 0 as the Neutral slot (firmware
+         * skips index 0 when matching gears — see signal_internal.c). The UI
+         * hides that row since it's always 0 and not user-editable; render
+         * skips index 0 and read synthesises the leading 0 back in. */
         function _gearRenderRatios(ratios) {
             const list = document.getElementById('gearRatioList');
             if (!list) return;
             list.innerHTML = '';
             ratios.forEach((r, i) => {
+                if (i === 0) return;  /* hide N row */
                 const row = document.createElement('div');
                 row.style.cssText = 'display:grid; grid-template-columns:50px 1fr; gap:8px; align-items:center;';
-                const label = (i === 0) ? 'N' : String(i);
-                row.innerHTML = `<span style="font-size:12px; font-weight:600; color:var(--text-muted); text-align:right;">${label}</span>
-                    <input type="number" step="0.001" min="0" value="${r.toFixed(3)}" data-gear-idx="${i}" ${i === 0 ? 'disabled title="Neutral is always 0.000"' : ''}
+                row.innerHTML = `<span style="font-size:12px; font-weight:600; color:var(--text-muted); text-align:right;">${i}</span>
+                    <input type="number" step="0.001" min="0" value="${r.toFixed(3)}" data-gear-idx="${i}"
                            style="width:100%; padding:4px 6px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px; font-family:monospace;">`;
                 list.appendChild(row);
             });
@@ -12402,9 +12873,10 @@
         function _gearReadRatios() {
             const list = document.getElementById('gearRatioList');
             if (!list) return [0];
-            return Array.from(list.querySelectorAll('input[data-gear-idx]'))
-                .sort((a, b) => parseInt(a.dataset.gearIdx) - parseInt(b.dataset.gearIdx))
-                .map((inp, i) => i === 0 ? 0 : (parseFloat(inp.value) || 0));
+            const inputs = Array.from(list.querySelectorAll('input[data-gear-idx]'))
+                .sort((a, b) => parseInt(a.dataset.gearIdx) - parseInt(b.dataset.gearIdx));
+            /* Prepend the reserved N=0 slot so storage format stays unchanged. */
+            return [0, ...inputs.map(inp => parseFloat(inp.value) || 0)];
         }
         function _gearAddRatio() {
             const r = _gearReadRatios();
@@ -12444,7 +12916,8 @@
                     cfg = Object.assign(cfg, j);
                 }
             } catch (e) { /* offline — use defaults */ }
-            document.getElementById('gearWheelM').value     = (cfg.wheel_circumference_m || 1.95).toFixed(3);
+            /* Display in mm (firmware stores metres). Round to nearest mm. */
+            document.getElementById('gearWheelM').value     = Math.round(((cfg.wheel_circumference_m || 1.95)) * 1000);
             document.getElementById('gearFinalDrive').value = (cfg.final_drive || 4.11).toFixed(3);
             document.getElementById('gearEnabled').checked  = !!cfg.enabled;
             if (document.getElementById('gearRpmSig').querySelector(`option[value="${cfg.rpm_signal}"]`)) {
@@ -12456,8 +12929,10 @@
             _gearRenderRatios(cfg.ratios && cfg.ratios.length ? cfg.ratios : [0, 3.321, 1.902, 1.308, 1.000, 0.759]);
         }
         async function saveGearSetup() {
+            /* UI shows mm; firmware expects metres. */
+            const wheelMm = parseFloat(document.getElementById('gearWheelM').value);
             const payload = {
-                wheel_circumference_m: parseFloat(document.getElementById('gearWheelM').value) || 1.95,
+                wheel_circumference_m: isFinite(wheelMm) && wheelMm > 0 ? wheelMm / 1000 : 1.95,
                 final_drive:           parseFloat(document.getElementById('gearFinalDrive').value) || 4.11,
                 rpm_signal:            document.getElementById('gearRpmSig').value || 'RPM',
                 speed_signal:          document.getElementById('gearSpeedSig').value || 'VEHICLE_SPEED',
@@ -12475,6 +12950,98 @@
                 closeGearSetup();
             } catch (e) {
                 if (typeof showToast === 'function') showToast('Save failed: ' + e.message, 'error');
+            }
+        }
+
+        /* ── Fuel Sender Setup modal ──────────────────────────────────────
+         * Configures the FUEL_SENDER_V calibration: min (empty) voltage, max
+         * (full) voltage, and the displayed value at full. Lives on the
+         * signal in the layout JSON (sig.fuel_cal) — save writes the layout. */
+        let _fuelSetupPollTimer = null;
+        function closeFuelSenderSetup() {
+            const m = document.getElementById('fuelSenderSetupModal');
+            if (m) m.style.display = 'none';
+            if (_fuelSetupPollTimer) { clearInterval(_fuelSetupPollTimer); _fuelSetupPollTimer = null; }
+        }
+        async function _fuelSetupPollLive() {
+            try {
+                const r = await fetch('/api/fuel/status');
+                if (!r.ok) return;
+                const d = await r.json();
+                const el = document.getElementById('fuelSetupLiveV');
+                if (el && typeof d.voltage === 'number') el.textContent = d.voltage.toFixed(3) + ' V';
+            } catch (e) { /* offline */ }
+        }
+        async function _fuelSetupUseCurrent(which) {
+            try {
+                const r = await fetch('/api/fuel/status');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const d = await r.json();
+                if (typeof d.voltage !== 'number') return;
+                const id = (which === 'empty') ? 'fuelSetupEmptyV' : 'fuelSetupFullV';
+                const inp = document.getElementById(id);
+                if (inp) inp.value = d.voltage.toFixed(3);
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Could not read live voltage', 'error');
+            }
+        }
+        async function openFuelSenderSetup() {
+            if (typeof closeMobileMenu === 'function') closeMobileMenu();
+            const modal = document.getElementById('fuelSenderSetupModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            if (!currentLayout.signals) currentLayout.signals = [];
+            let sig = currentLayout.signals.find(s => s.name === 'FUEL_SENDER_V');
+            if (!sig) {
+                sig = { name: 'FUEL_SENDER_V', source: 'internal', fuel_cal: { empty_v: 0.5, full_v: 3.0, full_value: 100, enabled: true } };
+                currentLayout.signals.push(sig);
+            }
+            const cal = sig.fuel_cal || {};
+            const ev = (cal.empty_v    != null) ? Number(cal.empty_v)    : 0.5;
+            const fv = (cal.full_v     != null) ? Number(cal.full_v)     : 3.0;
+            const fx = (cal.full_value != null) ? Number(cal.full_value) : 100;
+            document.getElementById('fuelSetupEmptyV').value    = ev.toFixed(3);
+            document.getElementById('fuelSetupFullV').value     = fv.toFixed(3);
+            document.getElementById('fuelSetupFullValue').value = fx;
+            document.getElementById('fuelSetupEnabled').checked = (cal.enabled !== false);
+            _fuelSetupPollLive();
+            if (_fuelSetupPollTimer) clearInterval(_fuelSetupPollTimer);
+            _fuelSetupPollTimer = setInterval(_fuelSetupPollLive, 500);
+        }
+        async function saveFuelSenderSetup() {
+            if (!currentLayout.signals) currentLayout.signals = [];
+            let sig = currentLayout.signals.find(s => s.name === 'FUEL_SENDER_V');
+            if (!sig) {
+                sig = { name: 'FUEL_SENDER_V', source: 'internal' };
+                currentLayout.signals.push(sig);
+            }
+            const empty_v    = parseFloat(document.getElementById('fuelSetupEmptyV').value);
+            const full_v     = parseFloat(document.getElementById('fuelSetupFullV').value);
+            const full_value = parseFloat(document.getElementById('fuelSetupFullValue').value);
+            if (!isFinite(empty_v) || !isFinite(full_v) || !isFinite(full_value)) {
+                if (typeof showToast === 'function') showToast('Enter valid numbers', 'error');
+                return;
+            }
+            if (Math.abs(full_v - empty_v) < 0.001) {
+                if (typeof showToast === 'function') showToast('Empty and Full voltages must differ', 'error');
+                return;
+            }
+            pushHistory();
+            sig.fuel_cal = {
+                empty_v:    empty_v,
+                full_v:     full_v,
+                full_value: full_value,
+                enabled:    document.getElementById('fuelSetupEnabled').checked
+            };
+            try {
+                if (typeof saveActiveLayout === 'function') {
+                    await saveActiveLayout({ silent: false });
+                }
+                if (typeof showToast === 'function') showToast('Fuel sender setup saved', 'success');
+                closeFuelSenderSetup();
+                if (typeof updateInspector === 'function') updateInspector();
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Save failed', 'error');
             }
         }
 
@@ -12658,6 +13225,192 @@
             if (_deviceInfoTimer) { clearInterval(_deviceInfoTimer); _deviceInfoTimer = null; }
         }
 
+        /* ── OBD2 Setup modal ───────────────────────────────────────── */
+        let _obd2SetupTimer = null;
+        async function _refreshObd2Setup() {
+            const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+            try {
+                const r = await fetch('/api/signals/values');
+                if (r.ok) {
+                    const data = await r.json();
+                    const sigs = Array.isArray(data) ? data : (data.signals || []);
+                    const liveCount = sigs.filter(s => !s.stale).length;
+                    setText('obd2SetupCan', liveCount > 0 ? `Active (${liveCount} live signals)` : 'Idle (no live signals)');
+                }
+            } catch (e) { setText('obd2SetupCan', 'Unknown'); }
+            try {
+                const ecu = (typeof currentLayout !== 'undefined' && currentLayout && currentLayout.ecu) ? currentLayout.ecu : '';
+                const ver = (typeof currentLayout !== 'undefined' && currentLayout && currentLayout.ecu_version) ? currentLayout.ecu_version : '';
+                let label = ''; if (ecu && ver) label = `${ecu} (${ver})`; else if (ecu) label = ecu;
+                setText('obd2SetupEcu', label || 'Generic OBD2');
+            } catch (e) {}
+            try {
+                const layoutSigs = (typeof currentLayout !== 'undefined' && currentLayout && Array.isArray(currentLayout.signals)) ? currentLayout.signals : [];
+                setText('obd2SetupEnabled', `${layoutSigs.length}`);
+            } catch (e) {}
+        }
+        function openObd2Setup() {
+            const m = document.getElementById('obd2SetupModal'); if (!m) return;
+            m.style.display = 'flex'; _refreshObd2Setup();
+            if (_obd2SetupTimer) clearInterval(_obd2SetupTimer);
+            _obd2SetupTimer = setInterval(_refreshObd2Setup, 2000);
+        }
+        function closeObd2Setup() {
+            const m = document.getElementById('obd2SetupModal'); if (m) m.style.display = 'none';
+            if (_obd2SetupTimer) { clearInterval(_obd2SetupTimer); _obd2SetupTimer = null; }
+        }
+
+        /* ── Trouble Codes (DTC reader) modal ───────────────────────── */
+        let _dtcCurrentTab = 'stored';
+        let _dtcClearArmed = false;
+        let _dtcClearArmTimer = null;
+        let _dtcInFlight = false;
+        function openTroubleCodes() {
+            const m = document.getElementById('troubleCodesModal'); if (!m) return;
+            m.style.display = 'flex'; _dtcCurrentTab = 'stored';
+            _dtcSelectTab('stored', true);
+        }
+        function closeTroubleCodes() {
+            const m = document.getElementById('troubleCodesModal'); if (m) m.style.display = 'none';
+            _dtcClearArmed = false;
+            if (_dtcClearArmTimer) { clearTimeout(_dtcClearArmTimer); _dtcClearArmTimer = null; }
+        }
+        function _dtcSelectTab(tab, fetchNow) {
+            _dtcCurrentTab = tab;
+            for (const t of ['stored', 'pending', 'permanent']) {
+                const el = document.getElementById('dtcTab' + t[0].toUpperCase() + t.slice(1));
+                if (!el) continue;
+                el.classList.remove('btn', 'btn-secondary');
+                el.classList.add(t === tab ? 'btn' : 'btn-secondary');
+            }
+            const clr = document.getElementById('dtcClearBtn');
+            if (clr) {
+                clr.disabled = (tab !== 'stored');
+                clr.style.opacity = (tab === 'stored') ? '1' : '0.4';
+                clr.style.cursor  = (tab === 'stored') ? 'pointer' : 'not-allowed';
+                clr.textContent   = 'Clear Codes';
+            }
+            _dtcClearArmed = false;
+            if (fetchNow !== false) _dtcRefresh();
+        }
+        async function _dtcRefresh() {
+            if (_dtcInFlight) return;
+            _dtcInFlight = true;
+            const body = document.getElementById('dtcBody');
+            const count = document.getElementById('dtcCount');
+            const status = document.getElementById('dtcStatus');
+            if (status) status.textContent = `Reading ${_dtcCurrentTab} codes…`;
+            if (body) body.innerHTML = '<tr><td colspan="2" style="padding:14px; text-align:center; color:var(--text-muted); font-style:italic;">Querying ECU…</td></tr>';
+            if (count) count.textContent = '';
+            try {
+                const r = await fetch('/api/obd2/dtcs?mode=' + _dtcCurrentTab);
+                const data = await r.json();
+                if (!data.ok) {
+                    if (status) status.textContent = `Error: ${data.error || 'unknown'}`;
+                    if (body) body.innerHTML = `<tr><td colspan="2" style="padding:14px; text-align:center; color:var(--text-muted); font-style:italic;">${(data.error || 'No response from ECU')}</td></tr>`;
+                    return;
+                }
+                const codes = Array.isArray(data.codes) ? data.codes : [];
+                if (count) count.textContent = codes.length ? `(${codes.length})` : '(none)';
+                if (status) status.textContent = `Last read: ${new Date().toLocaleTimeString()} — ${_dtcCurrentTab}`;
+                if (body) {
+                    if (codes.length === 0) {
+                        body.innerHTML = '<tr><td colspan="2" style="padding:14px; text-align:center; color:var(--text-muted); font-style:italic;">No codes 🎉</td></tr>';
+                    } else {
+                        body.innerHTML = codes.map(c => {
+                            const code = (c.code || '').toString();
+                            const desc = (c.desc || '(no description in database)').toString();
+                            return `<tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px; font-family:'JetBrains Mono', monospace; font-weight:600;">${code}</td><td style="padding:6px 10px; color:var(--text-muted);">${desc}</td></tr>`;
+                        }).join('');
+                    }
+                }
+            } catch (e) {
+                if (status) status.textContent = `Error: ${e.message || e}`;
+                if (body) body.innerHTML = '<tr><td colspan="2" style="padding:14px; text-align:center; color:var(--text-muted); font-style:italic;">Network error</td></tr>';
+            } finally { _dtcInFlight = false; }
+        }
+        async function _dtcClearTap() {
+            if (_dtcCurrentTab !== 'stored') return;
+            const btn = document.getElementById('dtcClearBtn');
+            if (!_dtcClearArmed) {
+                _dtcClearArmed = true;
+                if (btn) btn.textContent = 'Tap again to confirm';
+                if (_dtcClearArmTimer) clearTimeout(_dtcClearArmTimer);
+                _dtcClearArmTimer = setTimeout(() => { _dtcClearArmed = false; if (btn) btn.textContent = 'Clear Codes'; }, 4000);
+                return;
+            }
+            _dtcClearArmed = false;
+            if (_dtcClearArmTimer) { clearTimeout(_dtcClearArmTimer); _dtcClearArmTimer = null; }
+            if (btn) { btn.textContent = 'Clearing…'; btn.disabled = true; }
+            const status = document.getElementById('dtcStatus');
+            try {
+                const r = await fetch('/api/obd2/clear', { method: 'POST' });
+                const data = await r.json();
+                if (data.ok) {
+                    if (status) status.textContent = `Cleared ${new Date().toLocaleTimeString()}`;
+                    setTimeout(_dtcRefresh, 400);
+                } else {
+                    if (status) status.textContent = `Clear failed: ${data.error || 'ECU rejected'}`;
+                }
+            } catch (e) {
+                if (status) status.textContent = `Clear failed: ${e.message || e}`;
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Clear Codes'; }
+            }
+        }
+
+        /* ── Vehicle Info modal ─────────────────────────────────────── */
+        let _vehInfoLast = { vin: '', ecu: '' };
+        function openVehicleInfo() {
+            const m = document.getElementById('vehicleInfoModal'); if (!m) return;
+            m.style.display = 'flex';
+            document.getElementById('vinValue').textContent     = _vehInfoLast.vin || '…';
+            document.getElementById('ecuNameValue').textContent = _vehInfoLast.ecu || '…';
+            document.getElementById('vehInfoTime').textContent  = 'fetching…';
+            document.getElementById('vehInfoStatus').textContent = '';
+            _vehInfoRefresh();
+        }
+        function closeVehicleInfo() {
+            const m = document.getElementById('vehicleInfoModal'); if (m) m.style.display = 'none';
+        }
+        async function _vehInfoRefresh() {
+            const status = document.getElementById('vehInfoStatus');
+            const vinEl  = document.getElementById('vinValue');
+            const ecuEl  = document.getElementById('ecuNameValue');
+            const timeEl = document.getElementById('vehInfoTime');
+            if (status) status.textContent = 'Reading VIN + ECU name from ECU…';
+            try {
+                const [vinR, ecuR] = await Promise.all([
+                    fetch('/api/obd2/vin').then(r => r.json()).catch(() => ({ ok: false })),
+                    fetch('/api/obd2/ecuname').then(r => r.json()).catch(() => ({ ok: false })),
+                ]);
+                const vin = (vinR && vinR.ok && vinR.vin) ? vinR.vin : '';
+                const ecu = (ecuR && ecuR.ok && ecuR.ecu_name) ? ecuR.ecu_name : '';
+                _vehInfoLast.vin = vin;
+                _vehInfoLast.ecu = ecu;
+                if (vinEl) vinEl.textContent = vin || '(no response — not all ECUs support VIN)';
+                if (ecuEl) ecuEl.textContent = ecu || '(no response — Mode 09 PID 0x0A unsupported)';
+                if (timeEl) timeEl.textContent = new Date().toLocaleTimeString();
+                if (status) {
+                    if (!vin && !ecu) status.textContent = 'No response from ECU. Make sure ignition is on and the OBD2 plug is connected.';
+                    else status.textContent = '';
+                }
+            } catch (e) {
+                if (status) status.textContent = `Error: ${e.message || e}`;
+            }
+        }
+        async function _vehInfoCopyVin() {
+            const vin = (_vehInfoLast.vin || '').trim();
+            const status = document.getElementById('vehInfoStatus');
+            if (!vin) { if (status) status.textContent = 'No VIN to copy yet.'; return; }
+            try {
+                await navigator.clipboard.writeText(vin);
+                if (status) status.textContent = `Copied: ${vin}`;
+            } catch (e) {
+                if (status) status.textContent = `Copy failed: ${e.message || e}`;
+            }
+        }
+
         /* Marketplace — opens the external RDM marketplace in a new tab. The
          * URL is a placeholder until the marketplace web property lands; users
          * can override by setting localStorage.rdmMarketplaceUrl. */
@@ -12719,19 +13472,41 @@
 
         async function _refreshLogStatus() {
             try {
-                const [statusR, listR, configR] = await Promise.all([
+                const [statusR, listR, configR, canrawR] = await Promise.all([
                     fetch('/api/log/status'),
                     fetch('/api/log/list'),
                     fetch('/api/log/config'),
+                    fetch('/api/canraw/status').catch(() => null),
                 ]);
-                let running = false;
+                let active = false;
+                let storage = 'lfs', sdMounted = false, lfsMax = 1024*1024;
+                let canrawActive = false, canrawLine = '';
+                if (canrawR && canrawR.ok) {
+                    try {
+                        const c = await canrawR.json();
+                        canrawActive = !!c.active;
+                        if (canrawActive) {
+                            const where = c.storage === 'sd' ? 'SD' : 'flash';
+                            canrawLine = ` • Raw: ${c.frames || 0} frames to ${where}`;
+                        }
+                    } catch (_) { /* old firmware — no canraw endpoint */ }
+                }
                 if (statusR.ok) {
                     const s = await statusR.json();
-                    running = !!s.running;
+                    /* Firmware returns `active`; older builds returned `running` — accept both. */
+                    active = !!(s.active || s.running);
+                    storage = s.storage || (s.sd_mounted ? 'sd' : 'lfs');
+                    sdMounted = !!s.sd_mounted;
+                    if (typeof s.lfs_max_bytes === 'number' && s.lfs_max_bytes > 0)
+                        lfsMax = s.lfs_max_bytes;
                     const line = document.getElementById('logStatusLine');
                     if (line) {
-                        if (running) {
-                            line.textContent = `Recording ${s.file || ''} - ${s.samples || 0} samples @ ${s.rate_hz || 0} Hz`;
+                        if (active) {
+                            const where = storage === 'sd' ? 'SD' : 'flash';
+                            line.textContent = `Recording to ${where}: ${s.file || ''} — ${s.samples || 0} samples @ ${s.rate_hz || 0} Hz${canrawLine}`;
+                            line.style.color = 'hsl(140,60%,55%)';
+                        } else if (canrawActive) {
+                            line.textContent = `Capturing raw CAN${canrawLine.replace(' • Raw: ', ': ')}`;
                             line.style.color = 'hsl(140,60%,55%)';
                         } else {
                             line.textContent = 'Idle';
@@ -12739,7 +13514,22 @@
                         }
                     }
                     const btn = document.getElementById('logToggleBtn');
-                    if (btn) btn.textContent = running ? 'Stop' : 'Start';
+                    if (btn) btn.textContent = active ? 'Stop Signal Log' : 'Start Signal Log';
+                    const rawBtn = document.getElementById('canrawToggleBtn');
+                    if (rawBtn) rawBtn.textContent = canrawActive ? 'Stop Raw CAN' : 'Start Raw CAN';
+
+                    /* Storage-tier legend above the file list — explain WHERE
+                     * the next log will be saved + LFS cap warning so users
+                     * aren't surprised when a long log auto-stops. */
+                    const storageLine = document.getElementById('logStorageLine');
+                    if (storageLine) {
+                        if (sdMounted) {
+                            storageLine.textContent = 'Logs (SD card)';
+                        } else {
+                            const mb = (lfsMax / (1024*1024)).toFixed(1);
+                            storageLine.innerHTML = `Logs (internal flash &mdash; <span style="color:hsl(40,80%,60%);">no SD card detected, each log capped at ${mb} MB</span>)`;
+                        }
+                    }
                 }
                 if (configR.ok) {
                     const cfg = await configR.json();
@@ -12752,14 +13542,27 @@
                     const el = document.getElementById('logList');
                     if (el) {
                         el.innerHTML = arr.length === 0
-                            ? '<div style="padding:20px; text-align:center; color:var(--text-muted);">No log files on SD card</div>'
+                            ? '<div style="padding:20px; text-align:center; color:var(--text-muted);">No log files</div>'
                             : arr.map(f => {
                                 const name = typeof f === 'string' ? f : (f.name || f.file || '');
                                 const size = typeof f === 'object' ? _fmtBytes(f.size) : '';
+                                const tier = (typeof f === 'object' ? f.storage : null) || '';
+                                const tierBadge = tier
+                                    ? `<span style="font-size:9px; color:var(--text-muted); border:1px solid var(--border); border-radius:3px; padding:1px 4px; margin-left:6px;">${tier.toUpperCase()}</span>`
+                                    : '';
+                                /* Raw CAN captures (canraw_*.csv) can't be
+                                 * "played back" through the signal pipeline
+                                 * — they're meant for offline decoding in
+                                 * SavvyCAN / scripts — so hide the Play
+                                 * button on those rows. */
+                                const isRaw = name.toLowerCase().startsWith('canraw_');
+                                const playBtn = isRaw ? '' :
+                                    `<button class="btn btn-secondary" style="padding:2px 10px; font-size:10px; color:hsl(140,60%,55%);" onclick="playLogFile('${name}')">Play</button>`;
                                 return `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; border-bottom:1px solid var(--border);">
-                                    <span>${name} <span style="color:var(--text-muted); margin-left:8px;">${size}</span></span>
-                                    <span>
-                                        <a href="/api/log/download?file=${encodeURIComponent(name)}" download="${name}" class="btn btn-secondary" style="padding:2px 10px; font-size:10px; text-decoration:none;">Download</a>
+                                    <span>${name}${tierBadge} <span style="color:var(--text-muted); margin-left:8px;">${size}</span></span>
+                                    <span style="display:flex; gap:4px;">
+                                        ${playBtn}
+                                        <a href="/api/log/download?name=${encodeURIComponent(name)}" download="${name}" class="btn btn-secondary" style="padding:2px 10px; font-size:10px; text-decoration:none;">Download</a>
                                         <button class="btn btn-secondary" style="padding:2px 10px; font-size:10px; color:hsl(0,70%,60%);" onclick="deleteLogFile('${name}')">Delete</button>
                                     </span>
                                 </div>`;
@@ -12767,11 +13570,13 @@
                     }
                 }
             } catch (e) { /* silent */ }
+            /* Piggyback the replay-status poll on the same 1s tick. */
+            _refreshReplayStatus();
         }
 
         async function toggleDataLogger() {
             const btn = document.getElementById('logToggleBtn');
-            const running = btn && btn.textContent === 'Stop';
+            const running = btn && /Stop/i.test(btn.textContent);
             try {
                 if (running) {
                     await fetch('/api/log/stop', { method: 'POST' });
@@ -12792,14 +13597,112 @@
         async function deleteLogFile(name) {
             if (!confirm(`Delete ${name}?`)) return;
             try {
-                await fetch('/api/log/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ file: name })
+                /* Firmware expects ?name= as a query param (not a JSON body). */
+                await fetch('/api/log/delete?name=' + encodeURIComponent(name), {
+                    method: 'POST'
                 });
                 _refreshLogStatus();
             } catch (e) {
                 updateStatus('Failed to delete log file', true);
+            }
+        }
+
+        /* ── Raw CAN capture (every frame, no decoding) ───────────────
+         * Mutually exclusive with signal logging on the firmware side;
+         * the button updates label/colour from /api/canraw/status which
+         * _refreshLogStatus polls on the same 1s tick. */
+        async function toggleCanRaw() {
+            const btn = document.getElementById('canrawToggleBtn');
+            const running = btn && /Stop/i.test(btn.textContent);
+            try {
+                const path = running ? '/api/canraw/stop' : '/api/canraw/start';
+                const r = await fetch(path, { method: 'POST' });
+                if (!r.ok) {
+                    const msg = await r.text().catch(() => '');
+                    throw new Error(msg || ('HTTP ' + r.status));
+                }
+                _refreshLogStatus();
+            } catch (e) {
+                updateStatus('Raw CAN command failed: ' + e.message, true);
+                showToast('Raw CAN failed', 'error');
+            }
+        }
+
+        /* ── Replay (play back a CSV through the signal system) ────────
+         * Backed by /api/replay/start (POST {file,speed,loop}) +
+         * /api/replay/stop + /api/replay/status. The firmware reads the
+         * CSV one row at a time and injects each column into its matching
+         * signal — same data path the live CAN bus uses. */
+        async function playLogFile(name) {
+            const speedSel = document.getElementById('logReplaySpeed');
+            const speed = speedSel ? parseFloat(speedSel.value) || 1 : 1;
+            try {
+                const r = await fetch('/api/replay/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: name, speed: speed, loop: false })
+                });
+                if (!r.ok) throw new Error(await r.text());
+                showToast(`Replaying ${name} @ ${speed}x`, 'success');
+                _refreshReplayStatus();
+            } catch (e) {
+                updateStatus('Replay start failed: ' + e.message, true);
+                showToast('Replay failed', 'error');
+            }
+        }
+
+        async function stopReplay() {
+            try {
+                await fetch('/api/replay/stop', { method: 'POST' });
+                _refreshReplayStatus();
+            } catch (e) { /* silent */ }
+        }
+
+        async function _refreshReplayStatus() {
+            try {
+                const r = await fetch('/api/replay/status');
+                if (!r.ok) return;
+                const s = await r.json();
+                const line = document.getElementById('logReplayLine');
+                const info = document.getElementById('logReplayInfo');
+                if (!line || !info) return;
+                if (s.active) {
+                    line.style.display = 'flex';
+                    const pct = s.total_rows ? ((s.row / s.total_rows) * 100).toFixed(0) : 0;
+                    info.textContent = `Replaying ${s.file || ''} — row ${s.row}/${s.total_rows} (${pct}%) @ ${s.speed}x`;
+                } else {
+                    line.style.display = 'none';
+                }
+            } catch (e) { /* silent */ }
+        }
+
+        /* Upload a CSV from the user's filesystem so they can replay logs
+         * recorded on another device. Streams via fetch + File object so
+         * the firmware can write it to /lfs/logs/<name> capped at the
+         * standard LFS log limit. */
+        async function uploadLogFile() {
+            const input = document.getElementById('logUploadFile');
+            const file = input && input.files && input.files[0];
+            if (!file) {
+                showToast('Pick a .csv file first', 'error');
+                return;
+            }
+            try {
+                const r = await fetch('/api/log/upload?name=' + encodeURIComponent(file.name), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/csv' },
+                    body: file
+                });
+                if (!r.ok) {
+                    const msg = await r.text().catch(() => '');
+                    throw new Error(msg || ('HTTP ' + r.status));
+                }
+                showToast(`Uploaded ${file.name}`, 'success');
+                input.value = '';
+                _refreshLogStatus();
+            } catch (e) {
+                updateStatus('Upload failed: ' + e.message, true);
+                showToast('Upload failed', 'error');
             }
         }
 
@@ -12981,14 +13884,6 @@
             } catch (e) { /* silent */ }
         }
 
-        /* Initial paint + polling - renderSignals() (called on every layout
-         * change) also calls renderLiveSignalCards to rebuild the list. */
-        document.addEventListener('DOMContentLoaded', () => {
-            renderLiveSignalCards();
-            if (_sigCardsTimer) clearInterval(_sigCardsTimer);
-            _pollLiveSignalValues();
-            _sigCardsTimer = setInterval(_pollLiveSignalValues, 500);
-        });
 
         /* ── Studio-style mobile UX: bottom nav + slide-up sheet ────── */
 
@@ -13017,7 +13912,6 @@
         /* Bottom-nav icon dispatcher */
         function mobileAction(action) {
             switch (action) {
-                case 'widgets':    openSidebarTab('widgets'); break;
                 case 'properties': openSidebarTab('properties'); break;
                 case 'layers':     openSidebarTab('layers'); break;
                 case 'sim':        if (typeof toggleSimulation === 'function') toggleSimulation(); break;
@@ -13090,8 +13984,7 @@
                     { type: 'button', label: 'Rename\u2026',  icon: 'edit',   onclick: 'renameCurrentLayout()' }
                 ]},
                 { heading: 'Screen', items: [
-                    { type: 'select', id: 'screenModeSelect' },
-                    { type: 'select', id: 'ecuSelect' }
+                    { type: 'select', id: 'screenModeSelect' }
                 ]},
                 { heading: 'File', items: [
                     { type: 'button', label: 'Import .rdm',   icon: 'upload',   onclick: 'importRdm()' },
@@ -13113,7 +14006,7 @@
                 { heading: 'Tools', items: [
                     { type: 'button', label: 'Signal Dashboard\u2026', icon: 'activity', onclick: 'openSignalDashboard()' },
                     { type: 'button', label: 'Data Logger\u2026',      icon: 'database', onclick: 'openDataLogger()' },
-                    { type: 'button', label: 'Fuel Calibration\u2026', icon: 'gauge',      onclick: 'openFuelCalibration()' },
+                    { type: 'button', label: 'Fuel Sender Setup\u2026', icon: 'gauge',      onclick: 'openFuelSenderSetup()' },
                     { type: 'button', label: 'Dimmer Settings\u2026', icon: 'brightness', onclick: 'openDimmerSettings()' },
                     { type: 'button', label: 'Gear Setup\u2026',       icon: 'gauge',      onclick: 'openGearSetup()' },
                     { type: 'button', label: 'Import DBC\u2026',       icon: 'upload',   onclick: 'openDbcImportModal()' },
@@ -13133,9 +14026,8 @@
                     { type: 'select', id: 'streamRateSel' },
                     { type: 'toggle', label: 'CONTROL', icon: 'pointer', getState: () => (typeof _liveControlOn !== 'undefined' && _liveControlOn),
                         onclick: 'toggleLiveControl()' },
-                    { type: 'button', label: 'Sync Preview', icon: 'sync',  onclick: 'captureScreenshot()' },
                     { type: 'button', label: 'Reset View',   icon: 'reset', onclick: 'resetView()' },
-                    { type: 'button', label: 'Help',       icon: 'help',  onclick: "document.getElementById('helpModal').style.display='flex'" }
+                    { type: 'button', label: 'Keyboard Shortcuts', icon: 'help',  onclick: "document.getElementById('helpModal').style.display='flex'" }
                 ]},
                 { heading: 'Danger zone', items: [
                     { type: 'button', label: 'Delete Layout', icon: 'trash', onclick: 'deleteCurrentLayout()', danger: true }
@@ -13716,6 +14608,171 @@
         /* Re-sync on viewport change (rotation / resize) */
         window.addEventListener('resize', _wstUpdate);
 
+    </script>
+
+    <!-- Serial Logs drawer (USB only — shows ESP-IDF log output from the device) -->
+    <button id="logsToggleBtn" title="Device logs" aria-label="Toggle device logs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 5h16M4 10h16M4 15h10M4 20h7"/>
+        </svg>
+        <span class="logs-new-dot"></span>
+    </button>
+    <div id="logsDrawer" role="dialog" aria-label="Device logs">
+        <div class="logs-header">
+            <h3>Device Logs</h3>
+            <button id="logsCopyBtn" title="Copy all log lines to clipboard">Copy</button>
+            <button id="logsClearBtn" title="Clear log history">Clear</button>
+            <button class="logs-close" id="logsCloseBtn" title="Close" aria-label="Close logs">&times;</button>
+        </div>
+        <div class="logs-list" id="logsList">
+            <div class="logs-empty">No log lines yet. Connect via USB to see device output.</div>
+        </div>
+        <div class="logs-paused-banner" id="logsPausedBanner">Paused — click to resume autoscroll</div>
+    </div>
+
+    <script>
+        /* ── Serial Logs (USB only) ─────────────────────────────────────
+         * The Tauri backend emits `serial-log` events containing one log
+         * line each (already trimmed of trailing newlines, ANSI escapes
+         * stripped where possible). We append to a ring buffer of 1000
+         * lines, autoscroll if the user hasn't manually scrolled up,
+         * and surface a "new logs" dot on the toggle button when the
+         * drawer is closed. */
+        (function _setupSerialLogs() {
+            const MAX_LINES = 1000;
+            const lines = [];          // DOM elements, oldest first
+            const toggleBtn = document.getElementById('logsToggleBtn');
+            const drawer = document.getElementById('logsDrawer');
+            const list = document.getElementById('logsList');
+            const banner = document.getElementById('logsPausedBanner');
+            const emptyHint = list.querySelector('.logs-empty');
+            const copyBtn = document.getElementById('logsCopyBtn');
+            const clearBtn = document.getElementById('logsClearBtn');
+            const closeBtn = document.getElementById('logsCloseBtn');
+
+            /* Show the button only in Tauri (USB transport). The serial
+             * log stream doesn't exist for web/wifi/hotspot transports. */
+            const isTauri = !!(window.__TAURI_INTERNALS__ || window.__TAURI__);
+            if (!isTauri) return;
+            toggleBtn.classList.add('visible');
+
+            let autoscroll = true;
+            let suppressScrollHandler = false;
+
+            /* ANSI SGR escape stripper — defensive, the backend already
+             * strips them but firmware may add other escape sequences. */
+            const ANSI_RE = /\x1B\[[0-9;]*[A-Za-z]/g;
+
+            function classifyLevel(line) {
+                /* ESP-IDF format: "I (1234) tag: message" — first char
+                 * is the level after any leading whitespace. */
+                const c = line.charAt(0);
+                if (c === 'W') return 'lvl-w';
+                if (c === 'E') return 'lvl-e';
+                if (c === 'D') return 'lvl-d';
+                if (c === 'V') return 'lvl-v';
+                return '';
+            }
+
+            function appendLine(rawLine) {
+                const clean = rawLine.replace(ANSI_RE, '');
+                if (!clean) return;
+
+                if (emptyHint && emptyHint.parentNode) emptyHint.remove();
+
+                const el = document.createElement('div');
+                el.className = 'log-line';
+                const lvl = classifyLevel(clean);
+                if (lvl) el.classList.add(lvl);
+                el.textContent = clean;
+                list.appendChild(el);
+                lines.push(el);
+
+                /* Trim front of ring buffer. */
+                while (lines.length > MAX_LINES) {
+                    const old = lines.shift();
+                    if (old && old.parentNode) old.parentNode.removeChild(old);
+                }
+
+                if (autoscroll) {
+                    suppressScrollHandler = true;
+                    list.scrollTop = list.scrollHeight;
+                    /* Reset flag on next frame after the scroll lands. */
+                    requestAnimationFrame(() => { suppressScrollHandler = false; });
+                }
+
+                /* New-logs indicator on toggle button when drawer closed. */
+                if (!drawer.classList.contains('open')) {
+                    toggleBtn.classList.add('has-new');
+                }
+            }
+
+            list.addEventListener('scroll', () => {
+                if (suppressScrollHandler) return;
+                const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 4;
+                if (atBottom) {
+                    autoscroll = true;
+                    banner.classList.remove('visible');
+                } else {
+                    autoscroll = false;
+                    banner.classList.add('visible');
+                }
+            });
+
+            banner.addEventListener('click', () => {
+                autoscroll = true;
+                banner.classList.remove('visible');
+                list.scrollTop = list.scrollHeight;
+            });
+
+            toggleBtn.addEventListener('click', () => {
+                drawer.classList.toggle('open');
+                if (drawer.classList.contains('open')) {
+                    toggleBtn.classList.remove('has-new');
+                    /* Snap to bottom when opening, unless user previously
+                     * paused autoscroll. */
+                    if (autoscroll) list.scrollTop = list.scrollHeight;
+                }
+            });
+            closeBtn.addEventListener('click', () => {
+                drawer.classList.remove('open');
+            });
+
+            copyBtn.addEventListener('click', async () => {
+                const text = lines.map(el => el.textContent).join('\n');
+                try {
+                    await navigator.clipboard.writeText(text);
+                    copyBtn.textContent = 'Copied';
+                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1200);
+                } catch (e) {
+                    console.warn('Clipboard write failed:', e);
+                }
+            });
+
+            clearBtn.addEventListener('click', () => {
+                lines.length = 0;
+                list.innerHTML = '';
+                const hint = document.createElement('div');
+                hint.className = 'logs-empty';
+                hint.textContent = 'Cleared.';
+                list.appendChild(hint);
+                autoscroll = true;
+                banner.classList.remove('visible');
+            });
+
+            /* Bind the Tauri event listener. */
+            (async () => {
+                if (typeof window.__TAURI__?.event?.listen !== 'function') return;
+                try {
+                    await window.__TAURI__.event.listen('serial-log', (e) => {
+                        const payload = e.payload;
+                        if (typeof payload === 'string' && payload.length) appendLine(payload);
+                    });
+                } catch (err) {
+                    console.warn('serial-log listener failed to bind:', err);
+                }
+            })();
+        })();
     </script>
 </body>
 
