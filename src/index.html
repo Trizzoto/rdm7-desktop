@@ -5154,8 +5154,9 @@
                     const mx = w.config.bar_max !== undefined ? w.config.bar_max : 100;
                     w.config.bar_alerts_enabled = (lo !== mn || hi !== mx);
                 }
-                /* Image: convert LVGL zoom (256 = 100%) to web percentage */
-                if (w.type === 'image' && w.config && w.config.image_scale !== undefined) {
+                /* Image: convert LVGL zoom (256 = 100%) to web percentage; skip when
+                 * auto_size is set (zoom is computed at runtime, not stored). */
+                if (w.type === 'image' && w.config && w.config.image_scale !== undefined && !w.config.auto_size) {
                     w.config.image_scale = Math.round(w.config.image_scale * 100 / 256);
                 }
             });
@@ -5624,12 +5625,6 @@
                             { name: "anchor_enabled", label: "Anchor Curve", type: "checkbox", def: false, cat: "data" },
                             { name: "anchor_value", label: "Anchor Value", type: "number", def: 50, cat: "data", enabledBy: "anchor_enabled" },
                             { name: "anchor_position", label: "Anchor Position (%)", type: "slider", def: 50, cat: "data", min: 0, max: 100, enabledBy: "anchor_enabled" },
-                            /* Invert Direction: swaps the value endpoints so
-                             * max lands at the start position and min at the
-                             * end of the sweep. Mirrors a Top-start meter
-                             * to a Bottom-feel and vice versa. JSON key kept
-                             * as "reverse" for stability across firmware. */
-                            { name: "reverse", label: "Invert Direction", type: "checkbox", def: false, cat: "data" },
                             /* Redline zone: visual cues drawn between threshold and
                              * max. Show Arc + Recolor Ticks default ON so enabling
                              * the master toggle gives an immediate visible result. */
@@ -5718,7 +5713,8 @@
                         displayName: "Image", defW: 100, defH: 100,
                         fields: [
                             { name: "image_name", label: "Image", type: "image_picker", def: "", cat: "data", nightOverridable: true },
-                            { name: "image_scale", label: "Scale %", type: "stepper", def: 100, cat: "appearance", min: 10, max: 200 },
+                            { name: "auto_size", label: "Auto Size", type: "checkbox", def: true, cat: "appearance" },
+                            { name: "image_scale", label: "Scale %", type: "stepper", def: 100, cat: "appearance", min: 10, max: 200, enabledBy: "!auto_size" },
                             { name: "opacity", label: "Opacity (0-255)", type: "stepper", def: 255, cat: "appearance", min: 0, max: 255 },
                             { name: "recolor", label: "Color Overlay", type: "color", def: 0x000000, cat: "appearance", nightOverridable: true },
                             { name: "recolor_opa", label: "Overlay Strength (0-255)", type: "stepper", def: 0, cat: "appearance", min: 0, max: 255 }
@@ -5845,6 +5841,7 @@
                                   { v: 1, l: "Little Endian" }
                               ] },
                             { name: "tx_rate_hz", label: "TX Rate (Hz)", type: "stepper", def: 10, cat: "data", min: 0, max: 50 },
+                            { name: "momentary", label: "Momentary (hold=ON, release=OFF)", type: "checkbox", def: false, cat: "data" },
                             { name: "image_name", label: "Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
                             { name: "active_color", label: "Active Color", type: "color", def: 0x00FF00, cat: "appearance", nightOverridable: true },
                             { name: "inactive_color", label: "Inactive Color", type: "color", def: 0x555555, cat: "appearance", nightOverridable: true },
@@ -5877,7 +5874,7 @@
                                   { v: 1, l: "Little Endian" }
                               ] },
                             { name: "tx_rate_hz", label: "TX Rate (Hz)", type: "stepper", def: 10, cat: "data", min: 0, max: 50 },
-                            { name: "tx_send_release", label: "Send on Release", type: "checkbox", def: false, cat: "data", enabledBy: "!latch" },
+                            { name: "tx_send_release", label: "Send on Release", type: "checkbox", def: true, cat: "data", enabledBy: "!latch" },
                             { name: "image_name", label: "Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
                             { name: "pressed_image_name", label: "Pressed Image", type: "image_picker", def: "", cat: "appearance" },
                             { name: "bg_color", label: "Background", type: "color", def: 0x333333, cat: "appearance", nightOverridable: true },
@@ -7516,8 +7513,9 @@
                     w.config.bar_low_color = rgb888to565(0x0000FF);
                     w.config.bar_high_color = rgb888to565(0xFF0000);
                 }
-                /* Image: convert scale percentage (10-200) to LVGL zoom (256 = 100%) */
-                if (w.type === 'image' && w.config.image_scale !== undefined) {
+                /* Image: convert scale percentage (10-200) to LVGL zoom (256 = 100%);
+                 * skip when auto_size is set (firmware computes zoom from container size). */
+                if (w.type === 'image' && w.config.image_scale !== undefined && !w.config.auto_size) {
                     w.config.image_scale = Math.round(w.config.image_scale * 256 / 100);
                 }
                 /* Clean up web-editor-only fields */
@@ -7902,7 +7900,7 @@
              *   - everything else: normal signal assign flow */
             const isIndicatorWired = (w.type === 'indicator' &&
                                        (w.config?.input_source ?? 0) === 0);
-            const hasSignalBinding = !['shape_panel', 'image'].includes(w.type)
+            const hasSignalBinding = !['shape_panel', 'image', 'button', 'toggle'].includes(w.type)
                                       && !isIndicatorWired;
             const isTestable = TOGGLE_TEST_TYPES.has(w.type);
             if (dataFields.length || hasSignalBinding || isTestable) {
@@ -9006,6 +9004,20 @@
                     clearTestValue(sig);
                 }
                 if (typeof _wstUpdate === 'function') _wstUpdate();
+            }
+
+            /* Image: auto-resize container to native dims when image_name changes
+             * or auto_size is toggled on, so the box immediately reflects reality. */
+            if (w.type === 'image' && (field === 'image_name' || field === 'auto_size') && w.config.auto_size) {
+                const imgName = w.config.image_name;
+                if (imgName) {
+                    const imgInfo = (_cachedImageList || []).find(img => img.name === imgName);
+                    if (imgInfo && imgInfo.width && imgInfo.height) {
+                        w.w = imgInfo.width;
+                        w.h = imgInfo.height;
+                        updateInspector();
+                    }
+                }
             }
 
             /* Line: swap W/H when switching orientation so the bounding box
