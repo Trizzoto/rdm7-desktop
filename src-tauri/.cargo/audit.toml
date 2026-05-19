@@ -1,0 +1,63 @@
+# cargo-audit ignore list for rdm7-desktop.
+#
+# Every entry below must have a one-line rationale. Re-evaluate when:
+#   - The advisory transitions from "unmaintained" to a real CVE.
+#   - The upstream crate that pulls it in releases a major version that
+#     drops the dependency (most of these will resolve when Tauri
+#     migrates Linux from GTK3 to GTK4).
+#
+# To re-check what's currently ignored vs flagged:
+#   cd src-tauri && cargo audit
+#
+# Run without ignores for a worst-case view:
+#   cd src-tauri && cargo audit --ignore-source
+
+[advisories]
+ignore = [
+    # ── Tauri Linux GTK3 transitive deps ──────────────────────────────
+    # All of these are "no longer maintained" advisories for the GTK3
+    # binding crates. Tauri v2 still depends on GTK3 for its Linux
+    # webview; the maintainers are tracking GTK4 migration but it's
+    # not done. None are exploitable — just abandoned crates.
+    # Affects Linux/macOS builds only; not present in the Windows path
+    # users actually run today.
+    "RUSTSEC-2024-0411",  # gdkwayland-sys unmaintained (GTK3 binding)
+    "RUSTSEC-2024-0412",  # gdk unmaintained (GTK3 binding)
+    "RUSTSEC-2024-0413",  # atk unmaintained (GTK3 binding)
+    "RUSTSEC-2024-0414",  # gdkx11-sys unmaintained (GTK3 binding)
+    "RUSTSEC-2024-0415",  # gtk unmaintained (GTK3 binding)
+    "RUSTSEC-2024-0416",  # atk-sys unmaintained (GTK3 binding)
+    "RUSTSEC-2024-0417",  # gdkx11 unmaintained (GTK3 binding)
+    "RUSTSEC-2024-0418",  # gdk-sys unmaintained (GTK3 binding)
+    "RUSTSEC-2024-0419",  # gtk3-macros unmaintained (GTK3 binding)
+    "RUSTSEC-2024-0420",  # gtk-sys unmaintained (GTK3 binding)
+
+    # ── Tauri build-time / parsing transitives (unmaintained) ─────────
+    # proc-macro-error and the unic-* family are pulled in by Tauri's
+    # codegen / HTML-parsing layers. Build-time only — never reach
+    # runtime user input. No active exploits; "unmaintained" is the
+    # advisory category, not a vulnerability.
+    "RUSTSEC-2024-0370",  # proc-macro-error unmaintained (build-time)
+    "RUSTSEC-2025-0057",  # fxhash unmaintained (Tauri internal hash map)
+    "RUSTSEC-2025-0075",  # unic-char-range unmaintained (HTML parsing)
+    "RUSTSEC-2025-0080",  # unic-common unmaintained (HTML parsing)
+    "RUSTSEC-2025-0081",  # unic-char-property unmaintained (HTML parsing)
+    "RUSTSEC-2025-0098",  # unic-ucd-version unmaintained (HTML parsing)
+    "RUSTSEC-2025-0100",  # unic-ucd-ident unmaintained (HTML parsing)
+
+    # ── Narrow unsoundness in unreached paths ─────────────────────────
+    # glib unsoundness only triggers via Linux/macOS-only iterator path;
+    # rand unsoundness requires a custom logger setup we don't have.
+    # Tracking upstream fixes; not exploitable in our deployment.
+    "RUSTSEC-2024-0429",  # glib VariantStrIter Iterator unsoundness — Linux/macOS-only path
+    "RUSTSEC-2026-0097",  # rand custom-logger unsoundness — we don't set one
+]
+
+# Note on policy:
+#   - We do NOT ignore vulnerability-class advisories. Anything that
+#     RustSec categorises as a vulnerability (not "unmaintained" or
+#     "unsound") must be patched, not ignored. The CI workflow uses
+#     --deny warnings to catch any new warning the moment it appears.
+#   - To remove an entry from this list, delete the line and re-run
+#     `cargo audit` to confirm the advisory is gone (because the
+#     dependency was bumped or pruned).
