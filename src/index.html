@@ -5668,7 +5668,7 @@
             } catch (err) { console.warn('file-opened listener failed to bind:', err); }
         })();
 
-        (function _restoreConnection() {
+        function _restoreConnection() {
             const settings = RDM.getConnectionSettings();
             if (settings.mode === 'wifi' && settings.ip) {
                 RDM.setMode('wifi', { ip: settings.ip, port: settings.port });
@@ -5695,7 +5695,12 @@
             } else {
                 _updateConnectionUI();
             }
-        })();
+        }
+        /* Deferred: _updateConnectionUI → updateStatus touches `statusText`,
+         * a const declared much later in this script. Running the restore
+         * synchronously here would hit its temporal dead zone and kill the
+         * whole editor script on first run (no stored connection settings). */
+        setTimeout(_restoreConnection, 0);
 
         /* ── IndexedDB image cache (replaces localStorage for large images) ── */
         const imageStore = (() => {
