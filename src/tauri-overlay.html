@@ -266,6 +266,32 @@
 
 ##[ end ]##
 
+#! WiFi device picker — discovered dashes + recent devices + manual IP entry
+##[ block wifi-picker-modal ]##
+##[ anchor ]##
+    <div id="deviceInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceInfo()">
+##[ insert-before ]##
+    <!-- Desktop: WiFi device picker -->
+    <div id="wifiPickerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="_closeWifiPicker()">
+        <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:440px; max-width:95vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-weight:600; font-size:14px;">Connect over WiFi</span>
+                <button class="close-btn" onclick="_closeWifiPicker()" style="font-size:18px;">&times;</button>
+            </div>
+            <div id="wifiScanStatus" style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">Scanning network...</div>
+            <div id="wifiDeviceList" style="display:flex; flex-direction:column; gap:6px; overflow-y:auto; min-height:40px; max-height:40vh;"></div>
+            <div style="display:flex; gap:6px; margin-top:14px; align-items:center;">
+                <input id="wifiManualIp" placeholder="or enter IP: 192.168.1.50" spellcheck="false"
+                    style="flex:1; background:var(--bg); color:var(--text); border:1px solid var(--border); padding:7px 10px; border-radius:var(--radius-sm); font-size:12px; font-family:'JetBrains Mono',monospace;"
+                    onkeydown="if(event.key==='Enter')_wifiManualConnect()">
+                <button class="btn btn-secondary" onclick="_wifiManualConnect()" style="font-size:11px;">Connect</button>
+                <button class="btn btn-secondary" id="wifiRescanBtn" onclick="_wifiScan()" style="font-size:11px;">Rescan</button>
+            </div>
+        </div>
+    </div>
+
+##[ end ]##
+
 ##[ block js-desktop-runtime ]##
 ##[ anchor ]##
         const RDM_LAYOUT_MAX_BYTES = 32768;
@@ -275,6 +301,11 @@
         let _lastUsbPort = null;
         let _connectionOk = false;
         let _healthInterval = null;
+        let _healthFails = 0;
+        let _wifiRecoverTimer = null;
+        let _wifiRecoverTick = 0;
+        let _scanInFlight = false;
+        let _scanProgressUnlisten = null;
         let wasmModule = null;
         let _wasmReady = false;
         let _wasmPreviewTimer = null;
@@ -288,36 +319,37 @@
         let _dmRefreshTimer = null;
 
         /* ── Connection Management ───────────────────────────────────────── */
+        /* WiFi is the primary transport. The app auto-connects to the last
+         * device on boot, survives DHCP address churn by re-finding the dash
+         * by SERIAL (HTTP subnet sweep — the firmware has no mDNS), and runs
+         * a background recovery loop whenever the connection drops. */
+
+        function _connLabel() { return document.getElementById('connModeLabel'); }
+
+        function _setConnState(color, text) {
+            const label = _connLabel();
+            if (!label) return;
+            if (text !== undefined) label.textContent = text;
+            label.style.color = color;
+        }
+
         function _onConnectionModeChange(mode) {
-            const label = document.getElementById('connModeLabel');
+            _stopWifiRecovery();
             if (mode === 'local') {
                 _stopHealthCheck();
                 _connectionOk = false;
                 RDM.setMode('local');
-                label.textContent = 'Local';
-                label.style.color = 'var(--text-muted)';
+                _setConnState('var(--text-muted)', 'Local');
                 _updateConnectionUI();
                 fetchLayouts();
             } else if (mode === 'wifi') {
-                const settings = RDM.getConnectionSettings();
-                const lastIp = settings.ip || '';
-                _showPromptOverlay('Connect to ESP32', lastIp || '192.168.1.1', function(ip) {
-                    if (!ip || !ip.trim()) {
-                        document.getElementById('connectionMode').value = RDM.mode;
-                        return;
-                    }
-                    RDM.setMode('wifi', { ip: ip.trim() });
-                    label.textContent = ip.trim();
-                    label.style.color = 'var(--text-muted)';
-                    _testConnection();
-                }, { subtitle: 'Enter the IP address of your RDM-7', raw: true });
+                _openWifiPicker();
             } else if (mode === 'hotspot') {
                 RDM.setMode('hotspot');
-                label.textContent = '192.168.4.1';
-                label.style.color = 'var(--text-muted)';
+                _setConnState('var(--text-muted)', '192.168.4.1');
                 _testConnection();
             } else if (mode === 'usb') {
-                _connectUsb(label);
+                _connectUsb(_connLabel());
             }
         }
 
@@ -381,15 +413,29 @@
             }
         }
 
-        async function _testConnection() {
-            const label = document.getElementById('connModeLabel');
+        async function _testConnection(opts) {
+            opts = opts || {};
             updateStatus('Connecting...', false);
             try {
                 const layouts = await RDM.listLayouts();
                 _connectionOk = true;
-                label.style.color = '#4ade80';
+                _healthFails = 0;
+                _stopWifiRecovery();
+                _setConnState('#4ade80');
                 _updateConnectionUI();
-                showToast('Connected to device (' + layouts.length + ' layouts)', 'success');
+                if (!opts.quiet) showToast('Connected to device (' + layouts.length + ' layouts)', 'success');
+                /* Capture the dash's identity so reconnect can re-find it by
+                 * serial after a DHCP address change. */
+                if (RDM.mode === 'wifi' || RDM.mode === 'hotspot') {
+                    try {
+                        const info = await RDM.getDeviceInfo();
+                        if (info && info.serial) {
+                            const s = RDM.getConnectionSettings();
+                            if (RDM.mode === 'wifi') RDM.setMode('wifi', { ip: s.ip, port: s.port, serial: info.serial });
+                            RDM.rememberDevice({ serial: info.serial, ip: RDM.mode === 'wifi' ? s.ip : '192.168.4.1' });
+                        }
+                    } catch (e) { }
+                }
                 const activeName = layouts._active || 'default';
                 layoutSelect.innerHTML = '';
                 layouts.forEach(l => {
@@ -403,40 +449,98 @@
                 setTimeout(_checkFirmwareUpdate, 2000);
             } catch (e) {
                 _connectionOk = false;
-                label.style.color = '#f44';
+                _setConnState('#f44');
                 _updateConnectionUI();
-                showToast('Connection failed: ' + e.message, 'error');
+                if (!opts.quiet) showToast('Connection failed: ' + e.message, 'error');
                 _stopHealthCheck();
             }
         }
 
         function _startHealthCheck() {
             _stopHealthCheck();
+            _healthFails = 0;
             _healthInterval = setInterval(async () => {
                 if (RDM.mode === 'local') { _stopHealthCheck(); return; }
                 try {
-                    await RDM.listLayouts();
+                    await RDM.getDeviceInfo();
+                    _healthFails = 0;
                     if (!_connectionOk) {
                         _connectionOk = true;
-                        const label = document.getElementById('connModeLabel');
-                        label.style.color = '#4ade80';
+                        _setConnState('#4ade80');
                         _updateConnectionUI();
                         showToast('Device reconnected', 'success');
+                        _stopWifiRecovery();
                     }
                 } catch (e) {
-                    if (_connectionOk) {
-                        _connectionOk = false;
-                        const label = document.getElementById('connModeLabel');
-                        label.style.color = '#f44';
-                        _updateConnectionUI();
-                        showToast('Device disconnected', 'error');
-                    }
+                    _healthFails++;
+                    /* Two consecutive misses = really gone (a single slow
+                     * response during a layout push is normal). */
+                    if (_healthFails < 2 || !_connectionOk) return;
+                    _connectionOk = false;
+                    _setConnState('#f59e0b');
+                    _updateConnectionUI();
+                    showToast('Device connection lost — reconnecting...', 'error');
+                    _startWifiRecovery();
                 }
-            }, 5000);
+            }, 4000);
         }
 
         function _stopHealthCheck() {
             if (_healthInterval) { clearInterval(_healthInterval); _healthInterval = null; }
+        }
+
+        /* ── Reconnect / rediscovery loop ─────────────────────────────────
+         * Runs while disconnected. Fast-probes the last address every tick;
+         * every 3rd tick sweeps the subnet for the dash's serial in case it
+         * came back on a different DHCP address. Runs until it succeeds or
+         * the user switches modes — a dash powered on later is picked up
+         * automatically. */
+        function _startWifiRecovery() {
+            if (_wifiRecoverTimer) return;
+            _wifiRecoverTick = 0;
+            _wifiRecoverTimer = setInterval(_wifiRecoverAttempt, 6000);
+        }
+
+        function _stopWifiRecovery() {
+            if (_wifiRecoverTimer) { clearInterval(_wifiRecoverTimer); _wifiRecoverTimer = null; }
+            _wifiRecoverTick = 0;
+        }
+
+        async function _wifiRecoverAttempt() {
+            if (_connectionOk || _scanInFlight) return;
+            const s = RDM.getConnectionSettings();
+            if (RDM.mode === 'usb') {
+                if (!s.portName) return;
+                try {
+                    await RDM.serialConnect(s.portName);
+                    await _testConnection({ quiet: true });
+                    if (_connectionOk) showToast('USB device reconnected', 'success');
+                } catch (e) { }
+                return;
+            }
+            if (RDM.mode !== 'wifi' && RDM.mode !== 'hotspot') { _stopWifiRecovery(); return; }
+            _wifiRecoverTick++;
+            const ip = RDM.mode === 'hotspot' ? '192.168.4.1' : s.ip;
+            const hit = await RDM.probeDevice(ip, 1200);
+            if (hit && (!s.serial || hit.serial === s.serial)) {
+                await _testConnection({ quiet: true });
+                if (_connectionOk) showToast('Device reconnected', 'success');
+                return;
+            }
+            if (RDM.mode === 'wifi' && s.serial && _wifiRecoverTick % 3 === 0) {
+                _scanInFlight = true;
+                try {
+                    const known = RDM.getKnownDevices().map(d => d.ip);
+                    const devices = await RDM.discoverDevices([s.ip].concat(known).filter(Boolean));
+                    const match = devices.find(d => d.serial === s.serial);
+                    if (match && !_connectionOk) {
+                        RDM.setMode('wifi', { ip: match.ip, port: match.port, serial: match.serial });
+                        _setConnState('#f59e0b', match.ip);
+                        await _testConnection({ quiet: true });
+                        if (_connectionOk) showToast('Device moved to ' + match.ip + ' — reconnected', 'success');
+                    }
+                } finally { _scanInFlight = false; }
+            }
         }
 
         function _updateConnectionUI() {
@@ -464,35 +568,113 @@
             if (typeof _updateWasmCanvasVisibility === 'function') _updateWasmCanvasVisibility();
         }
 
-        async function _scanForDevices() {
+        function _scanForDevices() {
             if (!RDM.isTauri()) { showToast('Device scanning requires the desktop app', 'error'); return; }
-            showToast('Scanning for devices...');
-            try {
-                const devices = await RDM.discoverDevices();
-                if (devices.length === 0) { showToast('No devices found', 'error'); return; }
-                if (devices.length === 1) {
-                    const d = devices[0];
-                    _connectToDevice(d.ip, d.port, d.hostname);
-                    return;
-                }
-                const names = devices.map((d, i) => `${i + 1}. ${d.hostname} (${d.ip})`).join('\n');
-                _showPromptOverlay('Multiple Devices Found', '1', function(choice) {
-                    const idx = parseInt(choice) - 1;
-                    if (idx >= 0 && idx < devices.length) {
-                        const d = devices[idx];
-                        _connectToDevice(d.ip, d.port, d.hostname);
-                    }
-                }, names);
-            } catch (e) { showToast('Scan failed: ' + e.message, 'error'); }
+            _openWifiPicker();
         }
 
-        function _connectToDevice(ip, port, hostname) {
-            RDM.setMode('wifi', { ip, port });
+        function _connectToDevice(ip, port, hostname, serial) {
+            RDM.setMode('wifi', { ip, port, serial });
             document.getElementById('connectionMode').value = 'wifi';
-            document.getElementById('connModeLabel').textContent = ip;
-            document.getElementById('connModeLabel').style.color = '#4ade80';
-            if (hostname) showToast('Connected to ' + hostname, 'success');
+            _setConnState('var(--text-muted)', ip);
+            if (hostname) showToast('Connecting to ' + hostname + '...', 'info');
             _testConnection();
+        }
+
+        /* ── WiFi device picker ───────────────────────────────────────────── */
+        function _escHtmlConn(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g,
+                c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function _openWifiPicker() {
+            const modal = document.getElementById('wifiPickerModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            const s = RDM.getConnectionSettings();
+            const input = document.getElementById('wifiManualIp');
+            if (input && s.ip && !input.value) input.value = s.ip;
+            const recent = RDM.getKnownDevices().map(d => ({
+                ip: d.ip, serial: d.serial,
+                hostname: d.hostname || ('RDM-7 ' + d.serial), known: true
+            }));
+            _renderWifiDeviceList(recent, recent.length ? 'Recent devices — scanning for live ones...' : 'Scanning network...');
+            _wifiScan();
+        }
+
+        function _closeWifiPicker() {
+            const modal = document.getElementById('wifiPickerModal');
+            if (modal) modal.style.display = 'none';
+            const sel = document.getElementById('connectionMode');
+            if (sel && RDM.mode !== 'wifi') sel.value = RDM.mode;
+        }
+
+        async function _wifiScan() {
+            if (_scanInFlight) return;
+            if (!RDM.isTauri()) { showToast('Network scanning requires the desktop app', 'error'); return; }
+            _scanInFlight = true;
+            const btn = document.getElementById('wifiRescanBtn');
+            const status = document.getElementById('wifiScanStatus');
+            if (btn) btn.disabled = true;
+            if (status) status.textContent = 'Scanning network...';
+            if (!_scanProgressUnlisten && window.__TAURI__ && window.__TAURI__.event &&
+                typeof window.__TAURI__.event.listen === 'function') {
+                try {
+                    _scanProgressUnlisten = await window.__TAURI__.event.listen('scan-progress', (e) => {
+                        const p = e.payload || {};
+                        const st = document.getElementById('wifiScanStatus');
+                        if (st && _scanInFlight) st.textContent = 'Scanning network... ' + (p.scanned || 0) + '/' + (p.total || 0);
+                    });
+                } catch (e) { _scanProgressUnlisten = function () { }; }
+            }
+            try {
+                const known = RDM.getKnownDevices().map(d => d.ip);
+                const s = RDM.getConnectionSettings();
+                const devices = await RDM.discoverDevices([s.ip].concat(known).filter(Boolean));
+                devices.forEach(d => RDM.rememberDevice(d));
+                _renderWifiDeviceList(devices, devices.length
+                    ? 'Found ' + devices.length + ' device' + (devices.length > 1 ? 's' : '')
+                    : 'No RDM-7 found. Check the dash is powered and on this network, or enter its IP below.');
+            } catch (e) {
+                const st = document.getElementById('wifiScanStatus');
+                if (st) st.textContent = 'Scan failed: ' + (e.message || e);
+            } finally {
+                _scanInFlight = false;
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        function _renderWifiDeviceList(devices, statusText) {
+            const status = document.getElementById('wifiScanStatus');
+            const list = document.getElementById('wifiDeviceList');
+            if (status && statusText) status.textContent = statusText;
+            if (!list) return;
+            list.innerHTML = '';
+            devices.forEach(d => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--bg);';
+                row.innerHTML =
+                    '<span style="width:8px;height:8px;border-radius:50%;background:' + (d.known ? 'var(--text-muted)' : '#4ade80') + ';flex:none;"></span>' +
+                    '<span style="flex:1;font-size:12px;">' + _escHtmlConn(d.hostname || ('RDM-7 ' + (d.serial || ''))) + '</span>' +
+                    '<span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:var(--text-muted);">' + _escHtmlConn(d.ip) + '</span>';
+                row.onmouseenter = function () { row.style.borderColor = 'var(--accent)'; };
+                row.onmouseleave = function () { row.style.borderColor = 'var(--border)'; };
+                row.onclick = function () {
+                    const modal = document.getElementById('wifiPickerModal');
+                    if (modal) modal.style.display = 'none';
+                    _connectToDevice(d.ip, d.port || 80, d.hostname, d.serial);
+                };
+                list.appendChild(row);
+            });
+        }
+
+        function _wifiManualConnect() {
+            const input = document.getElementById('wifiManualIp');
+            const ip = input && input.value.trim();
+            if (!ip || !/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) { showToast('Enter a valid IP address', 'error'); return; }
+            const modal = document.getElementById('wifiPickerModal');
+            if (modal) modal.style.display = 'none';
+            _connectToDevice(ip, 80);
         }
 
         if (typeof window.__TAURI_INTERNALS__ !== 'undefined' || typeof window.__TAURI__ !== 'undefined') {
@@ -524,24 +706,72 @@
             } catch (err) { console.warn('file-opened listener failed to bind:', err); }
         })();
 
+        /* ── Boot auto-connect ────────────────────────────────────────────
+         * 1. probe the last-known address (fast)
+         * 2. sweep the subnet for the dash's serial (DHCP churn)
+         * 3. keep hunting in the background and connect when it appears */
+        async function _autoConnectWifi(s) {
+            document.getElementById('connectionMode').value = 'wifi';
+            _setConnState('#f59e0b', s.ip || 'searching...');
+            updateStatus('Looking for your RDM-7...', false);
+            if (s.ip) {
+                const hit = await RDM.probeDevice(s.ip, 1500);
+                if (hit && (!s.serial || hit.serial === s.serial)) {
+                    RDM.setMode('wifi', { ip: s.ip, port: s.port, serial: s.serial || hit.serial });
+                    _setConnState('var(--text-muted)', s.ip);
+                    await _testConnection({ quiet: true });
+                    if (_connectionOk) { showToast('Connected to RDM-7 at ' + s.ip, 'success'); return; }
+                }
+            }
+            _scanInFlight = true;
+            let devices = [];
+            try {
+                const known = RDM.getKnownDevices().map(d => d.ip);
+                devices = await RDM.discoverDevices([s.ip].concat(known).filter(Boolean));
+            } catch (e) { } finally { _scanInFlight = false; }
+            devices.forEach(d => RDM.rememberDevice(d));
+            const match = s.serial
+                ? devices.find(d => d.serial === s.serial)
+                : (devices.length === 1 ? devices[0] : null);
+            if (match) {
+                RDM.setMode('wifi', { ip: match.ip, port: match.port, serial: match.serial });
+                _setConnState('var(--text-muted)', match.ip);
+                await _testConnection({ quiet: true });
+                if (_connectionOk) {
+                    showToast('Connected to RDM-7 at ' + match.ip +
+                        (s.ip && match.ip !== s.ip ? ' (address changed)' : ''), 'success');
+                    return;
+                }
+            }
+            /* Not found — arm the recovery loop and connect when it shows up. */
+            RDM.setMode('wifi', { ip: s.ip, port: s.port, serial: s.serial });
+            _connectionOk = false;
+            _setConnState('#f59e0b', s.ip || 'searching');
+            _updateConnectionUI();
+            updateStatus('RDM-7 not found yet — auto-connect keeps looking', true);
+            _startHealthCheck();
+            _startWifiRecovery();
+        }
+
         function _restoreConnection() {
             const settings = RDM.getConnectionSettings();
-            if (settings.mode === 'wifi' && settings.ip) {
-                RDM.setMode('wifi', { ip: settings.ip, port: settings.port });
-                document.getElementById('connectionMode').value = 'wifi';
-                document.getElementById('connModeLabel').textContent = settings.ip;
-                _testConnection();
+            if (settings.mode === 'wifi' && (settings.ip || settings.serial)) {
+                _autoConnectWifi(settings);
             } else if (settings.mode === 'hotspot') {
                 RDM.setMode('hotspot');
                 document.getElementById('connectionMode').value = 'hotspot';
-                document.getElementById('connModeLabel').textContent = '192.168.4.1';
-                _testConnection();
+                _setConnState('var(--text-muted)', '192.168.4.1');
+                _testConnection({ quiet: true }).then(() => {
+                    if (_connectionOk) { showToast('Connected to RDM-7 hotspot', 'success'); return; }
+                    _startHealthCheck();
+                    _startWifiRecovery();
+                });
             } else if (settings.mode === 'usb' && settings.portName) {
                 (async () => {
                     try {
                         await RDM.serialConnect(settings.portName);
                         document.getElementById('connectionMode').value = 'usb';
-                        document.getElementById('connModeLabel').textContent = settings.portName;
+                        _setConnState('var(--text-muted)', settings.portName);
                         _testConnection();
                     } catch (e) {
                         console.warn('USB auto-reconnect failed:', e);
@@ -550,6 +780,28 @@
                 })();
             } else {
                 _updateConnectionUI();
+                /* First run: quietly look for a dash on the network. */
+                if (RDM.isTauri()) setTimeout(_backgroundDiscovery, 4000);
+            }
+        }
+
+        /* No saved connection: sweep once in the background. Exactly one
+         * dash on the network → connect to it; several → hint, let the
+         * user pick. */
+        async function _backgroundDiscovery() {
+            if (RDM.mode !== 'local' || _scanInFlight) return;
+            _scanInFlight = true;
+            let devices = [];
+            try { devices = await RDM.discoverDevices(RDM.getKnownDevices().map(d => d.ip)); }
+            catch (e) { } finally { _scanInFlight = false; }
+            if (RDM.mode !== 'local' || devices.length === 0) return;
+            devices.forEach(d => RDM.rememberDevice(d));
+            if (devices.length === 1) {
+                const d = devices[0];
+                showToast('Found ' + (d.hostname || 'an RDM-7') + ' at ' + d.ip + ' — connecting...', 'info');
+                _connectToDevice(d.ip, d.port || 80, d.hostname, d.serial);
+            } else {
+                showToast(devices.length + ' RDM-7 devices found — open the WiFi menu to pick one', 'info');
             }
         }
         /* Deferred: _updateConnectionUI → updateStatus touches `statusText`,

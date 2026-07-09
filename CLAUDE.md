@@ -56,7 +56,7 @@ src/firmware-base.html    verbatim copy of RDM-7_Dash/main/web/index.html
 - **State:** `SerialState` (Mutex-wrapped serial port) is the only shared Tauri state.
 
 Key backend subsystems:
-- **mDNS discovery** — browses `_rdm7._tcp.local.` for devices on the network
+- **Device discovery** — parallel HTTP sweep of every local /24 subnet probing `GET /api/device/info` (the firmware has no mDNS — it was removed 2026-04-27). `discover_devices` takes `extra_ips` to probe known addresses first; `probe_device` checks a single IP fast. Emits `scan-progress` events.
 - **Serial protocol** — custom binary framing: `STX + 4-byte LE length + payload + CRC16-CCITT + ETX`. Payload type 0x00 = JSON, 0x01 = binary (chunked firmware uploads with session_id + chunk_idx, 4096-byte chunks). Progress emitted via Tauri events.
 - **HTTP proxy** — `http_fetch`/`http_fetch_binary`/`http_upload_binary` commands bypass CORS for device communication. Uses `no_proxy()` (important for local device hotspots).
 - **Firmware updates** — checks GitHub releases API, compares semver versions.

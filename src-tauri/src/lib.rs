@@ -4,7 +4,11 @@ use std::time::Duration;
 use tauri::Emitter;
 use tauri_plugin_updater::UpdaterExt;
 
-// ── Device Discovery (mDNS) ─────────────────────────────────────────
+// ── Device Discovery (HTTP subnet sweep) ────────────────────────────
+// The firmware removed mDNS (2026-04-27, memory pressure), so discovery
+// probes every host on the local /24 subnets with GET /api/device/info —
+// the firmware answers with a JSON body containing "serial" and CORS *.
+// ~254 hosts x 400 ms connect timeout at 128-way concurrency ≈ 2 s.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredDevice {
@@ -16,74 +20,145 @@ pub struct DiscoveredDevice {
     pub schema: String,
 }
 
-#[tauri::command]
-async fn discover_devices() -> Result<Vec<DiscoveredDevice>, String> {
-    use mdns_sd::{ServiceDaemon, ServiceEvent};
+/// Probe one IP for an RDM-7. Any HTTP 200 from /api/device/info whose JSON
+/// carries a string "serial" is treated as a dash.
+async fn probe_device_info(
+    client: &reqwest::Client,
+    ip: &str,
+    timeout: Duration,
+) -> Option<DiscoveredDevice> {
+    let url = format!("http://{ip}/api/device/info");
+    let resp = client.get(&url).timeout(timeout).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let v: serde_json::Value = resp.json().await.ok()?;
+    let serial = v.get("serial")?.as_str()?.to_string();
+    let schema = v
+        .get("schema")
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+    let w = v.pointer("/display/width").and_then(|x| x.as_i64()).unwrap_or(0);
+    let h = v.pointer("/display/height").and_then(|x| x.as_i64()).unwrap_or(0);
+    let shape = v
+        .pointer("/display/shape")
+        .and_then(|x| x.as_str())
+        .unwrap_or("");
+    let dims = if w > 0 {
+        format!(" {w}\u{00D7}{h}{}", if shape == "round" { " round" } else { "" })
+    } else {
+        String::new()
+    };
+    Some(DiscoveredDevice {
+        ip: ip.to_string(),
+        port: 80,
+        hostname: format!("RDM-7 {serial}{dims}"),
+        serial,
+        version: String::new(),
+        schema,
+    })
+}
 
-    let mdns = ServiceDaemon::new().map_err(|e| format!("mDNS init failed: {e}"))?;
-    let receiver = mdns
-        .browse("_rdm7._tcp.local.")
-        .map_err(|e| format!("mDNS browse failed: {e}"))?;
-
-    let mut devices = Vec::new();
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
-
-    loop {
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if remaining.is_zero() {
-            break;
-        }
-
-        match tokio::time::timeout(remaining, tokio::task::spawn_blocking({
-            let rx = receiver.clone();
-            move || rx.recv_timeout(Duration::from_millis(500))
-        }))
-        .await
-        {
-            Ok(Ok(Ok(ServiceEvent::ServiceResolved(info)))) => {
-                let ip = info
-                    .get_addresses()
-                    .iter()
-                    .find(|a| a.is_ipv4())
-                    .map(|a| a.to_string())
-                    .unwrap_or_default();
-
-                if ip.is_empty() {
-                    continue;
+/// Candidate /24 subnets from every non-loopback IPv4 interface. Covers both
+/// the LAN (dash on home WiFi) and the 192.168.4.x case (PC joined to the
+/// dash's own hotspot).
+fn local_subnets() -> Vec<(u8, u8, u8, u8)> {
+    let mut nets: Vec<(u8, u8, u8, u8)> = Vec::new(); // (a,b,c, own_d)
+    if let Ok(ifaces) = if_addrs::get_if_addrs() {
+        for iface in ifaces {
+            if let std::net::IpAddr::V4(ip) = iface.addr.ip() {
+                let o = ip.octets();
+                let link_local = o[0] == 169 && o[1] == 254;
+                if !iface.is_loopback() && !link_local {
+                    let key = (o[0], o[1], o[2], o[3]);
+                    if !nets.iter().any(|n| (n.0, n.1, n.2) == (key.0, key.1, key.2)) {
+                        nets.push(key);
+                    }
                 }
-
-                let props = info.get_properties();
-                let serial = props
-                    .get("serial")
-                    .map(|v| v.val_str().to_string())
-                    .unwrap_or_default();
-                let version = props
-                    .get("version")
-                    .map(|v| v.val_str().to_string())
-                    .unwrap_or_default();
-                let schema = props
-                    .get("schema")
-                    .map(|v| v.val_str().to_string())
-                    .unwrap_or_default();
-
-                devices.push(DiscoveredDevice {
-                    ip,
-                    port: info.get_port(),
-                    hostname: info.get_hostname().to_string(),
-                    serial,
-                    version,
-                    schema,
-                });
             }
-            Ok(Ok(Ok(_))) => {} // other events
-            Ok(Ok(Err(_))) => break,  // channel closed or timeout
-            Ok(Err(_)) => break,      // task panicked
-            Err(_) => break,          // overall timeout
         }
     }
+    nets
+}
 
-    let _ = mdns.shutdown();
+#[tauri::command]
+async fn discover_devices(
+    app: tauri::AppHandle,
+    extra_ips: Option<Vec<String>>,
+) -> Result<Vec<DiscoveredDevice>, String> {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .connect_timeout(Duration::from_millis(400))
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))?;
+
+    // Known/likely IPs first (last-connected etc.) with a friendlier timeout.
+    let mut candidates: Vec<String> = extra_ips.unwrap_or_default();
+    let subnets = local_subnets();
+    for (a, b, c, own_d) in &subnets {
+        for d in 1..=254u8 {
+            if d == *own_d {
+                continue;
+            }
+            let ip = format!("{a}.{b}.{c}.{d}");
+            if !candidates.contains(&ip) {
+                candidates.push(ip);
+            }
+        }
+    }
+    if candidates.is_empty() {
+        return Err("No local IPv4 network found to scan".into());
+    }
+
+    let total = candidates.len();
+    let scanned = Arc::new(AtomicUsize::new(0));
+    let sem = Arc::new(tokio::sync::Semaphore::new(128));
+    let mut set = tokio::task::JoinSet::new();
+
+    for ip in candidates {
+        let client = client.clone();
+        let sem = sem.clone();
+        let scanned = scanned.clone();
+        let app = app.clone();
+        set.spawn(async move {
+            let _permit = sem.acquire_owned().await.ok()?;
+            let dev = probe_device_info(&client, &ip, Duration::from_millis(1500)).await;
+            let done = scanned.fetch_add(1, Ordering::Relaxed) + 1;
+            if done % 32 == 0 || dev.is_some() || done == total {
+                let _ = app.emit(
+                    "scan-progress",
+                    serde_json::json!({ "scanned": done, "total": total, "found": dev.is_some() }),
+                );
+            }
+            dev
+        });
+    }
+
+    let mut devices: Vec<DiscoveredDevice> = Vec::new();
+    while let Some(res) = set.join_next().await {
+        if let Ok(Some(dev)) = res {
+            if !devices.iter().any(|d| d.ip == dev.ip) {
+                devices.push(dev);
+            }
+        }
+    }
+    devices.sort_by(|a, b| a.ip.cmp(&b.ip));
     Ok(devices)
+}
+
+/// Probe a single IP — used by the frontend for fast reconnect checks
+/// before falling back to a full sweep.
+#[tauri::command]
+async fn probe_device(ip: String, timeout_ms: Option<u64>) -> Result<Option<DiscoveredDevice>, String> {
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .connect_timeout(Duration::from_millis(timeout_ms.unwrap_or(1500).min(5000)))
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))?;
+    Ok(probe_device_info(&client, &ip, Duration::from_millis(timeout_ms.unwrap_or(1500))).await)
 }
 
 // ── File System Commands ────────────────────────────────────────────
@@ -1458,6 +1533,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             discover_devices,
+            probe_device,
             read_binary_file,
             write_binary_file,
             serial_list_ports,

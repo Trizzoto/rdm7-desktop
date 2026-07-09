@@ -1246,7 +1246,10 @@
                 const port = opts.port || 80;
                 const url = `http://${ip}:${port}`;
                 this._transport = createWifiTransport(url);
-                _saveSettings({ mode, ip, port });
+                /* serial: remembered so reconnect can re-find this exact dash
+                 * by identity after a DHCP address change. */
+                const prev = _loadSettings();
+                _saveSettings({ mode, ip, port, serial: opts.serial || (prev.ip === ip ? prev.serial : undefined) });
             } else if (mode === 'hotspot') {
                 const url = 'http://192.168.4.1';
                 this._transport = createWifiTransport(url);
@@ -1298,14 +1301,48 @@
         },
 
         /* ── Device Discovery (Tauri only) ───────────────────── */
-        async discoverDevices() {
+        /* HTTP subnet sweep (firmware has no mDNS). extraIps are probed
+         * first — pass last-known addresses for fast rediscovery. */
+        async discoverDevices(extraIps) {
             if (!_isTauri()) return [];
             try {
-                return await _tauriInvoke('discover_devices');
+                return await _tauriInvoke('discover_devices', { extraIps: extraIps || [] });
             } catch (e) {
                 console.warn('Device discovery failed:', e);
                 return [];
             }
+        },
+
+        /* Probe one IP for an RDM-7. Resolves to a DiscoveredDevice
+         * ({ip, serial, hostname, schema, ...}) or null. */
+        async probeDevice(ip, timeoutMs) {
+            if (!_isTauri() || !ip) return null;
+            try {
+                return await _tauriInvoke('probe_device', { ip, timeoutMs: timeoutMs || 1500 });
+            } catch (e) {
+                return null;
+            }
+        },
+
+        /* ── Known-device memory (keyed by serial, most recent first) ── */
+        getKnownDevices() {
+            try {
+                return JSON.parse(localStorage.getItem('rdm7_known_devices')) || [];
+            } catch (e) { return []; }
+        },
+
+        rememberDevice(dev) {
+            if (!dev || !dev.serial) return;
+            const list = this.getKnownDevices().filter(d => d.serial !== dev.serial);
+            list.unshift({
+                serial: dev.serial,
+                ip: dev.ip,
+                hostname: dev.hostname || '',
+                lastSeen: Date.now()
+            });
+            try {
+                localStorage.setItem('rdm7_known_devices', JSON.stringify(list.slice(0, 8)));
+            } catch (e) { }
         },
 
         /* ── Serial Port Operations (Tauri only) ────────────── */
