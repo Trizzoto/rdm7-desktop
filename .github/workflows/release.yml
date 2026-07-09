@@ -23,6 +23,10 @@ jobs:
   release:
     strategy:
       fail-fast: false
+      # Serialized: parallel jobs race on updating the shared latest.json
+      # release asset (read-modify-write) — the loser 404s on a stale asset
+      # id and its platform entries vanish from the updater manifest.
+      max-parallel: 1
       matrix:
         include:
           - platform: windows-latest
