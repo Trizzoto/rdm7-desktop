@@ -106,6 +106,57 @@ const PAYLOAD_JSON: u8 = 0x00;
 const PAYLOAD_BINARY: u8 = 0x01;
 const CHUNK_SIZE: usize = 4096;
 
+/// ANSI CSI SGR escape stripper (e.g. "\x1B[0;32m" used by ESP-IDF log colors).
+/// Strips only the SGR subset (`\x1B[ ... m`); other CSI sequences are rare in
+/// log output and left alone to keep this cheap.
+fn strip_ansi(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x1B && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
+            let mut j = i + 2;
+            while j < bytes.len() && (bytes[j].is_ascii_digit() || bytes[j] == b';') {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j] == b'm' {
+                i = j + 1;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
+/// Append raw bytes to the log-line accumulator and emit any complete
+/// `\n`-terminated lines as `serial-log` events. Strips ANSI SGR escapes.
+fn ingest_log_bytes(buf: &mut String, bytes: &[u8], app: &tauri::AppHandle) {
+    /* Lossy UTF-8 — boot logs occasionally contain garbage bytes (esp. before
+     * UART pad setup); we don't want them to drop entire lines. */
+    buf.push_str(&String::from_utf8_lossy(bytes));
+    while let Some(nl) = buf.find('\n') {
+        let line: String = buf.drain(..=nl).collect();
+        let trimmed = line.trim_end_matches(['\r', '\n']);
+        if trimmed.is_empty() {
+            continue;
+        }
+        let cleaned = strip_ansi(trimmed);
+        let _ = app.emit("serial-log", cleaned);
+    }
+    /* Cap the partial-line buffer so a missing '\n' can't grow it without
+     * bound (e.g. binary garbage during boot). 8KB is generous for any real
+     * single log line. */
+    if buf.len() > 8192 {
+        if let Some(idx) = buf.char_indices().nth(buf.len() / 2).map(|(i, _)| i) {
+            buf.drain(..idx);
+        } else {
+            buf.clear();
+        }
+    }
+}
+
 fn crc16_ccitt(data: &[u8]) -> u16 {
     let mut crc: u16 = 0xFFFF;
     for &byte in data {
@@ -153,12 +204,22 @@ fn build_binary_frame(session_id: u64, chunk_idx: u16, data: &[u8]) -> Vec<u8> {
 }
 
 /// Read a complete frame from a serial port, returning the payload.
-/// Skips non-STX bytes (ESP_LOG output). Times out after `timeout`.
-fn read_frame(port: &mut Box<dyn serialport::SerialPort>, timeout: Duration) -> Result<Vec<u8>, String> {
+///
+/// Bytes received outside a frame are interleaved ESP_LOG output: they're
+/// accumulated into `log_buf` and emitted to the frontend as `serial-log`
+/// events on each `\n`. `log_buf` persists across calls so a line split
+/// across multiple `read_frame` calls (or by an intervening frame) is
+/// preserved. Times out after `timeout`.
+fn read_frame(
+    port: &mut Box<dyn serialport::SerialPort>,
+    log_buf: &mut String,
+    app: &tauri::AppHandle,
+    timeout: Duration,
+) -> Result<Vec<u8>, String> {
     let start = std::time::Instant::now();
     let mut byte_buf = [0u8; 1];
 
-    // Wait for STX
+    // Wait for STX — non-STX bytes are log output and get routed to the Logs UI.
     loop {
         if start.elapsed() > timeout {
             return Err("Timeout waiting for STX".into());
@@ -166,7 +227,7 @@ fn read_frame(port: &mut Box<dyn serialport::SerialPort>, timeout: Duration) -> 
         match port.read(&mut byte_buf) {
             Ok(1) if byte_buf[0] == STX => break,
             Ok(0) => return Err("Port closed (EOF)".into()),
-            Ok(_) => continue, // skip non-STX (log output)
+            Ok(_) => ingest_log_bytes(log_buf, &byte_buf, app),
             Err(e) if e.kind() == std::io::ErrorKind::TimedOut => continue,
             Err(e) => return Err(format!("Read error: {e}")),
         }
@@ -241,6 +302,10 @@ struct SerialConnection {
     port: Option<Box<dyn serialport::SerialPort>>,
     port_name: String,
     request_id: u32,
+    /// Partial log line — accumulates non-framed bytes between '\n' chars.
+    /// Persists across read_frame calls so a line split by an intervening
+    /// frame, or arriving in multiple reads, isn't lost.
+    log_partial: String,
 }
 
 impl SerialConnection {
@@ -249,6 +314,7 @@ impl SerialConnection {
             port: None,
             port_name: String::new(),
             request_id: 0,
+            log_partial: String::new(),
         }
     }
 }
@@ -324,6 +390,51 @@ async fn serial_list_ports() -> Result<Vec<SerialPortInfo>, String> {
     Ok(result)
 }
 
+/// Read one frame from the port without emitting log events (used pre-connect
+/// during port probing, where no AppHandle exists and bytes are noise).
+fn read_frame_silent(
+    port: &mut Box<dyn serialport::SerialPort>,
+    timeout: Duration,
+) -> Result<Vec<u8>, String> {
+    let start = std::time::Instant::now();
+    let mut byte_buf = [0u8; 1];
+
+    loop {
+        if start.elapsed() > timeout {
+            return Err("Timeout waiting for STX".into());
+        }
+        match port.read(&mut byte_buf) {
+            Ok(1) if byte_buf[0] == STX => break,
+            Ok(0) => return Err("Port closed (EOF)".into()),
+            Ok(_) => continue,
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => continue,
+            Err(e) => return Err(format!("Read error: {e}")),
+        }
+    }
+
+    let mut len_buf = [0u8; 4];
+    read_exact(port, &mut len_buf, timeout.saturating_sub(start.elapsed()))?;
+    let payload_len = u32::from_le_bytes(len_buf) as usize;
+    if payload_len == 0 || payload_len > 256 * 1024 {
+        return Err(format!("Invalid frame length: {payload_len}"));
+    }
+    let mut payload = vec![0u8; payload_len];
+    read_exact(port, &mut payload, timeout.saturating_sub(start.elapsed()))?;
+    let mut crc_buf = [0u8; 2];
+    read_exact(port, &mut crc_buf, timeout.saturating_sub(start.elapsed()))?;
+    let received_crc = u16::from_le_bytes(crc_buf);
+    let mut etx_buf = [0u8; 1];
+    read_exact(port, &mut etx_buf, timeout.saturating_sub(start.elapsed()))?;
+    if etx_buf[0] != ETX {
+        return Err(format!("Expected ETX, got 0x{:02X}", etx_buf[0]));
+    }
+    let computed_crc = crc16_ccitt(&payload);
+    if received_crc != computed_crc {
+        return Err(format!("CRC mismatch: got 0x{received_crc:04X}, expected 0x{computed_crc:04X}"));
+    }
+    Ok(payload)
+}
+
 /// Probe a serial port to check if an RDM-7 device is connected.
 /// Opens the port, sends a device.info request, checks for valid response.
 /// Retries once in case port-open toggled DTR and reset the device.
@@ -379,7 +490,7 @@ fn probe_port(port_name: &str) -> bool {
         }
         let _ = port.flush();
 
-        match read_frame(&mut port, Duration::from_millis(2000)) {
+        match read_frame_silent(&mut port, Duration::from_millis(2000)) {
             Ok(payload) => {
                 if let Ok(resp) = parse_json_response(&payload) {
                     if let Some(result) = resp.get("result") {
@@ -430,13 +541,14 @@ async fn serial_auto_detect() -> Result<Option<SerialPortInfo>, String> {
 }
 
 #[tauri::command]
-async fn serial_connect(port_name: String) -> Result<String, String> {
+async fn serial_connect(app: tauri::AppHandle, port_name: String) -> Result<String, String> {
     // Close any existing port first so the OS releases the handle
     {
         let mut conn = SERIAL.lock().map_err(|e| format!("Lock error: {e}"))?;
         if conn.port.is_some() {
             drop(conn.port.take());
             conn.port_name.clear();
+            conn.log_partial.clear();
         }
     }
     // Brief pause to let Windows fully release the handle
@@ -451,8 +563,117 @@ async fn serial_connect(port_name: String) -> Result<String, String> {
     conn.port = Some(port);
     conn.port_name = port_name.clone();
     conn.request_id = 0;
+    conn.log_partial.clear();
+    drop(conn);
+
+    /* Spawn idle-drain task: while no RPC is in flight, pull any bytes the
+     * firmware has sent and route log lines to the Logs UI. Exits when the
+     * port is disconnected. */
+    spawn_log_drain(app);
 
     Ok(format!("Connected to {port_name}"))
+}
+
+/// Background task: every ~80ms, if we can grab the SERIAL lock without
+/// blocking, drain any bytes that arrived between RPCs and route them to
+/// the Logs UI. Exits when the port becomes None (disconnect).
+fn spawn_log_drain(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_millis(80));
+
+            let mut conn = match SERIAL.try_lock() {
+                Ok(c) => c,
+                Err(_) => continue, // RPC in flight; it will drain on its own
+            };
+
+            if conn.port.is_none() {
+                return; // disconnected
+            }
+
+            /* Destructure for disjoint field borrows — we mutate both
+             * conn.port and conn.log_partial below. */
+            let SerialConnection { port: port_opt, log_partial, .. } = &mut *conn;
+            let port = match port_opt.as_mut() {
+                Some(p) => p,
+                None => return,
+            };
+
+            let bytes_available = port.bytes_to_read().unwrap_or(0);
+            if bytes_available == 0 {
+                continue;
+            }
+
+            /* Drain whatever's pending. The try_lock above guarantees no
+             * RPC is in flight, so any bytes here are either log text or
+             * (unexpected) unsolicited frame bytes. */
+            let mut buf = [0u8; 4096];
+            match port.read(&mut buf) {
+                Ok(n) if n > 0 => {
+                    /* Split on STX: bytes before STX are log text; if STX
+                     * appears we have to drain the rest of that frame too,
+                     * since we've already taken its leading byte out of the
+                     * OS RX buffer. */
+                    let stx_pos = buf[..n].iter().position(|&b| b == STX);
+                    let drain_len = stx_pos.unwrap_or(n);
+                    if drain_len > 0 {
+                        ingest_log_bytes(log_partial, &buf[..drain_len], &app);
+                    }
+                    if let Some(stx_pos) = stx_pos {
+                        let already = &buf[stx_pos..n];
+                        let _ = consume_unsolicited_frame(port, already, log_partial, &app);
+                    }
+                }
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {}
+                Err(_) => {
+                    /* Port error → probably disconnected. Drop the port so
+                     * subsequent commands return "Not connected" cleanly. */
+                    *port_opt = None;
+                    return;
+                }
+            }
+        }
+    });
+}
+
+/// Best-effort consume of a frame whose STX we've already swallowed during
+/// idle draining. `already` contains bytes from STX onward that were in the
+/// read buffer. Discards the frame (we're not in an RPC context, so no one
+/// is waiting for the response). Logs go to `log_buf` as usual.
+fn consume_unsolicited_frame(
+    port: &mut Box<dyn serialport::SerialPort>,
+    already: &[u8],
+    _log_buf: &mut String,
+    _app: &tauri::AppHandle,
+) -> Result<(), String> {
+    /* already[0] == STX. Need length(4) + payload + crc(2) + etx(1). */
+    if already.len() < 5 {
+        let mut more = vec![0u8; 5 - already.len()];
+        read_exact(port, &mut more, Duration::from_millis(500))?;
+        let mut buf = already.to_vec();
+        buf.extend_from_slice(&more);
+        return drain_rest_of_frame(port, &buf);
+    }
+    drain_rest_of_frame(port, already)
+}
+
+fn drain_rest_of_frame(
+    port: &mut Box<dyn serialport::SerialPort>,
+    head: &[u8],
+) -> Result<(), String> {
+    let payload_len = u32::from_le_bytes([head[1], head[2], head[3], head[4]]) as usize;
+    if payload_len == 0 || payload_len > 256 * 1024 {
+        return Err("Invalid frame length in unsolicited frame".into());
+    }
+    let needed = 1 + 4 + payload_len + 2 + 1;
+    let mut total = head.to_vec();
+    if total.len() < needed {
+        let mut more = vec![0u8; needed - total.len()];
+        read_exact(port, &mut more, Duration::from_millis(2000))?;
+        total.extend_from_slice(&more);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -477,7 +698,11 @@ async fn serial_get_port() -> Result<String, String> {
 
 /// Send a JSON-RPC request and return the parsed response
 #[tauri::command]
-async fn serial_request(method: String, params: serde_json::Value) -> Result<serde_json::Value, String> {
+async fn serial_request(
+    app: tauri::AppHandle,
+    method: String,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, String> {
     let mut conn = SERIAL.lock().map_err(|e| format!("Lock error: {e}"))?;
 
     let id = {
@@ -485,36 +710,42 @@ async fn serial_request(method: String, params: serde_json::Value) -> Result<ser
         conn.request_id
     };
 
-    let port = conn.port.as_mut().ok_or("Not connected")?;
+    /* Split borrow: take port out so we can pass &mut log_partial alongside. */
+    let mut port = conn.port.take().ok_or("Not connected")?;
 
-    let request = serde_json::json!({
-        "id": id,
-        "method": method,
-        "params": params,
-    });
-    let json_str = serde_json::to_string(&request)
-        .map_err(|e| format!("JSON serialization error: {e}"))?;
+    let result = (|| -> Result<serde_json::Value, String> {
+        let request = serde_json::json!({
+            "id": id,
+            "method": method,
+            "params": params,
+        });
+        let json_str = serde_json::to_string(&request)
+            .map_err(|e| format!("JSON serialization error: {e}"))?;
 
-    let frame = build_json_frame(&json_str);
-    port.write_all(&frame).map_err(|e| format!("Write error: {e}"))?;
-    port.flush().map_err(|e| format!("Flush error: {e}"))?;
+        let frame = build_json_frame(&json_str);
+        port.write_all(&frame).map_err(|e| format!("Write error: {e}"))?;
+        port.flush().map_err(|e| format!("Flush error: {e}"))?;
 
-    // Longer timeout for screenshot and layout.current (large responses)
-    let timeout = if method == "screenshot" || method == "layout.current" {
-        Duration::from_secs(10)
-    } else {
-        Duration::from_secs(5)
-    };
+        // Longer timeout for screenshot and layout.current (large responses)
+        let timeout = if method == "screenshot" || method == "layout.current" {
+            Duration::from_secs(10)
+        } else {
+            Duration::from_secs(5)
+        };
 
-    // Read response while holding the lock
-    let payload = read_frame(port, timeout)?;
-    let response = parse_json_response(&payload)?;
-    Ok(response)
+        let payload = read_frame(&mut port, &mut conn.log_partial, &app, timeout)?;
+        parse_json_response(&payload)
+    })();
+
+    conn.port = Some(port);
+    result
 }
 
 /// Helper: send a JSON-RPC request and read response (requires lock already held)
 fn serial_rpc_locked(
     port: &mut Box<dyn serialport::SerialPort>,
+    log_buf: &mut String,
+    app: &tauri::AppHandle,
     id: u32,
     method: &str,
     params: serde_json::Value,
@@ -530,7 +761,7 @@ fn serial_rpc_locked(
     let frame = build_json_frame(&json_str);
     port.write_all(&frame).map_err(|e| format!("Write error: {e}"))?;
     port.flush().map_err(|e| format!("Flush error: {e}"))?;
-    let payload = read_frame(port, timeout)?;
+    let payload = read_frame(port, log_buf, app, timeout)?;
     let resp = parse_json_response(&payload)?;
 
     // Check for device-side errors ({"result": null, "error": "..."})
@@ -547,6 +778,7 @@ fn serial_rpc_locked(
 /// Send a chunked binary upload over serial (for images, fonts, OTA)
 #[tauri::command]
 async fn serial_upload_chunked(
+    app: tauri::AppHandle,
     upload_type: String,
     name: String,
     data: Vec<u8>,
@@ -563,10 +795,11 @@ async fn serial_upload_chunked(
 
     // Take the port out temporarily to avoid double-borrow
     let mut port = conn.port.take().ok_or("Not connected")?;
+    let log_buf = &mut conn.log_partial;
 
     let result = (|| -> Result<serde_json::Value, String> {
         // Step 1: Send upload.start request
-        let start_resp = serial_rpc_locked(&mut port, start_id, "upload.start", serde_json::json!({
+        let start_resp = serial_rpc_locked(&mut port, log_buf, &app, start_id, "upload.start", serde_json::json!({
             "type": upload_type,
             "name": name,
             "size": total_size,
@@ -575,9 +808,9 @@ async fn serial_upload_chunked(
         // If "Upload already in progress", abort the stale session and retry
         let start_resp = match &start_resp {
             Err(e) if e.contains("Upload already in progress") => {
-                let _ = serial_rpc_locked(&mut port, abort_id, "upload.abort",
+                let _ = serial_rpc_locked(&mut port, log_buf, &app, abort_id, "upload.abort",
                     serde_json::json!({}), Duration::from_secs(2));
-                serial_rpc_locked(&mut port, start_id, "upload.start", serde_json::json!({
+                serial_rpc_locked(&mut port, log_buf, &app, start_id, "upload.start", serde_json::json!({
                     "type": upload_type,
                     "name": name,
                     "size": total_size,
@@ -609,26 +842,26 @@ async fn serial_upload_chunked(
             port.flush().map_err(|e| format!("Flush error: {e}"))?;
 
             // Wait for ACK — allow extra time for flash-busy ESP32
-            let payload = read_frame(&mut port, Duration::from_secs(10))?;
+            let payload = read_frame(&mut port, log_buf, &app, Duration::from_secs(10))?;
             let ack = parse_json_response(&payload)?;
 
             let ack_result = ack.get("result").ok_or("Missing ACK result")?;
             let ok = ack_result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
             if !ok {
-                let _ = serial_rpc_locked(&mut port, abort_id, "upload.abort",
+                let _ = serial_rpc_locked(&mut port, log_buf, &app, abort_id, "upload.abort",
                     serde_json::json!({}), Duration::from_secs(2));
                 return Err(format!("Chunk {} rejected by device", chunk_idx));
             }
         }
 
         // Step 3: Send upload.finish (large files need time for flash write)
-        serial_rpc_locked(&mut port, finish_id, "upload.finish",
+        serial_rpc_locked(&mut port, log_buf, &app, finish_id, "upload.finish",
             serde_json::json!({}), Duration::from_secs(30))
     })();
 
     // On failure, try to abort the upload so the device doesn't stay stuck
     if result.is_err() {
-        let _ = serial_rpc_locked(&mut port, abort_id, "upload.abort",
+        let _ = serial_rpc_locked(&mut port, log_buf, &app, abort_id, "upload.abort",
             serde_json::json!({}), Duration::from_secs(2));
     }
 
@@ -653,8 +886,9 @@ async fn serial_download_base64(
     let result = (|| -> Result<String, String> {
         /* Step 1: download.start — get metadata */
         conn.request_id += 1;
+        let req_id = conn.request_id;
         let resp = serial_rpc_locked(
-            &mut port, conn.request_id, "download.start",
+            &mut port, &mut conn.log_partial, &app, req_id, "download.start",
             serde_json::json!({"type": download_type, "name": name}),
             Duration::from_secs(5),
         )?;
@@ -673,8 +907,9 @@ async fn serial_download_base64(
 
         for i in 0..chunks {
             conn.request_id += 1;
+            let req_id = conn.request_id;
             let request = serde_json::json!({
-                "id": conn.request_id,
+                "id": req_id,
                 "method": "download.chunk",
                 "params": {"type": download_type, "name": name, "index": i},
             });
@@ -684,7 +919,7 @@ async fn serial_download_base64(
             port.write_all(&frame).map_err(|e| format!("Write error: {e}"))?;
             port.flush().map_err(|e| format!("Flush error: {e}"))?;
 
-            let payload = read_frame(&mut port, Duration::from_secs(10))
+            let payload = read_frame(&mut port, &mut conn.log_partial, &app, Duration::from_secs(10))
                 .map_err(|e| format!("Chunk {i}/{chunks}: {e}"))?;
 
             if payload.is_empty() {
@@ -728,8 +963,9 @@ async fn serial_download_log(
     let result = (|| -> Result<Vec<u8>, String> {
         /* Step 1: log.download.start — get metadata */
         conn.request_id += 1;
+        let req_id = conn.request_id;
         let resp = serial_rpc_locked(
-            &mut port, conn.request_id, "log.download.start",
+            &mut port, &mut conn.log_partial, &app, req_id, "log.download.start",
             serde_json::json!({"name": name}),
             Duration::from_secs(5),
         )?;
@@ -748,8 +984,9 @@ async fn serial_download_log(
 
         for i in 0..chunks {
             conn.request_id += 1;
+            let req_id = conn.request_id;
             let request = serde_json::json!({
-                "id": conn.request_id,
+                "id": req_id,
                 "method": "log.download.chunk",
                 "params": {"name": name, "index": i},
             });
@@ -759,7 +996,7 @@ async fn serial_download_log(
             port.write_all(&frame).map_err(|e| format!("Write error: {e}"))?;
             port.flush().map_err(|e| format!("Flush error: {e}"))?;
 
-            let payload = read_frame(&mut port, Duration::from_secs(10))
+            let payload = read_frame(&mut port, &mut conn.log_partial, &app, Duration::from_secs(10))
                 .map_err(|e| format!("Log chunk {i}/{chunks}: {e}"))?;
 
             if payload.is_empty() {
