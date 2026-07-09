@@ -62,16 +62,16 @@ async fn probe_device_info(
 /// Candidate /24 subnets from every non-loopback IPv4 interface. Covers both
 /// the LAN (dash on home WiFi) and the 192.168.4.x case (PC joined to the
 /// dash's own hotspot).
-fn local_subnets() -> Vec<(u8, u8, u8, u8)> {
-    let mut nets: Vec<(u8, u8, u8, u8)> = Vec::new(); // (a,b,c, own_d)
+fn local_subnets() -> Vec<(u8, u8, u8)> {
+    let mut nets: Vec<(u8, u8, u8)> = Vec::new();
     if let Ok(ifaces) = if_addrs::get_if_addrs() {
         for iface in ifaces {
             if let std::net::IpAddr::V4(ip) = iface.addr.ip() {
                 let o = ip.octets();
                 let link_local = o[0] == 169 && o[1] == 254;
                 if !iface.is_loopback() && !link_local {
-                    let key = (o[0], o[1], o[2], o[3]);
-                    if !nets.iter().any(|n| (n.0, n.1, n.2) == (key.0, key.1, key.2)) {
+                    let key = (o[0], o[1], o[2]);
+                    if !nets.contains(&key) {
                         nets.push(key);
                     }
                 }
@@ -98,11 +98,8 @@ async fn discover_devices(
     // Known/likely IPs first (last-connected etc.) with a friendlier timeout.
     let mut candidates: Vec<String> = extra_ips.unwrap_or_default();
     let subnets = local_subnets();
-    for (a, b, c, own_d) in &subnets {
+    for (a, b, c) in &subnets {
         for d in 1..=254u8 {
-            if d == *own_d {
-                continue;
-            }
             let ip = format!("{a}.{b}.{c}.{d}");
             if !candidates.contains(&ip) {
                 candidates.push(ip);
@@ -140,7 +137,9 @@ async fn discover_devices(
     let mut devices: Vec<DiscoveredDevice> = Vec::new();
     while let Some(res) = set.join_next().await {
         if let Ok(Some(dev)) = res {
-            if !devices.iter().any(|d| d.ip == dev.ip) {
+            /* Serial is unique per chip — the same dash reachable on two
+             * interface addresses is still one device. */
+            if !devices.iter().any(|d| d.serial == dev.serial) {
                 devices.push(dev);
             }
         }

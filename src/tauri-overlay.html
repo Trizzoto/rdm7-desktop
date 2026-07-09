@@ -462,15 +462,12 @@
             _healthInterval = setInterval(async () => {
                 if (RDM.mode === 'local') { _stopHealthCheck(); return; }
                 try {
-                    await RDM.getDeviceInfo();
+                    /* WifiTransport.getDeviceInfo returns null on failure
+                     * rather than throwing — treat that as a miss. */
+                    const info = await RDM.getDeviceInfo();
+                    if (!info) throw new Error('no response');
                     _healthFails = 0;
-                    if (!_connectionOk) {
-                        _connectionOk = true;
-                        _setConnState('#4ade80');
-                        _updateConnectionUI();
-                        showToast('Device reconnected', 'success');
-                        _stopWifiRecovery();
-                    }
+                    if (!_connectionOk) await _onReconnected();
                 } catch (e) {
                     _healthFails++;
                     /* Two consecutive misses = really gone (a single slow
@@ -487,6 +484,37 @@
 
         function _stopHealthCheck() {
             if (_healthInterval) { clearInterval(_healthInterval); _healthInterval = null; }
+        }
+
+        /* Shared "we're back" path for the health tick and the recovery
+         * loop. Deliberately does NOT blindly loadLayout(): reconnecting
+         * mid-session must never clobber unsaved editor work — the layout
+         * list refreshes, but the device layout is only pulled in when the
+         * editor has nothing to lose. */
+        async function _onReconnected(msg) {
+            _connectionOk = true;
+            _healthFails = 0;
+            _setConnState('#4ade80');
+            _updateConnectionUI();
+            _stopWifiRecovery();
+            showToast(msg || 'Device reconnected', 'success');
+            try {
+                if (typeof fetchLayoutsKeepCurrent === 'function') await fetchLayoutsKeepCurrent();
+                const nothingLoaded = !currentLayout || !currentLayout.widgets || currentLayout.widgets.length === 0;
+                if (nothingLoaded && !hasUnsavedEdits()) {
+                    const layouts = await RDM.listLayouts();
+                    const activeName = layouts._active || 'default';
+                    layoutSelect.innerHTML = '';
+                    layouts.forEach(l => {
+                        const opt = document.createElement('option');
+                        opt.value = l; opt.textContent = l;
+                        if (l === activeName) opt.selected = true;
+                        layoutSelect.appendChild(opt);
+                    });
+                    await loadLayout(activeName);
+                }
+            } catch (e) { }
+            _startHealthCheck();
         }
 
         /* ── Reconnect / rediscovery loop ─────────────────────────────────
@@ -523,8 +551,7 @@
             const ip = RDM.mode === 'hotspot' ? '192.168.4.1' : s.ip;
             const hit = await RDM.probeDevice(ip, 1200);
             if (hit && (!s.serial || hit.serial === s.serial)) {
-                await _testConnection({ quiet: true });
-                if (_connectionOk) showToast('Device reconnected', 'success');
+                await _onReconnected();
                 return;
             }
             if (RDM.mode === 'wifi' && s.serial && _wifiRecoverTick % 3 === 0) {
@@ -536,8 +563,7 @@
                     if (match && !_connectionOk) {
                         RDM.setMode('wifi', { ip: match.ip, port: match.port, serial: match.serial });
                         _setConnState('#f59e0b', match.ip);
-                        await _testConnection({ quiet: true });
-                        if (_connectionOk) showToast('Device moved to ' + match.ip + ' — reconnected', 'success');
+                        await _onReconnected('Device moved to ' + match.ip + ' — reconnected');
                     }
                 } finally { _scanInFlight = false; }
             }
