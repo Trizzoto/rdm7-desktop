@@ -1004,6 +1004,9 @@
              * disconnected / switched to local): the last rendered frame is
              * stale — re-push the current layout. */
             if (show && wasHidden && typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+            /* Keep the offline preview alive with bench-sim data (a dash
+             * with no data freezes gauges in their no-signal glow state). */
+            if (show) _wasmSimStart(); else _wasmSimStop();
         }
 
         /* Queried by the firmware's renderPreview() gate (overlay-patched)
@@ -1097,6 +1100,61 @@
         function injectWasmSignal(name, value) {
             if (!wasmModule) return;
             try { wasmModule.ccall('inject_signal', null, ['string', 'number'], [name, value]); } catch (e) { }
+        }
+
+        /* ── Offline bench sim for the WASM backdrop ─────────────────────
+         * A dash with no data shows gauges frozen in their no-signal state
+         * (fade_fill arcs read as a big soft glow). A real dash always has
+         * data — so while the WASM is the backdrop, sweep every layout-
+         * referenced signal min→max (tri-wave, per-signal phase offset, same
+         * idea as the firmware bench sim). Test sliders override the sweep. */
+        let _wasmSimTimer = null;
+        let _wasmSimPhase = 0;
+
+        function _wasmSimRanges() {
+            const out = {};
+            for (const w of (currentLayout.widgets || [])) {
+                const c = w.config || {};
+                const sn = c.signal_name;
+                if (!sn) continue;
+                let mn = 0, mx = 100;
+                if (w.type === 'rpm_bar')          { mn = 0;                  mx = c.rpm_max ?? 8000; }
+                else if (w.type === 'pathbar')     { mn = c.min ?? 0;         mx = c.max ?? 8000; }
+                else if (w.type === 'arc')         { mn = c.signal_min ?? 0;  mx = c.signal_max ?? 100; }
+                else if (w.type === 'meter')       { mn = c.min ?? 0;         mx = c.max ?? 100; }
+                else if (w.type === 'bar')         { mn = c.bar_min ?? 0;     mx = c.bar_max ?? 100; }
+                else if (w.type === 'shift_light') { mn = c.range_min ?? 0;   mx = c.flash_threshold ?? c.range_max ?? 8000; }
+                else if (/gear/i.test(sn))         { mn = 1;                  mx = 6; }
+                const prev = out[sn];
+                if (!prev) out[sn] = { min: mn, max: mx };
+                else { prev.min = Math.min(prev.min, mn); prev.max = Math.max(prev.max, mx); }
+            }
+            return out;
+        }
+
+        function _wasmSimTick() {
+            if (!_wasmBackdropActive()) return;
+            _wasmSimPhase = (_wasmSimPhase + 0.008) % 1;  /* ~10 s full sweep */
+            const tri = (typeof _pvTri === 'function') ? _pvTri : (t => { t = ((t % 1) + 1) % 1; return t < 0.5 ? t * 2 : 2 - t * 2; });
+            const hash = (typeof _pvHash01 === 'function') ? _pvHash01 : (s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return (h % 997) / 997; });
+            const ranges = _wasmSimRanges();
+            for (const name of Object.keys(ranges)) {
+                if (typeof _testValues !== 'undefined' && _testValues[name] !== undefined) continue;
+                const r = ranges[name];
+                let v = r.min + tri(_wasmSimPhase + hash(name)) * (r.max - r.min);
+                if (/gear/i.test(name)) v = Math.round(v);
+                injectWasmSignal(name, v);
+            }
+        }
+
+        function _wasmSimStart() {
+            if (_wasmSimTimer) return;
+            _wasmSimTimer = setInterval(_wasmSimTick, 80);
+            _wasmSimTick();
+        }
+
+        function _wasmSimStop() {
+            if (_wasmSimTimer) { clearInterval(_wasmSimTimer); _wasmSimTimer = null; }
         }
 ##[ end ]##
 
