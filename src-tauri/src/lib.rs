@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::Emitter;
+use tauri::Manager;
 use tauri_plugin_updater::UpdaterExt;
 
 // ── Device Discovery (HTTP subnet sweep) ────────────────────────────
@@ -1118,6 +1119,7 @@ struct HttpFetchResponse {
 
 /// Shared HTTP client — bypasses system proxy so requests to local
 /// devices (ESP32 hotspot at 192.168.4.1 etc.) always use direct routing.
+/// FOLLOWS redirects — used for GitHub/OTA downloads which 3xx to a CDN.
 fn http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .no_proxy()
@@ -1125,9 +1127,24 @@ fn http_client() -> Result<reqwest::Client, String> {
         .map_err(|e| format!("HTTP client error: {e}"))
 }
 
+/// HTTP client for device-facing calls (the /api/* transport). Does NOT
+/// follow redirects: a real RDM-7 never 3xx-redirects its API, but a
+/// captive portal or router sharing the target IP (e.g. the hotspot's
+/// 192.168.4.1 colliding with a home router's gateway) answers a 303 to a
+/// block page. Following that turned a "no device" into a bogus 200 with a
+/// foreign HTML body, which the frontend mistook for a live device. With
+/// redirects off, that 303 surfaces as a non-2xx status and is rejected.
+fn device_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))
+}
+
 #[tauri::command]
 async fn http_fetch(req: HttpFetchRequest) -> Result<HttpFetchResponse, String> {
-    let client = http_client()?;
+    let client = device_http_client()?;
     let method = req.method.as_deref().unwrap_or("GET");
     let timeout = Duration::from_millis(req.timeout_ms.unwrap_or(10000));
 
@@ -1155,7 +1172,7 @@ async fn http_fetch(req: HttpFetchRequest) -> Result<HttpFetchResponse, String> 
 
 #[tauri::command]
 async fn http_fetch_binary(url: String, timeout_ms: Option<u64>) -> Result<Vec<u8>, String> {
-    let client = http_client()?;
+    let client = device_http_client()?;
     let timeout = Duration::from_millis(timeout_ms.unwrap_or(15000));
 
     let resp = client
@@ -1177,7 +1194,7 @@ async fn http_fetch_binary(url: String, timeout_ms: Option<u64>) -> Result<Vec<u
 
 #[tauri::command]
 async fn http_upload_binary(url: String, data: Vec<u8>, timeout_ms: Option<u64>) -> Result<String, String> {
-    let client = http_client()?;
+    let client = device_http_client()?;
     let timeout = Duration::from_millis(timeout_ms.unwrap_or(30000));
 
     let resp = client
@@ -1489,6 +1506,69 @@ pub struct LayoutEntry {
 
 // ── App Entry Point ─────────────────────────────────────────────────
 
+/// Build and install the native menu bar. Custom items emit `menu-action`
+/// (handled in run()'s on_menu_event); the frontend maps each id to an editor
+/// function. Gives the app real desktop-program chrome instead of a bare
+/// webview.
+fn build_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    use tauri::menu::{MenuBuilder, PredefinedMenuItem, SubmenuBuilder};
+
+    let file = SubmenuBuilder::new(app, "File")
+        .text("new_layout", "New Layout")
+        .text("open_rdm", "Open .rdm Bundle…")
+        .separator()
+        .text("save", "Save / Apply")
+        .text("save_as", "Save As…")
+        .separator()
+        .text("export_json", "Export Layout JSON…")
+        .text("export_rdm", "Export .rdm Bundle…")
+        .separator()
+        .text("backup_all", "Backup All Device Layouts…")
+        .text("restore_all", "Restore Layouts from Backup…")
+        .separator()
+        .item(&PredefinedMenuItem::quit(app, Some("Exit"))?)
+        .build()?;
+
+    let edit = SubmenuBuilder::new(app, "Edit")
+        .text("undo", "Undo")
+        .text("redo", "Redo")
+        .separator()
+        .item(&PredefinedMenuItem::cut(app, Some("Cut"))?)
+        .item(&PredefinedMenuItem::copy(app, Some("Copy"))?)
+        .item(&PredefinedMenuItem::paste(app, Some("Paste"))?)
+        .item(&PredefinedMenuItem::select_all(app, Some("Select All"))?)
+        .build()?;
+
+    let view = SubmenuBuilder::new(app, "View")
+        .text("fit", "Fit to Screen")
+        .text("reset_view", "Reset View")
+        .separator()
+        .text("toggle_sim", "Toggle Simulator")
+        .text("toggle_live", "Toggle Live View")
+        .build()?;
+
+    let device = SubmenuBuilder::new(app, "Device")
+        .text("connect_wifi", "Connect over WiFi…")
+        .text("scan", "Scan for Devices")
+        .separator()
+        .text("device_manager", "Device Manager…")
+        .text("go_local", "Go Offline (Local)")
+        .build()?;
+
+    let help = SubmenuBuilder::new(app, "Help")
+        .text("shortcuts", "Keyboard Shortcuts")
+        .text("check_update", "Check for Updates…")
+        .separator()
+        .text("about", "About RDM-7 Visual Designer")
+        .build()?;
+
+    let menu = MenuBuilder::new(app)
+        .items(&[&file, &edit, &view, &device, &help])
+        .build()?;
+    app.set_menu(menu)?;
+    Ok(())
+}
+
 pub fn run() {
     // Collect any file paths passed on the command line (Windows/Linux file
     // associations open the app with the file path as argv[1]). On macOS the
@@ -1515,7 +1595,19 @@ pub fn run() {
                     let _ = app_handle.emit("file-opened", serde_json::json!({ "paths": files }));
                 });
             }
+
+            // ── Native application menu ──────────────────────────────────
+            // Every custom item emits a `menu-action` event carrying its id;
+            // the frontend routes it to the matching editor function. Native
+            // predefined items (cut/copy/paste/quit) keep OS-standard behavior.
+            build_app_menu(app.handle())?;
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            let id = event.id().0.clone();
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.emit("menu-action", id);
+            }
         })
         .on_window_event(|window, event| {
             // Windows drag-and-drop: if a user drops a .rdm on the running app,

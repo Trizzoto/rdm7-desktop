@@ -242,9 +242,15 @@
                         <canvas id="screenshotCanvas" width="800" height="480"></canvas>
 ##[ insert-after ]##
                         <!-- Desktop: offline LVGL preview (WASM). Replaces the device
-                             screenshot backdrop while no device is connected. -->
+                             screenshot backdrop while no device is connected.
+                             CSS width/height are pinned: Emscripten's SDL scales the
+                             backing store by devicePixelRatio (e.g. 1200x720 at 150%
+                             Windows scaling) and would otherwise blow out the layout
+                             size, showing a zoomed crop. Pinned CSS keeps it at
+                             logical display size; the bigger backing store just
+                             supersamples. -->
                         <canvas id="canvas" width="800" height="480"
-                            style="display:none; position:absolute; top:0; left:0;"></canvas>
+                            style="display:none; position:absolute; top:0; left:0; width:800px; height:480px;"></canvas>
 ##[ end ]##
 
 ##[ block device-manager-modal ]##
@@ -264,6 +270,18 @@
         </div>
     </div>
 
+##[ end ]##
+
+#! The editor's SVG approximation layer (glow/gradient mockups) exists for
+#! when there is no accurate backdrop. The WASM render IS accurate — while
+#! it's showing, the approximations must yield (same idea as _haveLiveFrame
+#! for the live screenshot feed).
+##[ block preview-yields-to-wasm ]##
+##[ anchor ]##
+            const show = _previewEnabled && !_haveLiveFrame;
+##[ replace-with ]##
+            const show = _previewEnabled && !_haveLiveFrame &&
+                !(typeof _wasmBackdropActive === 'function' && _wasmBackdropActive());
 ##[ end ]##
 
 #! WiFi device picker — discovered dashes + recent devices + manual IP entry
@@ -331,6 +349,67 @@
             if (!label) return;
             if (text !== undefined) label.textContent = text;
             label.style.color = color;
+        }
+
+        /* True only for a genuine /api/device/info payload. A real RDM-7
+         * always returns a JSON object carrying serial + schema; a router or
+         * captive portal answering the same IP returns an HTML string, which
+         * must never be mistaken for a live device. */
+        function _isDeviceInfo(info) {
+            return !!info && typeof info === 'object' && !Array.isArray(info) &&
+                ('serial' in info || 'schema' in info);
+        }
+
+        /* Native menu bar → editor actions. The Rust menu emits `menu-action`
+         * with the item id; route each to the existing editor function so the
+         * menu and the on-screen controls stay in lockstep. */
+        (async function _setupMenuActions() {
+            if (typeof window.__TAURI__?.event?.listen !== 'function') return;
+            const call = (fn, ...args) => { try { if (typeof fn === 'function') fn(...args); } catch (e) { console.warn('menu action failed:', e); } };
+            const actions = {
+                new_layout:     () => call(window.layoutEditorNew),
+                open_rdm:       () => call(window.importRdm),
+                save:           () => call(window.saveActiveLayout),
+                save_as:        () => call(window.layoutEditorSaveAs),
+                export_json:    () => call(window.downloadJson),
+                export_rdm:     () => call(window.exportRdm),
+                backup_all:     () => call(window.backupAllDeviceLayouts),
+                restore_all:    () => call(window.restoreAllDeviceLayouts),
+                undo:           () => call(window.undo),
+                redo:           () => call(window.redo),
+                fit:            () => call(window.zoomToFit),
+                reset_view:     () => call(window.resetView),
+                toggle_sim:     () => call(window.toggleSimulation),
+                toggle_live:    () => call(window.toggleLivePreview),
+                connect_wifi:   () => call(window._openWifiPicker),
+                scan:           () => call(window._scanForDevices),
+                device_manager: () => call(window.openDeviceManager),
+                go_local:       () => { const s = document.getElementById('connectionMode'); if (s) s.value = 'local'; call(window._onConnectionModeChange, 'local'); },
+                shortcuts:      () => { const m = document.getElementById('helpModal'); if (m) m.style.display = 'flex'; },
+                check_update:   () => _menuCheckUpdate(),
+                about:          () => _menuAbout(),
+            };
+            try {
+                await window.__TAURI__.event.listen('menu-action', (e) => {
+                    const fn = actions[e.payload];
+                    if (fn) fn();
+                });
+            } catch (err) { console.warn('menu-action listener failed to bind:', err); }
+        })();
+
+        async function _menuCheckUpdate() {
+            showToast('Checking for updates…', 'info');
+            try {
+                const info = await _tauriCall('check_desktop_update', {
+                    repo: _UPDATE_DESKTOP_REPO, currentVersion: _DESKTOP_VERSION
+                });
+                if (info && info.available) { _showDesktopUpdateBanner('desktop', info); }
+                else showToast('You’re on the latest version (v' + _DESKTOP_VERSION + ')', 'success');
+            } catch (e) { showToast('Update check failed', 'error'); }
+        }
+
+        function _menuAbout() {
+            showToast('RDM-7 Visual Designer v' + _DESKTOP_VERSION, 'info');
         }
 
         function _onConnectionModeChange(mode) {
@@ -462,10 +541,13 @@
             _healthInterval = setInterval(async () => {
                 if (RDM.mode === 'local') { _stopHealthCheck(); return; }
                 try {
-                    /* WifiTransport.getDeviceInfo returns null on failure
-                     * rather than throwing — treat that as a miss. */
+                    /* WifiTransport.getDeviceInfo returns null on failure and
+                     * the raw body string on a non-JSON 200 (e.g. a router /
+                     * captive-portal page answering the hotspot IP). Only a
+                     * real device replies with a JSON object — anything else
+                     * is a miss, not a live dash. */
                     const info = await RDM.getDeviceInfo();
-                    if (!info) throw new Error('no response');
+                    if (!_isDeviceInfo(info)) throw new Error('not a device response');
                     _healthFails = 0;
                     if (!_connectionOk) await _onReconnected();
                 } catch (e) {
@@ -911,7 +993,24 @@
             if (!el) return;
             const show = _wasmReady && !_wasmCrashed &&
                 (typeof RDM === 'undefined' || RDM.mode === 'local' || !_connectionOk);
+            const wasHidden = el.style.display === 'none';
             el.style.display = show ? 'block' : 'none';
+            /* The WASM render is pixel-accurate — while it's the backdrop,
+             * the editor's SVG approximation layer (gradients/glow mockups
+             * meant for when there's NO accurate backdrop) must stay out of
+             * the way. renderPreview() re-evaluates via _wasmBackdropActive. */
+            if (typeof renderPreview === 'function') renderPreview();
+            /* Becoming visible after a while hidden (e.g. device just
+             * disconnected / switched to local): the last rendered frame is
+             * stale — re-push the current layout. */
+            if (show && wasHidden && typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+        }
+
+        /* Queried by the firmware's renderPreview() gate (overlay-patched)
+         * so the SVG approximation layer yields to the WASM backdrop. */
+        function _wasmBackdropActive() {
+            const el = document.getElementById('canvas');
+            return !!(el && el.style.display !== 'none' && _wasmReady && !_wasmCrashed);
         }
 
         function _dlProgressShow(label, pct) {
@@ -1013,8 +1112,13 @@
             if (doZoom) zoomToFit();
 ##[ insert-after ]##
             if (wasmModule && !_wasmCrashed) {
-                try { wasmModule.ccall('set_display_size', null, ['number', 'number'], [w, h]); }
-                catch (e) { console.warn('[WASM] set_display_size failed:', e); }
+                try {
+                    wasmModule.ccall('set_display_size', null, ['number', 'number'], [w, h]);
+                    /* Re-pin CSS size after SDL rebuilds its (possibly
+                     * devicePixelRatio-scaled) backing store. */
+                    const wc = document.getElementById('canvas');
+                    if (wc) { wc.style.width = w + 'px'; wc.style.height = h + 'px'; }
+                } catch (e) { console.warn('[WASM] set_display_size failed:', e); }
             }
 ##[ end ]##
 
