@@ -1,0 +1,58 @@
+name: Frontend Merge Check
+
+# The desktop frontend is BUILT, not edited: tools/merge_overlay.py applies
+# src/tauri-overlay.html onto src/firmware-base.html (ADR-0007). This check
+# fails when an overlay anchor no longer matches the base (drift) or the
+# merged output contains a script syntax error.
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "src/firmware-base.html"
+      - "src/tauri-overlay.html"
+      - "src/transport.js"
+      - "tools/merge_overlay.py"
+      - ".github/workflows/frontend-merge-check.yml"
+  pull_request:
+    paths:
+      - "src/firmware-base.html"
+      - "src/tauri-overlay.html"
+      - "src/transport.js"
+      - "tools/merge_overlay.py"
+      - ".github/workflows/frontend-merge-check.yml"
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Merge overlay onto firmware base
+        run: python tools/merge_overlay.py
+
+      - name: Syntax-check merged inline scripts
+        run: |
+          node -e '
+            const fs = require("fs");
+            const { execFileSync } = require("child_process");
+            const html = fs.readFileSync("src/dist/index.html", "utf8");
+            const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
+            let m, i = 0, fail = 0;
+            while ((m = re.exec(html)) !== null) {
+              i++;
+              fs.writeFileSync(`/tmp/blk${i}.js`, m[1]);
+              try { execFileSync(process.execPath, ["--check", `/tmp/blk${i}.js`], { stdio: "pipe" }); }
+              catch (e) { fail++; console.log(`script #${i}: SYNTAX ERROR\n` + e.stderr.toString()); }
+            }
+            console.log(fail ? `FAILED: ${fail}/${i}` : `all ${i} script blocks parse clean`);
+            process.exit(fail ? 1 : 0);
+          '
+
+      - name: Syntax-check transport.js
+        run: node --check src/transport.js

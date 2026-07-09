@@ -4,9 +4,12 @@
   "version": "0.1.0",
   "identifier": "com.rdm7.designer",
   "build": {
-    "frontendDist": "../src"
+    "beforeDevCommand": "python tools/merge_overlay.py",
+    "beforeBuildCommand": "python tools/merge_overlay.py",
+    "frontendDist": "../src/dist"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "RDM-7 Visual Designer",

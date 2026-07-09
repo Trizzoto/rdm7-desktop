@@ -1,0 +1,1332 @@
+#! ============================================================================
+#! RDM-7 Desktop — Tauri overlay (ADR-0007)
+#! ============================================================================
+#! This file holds EVERY desktop-specific difference from the firmware web
+#! editor. tools/merge_overlay.py applies these blocks onto
+#! src/firmware-base.html (a verbatim copy of RDM-7_Dash/main/web/index.html)
+#! to produce src/dist/index.html — the HTML the Tauri webview loads.
+#!
+#! To update the editor from firmware:   python tools/sync_firmware.py
+#! If the merge fails, an anchor drifted: fix the anchor here, re-run
+#! tools/merge_overlay.py. Never edit src/dist/ or src/firmware-base.html.
+#!
+#! Block syntax:
+#!   ##[ block <name> ]##
+#!   ##[ anchor ]##            <verbatim line(s), must match base exactly once>
+#!   ##[ insert-after | insert-before | replace-with ]##
+#!   <content>
+#!   ##[ end ]##
+#! ============================================================================
+
+#! Desktop CSS: download-progress overlay, Device Manager modal, Serial Logs drawer
+##[ block head-css ]##
+##[ anchor ]##
+    </style>
+##[ insert-before ]##
+        /* ── Desktop: download progress overlay ── */
+        .dl-progress-overlay {
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            z-index: 3500; background: hsl(220, 15%, 16%);
+            border: 1px solid hsla(0, 0%, 100%, 0.12); border-radius: var(--radius-md);
+            padding: 12px 20px; min-width: 300px; box-shadow: var(--shadow-md);
+            display: none;
+        }
+        .dl-progress-overlay.visible { display: block; }
+        .dl-progress-label { font-size: 12px; color: hsl(0, 0%, 75%); margin-bottom: 8px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .dl-progress-track { height: 6px; background: hsl(220, 10%, 25%);
+            border-radius: 3px; overflow: hidden; }
+        .dl-progress-fill { height: 100%; background: #2d8ceb; border-radius: 3px;
+            transition: width 0.15s ease-out; width: 0%; }
+
+        /* ── Desktop: Device Manager modal ── */
+        .dm-section { background: var(--bg); border-radius: var(--radius-md);
+            border: 1px solid var(--border); padding: 12px; }
+        .dm-section-title { font-size: 10px; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+        .dm-row { display: flex; justify-content: space-between; align-items: center;
+            font-size: 12px; padding: 3px 0; }
+        .dm-label { color: var(--text-muted); }
+        .dm-value { font-family: 'JetBrains Mono', monospace; }
+        .dm-bar { height: 6px; background: var(--border); border-radius: 3px;
+            overflow: hidden; margin-top: 4px; }
+        .dm-bar-fill { height: 100%; background: var(--accent); border-radius: 3px;
+            transition: width 0.3s; }
+
+        /* ── Serial Logs drawer (USB-only) ─────────────────────────── */
+        #logsToggleBtn {
+            position: fixed; bottom: 16px; right: 16px; z-index: 1900;
+            width: 40px; height: 40px; border-radius: 50%;
+            background: var(--panel-elevated); border: 1px solid var(--border);
+            color: var(--text-muted); cursor: pointer;
+            display: none; align-items: center; justify-content: center;
+            box-shadow: var(--shadow-md);
+            transition: color .15s, border-color .15s;
+        }
+        #logsToggleBtn.visible { display: flex; }
+        #logsToggleBtn:hover { color: var(--text); border-color: var(--text-muted); }
+        #logsToggleBtn svg { width: 18px; height: 18px; }
+        #logsToggleBtn .logs-new-dot {
+            position: absolute; top: 6px; right: 6px;
+            width: 8px; height: 8px; border-radius: 50%;
+            background: hsl(160, 70%, 50%); display: none;
+            box-shadow: 0 0 0 2px var(--panel-elevated);
+        }
+        #logsToggleBtn.has-new .logs-new-dot { display: block; }
+
+        #logsDrawer {
+            position: fixed; top: 0; right: 0; bottom: 0;
+            width: min(420px, 95vw);
+            background: var(--panel-elevated); border-left: 1px solid var(--border);
+            box-shadow: -4px 0 20px rgba(0,0,0,0.4);
+            z-index: 1950;
+            display: flex; flex-direction: column;
+            transform: translateX(100%); transition: transform .2s ease-out;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        #logsDrawer.open { transform: translateX(0); }
+        .logs-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 12px 14px; border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .logs-header h3 {
+            margin: 0; flex: 1;
+            font-size: 11px; font-weight: 700;
+            letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--text);
+        }
+        .logs-header button {
+            background: none; border: 1px solid var(--border);
+            color: var(--text-muted); cursor: pointer;
+            font-size: 10px; padding: 4px 8px; border-radius: var(--radius-sm);
+            font-family: inherit; text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .logs-header button:hover { color: var(--text); border-color: var(--text-muted); }
+        .logs-header .logs-close {
+            border: none; font-size: 18px; padding: 0 4px;
+            line-height: 1;
+        }
+        .logs-list {
+            flex: 1; overflow-y: auto; overflow-x: hidden;
+            padding: 8px 0; font-size: 11px; line-height: 1.45;
+            background: var(--bg);
+        }
+        .logs-list .log-line {
+            padding: 1px 14px; white-space: pre-wrap; word-break: break-word;
+            color: var(--text);
+        }
+        .logs-list .log-line.lvl-w { color: hsl(38, 90%, 60%); }
+        .logs-list .log-line.lvl-e { color: hsl(0, 75%, 65%); }
+        .logs-list .log-line.lvl-d { color: hsl(0, 0%, 50%); }
+        .logs-list .log-line.lvl-v { color: hsl(0, 0%, 38%); }
+        .logs-empty {
+            padding: 16px 14px; color: var(--text-muted);
+            font-size: 11px; font-style: italic;
+        }
+        .logs-paused-banner {
+            display: none;
+            position: absolute; bottom: 12px; left: 50%;
+            transform: translateX(-50%);
+            background: hsl(38, 60%, 45%); color: white;
+            padding: 4px 10px; border-radius: 12px;
+            font-size: 10px; cursor: pointer;
+            box-shadow: var(--shadow-md);
+            text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .logs-paused-banner.visible { display: block; }
+##[ end ]##
+
+#! WASM engine (build/index.js), bundled logo data, RDM transport SDK
+##[ block head-scripts ]##
+##[ anchor ]##
+</head>
+##[ insert-before ]##
+    <!-- Desktop: WASM preview engine + transport layer loaded before main script -->
+    <script>
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.message, e.filename, e.lineno);
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('Unhandled rejection:', e.reason);
+        });
+    </script>
+    <script src="build/index.js"></script>
+    <script src="rdm_logo_data.js"></script>
+    <script src="transport.js"></script>
+##[ end ]##
+
+#! desktopUpdateBanner id is intentionally distinct from firmware's updateBanner
+##[ block body-banners ]##
+##[ anchor ]##
+    <div id="toastContainer" class="toast-container"></div>
+##[ insert-after ]##
+    <!-- Desktop update banner (separate from firmware OTA banner below) -->
+    <div id="desktopUpdateBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:10000;background:linear-gradient(135deg,#1a3a2a,#1a2a3a);border-bottom:1px solid #2e5e3e;padding:10px 20px;align-items:center;gap:12px;font-size:12px;color:#ccc;">
+        <span id="desktopUpdateIcon" style="font-size:16px;"></span>
+        <span id="desktopUpdateMessage" style="flex:1;"></span>
+        <button id="desktopUpdateInstallBtn" onclick="_installDesktopUpdate()" style="background:#4ade80;border:none;border-radius:6px;padding:5px 14px;color:#111;font-size:11px;font-weight:600;cursor:pointer;">Install</button>
+        <button onclick="_skipDesktopUpdate()" style="background:transparent;border:1px solid #555;border-radius:6px;padding:5px 14px;color:#aaa;font-size:11px;cursor:pointer;">Skip</button>
+    </div>
+    <!-- Download progress overlay (WASM image sync) -->
+    <div id="dlProgress" class="dl-progress-overlay">
+        <div class="dl-progress-label" id="dlProgressLabel">Downloading...</div>
+        <div class="dl-progress-track"><div class="dl-progress-fill" id="dlProgressFill"></div></div>
+    </div>
+##[ end ]##
+
+##[ block connection-bar ]##
+##[ anchor ]##
+            <input type="file" id="importRdmInput" accept=".rdm" style="display:none">
+##[ insert-after ]##
+            <!-- Desktop: transport-mode selector -->
+            <div id="connectionBar" style="display:flex; align-items:center; gap:6px;">
+                <select id="connectionMode" onchange="_onConnectionModeChange(this.value)"
+                    style="background:var(--bg); color:var(--text); border:1px solid var(--border); padding:4px 6px; border-radius:var(--radius-sm); font-size:10px; font-family:'JetBrains Mono',monospace;">
+                    <option value="local">Offline (Local)</option>
+                    <option value="wifi">WiFi</option>
+                    <option value="hotspot">ESP32 Hotspot</option>
+                    <option value="usb">USB Serial</option>
+                </select>
+                <span id="connModeLabel" style="font-size:10px; color:var(--text-muted);">Local</span>
+                <button id="scanDevicesBtn" class="btn btn-secondary" onclick="_scanForDevices()"
+                    style="font-size:9px; padding:2px 6px; display:none;" title="Scan for RDM-7 devices on network">Scan</button>
+            </div>
+            <div class="header-divider"></div>
+##[ end ]##
+
+#! Appended after the last firmware setup section (Developer Options)
+##[ block setup-cards ]##
+##[ anchor ]##
+                <div class="card-stat">Bench &amp; preview</div>
+            </div>
+        </div>
+##[ insert-after ]##
+
+        <!-- Desktop-only section (Tauri delta — not in firmware copy).
+             Connection-gated cards are toggled by _updateConnectionUI(),
+             which looks these ids up and flips style.display. -->
+        <div class="setup-section-title" style="margin-top:30px;">Desktop</div>
+        <div class="setup-grid">
+            <div class="setup-card" onclick="openDeviceManager()" id="deviceManagerItem">
+                <div class="card-title"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Device Manager</div>
+                <div class="card-body">Connection health, storage usage, reboot — the desktop app&apos;s view of the dash.</div>
+                <div class="card-stat">Desktop app</div>
+            </div>
+            <div class="setup-card" onclick="backupAllDeviceLayouts()" id="backupAllItem" style="display:none;">
+                <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Backup All Layouts</div>
+                <div class="card-body">Save every layout on the device into a single ZIP on this computer.</div>
+                <div class="card-stat">ZIP export</div>
+            </div>
+            <div class="setup-card" onclick="restoreAllDeviceLayouts()" id="restoreAllItem" style="display:none;">
+                <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Restore Layouts</div>
+                <div class="card-body">Push layouts from a ZIP backup back onto the device.</div>
+                <div class="card-stat">ZIP import</div>
+            </div>
+            <div class="setup-card" onclick="importLocalToDevice()" id="importToDeviceItem" style="display:none;">
+                <div class="card-title"><svg viewBox="0 0 24 24"><polyline points="7 17 2 12 7 7"/><line x1="2" y1="12" x2="22" y2="12"/><polyline points="17 7 22 12 17 17"/></svg>Import Local to Device</div>
+                <div class="card-body">Copy a layout saved offline in this app onto the connected dash.</div>
+                <div class="card-stat">Local &rarr; device</div>
+            </div>
+            <div class="setup-card" onclick="otaFirmwareUpdate()" id="otaUpdateItem" style="display:none;">
+                <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Update Firmware</div>
+                <div class="card-body">Install a firmware update on the dash over the air.</div>
+                <div class="card-stat">OTA</div>
+            </div>
+        </div>
+##[ end ]##
+
+#! The WASM preview renders into this canvas; initWasm() no-ops without it
+##[ block wasm-canvas ]##
+##[ anchor ]##
+                        <canvas id="screenshotCanvas" width="800" height="480"></canvas>
+##[ insert-after ]##
+                        <!-- Desktop: offline LVGL preview (WASM). Replaces the device
+                             screenshot backdrop while no device is connected. -->
+                        <canvas id="canvas" width="800" height="480"
+                            style="display:none; position:absolute; top:0; left:0;"></canvas>
+##[ end ]##
+
+##[ block device-manager-modal ]##
+##[ anchor ]##
+    <div id="deviceInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceInfo()">
+##[ insert-before ]##
+    <!-- Desktop: Device Manager modal -->
+    <div id="deviceManagerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceManager()">
+        <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:480px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <span style="font-weight:600; font-size:14px;">Device Manager</span>
+                <button class="close-btn" onclick="closeDeviceManager()" style="font-size:18px;">&times;</button>
+            </div>
+            <div id="dmContent" style="display:flex; flex-direction:column; gap:14px;">
+                <div style="text-align:center; color:var(--text-muted); font-size:12px; padding:20px;">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+##[ end ]##
+
+##[ block js-desktop-runtime ]##
+##[ anchor ]##
+        const RDM_LAYOUT_MAX_BYTES = 32768;
+##[ insert-after ]##
+
+        /* ── Desktop runtime state ───────────────────────────────────────── */
+        let _lastUsbPort = null;
+        let _connectionOk = false;
+        let _healthInterval = null;
+        let wasmModule = null;
+        let _wasmReady = false;
+        let _wasmPreviewTimer = null;
+        let _wasmCrashed = false;
+        const _wasmRegisteredImages = new Set();
+        const _wasmFailedImages = new Set();
+        const _UPDATE_DESKTOP_REPO = 'Trizzoto/rdm7-desktop';
+        const _UPDATE_FIRMWARE_REPO = 'Trizzoto/potato-jubilee';
+        const _DESKTOP_VERSION = '0.1.0';
+        let _pendingDesktopUpdate = null;
+        let _dmRefreshTimer = null;
+
+        /* ── Connection Management ───────────────────────────────────────── */
+        function _onConnectionModeChange(mode) {
+            const label = document.getElementById('connModeLabel');
+            if (mode === 'local') {
+                _stopHealthCheck();
+                _connectionOk = false;
+                RDM.setMode('local');
+                label.textContent = 'Local';
+                label.style.color = 'var(--text-muted)';
+                _updateConnectionUI();
+                fetchLayouts();
+            } else if (mode === 'wifi') {
+                const settings = RDM.getConnectionSettings();
+                const lastIp = settings.ip || '';
+                _showPromptOverlay('Connect to ESP32', lastIp || '192.168.1.1', function(ip) {
+                    if (!ip || !ip.trim()) {
+                        document.getElementById('connectionMode').value = RDM.mode;
+                        return;
+                    }
+                    RDM.setMode('wifi', { ip: ip.trim() });
+                    label.textContent = ip.trim();
+                    label.style.color = 'var(--text-muted)';
+                    _testConnection();
+                }, { subtitle: 'Enter the IP address of your RDM-7', raw: true });
+            } else if (mode === 'hotspot') {
+                RDM.setMode('hotspot');
+                label.textContent = '192.168.4.1';
+                label.style.color = 'var(--text-muted)';
+                _testConnection();
+            } else if (mode === 'usb') {
+                _connectUsb(label);
+            }
+        }
+
+        async function _connectUsb(label) {
+            if (!RDM.isTauri()) {
+                showToast('USB serial requires the desktop app', 'error');
+                document.getElementById('connectionMode').value = RDM.mode;
+                return;
+            }
+            try {
+                if (_lastUsbPort) {
+                    try {
+                        await RDM.serialConnect(_lastUsbPort);
+                        label.textContent = _lastUsbPort;
+                        label.style.color = 'var(--text-muted)';
+                        showToast('Reconnected to ' + _lastUsbPort, 'success');
+                        _testConnection();
+                        return;
+                    } catch (e) { _lastUsbPort = null; }
+                }
+                showToast('Scanning USB ports for RDM-7...');
+                const detected = await RDM.autoDetectDevice();
+                if (detected) {
+                    _lastUsbPort = detected.name;
+                    await RDM.serialConnect(detected.name);
+                    label.textContent = detected.name;
+                    label.style.color = 'var(--text-muted)';
+                    showToast('Found RDM-7 on ' + detected.name, 'success');
+                    _testConnection();
+                    return;
+                }
+                const ports = await RDM.listSerialPorts();
+                if (ports.length === 0) {
+                    showToast('No USB serial devices found. Check cable connection.', 'error');
+                    document.getElementById('connectionMode').value = RDM.mode;
+                    return;
+                }
+                const names = ports.map((p, i) =>
+                    `${i + 1}. ${p.name} (${p.product || p.manufacturer || 'USB'})`
+                ).join('\n');
+                _showPromptOverlay('RDM-7 not auto-detected. Select port manually:', '1', async function(choice) {
+                    const idx = parseInt(choice) - 1;
+                    if (idx >= 0 && idx < ports.length) {
+                        try {
+                            await RDM.serialConnect(ports[idx].name);
+                            _lastUsbPort = ports[idx].name;
+                            label.textContent = ports[idx].name;
+                            label.style.color = 'var(--text-muted)';
+                            _testConnection();
+                        } catch (e) {
+                            showToast('Failed to connect: ' + (e.message || e), 'error');
+                            document.getElementById('connectionMode').value = RDM.mode;
+                        }
+                    } else {
+                        document.getElementById('connectionMode').value = RDM.mode;
+                    }
+                }, names);
+            } catch (e) {
+                showToast('USB error: ' + (e.message || e), 'error');
+                document.getElementById('connectionMode').value = RDM.mode;
+            }
+        }
+
+        async function _testConnection() {
+            const label = document.getElementById('connModeLabel');
+            updateStatus('Connecting...', false);
+            try {
+                const layouts = await RDM.listLayouts();
+                _connectionOk = true;
+                label.style.color = '#4ade80';
+                _updateConnectionUI();
+                showToast('Connected to device (' + layouts.length + ' layouts)', 'success');
+                const activeName = layouts._active || 'default';
+                layoutSelect.innerHTML = '';
+                layouts.forEach(l => {
+                    const opt = document.createElement('option');
+                    opt.value = l; opt.textContent = l;
+                    if (l === activeName) opt.selected = true;
+                    layoutSelect.appendChild(opt);
+                });
+                await loadLayout(activeName);
+                _startHealthCheck();
+                setTimeout(_checkFirmwareUpdate, 2000);
+            } catch (e) {
+                _connectionOk = false;
+                label.style.color = '#f44';
+                _updateConnectionUI();
+                showToast('Connection failed: ' + e.message, 'error');
+                _stopHealthCheck();
+            }
+        }
+
+        function _startHealthCheck() {
+            _stopHealthCheck();
+            _healthInterval = setInterval(async () => {
+                if (RDM.mode === 'local') { _stopHealthCheck(); return; }
+                try {
+                    await RDM.listLayouts();
+                    if (!_connectionOk) {
+                        _connectionOk = true;
+                        const label = document.getElementById('connModeLabel');
+                        label.style.color = '#4ade80';
+                        _updateConnectionUI();
+                        showToast('Device reconnected', 'success');
+                    }
+                } catch (e) {
+                    if (_connectionOk) {
+                        _connectionOk = false;
+                        const label = document.getElementById('connModeLabel');
+                        label.style.color = '#f44';
+                        _updateConnectionUI();
+                        showToast('Device disconnected', 'error');
+                    }
+                }
+            }, 5000);
+        }
+
+        function _stopHealthCheck() {
+            if (_healthInterval) { clearInterval(_healthInterval); _healthInterval = null; }
+        }
+
+        function _updateConnectionUI() {
+            const isConnected = RDM.mode !== 'local' && _connectionOk;
+            updateStatus(
+                isConnected ? 'Connected (' + RDM.mode + ')' :
+                RDM.mode === 'local' ? 'Offline (Local)' : 'Disconnected',
+                !isConnected && RDM.mode !== 'local'
+            );
+            const backupAllItem = document.getElementById('backupAllItem');
+            const restoreAllItem = document.getElementById('restoreAllItem');
+            const backupRestoreSep = document.getElementById('backupRestoreSep');
+            const importItem = document.getElementById('importToDeviceItem');
+            const importSep = document.getElementById('importToDeviceSep');
+            const otaItem = document.getElementById('otaUpdateItem');
+            if (backupAllItem) backupAllItem.style.display = isConnected ? '' : 'none';
+            if (restoreAllItem) restoreAllItem.style.display = isConnected ? '' : 'none';
+            if (backupRestoreSep) backupRestoreSep.style.display = isConnected ? '' : 'none';
+            if (importItem) importItem.style.display = isConnected ? '' : 'none';
+            if (importSep) importSep.style.display = isConnected ? '' : 'none';
+            if (otaItem) otaItem.style.display = isConnected ? '' : 'none';
+            const liveBtn = document.getElementById('screenshotFeedBtn');
+            if (liveBtn) liveBtn.style.display = isConnected ? '' : 'none';
+            if (!isConnected && typeof stopScreenshotFeed === 'function') stopScreenshotFeed();
+            if (typeof _updateWasmCanvasVisibility === 'function') _updateWasmCanvasVisibility();
+        }
+
+        async function _scanForDevices() {
+            if (!RDM.isTauri()) { showToast('Device scanning requires the desktop app', 'error'); return; }
+            showToast('Scanning for devices...');
+            try {
+                const devices = await RDM.discoverDevices();
+                if (devices.length === 0) { showToast('No devices found', 'error'); return; }
+                if (devices.length === 1) {
+                    const d = devices[0];
+                    _connectToDevice(d.ip, d.port, d.hostname);
+                    return;
+                }
+                const names = devices.map((d, i) => `${i + 1}. ${d.hostname} (${d.ip})`).join('\n');
+                _showPromptOverlay('Multiple Devices Found', '1', function(choice) {
+                    const idx = parseInt(choice) - 1;
+                    if (idx >= 0 && idx < devices.length) {
+                        const d = devices[idx];
+                        _connectToDevice(d.ip, d.port, d.hostname);
+                    }
+                }, names);
+            } catch (e) { showToast('Scan failed: ' + e.message, 'error'); }
+        }
+
+        function _connectToDevice(ip, port, hostname) {
+            RDM.setMode('wifi', { ip, port });
+            document.getElementById('connectionMode').value = 'wifi';
+            document.getElementById('connModeLabel').textContent = ip;
+            document.getElementById('connModeLabel').style.color = '#4ade80';
+            if (hostname) showToast('Connected to ' + hostname, 'success');
+            _testConnection();
+        }
+
+        if (typeof window.__TAURI_INTERNALS__ !== 'undefined' || typeof window.__TAURI__ !== 'undefined') {
+            const scanBtn = document.getElementById('scanDevicesBtn');
+            if (scanBtn) scanBtn.style.display = '';
+        }
+
+        (async function _setupFileOpenListener() {
+            if (typeof window.__TAURI__?.event?.listen !== 'function') return;
+            try {
+                await window.__TAURI__.event.listen('file-opened', async (e) => {
+                    const paths = (e.payload && e.payload.paths) || [];
+                    const first = paths.find(p => typeof p === 'string' && p.toLowerCase().endsWith('.rdm'));
+                    if (!first) return;
+                    try {
+                        const bytes = await RDM.readFile(first);
+                        /* Trigger the importRdm pipeline by simulating a file object */
+                        const blob = new Blob([bytes], { type: 'application/octet-stream' });
+                        const file = new File([blob], first.split(/[\\/]/).pop() || 'imported.rdm');
+                        const dt = new DataTransfer();
+                        dt.items.add(file);
+                        const input = document.getElementById('importRdmInput');
+                        input.files = dt.files;
+                        input.dispatchEvent(new Event('change'));
+                    } catch (err) {
+                        showToast('Failed to open file: ' + (err.message || err), 'error');
+                    }
+                });
+            } catch (err) { console.warn('file-opened listener failed to bind:', err); }
+        })();
+
+        function _restoreConnection() {
+            const settings = RDM.getConnectionSettings();
+            if (settings.mode === 'wifi' && settings.ip) {
+                RDM.setMode('wifi', { ip: settings.ip, port: settings.port });
+                document.getElementById('connectionMode').value = 'wifi';
+                document.getElementById('connModeLabel').textContent = settings.ip;
+                _testConnection();
+            } else if (settings.mode === 'hotspot') {
+                RDM.setMode('hotspot');
+                document.getElementById('connectionMode').value = 'hotspot';
+                document.getElementById('connModeLabel').textContent = '192.168.4.1';
+                _testConnection();
+            } else if (settings.mode === 'usb' && settings.portName) {
+                (async () => {
+                    try {
+                        await RDM.serialConnect(settings.portName);
+                        document.getElementById('connectionMode').value = 'usb';
+                        document.getElementById('connModeLabel').textContent = settings.portName;
+                        _testConnection();
+                    } catch (e) {
+                        console.warn('USB auto-reconnect failed:', e);
+                        _updateConnectionUI();
+                    }
+                })();
+            } else {
+                _updateConnectionUI();
+            }
+        }
+        /* Deferred: _updateConnectionUI → updateStatus touches `statusText`,
+         * a const declared much later in this script. Running the restore
+         * synchronously here would hit its temporal dead zone and kill the
+         * whole editor script on first run (no stored connection settings). */
+        setTimeout(_restoreConnection, 0);
+
+        /* ── IndexedDB image cache (replaces localStorage for large images) ── */
+        const imageStore = (() => {
+            const DB_NAME = 'rdm7_images_db';
+            const STORE = 'image_data';
+            let _db = null;
+            function _open() {
+                if (_db) return Promise.resolve(_db);
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(DB_NAME, 1);
+                    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+                    req.onsuccess = () => { _db = req.result; resolve(_db); };
+                    req.onerror = () => reject(req.error);
+                });
+            }
+            return {
+                async get(name) {
+                    try {
+                        const db = await _open();
+                        return await new Promise((resolve, reject) => {
+                            const tx = db.transaction(STORE, 'readonly');
+                            const req = tx.objectStore(STORE).get(name);
+                            req.onsuccess = () => resolve(req.result || null);
+                            req.onerror = () => reject(req.error);
+                        });
+                    } catch (e) { return localStorage.getItem('rdm7_image_data_' + name); }
+                },
+                async set(name, b64) {
+                    const db = await _open();
+                    return new Promise((resolve, reject) => {
+                        const tx = db.transaction(STORE, 'readwrite');
+                        tx.objectStore(STORE).put(b64, name);
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = () => reject(tx.error);
+                    });
+                },
+                async remove(name) {
+                    try {
+                        const db = await _open();
+                        return new Promise((resolve, reject) => {
+                            const tx = db.transaction(STORE, 'readwrite');
+                            tx.objectStore(STORE).delete(name);
+                            tx.oncomplete = () => resolve();
+                            tx.onerror = () => reject(tx.error);
+                        });
+                    } catch (e) { }
+                    try { localStorage.removeItem('rdm7_image_data_' + name); } catch (e) { }
+                }
+            };
+        })();
+
+        /* ── WASM preview engine ─────────────────────────────────────────── */
+        async function initWasm() {
+            const canvasEl = document.getElementById('canvas');
+            if (!canvasEl || typeof LVGLPreview !== 'function') return;
+            try {
+                wasmModule = await LVGLPreview({
+                    canvas: canvasEl,
+                    locateFile: (path) => 'build/' + path
+                });
+                _wasmReady = true;
+                _updateWasmCanvasVisibility();
+                updateWasmPreview();
+            } catch (e) {
+                console.error('[WASM] Preview engine failed to load:', e);
+            }
+        }
+
+        /* The WASM canvas doubles as the "device screen" backdrop while no
+         * real device is connected; once connected, the screenshot/live
+         * backdrop is ground truth and the WASM layer hides. */
+        function _updateWasmCanvasVisibility() {
+            const el = document.getElementById('canvas');
+            if (!el) return;
+            const show = _wasmReady && !_wasmCrashed &&
+                (typeof RDM === 'undefined' || RDM.mode === 'local' || !_connectionOk);
+            el.style.display = show ? 'block' : 'none';
+        }
+
+        function _dlProgressShow(label, pct) {
+            const el = document.getElementById('dlProgress');
+            const lbl = document.getElementById('dlProgressLabel');
+            const fill = document.getElementById('dlProgressFill');
+            if (!el) return;
+            el.classList.add('visible');
+            if (lbl) lbl.textContent = label;
+            if (fill) fill.style.width = Math.round(pct) + '%';
+        }
+        function _dlProgressHide() {
+            const el = document.getElementById('dlProgress');
+            if (el) el.classList.remove('visible');
+        }
+
+        async function _syncWasmImages() {
+            if (!wasmModule || _wasmCrashed) return;
+            const defs = typeof WIDGET_DEFS !== 'undefined' ? WIDGET_DEFS : {};
+            const needed = [];
+            for (const w of (currentLayout.widgets || [])) {
+                if (!w.config || !w.type) continue;
+                const def = defs[w.type];
+                if (!def || !def.fields) continue;
+                for (const f of def.fields) {
+                    if (f.type !== 'image_picker') continue;
+                    const imgName = w.config[f.name];
+                    if (imgName && !_wasmRegisteredImages.has(imgName) && !_wasmFailedImages.has(imgName) && !needed.includes(imgName))
+                        needed.push(imgName);
+                }
+            }
+            if (needed.length === 0) return;
+            for (let idx = 0; idx < needed.length; idx++) {
+                const imgName = needed[idx];
+                _dlProgressShow(`Downloading image ${idx + 1}/${needed.length}: ${imgName}`, Math.round(idx / needed.length * 100));
+                try {
+                    const b64 = await RDM.getImageData(imgName);
+                    if (!b64) { _wasmFailedImages.add(imgName); continue; }
+                    const bin = atob(b64);
+                    const u8 = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+                    const ptr = wasmModule._malloc(u8.length);
+                    if (!ptr) { _wasmFailedImages.add(imgName); continue; }
+                    wasmModule.HEAPU8.set(u8, ptr);
+                    wasmModule.ccall('register_image', null, ['string', 'number', 'number'], [imgName, ptr, u8.length]);
+                    wasmModule._free(ptr);
+                    _wasmRegisteredImages.add(imgName);
+                } catch (e) {
+                    _wasmFailedImages.add(imgName);
+                    if (e instanceof WebAssembly.RuntimeError) { _wasmCrashed = true; _dlProgressHide(); return; }
+                }
+            }
+            _dlProgressShow('Download complete', 100);
+            setTimeout(_dlProgressHide, 800);
+        }
+
+        async function updateWasmPreview() {
+            if (!wasmModule || _wasmCrashed) return;
+            try {
+                await _syncWasmImages();
+                if (_wasmCrashed) return;
+                wasmModule.ccall('load_layout_json', null, ['string'], [JSON.stringify(buildFirmwarePayload())]);
+                if (typeof _testValues === 'object') {
+                    for (const sigName of Object.keys(_testValues)) {
+                        const v = _testValues[sigName];
+                        if (typeof v === 'number') injectWasmSignal(sigName, v);
+                    }
+                }
+            } catch (e) {
+                if (e instanceof WebAssembly.RuntimeError) {
+                    console.error('[WASM] crash — disabling preview');
+                    _wasmCrashed = true;
+                    _updateWasmCanvasVisibility();
+                }
+            }
+        }
+
+        function scheduleWasmPreview() {
+            if (_wasmCrashed) return;
+            if (_wasmPreviewTimer) clearTimeout(_wasmPreviewTimer);
+            _wasmPreviewTimer = setTimeout(updateWasmPreview, 150);
+        }
+
+        function injectWasmSignal(name, value) {
+            if (!wasmModule) return;
+            try { wasmModule.ccall('inject_signal', null, ['string', 'number'], [name, value]); } catch (e) { }
+        }
+##[ end ]##
+
+##[ block hook-trigger-preview ]##
+##[ anchor ]##
+            }, 250); // 250ms debounce
+##[ insert-after ]##
+            if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+##[ end ]##
+
+##[ block hook-screen-dims ]##
+##[ anchor ]##
+            if (doZoom) zoomToFit();
+##[ insert-after ]##
+            if (wasmModule && !_wasmCrashed) {
+                try { wasmModule.ccall('set_display_size', null, ['number', 'number'], [w, h]); }
+                catch (e) { console.warn('[WASM] set_display_size failed:', e); }
+            }
+##[ end ]##
+
+##[ block download-json-native ]##
+##[ anchor ]##
+        function downloadJson() {
+            const payload = buildFirmwarePayload();
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `${currentLayout.name || 'layout'}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+##[ replace-with ]##
+        async function downloadJson() {
+            const payload = buildFirmwarePayload();
+            const jsonStr = JSON.stringify(payload, null, 2);
+            if (typeof RDM !== 'undefined' && RDM.isTauri()) {
+                const path = await RDM.saveFileDialog(
+                    (currentLayout.name || 'layout') + '.json',
+                    [{ name: 'JSON', extensions: ['json'] }]
+                );
+                if (!path) return;
+                await RDM.writeFile(path, new TextEncoder().encode(jsonStr));
+                return;
+            }
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `${currentLayout.name || 'layout'}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+##[ end ]##
+
+##[ block export-rdm-native ]##
+##[ anchor ]##
+            /* Download */
+            const blob = new Blob([buf], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `${name}.rdm`;
+            a.click();
+            URL.revokeObjectURL(url);
+##[ replace-with ]##
+            /* Download */
+            if (typeof RDM !== 'undefined' && RDM.isTauri()) {
+                const path = await RDM.saveFileDialog(
+                    name + '.rdm',
+                    [{ name: 'RDM Bundle', extensions: ['rdm'] }]
+                );
+                if (path) await RDM.writeFile(path, new Uint8Array(buf));
+            } else {
+                const blob = new Blob([buf], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `${name}.rdm`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+##[ end ]##
+
+#! Firmware parse logic continues verbatim below this point
+##[ block import-rdm-head ]##
+##[ anchor ]##
+        function importRdm() {
+            const input = document.getElementById('importRdmInput');
+            input.value = '';
+            input.onchange = async function () {
+                const file = input.files[0];
+                if (!file) return;
+
+                try {
+                    const arrayBuf = await file.arrayBuffer();
+                    const u8 = new Uint8Array(arrayBuf);
+                    const view = new DataView(arrayBuf);
+##[ replace-with ]##
+        /* Body extracted from firmware's importRdm so the Tauri file-open
+         * pipeline (file association / drag-drop) can feed raw bytes in. */
+        async function _processRdmBytes(u8, fileName) {
+            {
+                const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+
+                try {
+##[ end ]##
+
+##[ block import-rdm-name ]##
+##[ anchor ]##
+                    updateStatus(`Imported ${file.name}${assetMsg}`);
+                    showToast(`Imported ${file.name}${assetMsg}`, 'success');
+##[ replace-with ]##
+                    updateStatus(`Imported ${fileName}${assetMsg}`);
+                    showToast(`Imported ${fileName}${assetMsg}`, 'success');
+##[ end ]##
+
+##[ block import-rdm-tail ]##
+##[ anchor ]##
+                }
+            };
+            input.click();
+        }
+##[ replace-with ]##
+                }
+            }
+        }
+
+        function importRdm() {
+            if (typeof RDM !== 'undefined' && RDM.isTauri()) {
+                RDM.openFileDialog([{ name: 'RDM Bundle', extensions: ['rdm'] }]).then(async path => {
+                    if (!path) return;
+                    try {
+                        const u8 = await RDM.readFile(path);
+                        await _processRdmBytes(u8, path.split(/[\\/]/).pop());
+                    } catch (e) { showToast('Import failed: ' + (e.message || e), 'error'); }
+                });
+                return;
+            }
+            const input = document.getElementById('importRdmInput');
+            input.value = '';
+            input.onchange = async function () {
+                const file = input.files[0];
+                if (!file) return;
+                const arrayBuf = await file.arrayBuffer();
+                await _processRdmBytes(new Uint8Array(arrayBuf), file.name);
+            };
+            input.click();
+        }
+##[ end ]##
+
+##[ block desktop-systems ]##
+##[ anchor ]##
+        async function populateEcuSelect() { /* deprecated */ }
+##[ insert-after ]##
+
+        /* ── Desktop: auto-update system ────────────────────────────────── */
+        function _tauriCall(cmd, args) {
+            const t = window.__TAURI_INTERNALS__ || (window.__TAURI__ && window.__TAURI__.core);
+            if (!t || !t.invoke) return Promise.reject('Not a Tauri app');
+            return t.invoke(cmd, args || {});
+        }
+
+        async function _checkDesktopUpdate() {
+            if (!RDM.isTauri()) return;
+            try {
+                const info = await _tauriCall('check_desktop_update', {
+                    repo: _UPDATE_DESKTOP_REPO, currentVersion: _DESKTOP_VERSION
+                });
+                if (info && info.available) _showDesktopUpdateBanner('desktop', info);
+            } catch (e) { console.log('Desktop update check skipped:', e); }
+        }
+
+        async function _checkFirmwareUpdate() {
+            if (!RDM.isTauri()) return;
+            try {
+                const deviceInfo = await _tauriCall('serial_request', { method: 'device.info', params: {} });
+                const deviceVersion = (deviceInfo && deviceInfo.result)
+                    ? (deviceInfo.result.app_version || deviceInfo.result.version || '0.0.0') : '0.0.0';
+                const info = await _tauriCall('check_firmware_update', {
+                    repo: _UPDATE_FIRMWARE_REPO, currentVersion: deviceVersion
+                });
+                if (info && info.available) _showDesktopUpdateBanner('firmware', info);
+            } catch (e) { console.log('Firmware update check skipped:', e); }
+        }
+
+        function _showDesktopUpdateBanner(type, info) {
+            const skipped = localStorage.getItem('rdm7_skip_update_' + type);
+            if (skipped === info.latest_version) return;
+            _pendingDesktopUpdate = { type, info };
+            const banner = document.getElementById('desktopUpdateBanner');
+            const icon = document.getElementById('desktopUpdateIcon');
+            const msg = document.getElementById('desktopUpdateMessage');
+            if (type === 'desktop') {
+                if (icon) icon.textContent = '\u{1F504}';
+                if (msg) msg.innerHTML = `Desktop update available: <strong>v${info.latest_version}</strong> (current: v${info.current_version})`;
+            } else {
+                if (icon) icon.textContent = '\u{1F527}';
+                const sizeMB = (info.file_size / 1048576).toFixed(1);
+                if (msg) msg.innerHTML = `Firmware update: <strong>v${info.latest_version}</strong> (current: v${info.current_version}) — ${sizeMB} MB`;
+            }
+            if (banner) banner.style.display = 'flex';
+        }
+
+        async function _installDesktopUpdate() {
+            if (!_pendingDesktopUpdate) return;
+            const { type, info } = _pendingDesktopUpdate;
+            const banner = document.getElementById('desktopUpdateBanner');
+            const msgEl = document.getElementById('desktopUpdateMessage');
+            const btnEl = document.getElementById('desktopUpdateInstallBtn');
+            if (type === 'desktop') {
+                try {
+                    if (btnEl) btnEl.disabled = true;
+                    if (msgEl) msgEl.innerHTML = 'Checking for update...';
+                    const unlisten = window.__TAURI__?.event?.listen
+                        ? await window.__TAURI__.event.listen('self-update-progress', (e) => {
+                            const p = e.payload || {};
+                            if (p.phase === 'downloading' && p.total && msgEl)
+                                msgEl.innerHTML = `Downloading update... ${Math.round((p.downloaded || 0) / p.total * 100)}%`;
+                            else if (p.phase === 'installing' && msgEl)
+                                msgEl.innerHTML = 'Installing... App will restart.';
+                        }) : null;
+                    await _tauriCall('self_update_install', {});
+                    if (unlisten) unlisten();
+                    if (banner) banner.style.display = 'none';
+                    _pendingDesktopUpdate = null;
+                } catch (err) {
+                    if (msgEl) msgEl.innerHTML = 'In-place update unavailable — opening download page';
+                    try { await _tauriCall('plugin:shell|open', { path: info.download_url }); }
+                    catch (e) { window.open(info.download_url, '_blank'); }
+                    if (btnEl) btnEl.disabled = false;
+                    if (banner) banner.style.display = 'none';
+                    _pendingDesktopUpdate = null;
+                }
+            } else {
+                try {
+                    if (msgEl) msgEl.innerHTML = 'Downloading firmware...';
+                    if (btnEl) btnEl.disabled = true;
+                    const binData = await _tauriCall('download_firmware_binary', { url: info.download_url });
+                    if (msgEl) msgEl.innerHTML = 'Flashing firmware...';
+                    await _tauriCall('serial_upload_chunked', {
+                        uploadType: 'ota', name: 'firmware', data: Array.from(new Uint8Array(binData))
+                    });
+                    if (banner) banner.style.display = 'none';
+                    _pendingDesktopUpdate = null;
+                    showToast('Firmware updated! Device is rebooting...', 'success');
+                } catch (e) {
+                    if (msgEl) msgEl.innerHTML = 'Update failed: ' + (e.message || e);
+                    if (btnEl) btnEl.disabled = false;
+                }
+            }
+        }
+
+        function _skipDesktopUpdate() {
+            if (_pendingDesktopUpdate)
+                localStorage.setItem('rdm7_skip_update_' + _pendingDesktopUpdate.type, _pendingDesktopUpdate.info.latest_version);
+            const banner = document.getElementById('desktopUpdateBanner');
+            if (banner) banner.style.display = 'none';
+            _pendingDesktopUpdate = null;
+        }
+
+        /* ── Desktop: Device Manager ─────────────────────────────────────── */
+        async function openDeviceManager() {
+            const modal = document.getElementById('deviceManagerModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            await _dmRefresh();
+            _dmRefreshTimer = setInterval(_dmRefreshHealth, 5000);
+        }
+
+        function closeDeviceManager() {
+            const modal = document.getElementById('deviceManagerModal');
+            if (modal) modal.style.display = 'none';
+            if (_dmRefreshTimer) { clearInterval(_dmRefreshTimer); _dmRefreshTimer = null; }
+        }
+
+        async function _dmRefresh() {
+            const el = document.getElementById('dmContent');
+            if (!el) return;
+            try {
+                const [info, storage, brightness, health] = await Promise.all([
+                    RDM.getDeviceInfo(), RDM.getStorageInfo(), RDM.getBrightness(), RDM.getSystemHealth()
+                ]);
+                let html = '';
+                if (info) {
+                    html += `<div class="dm-section"><div class="dm-section-title">Identity</div>
+                        <div class="dm-row"><span class="dm-label">Serial</span><span class="dm-value">${info.serial || '—'}</span></div>
+                        <div class="dm-row"><span class="dm-label">Firmware</span><span class="dm-value">${info.version || '—'}</span></div>
+                        <div class="dm-row"><span class="dm-label">Schema</span><span class="dm-value">v${info.schema || '?'}</span></div>
+                        ${info.hardware ? `<div class="dm-row"><span class="dm-label">Chip</span><span class="dm-value">${info.hardware.chip || '—'} (${info.hardware.cores || '?'} cores)</span></div>
+                        <div class="dm-row"><span class="dm-label">PSRAM</span><span class="dm-value">${info.hardware.psram_mb ? info.hardware.psram_mb.toFixed(1) + ' MB' : '—'}</span></div>` : ''}
+                    </div>`;
+                }
+                html += `<div class="dm-section"><div class="dm-section-title">Connection</div>
+                    <div class="dm-row"><span class="dm-label">Mode</span><span class="dm-value">${RDM.mode}</span></div>
+                    ${health && health.wifi_rssi ? `<div class="dm-row"><span class="dm-label">WiFi RSSI</span><span class="dm-value">${health.wifi_rssi} dBm</span></div>` : ''}
+                </div>`;
+                if (storage) {
+                    const pct = storage.maxBytes > 0 ? ((storage.totalBytes / storage.maxBytes) * 100).toFixed(1) : 0;
+                    html += `<div class="dm-section"><div class="dm-section-title">Storage</div>
+                        <div class="dm-row"><span class="dm-label">Used</span><span class="dm-value">${pct}%</span></div>
+                        <div class="dm-bar"><div class="dm-bar-fill" style="width:${pct}%"></div></div>
+                    </div>`;
+                }
+                const brVal = typeof brightness === 'number' ? brightness : (brightness && brightness.brightness) || null;
+                if (brVal !== null) {
+                    html += `<div class="dm-section"><div class="dm-section-title">Brightness</div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <input type="range" min="1" max="100" value="${brVal}" style="flex:1;"
+                                oninput="this.nextElementSibling.textContent=this.value+'%'; RDM.setBrightness(parseInt(this.value))">
+                            <span style="font-size:12px;font-family:'JetBrains Mono',monospace;min-width:36px;">${brVal}%</span>
+                        </div></div>`;
+                }
+                if (health) {
+                    const upH = Math.floor((health.uptime_s || 0) / 3600);
+                    const upM = Math.floor(((health.uptime_s || 0) % 3600) / 60);
+                    html += `<div class="dm-section" id="dmHealthSection"><div class="dm-section-title">System Health</div>
+                        <div class="dm-row"><span class="dm-label">Uptime</span><span class="dm-value">${upH}h ${upM}m</span></div>
+                        <div class="dm-row"><span class="dm-label">Heap Free</span><span class="dm-value">${((health.heap_free || 0) / 1024).toFixed(0)} KB</span></div>
+                        <div class="dm-row"><span class="dm-label">PSRAM Free</span><span class="dm-value">${((health.psram_free || 0) / (1024*1024)).toFixed(1)} MB</span></div>
+                    </div>`;
+                }
+                html += `<div class="dm-section"><div class="dm-section-title">Quick Actions</div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-secondary" style="font-size:11px;padding:6px 12px;" onclick="_dmReboot()">Reboot Device</button>
+                    </div></div>`;
+                el.innerHTML = html;
+            } catch (e) {
+                el.innerHTML = `<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">
+                    ${RDM.isConnected() ? 'Failed to load device info: ' + e.message : 'Connect to a device first'}</div>`;
+            }
+        }
+
+        async function _dmRefreshHealth() {
+            try {
+                const health = await RDM.getSystemHealth();
+                if (!health) return;
+                const section = document.getElementById('dmHealthSection');
+                if (!section) return;
+                const upH = Math.floor((health.uptime_s || 0) / 3600);
+                const upM = Math.floor(((health.uptime_s || 0) % 3600) / 60);
+                const rows = section.querySelectorAll('.dm-value');
+                if (rows[0]) rows[0].textContent = `${upH}h ${upM}m`;
+                if (rows[1]) rows[1].textContent = `${((health.heap_free || 0) / 1024).toFixed(0)} KB`;
+                if (rows[2]) rows[2].textContent = `${((health.psram_free || 0) / (1024*1024)).toFixed(1)} MB`;
+            } catch (e) { }
+        }
+
+        async function _dmReboot() {
+            if (!confirm('Reboot the device? This will interrupt any active connections.')) return;
+            try { await RDM.reboot(); updateStatus('Device is rebooting...'); }
+            catch (e) { updateStatus('Reboot command sent'); }
+            closeDeviceManager();
+        }
+
+        /* ── Desktop: ZIP backup / restore ──────────────────────────────── */
+        async function backupAllDeviceLayouts() {
+            if (RDM.mode === 'local' || !_connectionOk) { showToast('Connect to a device first', 'error'); return; }
+            try {
+                showToast('Listing device layouts...', 'info');
+                const list = await RDM.listLayouts();
+                if (!list || list.length === 0) { showToast('No layouts on device to back up', 'info'); return; }
+                const entries = [];
+                for (const item of list) {
+                    const name = item.name || item;
+                    try {
+                        const layoutJson = await RDM.loadLayout(name);
+                        const bytes = new TextEncoder().encode(JSON.stringify(layoutJson));
+                        entries.push({ name: String(name), data: Array.from(bytes) });
+                    } catch (e) { console.warn('Skipping layout "' + name + '":', e); }
+                }
+                if (entries.length === 0) { showToast('Backup failed: no layouts readable', 'error'); return; }
+                const bundle = await _tauriCall('zip_layouts', { entries });
+                const path = await _tauriCall('plugin:dialog|save', {
+                    options: {
+                        defaultPath: 'rdm7-layouts-' + new Date().toISOString().slice(0, 10) + '.rdmbackup',
+                        filters: [{ name: 'RDM Backup', extensions: ['rdmbackup'] }]
+                    }
+                });
+                const finalPath = typeof path === 'string' ? path : (path && path.path);
+                if (!finalPath) return;
+                await RDM.writeFile(finalPath, new Uint8Array(bundle));
+                showToast('Backed up ' + entries.length + ' layouts', 'success');
+            } catch (e) { showToast('Backup failed: ' + (e.message || e), 'error'); }
+        }
+
+        async function restoreAllDeviceLayouts() {
+            if (RDM.mode === 'local' || !_connectionOk) { showToast('Connect to a device first', 'error'); return; }
+            try {
+                const path = await RDM.openFileDialog([{ name: 'RDM Backup', extensions: ['rdmbackup'] }]);
+                if (!path) return;
+                const bytes = await RDM.readFile(path);
+                const entries = await _tauriCall('unzip_layouts', { data: Array.from(bytes) });
+                if (!entries || entries.length === 0) { showToast('Backup file contained no layouts', 'error'); return; }
+                if (!confirm('Restore ' + entries.length + ' layout(s) to the connected dash? Existing layouts with matching names will be overwritten.')) return;
+                let restored = 0;
+                for (const e of entries) {
+                    try {
+                        const str = new TextDecoder().decode(new Uint8Array(e.data));
+                        const obj = JSON.parse(str);
+                        if (!obj.name) obj.name = e.name;
+                        await RDM.saveLayout(obj.name, obj);
+                        restored++;
+                    } catch (err) { console.warn('Skipping entry "' + e.name + '":', err); }
+                }
+                await fetchLayoutsKeepCurrent();
+                showToast('Restored ' + restored + ' / ' + entries.length + ' layouts', 'success');
+            } catch (e) { showToast('Restore failed: ' + (e.message || e), 'error'); }
+        }
+
+        async function importLocalToDevice() {
+            showToast('Connect to a device and use "Import Local to Device" from the layout menu', 'info');
+        }
+
+        async function otaFirmwareUpdate() {
+            /* Route to the firmware's built-in OTA flow */
+            if (typeof _otaShowInstall === 'function') { _otaShowInstall(); return; }
+            showToast('OTA update requires a WiFi connection to the device', 'info');
+        }
+
+        /* Seed the RDM logo into IndexedDB if the data file was loaded */
+        if (typeof _RDM_LOGO_RDMIMG_B64 !== 'undefined' && typeof RDM !== 'undefined') {
+            RDM.getImageData('RDM').then(existing => {
+                if (!existing) RDM.setImageData('RDM', _RDM_LOGO_RDMIMG_B64);
+            }).catch(() => { });
+        }
+
+        setTimeout(_checkDesktopUpdate, 3000);
+##[ end ]##
+
+##[ block boot-wasm ]##
+##[ anchor ]##
+        /* Start */
+##[ insert-before ]##
+        /* Desktop: boot the WASM preview engine (no-op outside Tauri —
+         * LVGLPreview only exists when build/index.js is present). The
+         * delayed refreshes cover the wasm-ready-before-layout-load race. */
+        if (typeof initWasm === 'function') initWasm().then(() => {
+            setTimeout(scheduleWasmPreview, 800);
+            setTimeout(scheduleWasmPreview, 2500);
+        });
+
+##[ end ]##
+
+##[ block logs-drawer ]##
+##[ anchor ]##
+</body>
+##[ insert-before ]##
+    <!-- Serial Logs drawer (USB only — shows ESP-IDF log output from the device) -->
+    <button id="logsToggleBtn" title="Device logs" aria-label="Toggle device logs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 5h16M4 10h16M4 15h10M4 20h7"/>
+        </svg>
+        <span class="logs-new-dot"></span>
+    </button>
+    <div id="logsDrawer" role="dialog" aria-label="Device logs">
+        <div class="logs-header">
+            <h3>Device Logs</h3>
+            <button id="logsCopyBtn" title="Copy all log lines to clipboard">Copy</button>
+            <button id="logsClearBtn" title="Clear log history">Clear</button>
+            <button class="logs-close" id="logsCloseBtn" title="Close" aria-label="Close logs">&times;</button>
+        </div>
+        <div class="logs-list" id="logsList">
+            <div class="logs-empty">No log lines yet. Connect via USB to see device output.</div>
+        </div>
+        <div class="logs-paused-banner" id="logsPausedBanner">Paused — click to resume autoscroll</div>
+    </div>
+
+    <script>
+        /* ── Serial Logs (USB only) ─────────────────────────────────────
+         * The Tauri backend emits `serial-log` events containing one log
+         * line each (already trimmed of trailing newlines, ANSI escapes
+         * stripped where possible). We append to a ring buffer of 1000
+         * lines, autoscroll if the user hasn't manually scrolled up,
+         * and surface a "new logs" dot on the toggle button when the
+         * drawer is closed. */
+        (function _setupSerialLogs() {
+            const MAX_LINES = 1000;
+            const lines = [];          // DOM elements, oldest first
+            const toggleBtn = document.getElementById('logsToggleBtn');
+            const drawer = document.getElementById('logsDrawer');
+            const list = document.getElementById('logsList');
+            const banner = document.getElementById('logsPausedBanner');
+            const emptyHint = list.querySelector('.logs-empty');
+            const copyBtn = document.getElementById('logsCopyBtn');
+            const clearBtn = document.getElementById('logsClearBtn');
+            const closeBtn = document.getElementById('logsCloseBtn');
+
+            /* Show the button only in Tauri (USB transport). The serial
+             * log stream doesn't exist for web/wifi/hotspot transports. */
+            const isTauri = !!(window.__TAURI_INTERNALS__ || window.__TAURI__);
+            if (!isTauri) return;
+            toggleBtn.classList.add('visible');
+
+            let autoscroll = true;
+            let suppressScrollHandler = false;
+
+            /* ANSI SGR escape stripper — defensive, the backend already
+             * strips them but firmware may add other escape sequences. */
+            const ANSI_RE = /\x1B\[[0-9;]*[A-Za-z]/g;
+
+            function classifyLevel(line) {
+                /* ESP-IDF format: "I (1234) tag: message" — first char
+                 * is the level after any leading whitespace. */
+                const c = line.charAt(0);
+                if (c === 'W') return 'lvl-w';
+                if (c === 'E') return 'lvl-e';
+                if (c === 'D') return 'lvl-d';
+                if (c === 'V') return 'lvl-v';
+                return '';
+            }
+
+            function appendLine(rawLine) {
+                const clean = rawLine.replace(ANSI_RE, '');
+                if (!clean) return;
+
+                if (emptyHint && emptyHint.parentNode) emptyHint.remove();
+
+                const el = document.createElement('div');
+                el.className = 'log-line';
+                const lvl = classifyLevel(clean);
+                if (lvl) el.classList.add(lvl);
+                el.textContent = clean;
+                list.appendChild(el);
+                lines.push(el);
+
+                /* Trim front of ring buffer. */
+                while (lines.length > MAX_LINES) {
+                    const old = lines.shift();
+                    if (old && old.parentNode) old.parentNode.removeChild(old);
+                }
+
+                if (autoscroll) {
+                    suppressScrollHandler = true;
+                    list.scrollTop = list.scrollHeight;
+                    /* Reset flag on next frame after the scroll lands. */
+                    requestAnimationFrame(() => { suppressScrollHandler = false; });
+                }
+
+                /* New-logs indicator on toggle button when drawer closed. */
+                if (!drawer.classList.contains('open')) {
+                    toggleBtn.classList.add('has-new');
+                }
+            }
+
+            list.addEventListener('scroll', () => {
+                if (suppressScrollHandler) return;
+                const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 4;
+                if (atBottom) {
+                    autoscroll = true;
+                    banner.classList.remove('visible');
+                } else {
+                    autoscroll = false;
+                    banner.classList.add('visible');
+                }
+            });
+
+            banner.addEventListener('click', () => {
+                autoscroll = true;
+                banner.classList.remove('visible');
+                list.scrollTop = list.scrollHeight;
+            });
+
+            toggleBtn.addEventListener('click', () => {
+                drawer.classList.toggle('open');
+                if (drawer.classList.contains('open')) {
+                    toggleBtn.classList.remove('has-new');
+                    /* Snap to bottom when opening, unless user previously
+                     * paused autoscroll. */
+                    if (autoscroll) list.scrollTop = list.scrollHeight;
+                }
+            });
+            closeBtn.addEventListener('click', () => {
+                drawer.classList.remove('open');
+            });
+
+            copyBtn.addEventListener('click', async () => {
+                const text = lines.map(el => el.textContent).join('\n');
+                try {
+                    await navigator.clipboard.writeText(text);
+                    copyBtn.textContent = 'Copied';
+                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1200);
+                } catch (e) {
+                    console.warn('Clipboard write failed:', e);
+                }
+            });
+
+            clearBtn.addEventListener('click', () => {
+                lines.length = 0;
+                list.innerHTML = '';
+                const hint = document.createElement('div');
+                hint.className = 'logs-empty';
+                hint.textContent = 'Cleared.';
+                list.appendChild(hint);
+                autoscroll = true;
+                banner.classList.remove('visible');
+            });
+
+            /* Bind the Tauri event listener. */
+            (async () => {
+                if (typeof window.__TAURI__?.event?.listen !== 'function') return;
+                try {
+                    await window.__TAURI__.event.listen('serial-log', (e) => {
+                        const payload = e.payload;
+                        if (typeof payload === 'string' && payload.length) appendLine(payload);
+                    });
+                } catch (err) {
+                    console.warn('serial-log listener failed to bind:', err);
+                }
+            })();
+        })();
+    </script>
+
+##[ end ]##

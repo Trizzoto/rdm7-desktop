@@ -22,7 +22,31 @@ cd src-tauri && cargo check
 cd src-tauri && cargo clippy
 ```
 
-There is no npm/yarn — the frontend has no bundler or package manager. The WASM artifacts (`src/build/index.js` and `src/build/index.wasm`) are built externally in the `rdm7-wasm-editor` repo and copied in; they are gitignored.
+There is no npm/yarn — the frontend has no bundler or package manager. The WASM artifacts (`src/build/index.js` and `src/build/index.wasm`) are built externally in the `rdm7-wasm-editor` repo and copied in.
+
+## Frontend is BUILT, not edited (ADR-0007)
+
+The editor HTML is assembled at build time — **never edit `src/dist/` or
+`src/firmware-base.html` by hand**:
+
+```
+src/firmware-base.html    verbatim copy of RDM-7_Dash/main/web/index.html
++ src/tauri-overlay.html  every desktop-specific delta, as anchored blocks
+= src/dist/index.html     what the Tauri webview loads (gitignored)
+```
+
+- `python tools/merge_overlay.py` — builds `src/dist/` (also runs automatically
+  as Tauri's beforeDevCommand/beforeBuildCommand).
+- `python tools/sync_firmware.py` — pulls the latest firmware editor HTML from
+  `../RDM-7_Dash` into `src/firmware-base.html`, then merges. Run this whenever
+  the firmware editor changes; that IS the desktop sync now.
+- A failed merge means a block's anchor no longer matches the firmware HTML —
+  that's the drift detector. Fix the anchor in `src/tauri-overlay.html`.
+- Desktop-only UI/behaviour changes go in `src/tauri-overlay.html` (or
+  `transport.js` / `lib.rs`). Editor features shared with the device belong in
+  the firmware repo (`RDM-7_Dash/main/web/index.html`), then re-sync.
+- `WIDGET_DEFS` arrives via the firmware base and is guarded by firmware-repo
+  CI; the old vendored `schema/` + codegen pipeline in this repo was retired.
 
 ## Architecture
 
@@ -38,9 +62,9 @@ Key backend subsystems:
 - **Firmware updates** — checks GitHub releases API, compares semver versions.
 
 ### Frontend (`src/`)
-- **`index.html`** — The entire SPA (~10k lines). All UI, styles, and application logic in one file.
-- **`transport.js`** — Transport abstraction layer exposing `window.RDM` API. Implementations: LocalTransport, WifiTransport, HotspotTransport, UsbTransport. Bridges Tauri `invoke()` calls to backend commands.
-- **`build/`** — WASM module (gitignored). Loaded at runtime for real-time canvas rendering of dashboard widgets/signals.
+- **`firmware-base.html` + `tauri-overlay.html` → `dist/index.html`** — the SPA (~22k lines merged). See "Frontend is BUILT, not edited" above.
+- **`transport.js`** — Transport abstraction layer exposing `window.RDM` API. Implementations: LocalTransport, WifiTransport (+ hotspot variant), UsbTransport, plus the `fetch()` interceptor that reroutes the firmware's raw `/api/*` calls through the active transport under Tauri.
+- **`build/`** — WASM module. Loaded at runtime for real-time canvas rendering of dashboard widgets/signals.
 
 ### Communication Flow
 Frontend JS → `window.__TAURI__.core.invoke("command_name", {args})` → Rust `#[tauri::command]` → serial port / HTTP / mDNS → response back to JS.
