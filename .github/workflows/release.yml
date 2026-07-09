@@ -1,5 +1,16 @@
 name: Release Desktop App
 
+# Tag a commit `v*` (matching the version in src-tauri/tauri.conf.json) to
+# build installers for every platform AND the signed self-update artifacts.
+#
+# tauri-action does the heavy lifting: runs `cargo tauri build` (which runs
+# the frontend merge via beforeBuildCommand), signs each bundle with
+# TAURI_SIGNING_PRIVATE_KEY (repo secret; pubkey lives in tauri.conf.json),
+# generates latest.json with per-platform signatures, and uploads everything
+# to the GitHub release. Installed apps poll
+#   https://github.com/Trizzoto/rdm7-desktop/releases/latest/download/latest.json
+# and self-update through the in-app banner.
+
 on:
   push:
     tags:
@@ -9,80 +20,35 @@ permissions:
   contents: write
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python (frontend merge — tauri beforeBuildCommand)
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2"
-
-      - name: Build Tauri App
-        run: cargo tauri build
-
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
-          draft: false
-          prerelease: false
-
-  build-macos:
-    runs-on: macos-latest
+  release:
     strategy:
+      fail-fast: false
       matrix:
-        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+        include:
+          - platform: windows-latest
+            args: ''
+          - platform: macos-latest
+            args: '--target aarch64-apple-darwin'
+          - platform: macos-latest
+            args: '--target x86_64-apple-darwin'
+          - platform: ubuntu-22.04
+            args: ''
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Python (frontend merge — tauri beforeBuildCommand)
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
-
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2"
-
-      - name: Build Tauri App
-        run: cargo tauri build --target ${{ matrix.target }}
-
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-          draft: false
-          prerelease: false
-
-  build-linux:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python (frontend merge — tauri beforeBuildCommand)
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -99,18 +65,23 @@ jobs:
             libgtk-3-dev \
             libayatana-appindicator3-dev
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2"
-
-      - name: Build Tauri App (Linux)
-        run: cargo tauri build
-
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v2
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
         with:
-          files: |
-            src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/rpm/*.rpm
-          draft: false
+          workspaces: src-tauri
+
+      - name: Build, sign, and upload release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'RDM-7 Visual Designer ${{ github.ref_name }}'
+          releaseBody: 'See the assets below to download and install. Installed apps update themselves automatically.'
+          releaseDraft: false
           prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}

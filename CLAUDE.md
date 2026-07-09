@@ -69,9 +69,29 @@ Key backend subsystems:
 ### Communication Flow
 Frontend JS → `window.__TAURI__.core.invoke("command_name", {args})` → Rust `#[tauri::command]` → serial port / HTTP / mDNS → response back to JS.
 
-## Release Process
+## Release Process (installers + built-in self-update)
 
-Tag a commit with `v*` (e.g., `v0.1.0`). GitHub Actions builds on Windows, runs `cargo tauri build`, and uploads MSI/NSIS installers to the GitHub release.
+1. Bump `version` in `src-tauri/tauri.conf.json` (single source of truth —
+   `Cargo.toml` should match; the frontend's `_DESKTOP_VERSION` is injected
+   from it by merge_overlay.py).
+2. Commit, then tag `v<version>` (e.g. `v0.2.0`) and push the tag.
+3. GitHub Actions (tauri-action) builds Windows setup.exe (NSIS) + MSI, macOS
+   DMGs, Linux AppImage/deb/rpm, **signs each bundle** with the
+   `TAURI_SIGNING_PRIVATE_KEY` repo secret, generates `latest.json` with the
+   signatures, and publishes everything to the GitHub release.
+4. Installed apps poll `releases/latest/download/latest.json` (checked ~3 s
+   after launch, banner → one-click passive update via tauri-plugin-updater;
+   the pubkey in tauri.conf.json verifies every download).
+
+**Updater signing key**: private key at `C:\Users\ruuva\.tauri\rdm7-desktop-updater.key`
+(no password) + the `TAURI_SIGNING_PRIVATE_KEY` GitHub secret. **Back it up —
+if it's lost, already-installed apps can never self-update again** (they
+verify against the pubkey baked into their config). Local signed builds:
+`TAURI_SIGNING_PRIVATE_KEY_PATH=~/.tauri/rdm7-desktop-updater.key cargo tauri build`.
+
+Not yet done: Windows Authenticode code-signing (SmartScreen will show the
+"unknown publisher" warning until an OV/EV certificate is purchased and wired
+into the workflow).
 
 ## Important Notes
 

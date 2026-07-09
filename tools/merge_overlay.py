@@ -27,6 +27,7 @@ Overlay block format (see src/tauri-overlay.html):
 The anchor line-sequence must occur EXACTLY ONCE in the base file.
 Lines outside blocks that start with '#!' are comments and ignored.
 """
+import json
 import re
 import shutil
 import sys
@@ -154,9 +155,20 @@ def main():
             base_lines[i:i + la] = b.content
         added += len(b.content)
 
+    merged = "\n".join(base_lines)
+
+    # Single-source the app version: tauri.conf.json is the authority.
+    try:
+        version = json.loads(
+            (ROOT / "src-tauri" / "tauri.conf.json").read_text(encoding="utf-8")
+        )["version"]
+    except Exception as e:
+        fail(f"cannot read version from src-tauri/tauri.conf.json: {e}")
+    merged = merged.replace("__RDM7_DESKTOP_VERSION__", version)
+
     DIST.mkdir(parents=True, exist_ok=True)
     out = DIST / "index.html"
-    out.write_text("\n".join(base_lines), encoding="utf-8", newline="\n")
+    out.write_text(merged, encoding="utf-8", newline="\n")
 
     for a in ASSETS:
         src = ROOT / "src" / a
