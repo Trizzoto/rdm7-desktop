@@ -1121,6 +1121,39 @@
             z-index: 20;
         }
 
+        /* pathbar custom-path waypoint editor */
+        .path-handle {
+            position: absolute;
+            width: 13px;
+            height: 13px;
+            background: hsl(0, 0%, 100%);
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            pointer-events: auto;
+            cursor: grab;
+            z-index: 30;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+        }
+        .path-handle:hover { background: var(--accent); }
+        .path-add-handle {
+            position: absolute;
+            width: 11px;
+            height: 11px;
+            line-height: 9px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--accent);
+            background: rgba(20,22,28,0.85);
+            border: 1px dashed var(--accent);
+            border-radius: 50%;
+            pointer-events: auto;
+            cursor: copy;
+            z-index: 29;
+            user-select: none;
+        }
+        .path-add-handle:hover { background: var(--accent); color: #000; }
+
         .resize-handle.nw {
             top: -5px;
             left: -5px;
@@ -7576,7 +7609,15 @@
                         fields: [
                             { name: "rpm_max", label: "RPM Max", type: "number", def: 7000, cat: "data" },
                             { name: "redline", label: "Redline RPM", type: "number", def: 6000, cat: "data" },
+                            { name: "smoothing_ms", label: "Smoothing (ms)", type: "slider", def: 80, cat: "appearance", min: 0, max: 300, step: 10 },
                             { name: "bar_color", label: "Bar Color", type: "color", def: 0x00FF00, cat: "appearance", nightOverridable: true },
+                            { name: "fill_dir", label: "Fill Direction", type: "select", def: 0, cat: "appearance",
+                              options: [
+                                  { v: 0, l: "Left to Right" },
+                                  { v: 1, l: "Right to Left" },
+                                  { v: 2, l: "Center Out" },
+                                  { v: 3, l: "Edges In" }
+                              ] },
                             { name: "limiter_effect", label: "Limiter Effect", type: "select", def: 0, cat: "appearance",
                               options: [
                                   { v: 0, l: "None" },
@@ -7612,6 +7653,9 @@
                                   { v: 2, l: "Min" },
                                   { v: 3, l: "Min/Max" }
                               ] },
+                            { name: "peak_font", label: "Peak Font", type: "font", def: "", cat: "data", enabledBy: "show_peak" },
+                            { name: "peak_x_offset", label: "Peak X Offset", type: "stepper", def: 0, cat: "data", min: -100, max: 100, enabledBy: "show_peak" },
+                            { name: "peak_y_offset", label: "Peak Y Offset", type: "stepper", def: 31, cat: "data", min: -100, max: 100, enabledBy: "show_peak" },
                             { name: "warning_high_enabled", label: "High Alert", type: "checkbox", def: false, cat: "alerts", group: "high" },
                             { name: "warning_high_threshold", label: "Threshold", type: "stepper", def: 0, cat: "alerts", group: "high", min: -99999, max: 99999, enabledBy: "warning_high_enabled" },
                             { name: "warning_high_color", label: "High Color", type: "color", def: 0xFF0000, cat: "alerts", group: "high" },
@@ -7635,6 +7679,19 @@
                             { name: "value_color", label: "Value Color", type: "color", def: 0xFFFFFF, cat: "appearance", nightOverridable: true },
                             { name: "label_y_offset", label: "Label Y Offset", type: "stepper", def: -28, cat: "appearance", min: -100, max: 100 },
                             { name: "value_y_offset", label: "Value Y Offset", type: "stepper", def: 9, cat: "appearance", min: -100, max: 100 },
+                            { name: "text_align", label: "Text Align", type: "select", def: 1, cat: "appearance",
+                              options: [
+                                  { v: 0, l: "Left" },
+                                  { v: 1, l: "Center" },
+                                  { v: 2, l: "Right" }
+                              ] },
+                            { name: "show_unit", label: "Show Unit Suffix", type: "checkbox", def: false, cat: "data" },
+                            { name: "unit_size", label: "Unit Size", type: "select", def: 2, cat: "data", enabledBy: "show_unit",
+                              options: [
+                                  { v: 0, l: "Small" },
+                                  { v: 1, l: "Medium" },
+                                  { v: 2, l: "Full" }
+                              ] },
                             { name: "custom_text_x_offset", label: "Unit Text X", type: "stepper", def: 41, cat: "appearance", min: -100, max: 100 },
                             { name: "custom_text_y_offset", label: "Unit Text Y", type: "stepper", def: 32, cat: "appearance", min: -100, max: 100 }
                         ]
@@ -7645,6 +7702,7 @@
                             { name: "label", label: "Label", type: "text", def: "", cat: "data" },
                             { name: "bar_min", label: "Min Value", type: "number", def: 0, cat: "data" },
                             { name: "bar_max", label: "Max Value", type: "number", def: 100, cat: "data" },
+                            { name: "smoothing_ms", label: "Smoothing (ms)", type: "slider", def: 80, cat: "appearance", min: 0, max: 300, step: 10 },
                             { name: "show_bar_value", label: "Show Value", type: "checkbox", def: false, cat: "data" },
                             { name: "decimals", label: "Decimals", type: "number", def: 0, cat: "data" },
                             /* Anchor-based non-linear scale. "Pin THIS data value to
@@ -7658,6 +7716,13 @@
                             { name: "anchor_position", label: "Anchor Position (%)", type: "slider", def: 50, cat: "data", min: 0, max: 100, enabledBy: "anchor_enabled" },
                             { name: "invert_bar_value", label: "Invert Fill", type: "checkbox", def: false, cat: "appearance" },
                             { name: "center_fill", label: "Center Fill (±)", type: "checkbox", def: false, cat: "appearance" },
+                            { name: "fill_dir", label: "Fill Direction", type: "select", def: 0, cat: "appearance",
+                              options: [
+                                  { v: 0, l: "Left to Right" },
+                                  { v: 1, l: "Right to Left" },
+                                  { v: 2, l: "Center Out" },
+                                  { v: 3, l: "Edges In" }
+                              ] },
                             { name: "bar_in_range_color", label: "Bar Color", type: "color", def: 0x00FF00, cat: "appearance", nightOverridable: true },
                             { name: "label_font", label: "Label Font", type: "font", def: "", cat: "appearance" },
                             { name: "value_font", label: "Value Font", type: "font", def: "", cat: "appearance" },
@@ -7670,6 +7735,8 @@
                             { name: "value_color", label: "Value Color", type: "color", def: 0xFFFFFF, cat: "appearance", nightOverridable: true },
                             { name: "bar_image", label: "Track Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
                             { name: "bar_image_full", label: "Fill Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
+                            { name: "fill_edge_width", label: "Fill Edge Width", type: "stepper", def: 0, cat: "appearance", min: 0, max: 20, enabledBy: "bar_image_full" },
+                            { name: "fill_edge_color", label: "Fill Edge Color", type: "color", def: 0xFFFFFF, cat: "appearance", enabledBy: "bar_image_full" },
                             { name: "bar_alerts_enabled", label: "Color Alerts", type: "checkbox", def: false, cat: "alerts", group: "bar_alerts" },
                             { name: "bar_low", label: "Low Threshold", type: "stepper", def: 0, cat: "alerts", group: "bar_alerts", min: -99999, max: 99999, enabledBy: "bar_alerts_enabled" },
                             { name: "bar_low_color", label: "Low Color", type: "color", def: 0x0000FF, cat: "alerts", group: "bar_alerts", enabledBy: "bar_alerts_enabled", nightOverridable: true },
@@ -7750,6 +7817,7 @@
                         fields: [
                             { name: "min", label: "Min Value", type: "number", def: 0, cat: "data" },
                             { name: "max", label: "Max Value", type: "number", def: 100, cat: "data" },
+                            { name: "smoothing_ms", label: "Smoothing (ms)", type: "slider", def: 80, cat: "appearance", min: 0, max: 300, step: 10 },
                             /* User-coord start angle: 0° = 12 o'clock, CW positive.
                              * _meterSyncDerived translates this into the LVGL
                              * start_angle/end_angle pair the firmware reads. */
@@ -7809,6 +7877,7 @@
                             { name: "needle_color", label: "Needle Color", type: "color", def: 0xFFFFFF, cat: "appearance", enabledBy: "show_needle", nightOverridable: true },
                             { name: "needle_r_mod", label: "Needle Length Trim", type: "stepper", def: -10, cat: "appearance", min: -100, max: 100, enabledBy: "show_needle" },
                             { name: "needle_rear_length", label: "Needle Rear Length", type: "stepper", def: 0, cat: "appearance", min: 0, max: 100, enabledBy: "show_needle" },
+                            { name: "needle_inner_radius", label: "Needle Start Radius", type: "stepper", def: 0, cat: "appearance", min: 0, max: 400, enabledBy: "show_needle" },
                             { name: "needle_tip_style", label: "Needle Tip Style", type: "select", def: 0, cat: "appearance", enabledBy: "show_needle",
                               options: [
                                   { v: 0, l: "Flat" },
@@ -7889,7 +7958,8 @@
                             { name: "shadow_color", label: "Shadow Color", type: "color", def: 0x000000, cat: "appearance", nightOverridable: true },
                             { name: "shadow_opa", label: "Shadow Opacity", type: "stepper", def: 128, cat: "appearance", min: 0, max: 255 },
                             { name: "shadow_ofs_x", label: "Shadow X", type: "stepper", def: 0, cat: "appearance", min: -100, max: 100 },
-                            { name: "shadow_ofs_y", label: "Shadow Y", type: "stepper", def: 0, cat: "appearance", min: -100, max: 100 }
+                            { name: "shadow_ofs_y", label: "Shadow Y", type: "stepper", def: 0, cat: "appearance", min: -100, max: 100 },
+                            { name: "bake_into_gauge", label: "Bake Into Gauge (perf)", type: "checkbox", def: false, cat: "appearance" }
                         ]
                     },
                     "line": {
@@ -7949,11 +8019,12 @@
                             { name: "sweep_degrees", label: "Sweep (°)", type: "slider", def: 270, cat: "data", min: 30, max: 360, step: 5 },
                             { name: "signal_min", label: "Signal Min", type: "number", def: 0, cat: "data" },
                             { name: "signal_max", label: "Signal Max", type: "number", def: 100, cat: "data" },
-                            { name: "arc_width", label: "Arc Width", type: "stepper", def: 10, cat: "appearance", min: 1, max: 50 },
+                            { name: "smoothing_ms", label: "Smoothing (ms)", type: "slider", def: 80, cat: "appearance", min: 0, max: 300, step: 10 },
+                            { name: "arc_width", label: "Arc Width", type: "stepper", def: 10, cat: "appearance", min: 1, max: 200 },
                             { name: "arc_offset", label: "Arc Offset", type: "stepper", def: 0, cat: "appearance", min: 0, max: 120 },
                             { name: "arc_color", label: "Arc Color", type: "color", def: 0x00FF00, cat: "appearance", nightOverridable: true },
                             { name: "bg_arc_color", label: "Track Color", type: "color", def: 0x333333, cat: "appearance", nightOverridable: true },
-                            { name: "bg_arc_width", label: "Track Width", type: "stepper", def: 10, cat: "appearance", min: 1, max: 50 },
+                            { name: "bg_arc_width", label: "Track Width", type: "stepper", def: 10, cat: "appearance", min: 1, max: 200 },
                             { name: "rounded_ends", label: "Rounded Ends", type: "checkbox", def: false, cat: "appearance" },
                             { name: "arc_image", label: "Track Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
                             { name: "arc_image_full", label: "Fill Image", type: "image_picker", def: "", cat: "appearance", nightOverridable: true },
@@ -7966,7 +8037,12 @@
                             { name: "major_tick_width", label: "Major Tick Width", type: "stepper", def: 4, cat: "appearance", min: 1, max: 20, enabledBy: "show_ticks" },
                             { name: "minor_tick_color", label: "Minor Tick Color", type: "color", def: 0x9E9E9E, cat: "appearance", enabledBy: "show_ticks", nightOverridable: true },
                             { name: "major_tick_color", label: "Major Tick Color", type: "color", def: 0xFFFFFF, cat: "appearance", enabledBy: "show_ticks", nightOverridable: true },
+                            { name: "mid_tick_step", label: "Medium Tick Step", type: "number", def: 0, cat: "appearance" },
+                            { name: "mid_tick_length", label: "Medium Tick Length", type: "stepper", def: 13, cat: "appearance", min: 0, max: 100 },
+                            { name: "mid_tick_width", label: "Medium Tick Width", type: "stepper", def: 2, cat: "appearance", min: 0, max: 20 },
+                            { name: "mid_tick_color", label: "Medium Tick Color", type: "color", def: 0xBDBDBD, cat: "appearance" },
                             { name: "show_tick_labels", label: "Show Tick Labels", type: "checkbox", def: true, cat: "appearance" },
+                            { name: "ticks_on_top", label: "Ticks On Top", type: "checkbox", def: false, cat: "appearance" },
                             { name: "label_gap", label: "Label Gap", type: "stepper", def: 10, cat: "appearance", min: -150, max: 150, enabledBy: "show_tick_labels" },
                             { name: "tick_label_font", label: "Tick Label Font", type: "font", def: "", cat: "appearance", enabledBy: "show_tick_labels" },
                             { name: "tick_label_color", label: "Tick Label Color", type: "color", def: 0xFFFFFF, cat: "appearance", enabledBy: "show_tick_labels", nightOverridable: true },
@@ -7989,7 +8065,10 @@
                             { name: "arc_low", label: "Low Threshold", type: "stepper", def: 0, cat: "alerts", group: "arc_alerts", min: -99999, max: 99999, enabledBy: "arc_alerts_enabled" },
                             { name: "arc_low_color", label: "Low Color", type: "color", def: 0x0000FF, cat: "alerts", group: "arc_alerts", enabledBy: "arc_alerts_enabled", nightOverridable: true },
                             { name: "arc_high", label: "High Threshold", type: "stepper", def: 100, cat: "alerts", group: "arc_alerts", min: -99999, max: 99999, enabledBy: "arc_alerts_enabled" },
-                            { name: "arc_high_color", label: "High Color", type: "color", def: 0xFF0000, cat: "alerts", group: "arc_alerts", enabledBy: "arc_alerts_enabled", nightOverridable: true }
+                            { name: "arc_high_color", label: "High Color", type: "color", def: 0xFF0000, cat: "alerts", group: "arc_alerts", enabledBy: "arc_alerts_enabled", nightOverridable: true },
+                            { name: "redline_arc_width", label: "Redline Thickness", type: "stepper", def: 0, cat: "appearance", min: 0, max: 200 },
+                            { name: "redline_color", label: "Redline Color", type: "color", def: 0xFF0000, cat: "appearance" },
+                            { name: "redline_recolor_fill", label: "Redline Recolors Fill", type: "checkbox", def: true, cat: "appearance" }
                         ]
                     },
                     "toggle": {
@@ -8080,6 +8159,36 @@
                               ] },
                             { name: "threshold_mid", label: "Mid Threshold", type: "number", def: 0.5, cat: "thresholds", min: 0, max: 1, step: 0.05 },
                             { name: "threshold_high", label: "High Threshold", type: "number", def: 0.8, cat: "thresholds", min: 0, max: 1, step: 0.05 }
+                        ]
+                    },
+                    "pathbar": {
+                        displayName: "Path Bar", defW: 400, defH: 260,
+                        fields: [
+                            { name: "shape", label: "Shape", type: "select", def: 1, cat: "appearance",
+                              options: [
+                                  { v: 0, l: "Custom" },
+                                  { v: 1, l: "L-Bend" },
+                                  { v: 2, l: "Straight" },
+                                  { v: 3, l: "45° Bend" }
+                              ] },
+                            { name: "orientation", label: "Orientation", type: "select", def: 0, cat: "appearance",
+                              options: [
+                                  { v: 0, l: "Top-Left / Horizontal" },
+                                  { v: 1, l: "Top-Right / Vertical" },
+                                  { v: 2, l: "Bottom-Left" },
+                                  { v: 3, l: "Bottom-Right" }
+                              ] },
+                            { name: "corner_radius", label: "Corner Radius", type: "stepper", def: 40, cat: "appearance", min: 0, max: 400 },
+                            { name: "band_width", label: "Band Width", type: "stepper", def: 22, cat: "appearance", min: 2, max: 80 },
+                            { name: "rounded", label: "Rounded Caps", type: "checkbox", def: true, cat: "appearance" },
+                            { name: "lit_color", label: "Fill Color", type: "color", def: 0x2EE4C8, cat: "appearance" },
+                            { name: "dim_color", label: "Track Color", type: "color", def: 0x2E323A, cat: "appearance" },
+                            { name: "dim_opa", label: "Track Opacity", type: "slider", def: 90, cat: "appearance", min: 0, max: 255 },
+                            { name: "redline_color", label: "Redline Color", type: "color", def: 0xFF5C32, cat: "appearance" },
+                            { name: "min", label: "Min Value", type: "number", def: 0, cat: "data" },
+                            { name: "max", label: "Max Value", type: "number", def: 11000, cat: "data" },
+                            { name: "redline", label: "Redline", type: "number", def: 10000, cat: "data" },
+                            { name: "smoothing_ms", label: "Smoothing (ms)", type: "slider", def: 90, cat: "appearance", min: 0, max: 500 }
                         ]
                     }
                 };
@@ -8303,7 +8412,8 @@
             toggle:      '<svg viewBox="0 0 20 16"><rect x="2" y="4" width="16" height="8" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="13" cy="8" r="2.5" fill="currentColor" opacity="0.6"/></svg>',
             button:      '<svg viewBox="0 0 20 16"><rect x="2" y="4" width="16" height="8" rx="2" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.2"/><text x="5" y="11" font-size="6" fill="currentColor" opacity="0.7">OK</text></svg>',
             shift_light: '<svg viewBox="0 0 20 16"><rect x="1" y="5" width="3" height="6" rx="0.5" fill="currentColor" opacity="0.7"/><rect x="5" y="5" width="3" height="6" rx="0.5" fill="currentColor" opacity="0.7"/><rect x="9" y="5" width="3" height="6" rx="0.5" fill="currentColor" opacity="0.7"/><rect x="13" y="5" width="3" height="6" rx="0.5" fill="currentColor" opacity="0.2"/></svg>',
-            banner:      '<svg viewBox="0 0 20 16"><rect x="1" y="11" width="18" height="4" rx="0.6" fill="currentColor" opacity="0.5"/><text x="3" y="14.3" font-size="3.5" font-weight="bold" fill="#000">WARNING</text></svg>'
+            banner:      '<svg viewBox="0 0 20 16"><rect x="1" y="11" width="18" height="4" rx="0.6" fill="currentColor" opacity="0.5"/><text x="3" y="14.3" font-size="3.5" font-weight="bold" fill="#000">WARNING</text></svg>',
+            pathbar:     '<svg viewBox="0 0 20 16"><path d="M4,14 L4,7 Q4,4 7,4 L17,4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity="0.25"/><path d="M4,14 L4,7 Q4,4 7,4 L11,4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>'
         };
 
         function setSplashUIVisibility(isSplash) {
@@ -8679,6 +8789,12 @@
                 };
 
                 interactionLayer.appendChild(box);
+
+                /* Custom-path pathbar: draggable waypoint handles overlaid on the bar */
+                if (w.type === 'pathbar' && selectedIndices.size === 1 &&
+                    selectedIndices.has(index) && !w.locked && _pathbarIsCustom(w)) {
+                    _renderPathHandles(w, index);
+                }
             });
 
             // Empty state when no widgets
@@ -8691,6 +8807,123 @@
 
             updateFooterCounts();
             renderLayerTree();
+        }
+
+        /* ── pathbar custom-path waypoint editor ───────────────────────────
+         * Path points are absolute screen px == interactionLayer canvas px, so
+         * handles sit at the point coords directly. The firmware clips the bar
+         * to the widget box, so after any edit we re-fit the box to the path. */
+        function _pathbarIsCustom(w) {
+            const s = w.config ? w.config.shape : undefined;
+            const custom = (s === 0 || s === undefined);
+            if (custom && (!w.config || !Array.isArray(w.config.path) || w.config.path.length < 4)) {
+                _seedPathbarPath(w);
+                _fitPathbarBox(w);
+            }
+            return custom;
+        }
+        function _seedPathbarPath(w) {
+            const cfg = w.config || (w.config = {});
+            const band = cfg.band_width || 22;
+            const inset = band / 2 + 2;
+            const cxs = w.x + ORIGIN_X, cys = w.y + ORIGIN_Y;
+            const L = cxs - w.w / 2 + inset, T = cys - w.h / 2 + inset;
+            const R = cxs + w.w / 2 - inset, B = cys + w.h / 2 - inset;
+            cfg.path = [Math.round(L), Math.round(B), Math.round(L), Math.round(T), Math.round(R), Math.round(T)];
+        }
+        function _fitPathbarBox(w) {
+            const path = w.config.path;
+            if (!Array.isArray(path) || path.length < 4) return;
+            let minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
+            for (let i = 0; i < path.length; i += 2) {
+                minx = Math.min(minx, path[i]); maxx = Math.max(maxx, path[i]);
+                miny = Math.min(miny, path[i + 1]); maxy = Math.max(maxy, path[i + 1]);
+            }
+            const m = (w.config.band_width || 22) / 2 + 6;
+            minx = Math.max(0, minx - m); miny = Math.max(0, miny - m);
+            maxx = Math.min(CANVAS_W, maxx + m); maxy = Math.min(CANVAS_H, maxy + m);
+            w.w = Math.round(maxx - minx); w.h = Math.round(maxy - miny);
+            w.x = Math.round((minx + maxx) / 2 - ORIGIN_X);
+            w.y = Math.round((miny + maxy) / 2 - ORIGIN_Y);
+        }
+        function _snap45(ax, ay, bx, by) {
+            const dx = bx - ax, dy = by - ay;
+            if (Math.hypot(dx, dy) < 1) return [bx, by];
+            const step = Math.PI / 4;
+            const ang = Math.round(Math.atan2(dy, dx) / step) * step;
+            const proj = dx * Math.cos(ang) + dy * Math.sin(ang);
+            return [ax + proj * Math.cos(ang), ay + proj * Math.sin(ang)];
+        }
+        function _pathbarPreview() {
+            if (document.getElementById('livePreviewToggle') &&
+                document.getElementById('livePreviewToggle').checked &&
+                typeof triggerPreview === 'function') triggerPreview();
+        }
+        function _renderPathHandles(w, idx) {
+            const path = w.config.path;
+            const n = path.length / 2;
+            for (let i = 0; i < n; i++) {
+                const px = path[i * 2], py = path[i * 2 + 1];
+                const h = document.createElement('div');
+                h.className = 'path-handle';
+                h.style.left = (px - 7) + 'px'; h.style.top = (py - 7) + 'px';
+                h.title = 'Drag to move · double-click to remove · hold Shift for free angle';
+                h.onmousedown = (e) => { if (e.button === 0) _startPathDrag(e, idx, i); };
+                h.ondblclick = (e) => { e.stopPropagation(); e.preventDefault(); _removePathPoint(idx, i); };
+                interactionLayer.appendChild(h);
+                if (i < n - 1) {
+                    const mx = (px + path[(i + 1) * 2]) / 2, my = (py + path[(i + 1) * 2 + 1]) / 2;
+                    const a = document.createElement('div');
+                    a.className = 'path-add-handle'; a.textContent = '+';
+                    a.style.left = (mx - 6) + 'px'; a.style.top = (my - 6) + 'px';
+                    a.title = 'Add a point here';
+                    a.onmousedown = (e) => { e.stopPropagation(); e.preventDefault(); _addPathPoint(idx, i, mx, my); };
+                    interactionLayer.appendChild(a);
+                }
+            }
+        }
+        function _startPathDrag(e, idx, ptIdx) {
+            e.stopPropagation(); e.preventDefault();
+            const w = currentLayout.widgets[idx];
+            const path = w.config.path;
+            pushHistory();
+            const rect = interactionLayer.getBoundingClientRect();
+            const move = (ev) => {
+                let cx = (ev.clientX - rect.left) / zoomLevel;
+                let cy = (ev.clientY - rect.top) / zoomLevel;
+                cx = Math.max(0, Math.min(CANVAS_W, cx));
+                cy = Math.max(0, Math.min(CANVAS_H, cy));
+                if (!ev.shiftKey && ptIdx > 0) {
+                    const s = _snap45(path[(ptIdx - 1) * 2], path[(ptIdx - 1) * 2 + 1], cx, cy);
+                    cx = s[0]; cy = s[1];
+                }
+                path[ptIdx * 2] = Math.round(cx); path[ptIdx * 2 + 1] = Math.round(cy);
+                _fitPathbarBox(w);
+                renderEditor();
+            };
+            const up = () => {
+                document.removeEventListener('mousemove', move);
+                document.removeEventListener('mouseup', up);
+                updateInspector();
+                _pathbarPreview();
+            };
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
+        }
+        function _removePathPoint(idx, ptIdx) {
+            const w = currentLayout.widgets[idx], path = w.config.path;
+            if (path.length / 2 <= 2) { updateStatus('Path needs at least 2 points'); return; }
+            pushHistory();
+            path.splice(ptIdx * 2, 2);
+            _fitPathbarBox(w);
+            renderEditor(); updateInspector(); _pathbarPreview();
+        }
+        function _addPathPoint(idx, afterIdx, mx, my) {
+            const w = currentLayout.widgets[idx], path = w.config.path;
+            pushHistory();
+            path.splice((afterIdx + 1) * 2, 0, Math.round(mx), Math.round(my));
+            _fitPathbarBox(w);
+            renderEditor(); updateInspector(); _pathbarPreview();
         }
 
         /* Layout Settings box (hidden, display:none). Night-mode trigger UI
@@ -18452,6 +18685,7 @@
             ['km/h', 'mph',  0.62137119,  0],
             ['m/s',  'km/h', 3.6,         0],
             ['m/s',  'mph',  2.23693629,  0],
+            ['λ',    'AFR',  14.7,        0],
         ];
         function _unitConvert(v, from, to) {
             if (v == null || isNaN(v) || !from || !to || from === to) return v;
@@ -19467,6 +19701,11 @@
                                     <span class="ch2-num-label">Label</span>
                                     <input type="text" value="${c.label||''}" onchange="_chEdit('${c.id}','label', this.value)">
                                 </div>
+                                ${(c.source_units && c.source_units.length > 1) ? `
+                                <div class="ch2-num" style="margin-top:10px;">
+                                    <span class="ch2-num-label" title="The unit your ECU is actually sending. Change this if you switched the ECU's units (e.g. MaxxECU set to °F or psi) so the value is read correctly.">Received units</span>
+                                    ${_chSourceFieldHTML(c)}
+                                </div>` : ''}
                                 <div class="ch2-num" style="margin-top:10px;">
                                     <span class="ch2-num-label">Display units</span>
                                     ${_chUnitFieldHTML(c)}
@@ -19518,6 +19757,26 @@
             _chEdit(id, 'units_display', value);
             /* Flush now and re-render so the value, range and threshold
              * fields all flip to the new unit immediately. */
+            await _flushChannelEdits();
+            _renderChannelDetail();
+            _refreshChannelsList();
+        }
+
+        /* "Received units" — the NATIVE/source unit the ECU actually transmits.
+         * source_units (from /api/channels) is the convertible family; only
+         * shown when there's a real choice. Changing it re-expresses the stored
+         * range + thresholds into the new unit (firmware side). */
+        function _chSourceFieldHTML(c) {
+            const opts = c.source_units || [];
+            if (opts.length < 2) return '';
+            const cur = c.units_native || opts[0];
+            return `<select onchange="_chSourceSelect('${c.id}', this.value)">
+                        ${opts.map(u => `<option value="${u}" ${cur === u ? 'selected' : ''}>${u}${u === opts[0] ? ' (default)' : ''}</option>`).join('')}
+                    </select>`;
+        }
+        async function _chSourceSelect(id, value) {
+            if (!value) return;
+            _chEdit(id, 'units_native', value);
             await _flushChannelEdits();
             _renderChannelDetail();
             _refreshChannelsList();
