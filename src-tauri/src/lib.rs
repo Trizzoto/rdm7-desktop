@@ -1561,7 +1561,7 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .text("shortcuts", "Keyboard Shortcuts")
         .text("check_update", "Check for Updates…")
         .separator()
-        .text("about", "About RDM-7 Visual Designer")
+        .text("about", "About RDM Studio")
         .build()?;
 
     let menu = MenuBuilder::new(app)

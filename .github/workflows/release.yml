@@ -81,7 +81,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'RDM-7 Visual Designer ${{ github.ref_name }}'
+          releaseName: 'RDM Studio ${{ github.ref_name }}'
           releaseBody: 'See the assets below to download and install. Installed apps update themselves automatically.'
           releaseDraft: false
           prerelease: false

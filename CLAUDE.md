@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RDM-7 Visual Designer — a Tauri 2 desktop app for designing automotive dashboard/gauge clusters for MaxxECU systems. Rust backend handles device communication; the frontend is a single-page HTML/JS app with a WebAssembly renderer compiled from separate C/C++ firmware code (rdm7-wasm-editor repo).
+RDM Studio (formerly "RDM-7 Visual Designer"; renamed 2026-07-10 — the bundle `identifier` stays `com.rdm7.designer` so self-update and app data carry over) — a Tauri 2 desktop app for designing automotive dashboard/gauge clusters for RDM-7 display hardware, expanding into the configuration suite for the whole RDM device family (CAN keypads, GPS lap timer, IO expander — see `../RDM-7_Dash/docs/PLATFORM_PLAN_2026-07.md`). Rust backend handles device communication; the frontend is a single-page HTML/JS app with a WebAssembly renderer compiled from separate C/C++ firmware code (rdm7-wasm-editor repo).
 
 This repo (rdm7-desktop) is one part of a larger project that includes: **Web Studio** (browser-based editor), **Desktop Studio** (this repo), **RDM Marketplace** (shared layouts/assets), and **RDM-7 Dash** (the device firmware/runtime). They share the same WASM renderer and layout format.
 
