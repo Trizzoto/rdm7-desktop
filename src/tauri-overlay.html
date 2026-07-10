@@ -413,14 +413,11 @@
         .sh-headrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
         .sh-h { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 26px; letter-spacing: 0.01em; margin: 0; }
         .sh-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
-        .sh-conn {
-            display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted);
-            background: var(--panel); border: 1px solid var(--border); border-radius: 20px;
-            padding: 6px 12px; box-shadow: var(--shadow-sm); white-space: nowrap;
-        }
-        .sh-conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); display: inline-block; flex-shrink: 0; }
-        .sh-conn.ok i { background: #6FBF73; box-shadow: 0 0 6px rgba(111,191,115,0.7); }
-        .sh-conn.ok { color: var(--text); }
+        .sh-sub { display: flex; align-items: center; gap: 8px; }
+        .sh-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); display: inline-block; flex-shrink: 0; }
+        .sh-dot.ok { background: #6FBF73; box-shadow: 0 0 6px rgba(111,191,115,0.7); }
+        /* Desktop: the editor header joins the suite chrome */
+        body.suite-desktop header { background: var(--bg-toolbar); box-shadow: var(--shadow-sm); }
         .sh-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
         .sh-card {
             background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg);
@@ -598,10 +595,9 @@
             <div class="sh-wrap">
                 <div class="sh-headrow">
                     <div>
-                        <h1 class="sh-h">Garage</h1>
-                        <div class="sh-sub">Everything on the car, configured in one place.</div>
+                        <h1 class="sh-h" id="shConnHead">Starting up&#8230;</h1>
+                        <div class="sh-sub"><i class="sh-dot" id="shDot"></i><span id="shConnSub">Checking the connection.</span></div>
                     </div>
-                    <span class="sh-conn" id="shConn"><i></i><span id="shConnText">Offline — This PC</span></span>
                 </div>
                 <div class="sh-grid">
 
@@ -1133,17 +1129,26 @@
         /* ============ splash + home ============ */
         var connPollTimer = null;
         function pollConn() {
-            var t = document.getElementById("shConnText");
-            var c = document.getElementById("shConn");
-            if (!t || !c) return;
+            var head = document.getElementById("shConnHead");
+            var sub = document.getElementById("shConnSub");
+            var dot = document.getElementById("shDot");
+            if (!head || !sub || !dot) return;
             var lbl = document.getElementById("connModeLabel");
             var mode = document.getElementById("connectionMode");
             var label = lbl ? lbl.textContent.trim() : "";
-            if (mode && mode.value === "local") { t.textContent = "Offline — This PC is its own dash"; c.className = "sh-conn"; }
-            else if (label && !/not connected|scanning|connecting|^wifi$|^local$|^usb/i.test(label)) {
-                t.textContent = "Connected — " + label; c.className = "sh-conn ok";
+            if (mode && mode.value === "local") {
+                head.textContent = "Working offline.";
+                sub.textContent = "This PC acts as its own dash — everything you build saves here.";
+                dot.className = "sh-dot";
+            } else if (label && !/not connected|scanning|connecting|^wifi$|^local$|^usb/i.test(label)) {
+                head.textContent = "Your dash is online.";
+                sub.textContent = label + " — live preview and transfers are ready.";
+                dot.className = "sh-dot ok";
+            } else {
+                head.textContent = "No dash connected.";
+                sub.textContent = "Power the dash up and it’ll appear here — or keep working offline.";
+                dot.className = "sh-dot";
             }
-            else { t.textContent = label || "Not connected"; c.className = "sh-conn"; }
         }
         window._suiteHomeShow = function () {
             var ws = document.getElementById("kpWorkspace");
@@ -1171,6 +1176,23 @@
            immediately) */
         function bootSuite() {
             if (!window.__TAURI__) return;
+            document.body.classList.add("suite-desktop");
+            /* editor header joins the suite: swap the legacy logo image for the
+               wordmark and add a Home button at the far left */
+            try {
+                var hdrTitle = document.querySelector("header .title");
+                if (hdrTitle && !document.getElementById("suiteHeaderBrand")) {
+                    var img = hdrTitle.querySelector("img");
+                    if (img) img.style.display = "none";
+                    var brand = document.createElement("span");
+                    brand.id = "suiteHeaderBrand";
+                    brand.style.cssText = "display:inline-flex; align-items:center; gap:10px;";
+                    brand.innerHTML =
+                        '<button class="btn btn-secondary" style="font-size:11px; padding:4px 10px;" onclick="_suiteHomeShow()" title="Home (Esc)">&#8962;</button>' +
+                        '<span style="font-family:Sora,sans-serif; font-weight:600; font-size:13px; letter-spacing:0.01em; white-space:nowrap;">RDM Studio</span>';
+                    hdrTitle.insertBefore(brand, hdrTitle.firstChild);
+                }
+            } catch (e) { console.warn("header brand injection failed:", e); }
             /* the WASM module (emscripten/SDL) rewrites document.title to its
                internal name after init — pin the product name */
             var titleEl = document.querySelector("title");
