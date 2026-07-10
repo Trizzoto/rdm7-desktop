@@ -384,6 +384,10 @@
                 const r = await api('/api/layout/list');
                 const list = r.layouts || r;
                 if (!Array.isArray(list)) throw new Error('Invalid response from device');
+                /* USB/local transports carry the device's active layout on the
+                 * list — wifi didn't, so every boot the header dropdown fell
+                 * back to 'default' while the editor loaded the real active. */
+                list._active = r.active || null;
                 return list;
             },
 

@@ -1549,6 +1549,12 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .text("control", "Control Device Screen…")
         .build()?;
 
+    let boot_anim = SubmenuBuilder::new(app, "Boot Animation")
+        .text("boot_fade", "Fade In (top to bottom)")
+        .text("boot_curtain", "Curtain Sweep")
+        .text("boot_off", "Off")
+        .build()?;
+
     let device = SubmenuBuilder::new(app, "Device")
         .text("connect_wifi", "Connect over WiFi…")
         .text("scan", "Scan for Devices")
@@ -1556,6 +1562,7 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .text("keypad", "Keypad Configurator…")
         .text("transfer", "Transfer Layouts…")
         .text("device_manager", "Device Manager…")
+        .item(&boot_anim)
         .separator()
         .text("go_local", "Go Offline (Local)")
         .build()?;

@@ -179,20 +179,22 @@
 ##[ anchor ]##
             <input type="file" id="importRdmInput" accept=".rdm" style="display:none">
 ##[ insert-after ]##
-            <!-- Desktop: transport-mode selector -->
-            <div id="connectionBar" style="display:flex; align-items:center; gap:6px;">
+            <!-- Desktop: transport selector + address as one flat control
+                 group. Connection state lives in the address text colour
+                 (green = talking to the dash, amber = searching, red =
+                 unreachable) — no status dot. -->
+            <div id="connectionBar" style="display:flex; align-items:stretch; height:30px; box-sizing:border-box; flex-shrink:0; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden;">
                 <select id="connectionMode" onchange="_onConnectionModeChange(this.value)"
-                    style="background:var(--bg); color:var(--text); border:1px solid var(--border); padding:4px 6px; border-radius:var(--radius-sm); font-size:10px; font-family:'JetBrains Mono',monospace;">
+                    style="background:transparent; color:var(--text); border:none; height:100%; padding:0 2px 0 10px; font-size:10.5px; font-family:'JetBrains Mono',monospace; cursor:pointer;">
                     <option value="local">Offline (Local)</option>
                     <option value="wifi">WiFi</option>
                     <option value="hotspot">ESP32 Hotspot</option>
                     <option value="usb">USB Serial</option>
                 </select>
-                <span id="connModeLabel" style="font-size:10px; color:var(--text-muted);">Local</span>
-                <button id="scanDevicesBtn" class="btn btn-secondary" onclick="_scanForDevices()"
-                    style="font-size:9px; padding:2px 6px; display:none;" title="Scan for RDM-7 devices on network">Scan</button>
+                <span id="connModeLabel" style="display:inline-flex; align-items:center; padding:0 10px 0 4px; font-size:10.5px; color:var(--text-muted); font-family:'JetBrains Mono',monospace; white-space:nowrap;">Local</span>
+                <button id="scanDevicesBtn" onclick="_scanForDevices()"
+                    style="display:none; align-items:center; border:none; border-left:1px solid var(--border); background:transparent; color:var(--text-muted); padding:0 10px; font-size:10px; font-family:'JetBrains Mono',monospace; cursor:pointer;" title="Scan for RDM-7 devices on network">Scan</button>
             </div>
-            <div class="header-divider"></div>
 ##[ end ]##
 
 #! Appended after the last firmware setup section (Developer Options)
@@ -355,7 +357,7 @@
         #suiteSplash.sh-out { opacity: 0; pointer-events: none; }
         .sh-lockup { display: flex; flex-direction: column; align-items: center; gap: 0; }
         .rdm-logo { display: inline-block; vertical-align: middle; }
-        .sh-splash-logo svg { display: block; width: 100%; height: auto; }
+        .sh-splash-logo img { display: block; width: 100%; height: auto; }
         .sh-splash-logo {
             width: 300px; height: auto; line-height: 0;
             filter: drop-shadow(0 10px 26px rgba(0,0,0,0.5));
@@ -423,7 +425,7 @@
         .sh-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
         .sh-sub { display: flex; align-items: center; gap: 8px; }
         .sh-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); display: inline-block; flex-shrink: 0; }
-        .sh-dot.ok { background: #6FBF73; box-shadow: 0 0 6px rgba(111,191,115,0.7); }
+        .sh-dot.ok { background: #6FBF73; }
         .sh-actions { display: flex; gap: 14px; align-items: baseline; }
         .sh-actions a {
             font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em;
@@ -438,6 +440,40 @@
            layout with live values continuously. CONTROL (mirror + remote
            touch) stays. The pill remains in the on-device/phone editor. */
         body.suite-desktop #pillLive { display: none !important; }
+        /* The hamburger is the PHONE menu (it just clones header controls
+           into a sheet). On desktop the native menus + header cover all of
+           it — boot animation moved to Device ▸ Boot Animation. */
+        body.suite-desktop .mobile-burger { display: none !important; }
+        /* One design language across the header. Grouping comes from spacing:
+           the firmware's divider strokes bracket controls that are hidden on
+           desktop (undo/help/sync live in native menus), so what's left reads
+           as stray lines — drop them all. Every control shares the same
+           radius, and the Setup/Design switcher matches the keypad
+           workspace's Design/Live one (filled segments, Sora). */
+        body.suite-desktop header .header-divider { display: none; }
+        body.suite-desktop .top-controls { gap: 8px; }
+        body.suite-desktop header select,
+        body.suite-desktop header .btn,
+        body.suite-desktop header .header-pill { border-radius: var(--radius-md); }
+        body.suite-desktop .studio-mode-switcher {
+            padding: 0; overflow: hidden; border-radius: var(--radius-md);
+            height: 30px; box-sizing: border-box;
+        }
+        body.suite-desktop .studio-mode-btn {
+            font-family: 'Sora', sans-serif; text-transform: none;
+            letter-spacing: 0.02em; font-size: 11px; font-weight: 600;
+            padding: 0 16px; height: 100%; border-radius: 0;
+        }
+        body.suite-desktop .studio-mode-btn.active { box-shadow: none; }
+        body.suite-desktop .header-pill {
+            font-family: 'Sora', sans-serif; letter-spacing: 0.02em; font-weight: 600;
+        }
+        /* Bezel/Widgets are independent toggles — the firmware wraps them in
+           their own bordered tray, which double-borders against the pills.
+           Flatten the tray so they read like the other pills. */
+        body.suite-desktop .header-toggles {
+            background: none; border: none; padding: 0; gap: 8px;
+        }
         /* Layering contract: banners, modals and toasts must sit ABOVE the
            suite overlays (Home/keypad are 15000, splash 20000). Their inline
            z-indexes predate the suite, hence the importants. */
@@ -483,21 +519,33 @@
 
         /* ---- keypad workspace ---- */
         #kpWorkspace { position: fixed; inset: 0; z-index: 15000; background: var(--bg-canvas); display: none; flex-direction: column; }
+        /* Topbar mirrors the dash editor header exactly: same padding, same
+           30px control height, same brand cluster (home / logo / muted
+           label), same segmented switch. */
         .kp-topbar {
-            display: flex; align-items: center; gap: 12px; padding: 7px 12px;
+            display: flex; align-items: center; gap: 8px; padding: 6px 8px;
             background: var(--bg-toolbar); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-sm);
             flex-wrap: wrap;
         }
-        .kp-topbar .b { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 13px; }
+        #kpBrand span {
+            font-family: 'Sora', sans-serif; font-weight: 400; font-size: 13px;
+            letter-spacing: 0.03em; color: var(--text-muted); white-space: nowrap;
+        }
         .kp-chip {
             font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted);
-            background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 4px 8px; white-space: nowrap;
+            background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+            padding: 0 10px; white-space: nowrap; height: 30px; box-sizing: border-box;
+            display: inline-flex; align-items: center;
         }
-        .kp-modes { margin-left: auto; display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
-        .kp-modes button { background: none; border: none; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 600; padding: 6px 16px; cursor: pointer; }
+        .kp-modes {
+            margin-left: auto; display: flex; background: var(--bg); border: 1px solid var(--border);
+            border-radius: var(--radius-md); overflow: hidden; height: 30px; box-sizing: border-box;
+        }
+        .kp-modes button { background: none; border: none; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; padding: 0 16px; height: 100%; cursor: pointer; }
         .kp-modes button.on { background: var(--accent); color: #fff; }
-        .kp-body { display: flex; flex: 1; min-height: 0; flex-wrap: wrap; }
-        .kp-rail { width: 128px; background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+        .kp-topbar > .btn:last-child { height: 30px; box-sizing: border-box; }
+        .kp-body { display: flex; flex: 1; min-height: 0; flex-wrap: wrap; overflow: hidden; }
+        .kp-rail { width: 128px; min-height: 0; background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
         .kp-rail-title { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin: 0 4px 4px; font-weight: 600; }
         .kp-model {
             background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md);
@@ -527,7 +575,7 @@
         .kp-ct { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
         .kp-ct b { color: var(--text); font-weight: 600; }
         .kp-ct.hot b { color: #e05d52; }
-        .kp-insp { width: 300px; background: var(--panel); border-left: 1px solid var(--border); padding: 12px 14px; flex-shrink: 0; overflow-y: auto; }
+        .kp-insp { width: 300px; min-height: 0; max-height: 100%; background: var(--panel); border-left: 1px solid var(--border); padding: 12px 14px; flex-shrink: 0; overflow-y: auto; }
         .kp-insp h2 { font-family: 'Sora', sans-serif; font-size: 12.5px; font-weight: 600; margin: 0 0 1px; }
         .kp-sub { color: var(--text-muted); font-size: 10px; font-family: 'JetBrains Mono', monospace; margin-bottom: 10px; }
         .kp-grp { border-top: 1px solid var(--border); padding: 10px 0 2px; margin-top: 6px; }
@@ -556,10 +604,11 @@
         .kp-note b { color: var(--text); }
         .kp-none { color: var(--text-muted); font-size: 11px; padding: 28px 8px; text-align: center; }
         @media (max-width: 900px) {
+            .kp-body { overflow-y: auto; }
             .kp-rail { width: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); }
             .kp-rail-title { display: none; }
             .kp-model { flex: 1; }
-            .kp-insp { width: 100%; border-left: none; border-top: 1px solid var(--border); }
+            .kp-insp { width: 100%; max-height: 46vh; border-left: none; border-top: 1px solid var(--border); }
         }
         @media (prefers-reduced-motion: reduce) { .kp-live-dot { animation: none; } }
     </style>
@@ -725,15 +774,15 @@
 
     <div id="kpWorkspace">
         <div class="kp-topbar">
-            <button class="btn btn-secondary" style="font-size:10px; padding:4px 10px;" onclick="_kpClose()">&#8962; Home</button>
-            <span class="b">Keypad Configurator</span>
+            <button class="btn btn-secondary" style="font-size:13px; padding:0 10px; height:30px; box-sizing:border-box;" onclick="_kpClose()" title="Home (Esc)">&#8962;</button>
+            <span id="kpBrand" style="display:inline-flex; align-items:center; gap:10px;"></span>
             <span class="kp-chip" id="kpChipModel">PKP-2200-SI · CANopen · node 0x15</span>
             <span class="kp-chip" id="kpChipLink">no device link — saves to this PC</span>
             <div class="kp-modes" role="group" aria-label="Mode">
                 <button id="kpBtnDesign" class="on" onclick="_kpSetLive(false)">Design</button>
                 <button id="kpBtnLive" onclick="_kpSetLive(true)">Live (sim)</button>
             </div>
-            <button class="btn" style="font-size:11px; padding:5px 14px;" onclick="_kpSaveExplicit()">Save</button>
+            <button class="btn" style="font-size:11px; padding:0 16px;" onclick="_kpSaveExplicit()">Save</button>
         </div>
         <div class="kp-body">
             <div class="kp-rail" id="kpRail"><div class="kp-rail-title">Model</div></div>
@@ -755,23 +804,26 @@
     (function () {
         "use strict";
 
-        /* RDM wordmark — the real logo as inline SVG so it's crisp from the
-         * 19 px header to the 300 px splash off one definition. Red slab,
-         * italic letters. Sized by the .rdm-logo width/height set per use. */
-        var RDM_LOGO_SVG =
-            '<svg class="rdm-logo" viewBox="0 0 268 132" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="RDM">' +
-              '<polygon points="34,5 262,5 234,127 6,127" fill="#E31E24"/>' +
-              '<text x="132" y="99" text-anchor="middle" font-family="\'Arial Black\',\'Arial Bold\',Arial,sans-serif" font-weight="900" font-style="italic" font-size="92" letter-spacing="-4" fill="#fff">RDM</text>' +
-            '</svg>';
+        /* RDM wordmark — the official logo PNG (transparent, trimmed, 600px
+         * master shipped as rdm_logo.png). One asset, sized per use. */
+        var RDM_LOGO_IMG = '<img class="rdm-logo" src="rdm_logo.png" alt="RDM" draggable="false">';
 
         function _populateLogos() {
             var splash = document.getElementById('shSplashLogo');
-            if (splash && !splash.firstChild) splash.innerHTML = RDM_LOGO_SVG;
+            if (splash && !splash.firstChild) splash.innerHTML = RDM_LOGO_IMG;
             var home = document.getElementById('shHomeBrand');
             if (home && !home.firstChild) {
                 home.innerHTML =
-                    RDM_LOGO_SVG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:20px;width:auto"') +
+                    RDM_LOGO_IMG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:20px;width:auto"') +
                     '<span style="font-family:Sora,sans-serif;font-weight:400;font-size:13px;letter-spacing:0.03em;color:var(--text-muted);">Studio</span>';
+            }
+            /* keypad topbar carries the same logo + muted-label cluster as
+               the dash editor header */
+            var kpb = document.getElementById('kpBrand');
+            if (kpb && !kpb.firstChild) {
+                kpb.innerHTML =
+                    RDM_LOGO_IMG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:19px;width:auto"') +
+                    '<span>Keypad Configurator</span>';
             }
         }
 
@@ -855,12 +907,54 @@
             if (typeof showToast === "function") showToast("Keypad config saved on this PC — device sync arrives with the keypad firmware update", "success");
         };
 
+        /* LED "Follows" choices — populated from the connected dash's channel
+         * registry so an LED can track anything on the car (warnings included).
+         * Falls back to a small static list offline. */
+        var _kpChanList = null;
+        function _kpLoadChannels() {
+            window._kpChanDebug = "start";
+            try {
+                if (typeof RDM === "undefined" || RDM.mode === "local") { window._kpChanDebug = "guard:" + (typeof RDM === "undefined" ? "noRDM" : RDM.mode); return; }
+                fetch("/api/channels")
+                    .then(function (r) { window._kpChanDebug = "resp " + r.status; return r.ok ? r.json() : null; })
+                    .then(function (j) {
+                        if (!j || !Array.isArray(j.channels)) { window._kpChanDebug = "badshape " + JSON.stringify(j).slice(0, 80); return; }
+                        var seen = {};
+                        _kpChanList = j.channels
+                            .filter(function (c) { return c && c.id && !seen[c.id] && (seen[c.id] = 1); })
+                            .map(function (c) { return { v: c.id, t: (c.label || c.id) }; });
+                        window._kpChanDebug = "loaded " + _kpChanList.length;
+                        kpRenderInspector();
+                    })
+                    .catch(function (e) { window._kpChanDebug = "err " + e; });
+            } catch (e) { window._kpChanDebug = "throw " + e; }
+        }
+        function _kpFollowsOptions(cur) {
+            var opts = [["self", "This button’s state"]];
+            if (_kpChanList && _kpChanList.length) {
+                _kpChanList.forEach(function (c) { opts.push([c.v, c.t]); });
+            } else {
+                opts.push(["coolant_temp", "coolant_temp › high warn"],
+                          ["oil_press", "oil_press ‹ low warn"],
+                          ["fan_output", "fan_output (RDM IO)"]);
+            }
+            if (cur && !opts.some(function (o) { return o[0] === cur; })) opts.push([cur, cur]);
+            return opts.map(function (o) { return opt(o[0], o[1], cur); }).join("");
+        }
+
         var CELL = 104, SEAM = 7, PAD = 20, CAP_R = 27, RING_R = 36, WELL_R = 42, MARGIN = 44;
         function keyAssigned(k) { return k.label !== "" || k.preset.indexOf("unassigned") === -1; }
         function ledActive(i) {
             var k = kp.keys[i];
             if (!keyAssigned(k)) return false;
-            if (kp.live) { if (k.follows === "coolant_temp") return true; return !!kp.keyOn[i]; }
+            if (kp.live) {
+                /* Function-state semantics: every key lights when its function
+                 * is toggled on — including channel-bound keys (press FAN, the
+                 * amber ring lights; that's the request state). The simulated
+                 * alarm (coolant > 95) lights a coolant-bound key regardless. */
+                if (k.follows === "coolant_temp" && kp.coolant > 95) return true;
+                return !!kp.keyOn[i];
+            }
             return true;
         }
         function ledColor(i) {
@@ -995,7 +1089,10 @@
                 el.className = "kp-ct" + (hot ? " hot" : "");
                 el.innerHTML = 'coolant_temp <b>' + kp.coolant.toFixed(1) + "</b> &#176;C" + (hot ? " &#8212; HIGH" : "");
             }
-            kpRenderStage();
+            /* Only re-render the keypad when the alarm state flips. Re-drawing
+             * every tick restarted the CSS blink animations mid-cycle, so slow
+             * blink never reached its off phase (looked stuck solid). */
+            if (hot !== kp._lastHot) { kp._lastHot = hot; kpRenderStage(); }
         }
         window._kpSetLive = function (on) {
             kp.live = on;
@@ -1041,10 +1138,7 @@
                 "</select></div></div>" +
                 '<div class="kp-grp"><div class="kp-gt">LED ring</div>' +
                 '<div class="kp-field"><label>Follows</label><select id="kpFFollows">' +
-                opt("self", "This button’s state", k.follows) +
-                opt("coolant_temp", "coolant_temp › high warn", k.follows) +
-                opt("oil_press", "oil_press ‹ low warn", k.follows) +
-                opt("fan_output", "fan_output (RDM IO)", k.follows) +
+                _kpFollowsOptions(k.follows) +
                 "</select></div>" +
                 '<div class="kp-field"><label>Color</label><div class="kp-swatches">' +
                 LED_COLORS.map(function (c) {
@@ -1122,6 +1216,7 @@
             if (home) home.style.display = "none";
             kpBuildRail();
             kpLoadCfg();
+            _kpLoadChannels();
             var ws = document.getElementById("kpWorkspace");
             if (ws) ws.style.display = "flex";
             kpRenderStage(); kpRenderInspector();
@@ -1225,7 +1320,8 @@
         window._suiteOpenDash = function () {
             var home = document.getElementById("suiteHome");
             if (home) home.style.display = "none";
-            if (connPollTimer) { clearInterval(connPollTimer); connPollTimer = null; }
+            /* connPollTimer stays running — it also drives the editor
+             * header's connection dot now, not just the Home heading. */
             if (_shLiveTimer) { clearInterval(_shLiveTimer); _shLiveTimer = null; }
         };
         document.addEventListener("keydown", function (e) {
@@ -1253,12 +1349,18 @@
                     brand.id = "suiteHeaderBrand";
                     brand.style.cssText = "display:inline-flex; align-items:center; gap:10px;";
                     brand.innerHTML =
-                        '<button class="btn btn-secondary" style="font-size:11px; padding:4px 10px;" onclick="_suiteHomeShow()" title="Home (Esc)">&#8962;</button>' +
-                        RDM_LOGO_SVG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:19px;width:auto"') +
+                        '<button class="btn btn-secondary" style="font-size:13px; padding:0 10px;" onclick="_suiteHomeShow()" title="Home (Esc)">&#8962;</button>' +
+                        RDM_LOGO_IMG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:19px;width:auto"') +
                         '<span style="font-family:Sora,sans-serif; font-weight:400; font-size:13px; letter-spacing:0.03em; color:var(--text-muted); white-space:nowrap;">Studio</span>';
                     hdrTitle.insertBefore(brand, hdrTitle.firstChild);
                 }
             } catch (e) { console.warn("header brand injection failed:", e); }
+            /* pills join the suite type ramp (mono-caps is the phone editor's
+               look) — sim text updates live via the sim-pill-text hook */
+            var _ps = document.getElementById("pillSimulate");
+            if (_ps && /^SIM$/.test(_ps.textContent.trim())) _ps.textContent = "Sim";
+            var _pc = document.getElementById("pillLiveControl");
+            if (_pc && /^CONTROL$/.test(_pc.textContent.trim())) _pc.textContent = "Control";
             _populateLogos();
             /* the WASM module (emscripten/SDL) rewrites document.title to its
                internal name after init — pin the product name */
@@ -1361,6 +1463,9 @@
                 scan:           () => call(window._scanForDevices),
                 home:           () => call(window._suiteHomeShow),
                 keypad:         () => call(window._kpOpen),
+                boot_fade:      () => { const s = document.getElementById('bootAnimSelect'); if (s) s.value = 'fade'; call(window.setBootAnim, 'fade'); },
+                boot_curtain:   () => { const s = document.getElementById('bootAnimSelect'); if (s) s.value = 'curtain'; call(window.setBootAnim, 'curtain'); },
+                boot_off:       () => { const s = document.getElementById('bootAnimSelect'); if (s) s.value = 'off'; call(window.setBootAnim, 'off'); },
                 transfer:       () => call(window.openTransferModal),
                 device_manager: () => call(window.openDeviceManager),
                 go_local:       () => { const s = document.getElementById('connectionMode'); if (s) s.value = 'local'; call(window._onConnectionModeChange, 'local'); },
@@ -2439,6 +2544,31 @@
             if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
 ##[ end ]##
 
+#! Switching layouts FROM THE DESKTOP (layoutSelect dropdown) rebuilds
+#! currentLayout and re-renders the editor, but — same bug as the device-sync
+#! path — never refreshed the WASM backdrop. Hook the end of the switch flow.
+##[ block hook-switch-wasm ]##
+##[ anchor ]##
+                updateStatus(`Switched device to ${name}`);
+##[ insert-after ]##
+                if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+##[ end ]##
+
+#! ROOT CAUSE of "switching layouts leaves the preview stale": the firmware's
+#! GET /api/layout/raw?name= does not URL-decode, so any layout whose name has
+#! a space ("RD Cluster") comes back "Layout not found" — the switch flow had
+#! already POSTed /api/layout/set (device DOES switch), then threw here,
+#! leaving currentLayout + WASM on the old layout and the 3 s sync nagging
+#! "reload to sync" forever. Since set just made `name` the ACTIVE layout,
+#! fetch it via /api/layout/current — no name in the URL, works on every
+#! firmware in the field.
+##[ block fix-space-name-switch ]##
+##[ anchor ]##
+                const response = await fetch(`/api/layout/raw?name=${encodeURIComponent(name)}`);
+##[ replace-with ]##
+                const response = await fetch('/api/layout/current');
+##[ end ]##
+
 #! When the device's active layout changes (on-dash switcher / menu / another
 #! client), syncFromDevice() reloads currentLayout and re-renders the editor —
 #! but it never refreshed the WASM backdrop, so the preview kept showing the
@@ -2449,6 +2579,24 @@
                     updateStatus('Synced from device');
 ##[ insert-after ]##
                     if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+                    /* keep the header dropdown honest — the firmware sync
+                       reloads currentLayout but never re-points the select,
+                       so device-side switches left it naming the old layout */
+                    try {
+                        const _ls = document.getElementById('layoutSelect');
+                        if (_ls && currentLayout && currentLayout.name && _ls.value !== currentLayout.name) _ls.value = currentLayout.name;
+                    } catch (e) { }
+##[ end ]##
+
+#! Desktop headers use the suite type ramp (Sora, title case) instead of the
+#! phone editor's mono-caps pills; keep the sim toggle's dynamic text in step.
+##[ block sim-pill-text ]##
+##[ anchor ]##
+            btn.textContent = _simActive ? 'SIM ON' : 'SIM';
+##[ replace-with ]##
+            btn.textContent = document.body.classList.contains('suite-desktop')
+                ? (_simActive ? 'Sim on' : 'Sim')
+                : (_simActive ? 'SIM ON' : 'SIM');
 ##[ end ]##
 
 ##[ block hook-screen-dims ]##
