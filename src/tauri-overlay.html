@@ -603,68 +603,24 @@
 
                     <div class="sh-card sh-hero" tabindex="0" role="button" onclick="_suiteOpenDash()" onkeydown="if(event.key==='Enter')_suiteOpenDash()">
                         <div class="sh-visual">
-                            <svg viewBox="0 0 300 172" aria-hidden="true">
+                            <svg viewBox="0 0 300 178" aria-hidden="true">
                                 <defs>
                                     <linearGradient id="shvCase" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2B2E32"/><stop offset="0.12" stop-color="#1E2023"/><stop offset="0.7" stop-color="#141618"/><stop offset="1" stop-color="#0E1012"/></linearGradient>
                                     <linearGradient id="shvCaseRim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7B838C" stop-opacity="0.5"/><stop offset="0.2" stop-color="#4A5057" stop-opacity="0.15"/><stop offset="0.7" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.45"/></linearGradient>
-                                    <radialGradient id="shvScr" cx="0.5" cy="0.42" r="0.85"><stop offset="0" stop-color="#0B0F15"/><stop offset="0.75" stop-color="#070A0E"/><stop offset="1" stop-color="#04060A"/></radialGradient>
-                                    <filter id="shvGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="1.8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                                    <filter id="shvBloom" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="4"/></filter>
                                     <filter id="shvSoft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2"/></filter>
                                     <radialGradient id="shvFloor" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.5"/><stop offset="0.7" stop-color="#000" stop-opacity="0.25"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+                                    <clipPath id="shvClip"><rect x="38" y="19" width="224" height="134.4" rx="2.5"/></clipPath>
                                 </defs>
-                                <!-- unit: slim-bezel 7in dash, matte case -->
-                                <ellipse cx="150" cy="160" rx="118" ry="9" fill="url(#shvFloor)"/>
-                                <rect x="20" y="12" width="260" height="140" rx="13" fill="#000" opacity="0.55" filter="url(#shvSoft)" transform="translate(0,2.5)"/>
-                                <rect x="20" y="12" width="260" height="140" rx="13" fill="url(#shvCase)"/>
-                                <rect x="20.8" y="12.8" width="258.4" height="138.4" rx="12.4" fill="none" stroke="url(#shvCaseRim)" stroke-width="1.6"/>
-                                <!-- glossy bezel step -->
-                                <rect x="27" y="19" width="246" height="126" rx="7" fill="#08090B"/>
-                                <rect x="27.7" y="19.7" width="244.6" height="124.6" rx="6.6" fill="none" stroke="#2A2E33" stroke-width="0.7" opacity="0.5"/>
-                                <!-- screen -->
-                                <rect x="33" y="25" width="234" height="114" rx="2.5" fill="url(#shvScr)"/>
-                                <g>
-                                    <!-- status strip -->
-                                    <text x="40" y="35" font-family="Sora, sans-serif" font-size="6" fill="#4A5057" letter-spacing="0.5">14.4.2025&#160;&#160;09:59</text>
-                                    <text x="260" y="35" text-anchor="end" font-family="Sora, sans-serif" font-size="6" fill="#4A5057" letter-spacing="1">RDM-7</text>
-                                    <!-- centre tach -->
-                                    <circle cx="150" cy="85" r="47" fill="none" stroke="#22262B" stroke-width="1.2"/>
-                                    <path d="M 109.3 108.5 A 47 47 0 1 1 190.7 108.5" fill="none" stroke="#3A4046" stroke-width="2"/>
-                                    <path d="M 196.8 80.9 A 47 47 0 0 1 190.7 108.5" fill="none" stroke="#E0524D" stroke-width="4" filter="url(#shvGlow)"/>
-                                    <g stroke="#C8CED5" stroke-width="1.8">
-                                        <g transform="rotate(-120 150 85)"><line x1="150" y1="42" x2="150" y2="49"/></g>
-                                        <g transform="rotate(-80 150 85)"><line x1="150" y1="42" x2="150" y2="49"/></g>
-                                        <g transform="rotate(-40 150 85)"><line x1="150" y1="42" x2="150" y2="49"/></g>
-                                        <line x1="150" y1="42" x2="150" y2="49"/>
-                                        <g transform="rotate(40 150 85)"><line x1="150" y1="42" x2="150" y2="49"/></g>
-                                        <g transform="rotate(80 150 85)"><line x1="150" y1="42" x2="150" y2="49"/></g>
-                                        <g transform="rotate(120 150 85)"><line x1="150" y1="42" x2="150" y2="49"/></g>
-                                    </g>
-                                    <g transform="rotate(28 150 85)">
-                                        <line x1="150" y1="85" x2="150" y2="46" stroke="#F2F5F8" stroke-width="2.2" filter="url(#shvGlow)"/>
-                                    </g>
-                                    <circle cx="150" cy="85" r="4" fill="#2A2E33" stroke="#0B0D0F" stroke-width="1"/>
-                                    <text x="150" y="103" text-anchor="middle" font-family="Sora, sans-serif" font-size="21" font-weight="800" fill="#F2F5F8">121</text>
-                                    <text x="150" y="112" text-anchor="middle" font-family="Sora, sans-serif" font-size="6" fill="#7A828C" letter-spacing="1.5">KM/H</text>
-                                    <!-- water -->
-                                    <path d="M 46 100 A 30 30 0 1 1 98 100" fill="none" stroke="#23262B" stroke-width="4"/>
-                                    <path d="M 46 100 A 30 30 0 0 1 57.8 61.2" fill="none" stroke="#32D6D0" stroke-width="4" filter="url(#shvGlow)"/>
-                                    <path d="M 46 100 A 30 30 0 0 1 57.8 61.2" fill="none" stroke="#32D6D0" stroke-width="7" opacity="0.35" filter="url(#shvBloom)"/>
-                                    <text x="72" y="88" text-anchor="middle" font-family="Sora, sans-serif" font-size="12" font-weight="700" fill="#E8EAED">82&#176;</text>
-                                    <text x="72" y="98" text-anchor="middle" font-family="Sora, sans-serif" font-size="5.5" fill="#7A828C" letter-spacing="1.5">WATER</text>
-                                    <!-- oil -->
-                                    <path d="M 202 100 A 30 30 0 1 1 254 100" fill="none" stroke="#23262B" stroke-width="4"/>
-                                    <path d="M 202 100 A 30 30 0 0 1 249.5 66.5" fill="none" stroke="#FF9F0A" stroke-width="4" filter="url(#shvGlow)"/>
-                                    <path d="M 202 100 A 30 30 0 0 1 249.5 66.5" fill="none" stroke="#FF9F0A" stroke-width="7" opacity="0.35" filter="url(#shvBloom)"/>
-                                    <text x="228" y="88" text-anchor="middle" font-family="Sora, sans-serif" font-size="12" font-weight="700" fill="#E8EAED">4.2</text>
-                                    <text x="228" y="98" text-anchor="middle" font-family="Sora, sans-serif" font-size="5.5" fill="#7A828C" letter-spacing="1.5">OIL BAR</text>
-                                    <!-- fuel strip -->
-                                    <rect x="105" y="128" width="90" height="4.5" rx="2" fill="#16181B"/>
-                                    <rect x="105" y="128" width="58" height="4.5" rx="2" fill="#2D8CEB" filter="url(#shvGlow)"/>
-                                </g>
-                                <!-- glass reflection across bezel + screen -->
-                                <polygon points="33,25 118,25 58,139 33,139" fill="#FFFFFF" opacity="0.028"/>
-                                <path d="M 27 60 Q 150 34 273 60 L 273 19 L 27 19 Z" fill="#FFFFFF" opacity="0.02"/>
+                                <!-- the real RDM-7: slim bezel, matte case, actual default layout on screen -->
+                                <ellipse cx="150" cy="172" rx="118" ry="8" fill="url(#shvFloor)"/>
+                                <rect x="25" y="6" width="250" height="158" rx="13" fill="#000" opacity="0.55" filter="url(#shvSoft)" transform="translate(0,2.5)"/>
+                                <rect x="25" y="6" width="250" height="158" rx="13" fill="url(#shvCase)"/>
+                                <rect x="25.8" y="6.8" width="248.4" height="156.4" rx="12.4" fill="none" stroke="url(#shvCaseRim)" stroke-width="1.6"/>
+                                <rect x="32" y="13" width="236" height="144" rx="7" fill="#08090B"/>
+                                <rect x="32.7" y="13.7" width="234.6" height="142.6" rx="6.6" fill="none" stroke="#2A2E33" stroke-width="0.7" opacity="0.5"/>
+                                <image href="dash_default_layout.jpg" x="38" y="19" width="224" height="134.4" preserveAspectRatio="xMidYMid slice" clip-path="url(#shvClip)"/>
+                                <polygon points="38,19 122,19 62,153.4 38,153.4" fill="#FFFFFF" opacity="0.025"/>
+                                <path d="M 32 52 Q 150 28 268 52 L 268 13 L 32 13 Z" fill="#FFFFFF" opacity="0.018"/>
                             </svg>
                         </div>
                         <div class="sh-info">

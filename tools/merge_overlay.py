@@ -39,7 +39,7 @@ OVERLAY = ROOT / "src" / "tauri-overlay.html"
 DIST = ROOT / "src" / "dist"
 
 # Static assets copied verbatim into dist (relative to src/)
-ASSETS = ["transport.js", "rdm_logo_data.js", "favicon.ico"]
+ASSETS = ["transport.js", "rdm_logo_data.js", "favicon.ico", "dash_default_layout.jpg"]
 ASSET_DIRS = ["build"]
 
 DIRECTIVE = re.compile(r"^##\[\s*(.+?)\s*\]##\s*$")
