@@ -416,8 +416,27 @@
         .sh-sub { display: flex; align-items: center; gap: 8px; }
         .sh-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); display: inline-block; flex-shrink: 0; }
         .sh-dot.ok { background: #6FBF73; box-shadow: 0 0 6px rgba(111,191,115,0.7); }
+        .sh-actions { display: flex; gap: 14px; align-items: baseline; }
+        .sh-actions a {
+            font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em;
+            color: var(--text-muted); cursor: pointer; text-decoration: none;
+            border-bottom: 1px solid transparent; padding-bottom: 1px;
+        }
+        .sh-actions a:hover { color: var(--accent-hover); border-bottom-color: var(--accent-hover); }
+        .sh-actions a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         /* Desktop: the editor header joins the suite chrome */
         body.suite-desktop header { background: var(--bg-toolbar); box-shadow: var(--shadow-sm); }
+        /* Layering contract: banners, modals and toasts must sit ABOVE the
+           suite overlays (Home/keypad are 15000, splash 20000). Their inline
+           z-indexes predate the suite, hence the importants. */
+        body.suite-desktop #desktopUpdateBanner { z-index: 21000 !important; }
+        body.suite-desktop #transferModal,
+        body.suite-desktop #wifiPickerModal,
+        body.suite-desktop #deviceManagerModal,
+        body.suite-desktop #deviceInfoModal { z-index: 16000 !important; }
+        body.suite-desktop .modal-overlay,
+        body.suite-desktop .modal { z-index: 16000 !important; }
+        body.suite-desktop #toastContainer { z-index: 22000 !important; }
         .sh-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
         .sh-card {
             background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg);
@@ -598,6 +617,10 @@
                         <h1 class="sh-h" id="shConnHead">Starting up&#8230;</h1>
                         <div class="sh-sub"><i class="sh-dot" id="shDot"></i><span id="shConnSub">Checking the connection.</span></div>
                     </div>
+                    <div class="sh-actions" id="shActions" style="display:none;">
+                        <a role="button" tabindex="0" onclick="openTransferModal()" onkeydown="if(event.key==='Enter')openTransferModal()">TRANSFER LAYOUTS</a>
+                        <a role="button" tabindex="0" onclick="openDeviceManager()" onkeydown="if(event.key==='Enter')openDeviceManager()">DEVICE MANAGER</a>
+                    </div>
                 </div>
                 <div class="sh-grid">
 
@@ -618,7 +641,7 @@
                                 <rect x="25.8" y="6.8" width="248.4" height="156.4" rx="12.4" fill="none" stroke="url(#shvCaseRim)" stroke-width="1.6"/>
                                 <rect x="32" y="13" width="236" height="144" rx="7" fill="#08090B"/>
                                 <rect x="32.7" y="13.7" width="234.6" height="142.6" rx="6.6" fill="none" stroke="#2A2E33" stroke-width="0.7" opacity="0.5"/>
-                                <image href="dash_default_layout.jpg" x="38" y="19" width="224" height="134.4" preserveAspectRatio="xMidYMid slice" clip-path="url(#shvClip)"/>
+                                <image id="shvScreenImg" href="dash_default_layout.jpg" x="38" y="19" width="224" height="134.4" preserveAspectRatio="xMidYMid slice" clip-path="url(#shvClip)"/>
                                 <polygon points="38,19 122,19 62,153.4 38,153.4" fill="#FFFFFF" opacity="0.025"/>
                                 <path d="M 32 52 Q 150 28 268 52 L 268 13 L 32 13 Z" fill="#FFFFFF" opacity="0.018"/>
                             </svg>
@@ -672,11 +695,12 @@
                         <div class="sh-info">
                             <div class="t">CAN Keypad</div>
                             <div class="d">Blink PKP buttons, LED rings bound to channels, night dim.</div>
+                            <div class="d" id="shKpSaved" style="display:none; margin-top:2px;"></div>
                             <div class="s">OPEN CONFIGURATOR &#8594;</div>
                         </div>
                     </div>
 
-                    <div class="sh-card sh-small dev" tabindex="-1" aria-disabled="true">
+                    <div class="sh-card sh-small dev" tabindex="-1" aria-disabled="true" onclick="showToast('GPS Lap Timer is in development — a 25 Hz GPS + IMU puck with predictive lap delta on the dash.', 'info')">
                         <div class="sh-visual">
                             <svg viewBox="0 0 130 85" aria-hidden="true">
                                 <defs>
@@ -699,7 +723,7 @@
                         </div>
                     </div>
 
-                    <div class="sh-card sh-small dev" tabindex="-1" aria-disabled="true">
+                    <div class="sh-card sh-small dev" tabindex="-1" aria-disabled="true" onclick="showToast('CAN IO Expander is in development — analog, thermocouple and power outputs that become channels.', 'info')">
                         <div class="sh-visual">
                             <svg viewBox="0 0 130 85" aria-hidden="true">
                                 <defs>
@@ -1124,6 +1148,40 @@
 
         /* ============ splash + home ============ */
         var connPollTimer = null;
+        var _shLiveTimer = null, _shLiveN = 0, _shLiveFailed = false;
+        var SH_STOCK_SHOT = "dash_default_layout.jpg";
+        var _suiteTitleWanted = "RDM Studio";
+
+        function _shApplyTitle() { if (document.title !== _suiteTitleWanted) document.title = _suiteTitleWanted; }
+
+        function _shConnectedIp() {
+            var mode = document.getElementById("connectionMode");
+            if (!mode || (mode.value !== "wifi" && mode.value !== "hotspot")) return null;
+            var lbl = document.getElementById("connModeLabel");
+            var label = lbl ? lbl.textContent.trim() : "";
+            return /^\d{1,3}(\.\d{1,3}){3}$/.test(label) ? label : null;
+        }
+
+        function _shSetScreen(href) {
+            var img = document.getElementById("shvScreenImg");
+            if (img && img.getAttribute("href") !== href) img.setAttribute("href", href);
+        }
+
+        /* While Home is visible and a dash is connected, the card shows the
+           car's actual current screen (probed off-DOM first so a dead link
+           never blanks the card — it just falls back to the stock shot). */
+        function _shLiveTick() {
+            var home = document.getElementById("suiteHome");
+            if (!home || home.style.display !== "flex") return;
+            var ip = _shConnectedIp();
+            if (!ip) { _shSetScreen(SH_STOCK_SHOT); return; }
+            var url = "http://" + ip + "/api/screenshot?_n=" + (++_shLiveN);
+            var probe = new Image();
+            probe.onload = function () { _shSetScreen(url); _shLiveFailed = false; };
+            probe.onerror = function () { if (!_shLiveFailed) { _shLiveFailed = true; _shSetScreen(SH_STOCK_SHOT); } };
+            probe.src = url;
+        }
+
         function pollConn() {
             var head = document.getElementById("shConnHead");
             var sub = document.getElementById("shConnSub");
@@ -1132,18 +1190,38 @@
             var lbl = document.getElementById("connModeLabel");
             var mode = document.getElementById("connectionMode");
             var label = lbl ? lbl.textContent.trim() : "";
+            var connected = false;
             if (mode && mode.value === "local") {
                 head.textContent = "Working offline.";
                 sub.textContent = "This PC acts as its own dash — everything you build saves here.";
                 dot.className = "sh-dot";
+                _suiteTitleWanted = "RDM Studio — Offline";
             } else if (label && !/not connected|scanning|connecting|^wifi$|^local$|^usb/i.test(label)) {
                 head.textContent = "Your dash is online.";
                 sub.textContent = label + " — live preview and transfers are ready.";
                 dot.className = "sh-dot ok";
+                connected = true;
+                _suiteTitleWanted = "RDM Studio — " + label;
             } else {
                 head.textContent = "No dash connected.";
                 sub.textContent = "Power the dash up and it’ll appear here — or keep working offline.";
                 dot.className = "sh-dot";
+                _suiteTitleWanted = "RDM Studio";
+            }
+            _shApplyTitle();
+            var acts = document.getElementById("shActions");
+            if (acts) acts.style.display = connected ? "flex" : "none";
+            var note = document.getElementById("shKpSaved");
+            if (note) {
+                try {
+                    var all = JSON.parse(localStorage.getItem(KP_LS) || "{}");
+                    var ids = Object.keys(all);
+                    if (ids.length) {
+                        var names = { pkp2200: "PKP-2200", pkp2400: "PKP-2400", pkp2600: "PKP-2600", pkp3500: "PKP-3500" };
+                        note.textContent = "✓ " + ids.map(function (i) { return names[i] || i; }).join(", ") + " saved on this PC";
+                        note.style.display = "block";
+                    } else { note.style.display = "none"; }
+                } catch (e) { note.style.display = "none"; }
             }
         }
         window._suiteHomeShow = function () {
@@ -1152,12 +1230,15 @@
             var home = document.getElementById("suiteHome");
             if (home) home.style.display = "flex";
             pollConn();
+            _shLiveTick();
             if (!connPollTimer) connPollTimer = setInterval(pollConn, 1500);
+            if (!_shLiveTimer) _shLiveTimer = setInterval(_shLiveTick, 8000);
         };
         window._suiteOpenDash = function () {
             var home = document.getElementById("suiteHome");
             if (home) home.style.display = "none";
             if (connPollTimer) { clearInterval(connPollTimer); connPollTimer = null; }
+            if (_shLiveTimer) { clearInterval(_shLiveTimer); _shLiveTimer = null; }
         };
         document.addEventListener("keydown", function (e) {
             if (e.key !== "Escape") return;
@@ -1192,9 +1273,7 @@
             /* the WASM module (emscripten/SDL) rewrites document.title to its
                internal name after init — pin the product name */
             var titleEl = document.querySelector("title");
-            if (titleEl) new MutationObserver(function () {
-                if (document.title !== "RDM Studio") document.title = "RDM Studio";
-            }).observe(titleEl, { childList: true });
+            if (titleEl) new MutationObserver(_shApplyTitle).observe(titleEl, { childList: true });
             var splash = document.getElementById("suiteSplash");
             var ver = (typeof _DESKTOP_VERSION !== "undefined") ? _DESKTOP_VERSION : "";
             var v1 = document.getElementById("shVer"); if (v1) v1.textContent = "v" + ver;
