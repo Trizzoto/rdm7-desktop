@@ -335,6 +335,870 @@
 
 ##[ end ]##
 
+#! Suite shell: boot splash, Home launcher (product picker), and the Keypad
+#! Configurator workspace (Phase K0 — design mode + simulated live mode; real
+#! device link arrives with the firmware keypad update). All desktop-only,
+#! rendered ABOVE the editor so the editor DOM/init is untouched.
+##[ block suite-home-keypad ]##
+##[ anchor ]##
+    <div id="deviceInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceInfo()">
+##[ insert-before ]##
+    <!-- ================= Desktop suite shell: splash / home / keypad ================= -->
+    <style>
+        /* ---- splash ---- */
+        #suiteSplash {
+            position: fixed; inset: 0; z-index: 20000;
+            background: radial-gradient(ellipse 70% 60% at 50% 44%, #2e2e2e, #1b1b1b 80%);
+            display: none; align-items: center; justify-content: center;
+            transition: opacity 0.45s ease;
+        }
+        #suiteSplash.sh-out { opacity: 0; pointer-events: none; }
+        .sh-lockup { display: flex; align-items: center; gap: 24px; }
+        .sh-gauge { width: 92px; height: 92px; }
+        .sh-needle {
+            transform-origin: 50px 50px;
+            transform: rotate(-118deg);
+            animation: shSweep 1.7s cubic-bezier(0.65, 0, 0.35, 1) 0.15s forwards;
+        }
+        .sh-gauge { filter: drop-shadow(0 6px 14px rgba(0,0,0,0.45)); }
+        @keyframes shSweep {
+            0%   { transform: rotate(-118deg); }
+            55%  { transform: rotate(112deg); }
+            78%  { transform: rotate(50deg); }
+            100% { transform: rotate(64deg); }
+        }
+        .sh-word { display: flex; flex-direction: column; }
+        .sh-rdm {
+            font-family: 'Sora', sans-serif; font-weight: 800; font-size: 52px;
+            letter-spacing: 0.04em; color: var(--text); line-height: 1;
+            opacity: 0; animation: shRise 0.6s ease 0.15s forwards;
+        }
+        .sh-studio {
+            font-family: 'Sora', sans-serif; font-weight: 400; font-size: 15px;
+            letter-spacing: 0.58em; color: var(--text-muted); margin: 8px 0 0 3px;
+            opacity: 0; animation: shRise 0.6s ease 0.38s forwards;
+        }
+        .sh-line {
+            height: 2px; background: var(--accent); margin-top: 12px;
+            transform: scaleX(0); transform-origin: left;
+            animation: shLine 0.7s cubic-bezier(0.65, 0, 0.35, 1) 0.55s forwards;
+        }
+        .sh-ver {
+            position: absolute; bottom: 26px; left: 0; right: 0; text-align: center;
+            font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted);
+            opacity: 0; animation: shRise 0.6s ease 1s forwards;
+        }
+        @keyframes shRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes shLine { to { transform: scaleX(1); } }
+        @media (prefers-reduced-motion: reduce) {
+            .sh-needle, .sh-rdm, .sh-studio, .sh-line, .sh-ver { animation: none; opacity: 1; transform: none; }
+            .sh-needle { transform: rotate(74deg); }
+        }
+
+        /* ---- home launcher ---- */
+        #suiteHome {
+            position: fixed; inset: 0; z-index: 15000;
+            background: radial-gradient(ellipse 62% 50% at 50% 38%, rgba(255,255,255,0.04), rgba(255,255,255,0) 70%), var(--bg-canvas);
+            display: none; flex-direction: column;
+        }
+        .sh-topbar {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 14px; background: var(--bg-toolbar);
+            border-bottom: 1px solid var(--border); box-shadow: var(--shadow-sm);
+        }
+        .sh-topbar .b { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 13px; }
+        .sh-topbar .v { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); }
+        .sh-center { flex: 1; display: flex; align-items: center; justify-content: center; padding: 28px 22px; overflow-y: auto; }
+        .sh-wrap { width: 100%; max-width: 980px; }
+        .sh-headrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+        .sh-h { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 26px; letter-spacing: 0.01em; margin: 0; }
+        .sh-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+        .sh-conn {
+            display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted);
+            background: var(--panel); border: 1px solid var(--border); border-radius: 20px;
+            padding: 6px 12px; box-shadow: var(--shadow-sm); white-space: nowrap;
+        }
+        .sh-conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); display: inline-block; flex-shrink: 0; }
+        .sh-conn.ok i { background: #6FBF73; box-shadow: 0 0 6px rgba(111,191,115,0.7); }
+        .sh-conn.ok { color: var(--text); }
+        .sh-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
+        .sh-card {
+            background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm); cursor: pointer; padding: 14px;
+            transition: border-color 0.15s, transform 0.15s; text-align: left;
+        }
+        .sh-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .sh-card:hover .sh-info .s { color: var(--accent-hover); }
+        .sh-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+        .sh-card.dev { cursor: default; }
+        .sh-card.dev:hover { border-color: var(--border); transform: none; }
+        .sh-hero { grid-column: span 7; display: flex; gap: 16px; }
+        .sh-hero .sh-visual { flex: 1.25; min-height: 172px; }
+        .sh-hero .sh-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .sh-kpcard { grid-column: span 5; display: flex; flex-direction: column; gap: 12px; }
+        .sh-kpcard .sh-visual { height: 130px; }
+        .sh-small { grid-column: span 6; display: flex; gap: 14px; align-items: center; padding: 12px 14px; }
+        .sh-small .sh-visual { width: 106px; height: 72px; flex-shrink: 0; }
+        .sh-visual {
+            background: radial-gradient(ellipse 80% 70% at 50% 42%, #2A2C30, #1B1D20 85%);
+            border: 1px solid var(--border); border-radius: var(--radius-md);
+            display: flex; align-items: center; justify-content: center; overflow: hidden;
+            box-shadow: var(--shadow-inset);
+        }
+        .sh-visual svg { display: block; max-width: 94%; max-height: 94%; }
+        .sh-info .t { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 14px; color: var(--text); }
+        .sh-info .d { font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.55; }
+        .sh-info .s { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--accent); margin-top: 10px; letter-spacing: 0.1em; }
+        .sh-card.dev .sh-info .t { color: var(--text-muted); }
+        .sh-card.dev .sh-info .s { color: var(--text-muted); }
+        @media (max-width: 940px) { .sh-hero, .sh-kpcard, .sh-small { grid-column: span 12; } }
+
+        /* ---- keypad workspace ---- */
+        #kpWorkspace { position: fixed; inset: 0; z-index: 15000; background: var(--bg-canvas); display: none; flex-direction: column; }
+        .kp-topbar {
+            display: flex; align-items: center; gap: 12px; padding: 7px 12px;
+            background: var(--bg-toolbar); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-sm);
+            flex-wrap: wrap;
+        }
+        .kp-topbar .b { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 13px; }
+        .kp-chip {
+            font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted);
+            background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 4px 8px; white-space: nowrap;
+        }
+        .kp-modes { margin-left: auto; display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+        .kp-modes button { background: none; border: none; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 600; padding: 6px 16px; cursor: pointer; }
+        .kp-modes button.on { background: var(--accent); color: #fff; }
+        .kp-body { display: flex; flex: 1; min-height: 0; flex-wrap: wrap; }
+        .kp-rail { width: 128px; background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+        .kp-rail-title { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin: 0 4px 4px; font-weight: 600; }
+        .kp-model {
+            background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md);
+            color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 10.5px;
+            padding: 8px 6px 6px; cursor: pointer; text-align: center; box-shadow: var(--shadow-sm);
+        }
+        .kp-model:hover { border-color: var(--border-light); color: var(--text); }
+        .kp-model.on { border-color: var(--accent); color: var(--text); background: var(--panel-elevated); }
+        .kp-model .mini { display: grid; gap: 3px; justify-content: center; margin-bottom: 5px; }
+        .kp-model .mini i { display: block; width: 8px; height: 8px; background: var(--border-light); border-radius: 50%; }
+        .kp-model.on .mini i { background: var(--accent); }
+        .kp-stage {
+            flex: 1 1 420px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 26px 16px; min-width: 320px; overflow: auto;
+            background: radial-gradient(ellipse 60% 55% at 50% 46%, rgba(255,255,255,0.055), rgba(255,255,255,0) 70%), var(--bg-canvas);
+        }
+        .kp-stage svg { max-width: 100%; height: auto; flex-shrink: 0; }
+        .kp-hint { color: var(--text-muted); font-size: 11px; margin-top: 18px; text-align: center; }
+        .kp-live-strip {
+            display: none; align-items: center; gap: 12px; background: var(--panel);
+            border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+            padding: 7px 12px; margin-bottom: 20px; font-size: 11px; flex-wrap: wrap;
+        }
+        .kp-live-strip.show { display: flex; }
+        .kp-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #6fbf73; animation: kpPulse 1.6s infinite; }
+        @keyframes kpPulse { 50% { opacity: 0.35; } }
+        .kp-ct { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+        .kp-ct b { color: var(--text); font-weight: 600; }
+        .kp-ct.hot b { color: #e05d52; }
+        .kp-insp { width: 300px; background: var(--panel); border-left: 1px solid var(--border); padding: 12px 14px; flex-shrink: 0; overflow-y: auto; }
+        .kp-insp h2 { font-family: 'Sora', sans-serif; font-size: 12.5px; font-weight: 600; margin: 0 0 1px; }
+        .kp-sub { color: var(--text-muted); font-size: 10px; font-family: 'JetBrains Mono', monospace; margin-bottom: 10px; }
+        .kp-grp { border-top: 1px solid var(--border); padding: 10px 0 2px; margin-top: 6px; }
+        .kp-gt { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 8px; }
+        .kp-field { margin-bottom: 9px; }
+        .kp-field label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 3px; }
+        .kp-field input[type=text], .kp-field select {
+            width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+            border-radius: var(--radius-md); padding: 5px 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace;
+        }
+        .kp-field input[type=text]:focus, .kp-field select:focus { outline: none; border-color: var(--accent); }
+        .kp-swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+        .kp-sw { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); cursor: pointer; padding: 0; box-shadow: var(--shadow-inset); }
+        .kp-sw.on { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--accent); }
+        .kp-seg { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+        .kp-seg button { flex: 1; background: none; border: none; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 10.5px; font-weight: 600; padding: 5px 0; cursor: pointer; }
+        .kp-seg button.on { background: var(--accent); color: #fff; }
+        .kp-slider { display: flex; align-items: center; gap: 8px; }
+        .kp-slider input[type=range] { flex: 1; accent-color: var(--accent); }
+        .kp-slider .val { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); width: 28px; text-align: right; }
+        .kp-note {
+            font-size: 10.5px; color: var(--text-muted); background: var(--bg);
+            border: 1px solid var(--border); border-left: 3px solid var(--accent);
+            border-radius: var(--radius-sm); padding: 7px 9px; margin-top: 12px; line-height: 1.5;
+        }
+        .kp-note b { color: var(--text); }
+        .kp-none { color: var(--text-muted); font-size: 11px; padding: 28px 8px; text-align: center; }
+        @media (max-width: 900px) {
+            .kp-rail { width: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); }
+            .kp-rail-title { display: none; }
+            .kp-model { flex: 1; }
+            .kp-insp { width: 100%; border-left: none; border-top: 1px solid var(--border); }
+        }
+        @media (prefers-reduced-motion: reduce) { .kp-live-dot { animation: none; } }
+    </style>
+
+    <div id="suiteSplash">
+        <div class="sh-lockup">
+            <svg class="sh-gauge" viewBox="0 0 100 100" aria-hidden="true">
+                <defs>
+                    <radialGradient id="shgFace" cx="0.5" cy="0.38" r="0.8">
+                        <stop offset="0" stop-color="#26292D"/><stop offset="0.65" stop-color="#1B1D20"/><stop offset="1" stop-color="#121416"/>
+                    </radialGradient>
+                    <linearGradient id="shgRim" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" stop-color="#6E767F"/><stop offset="0.5" stop-color="#33383E"/><stop offset="1" stop-color="#15171A"/>
+                    </linearGradient>
+                    <radialGradient id="shgHub" cx="0.4" cy="0.35" r="0.8">
+                        <stop offset="0" stop-color="#454B52"/><stop offset="1" stop-color="#191C1F"/>
+                    </radialGradient>
+                </defs>
+                <circle cx="50" cy="50" r="48" fill="#000" opacity="0.5"/>
+                <circle cx="50" cy="50" r="47" fill="none" stroke="url(#shgRim)" stroke-width="2.4"/>
+                <circle cx="50" cy="50" r="45.4" fill="url(#shgFace)"/>
+                <circle cx="50" cy="50" r="41.5" fill="none" stroke="#101214" stroke-width="1" opacity="0.8"/>
+                <path d="M 87.1 44.8 A 37.5 37.5 0 0 1 82.5 68.8" fill="none" stroke="#E0524D" stroke-width="4" opacity="0.85"/>
+                <g stroke="#CCD2D9" stroke-width="2.1">
+                    <g transform="rotate(-120 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
+                    <g transform="rotate(-80 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
+                    <g transform="rotate(-40 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
+                    <line x1="50" y1="9.5" x2="50" y2="16.5"/>
+                    <g transform="rotate(40 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
+                    <g transform="rotate(80 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
+                    <g transform="rotate(120 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
+                </g>
+                <g stroke="#767D85" stroke-width="1.2">
+                    <g transform="rotate(-100 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
+                    <g transform="rotate(-60 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
+                    <g transform="rotate(-20 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
+                    <g transform="rotate(20 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
+                    <g transform="rotate(60 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
+                    <g transform="rotate(100 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
+                </g>
+                <g class="sh-needle">
+                    <polygon points="48.9,53.5 51.1,53.5 50.5,15.5 49.5,15.5" fill="#0A0C0E" opacity="0.4" transform="translate(1.1,1.6)"/>
+                    <polygon points="48.9,53.5 51.1,53.5 50.5,15.5 49.5,15.5" fill="var(--accent)"/>
+                </g>
+                <circle cx="50" cy="50" r="6.2" fill="url(#shgHub)" stroke="#0B0D0F" stroke-width="1"/>
+                <circle cx="50" cy="50" r="2" fill="#0D0E10"/>
+                <ellipse cx="40" cy="31" rx="20" ry="11" fill="#FFFFFF" opacity="0.028" transform="rotate(-18 40 31)"/>
+            </svg>
+            <div class="sh-word">
+                <div class="sh-rdm">RDM</div>
+                <div class="sh-studio">STUDIO</div>
+                <div class="sh-line"></div>
+            </div>
+        </div>
+        <div class="sh-ver" id="shVer"></div>
+    </div>
+
+    <div id="suiteHome">
+        <div class="sh-topbar">
+            <span class="b">RDM Studio</span>
+            <span class="v" id="shHomeVer"></span>
+        </div>
+        <div class="sh-center">
+            <div class="sh-wrap">
+                <div class="sh-headrow">
+                    <div>
+                        <h1 class="sh-h">Garage</h1>
+                        <div class="sh-sub">Everything on the car, configured in one place.</div>
+                    </div>
+                    <span class="sh-conn" id="shConn"><i></i><span id="shConnText">Offline — This PC</span></span>
+                </div>
+                <div class="sh-grid">
+
+                    <div class="sh-card sh-hero" tabindex="0" role="button" onclick="_suiteOpenDash()" onkeydown="if(event.key==='Enter')_suiteOpenDash()">
+                        <div class="sh-visual">
+                            <svg viewBox="0 0 250 135" aria-hidden="true">
+                                <defs>
+                                    <linearGradient id="shvBez" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E3136"/><stop offset="0.5" stop-color="#17181B"/><stop offset="1" stop-color="#101113"/></linearGradient>
+                                    <radialGradient id="shvScr" cx="0.5" cy="0.35" r="0.9"><stop offset="0" stop-color="#12151A"/><stop offset="1" stop-color="#07090C"/></radialGradient>
+                                    <filter id="shvGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                                </defs>
+                                <rect x="4" y="4" width="242" height="127" rx="12" fill="url(#shvBez)" stroke="#000" stroke-width="1.5"/>
+                                <rect x="6.5" y="6.5" width="237" height="122" rx="10" fill="none" stroke="#4A5057" stroke-width="0.8" opacity="0.35"/>
+                                <rect x="13" y="13" width="224" height="109" rx="5" fill="url(#shvScr)"/>
+                                <path d="M 37.1 86 A 38 38 0 1 1 102.9 86" fill="none" stroke="#23262B" stroke-width="5.5" stroke-linecap="round"/>
+                                <path d="M 37.1 86 A 38 38 0 0 1 101.1 45.2" fill="none" stroke="#FF9F0A" stroke-width="5.5" stroke-linecap="round" filter="url(#shvGlow)"/>
+                                <line x1="70" y1="67" x2="94.6" y2="49.8" stroke="#E8EAED" stroke-width="2"/>
+                                <circle cx="70" cy="67" r="3.5" fill="#33383E" stroke="#0B0D0F" stroke-width="1"/>
+                                <path d="M 147.1 86 A 38 38 0 1 1 212.9 86" fill="none" stroke="#23262B" stroke-width="5.5" stroke-linecap="round"/>
+                                <path d="M 147.1 86 A 38 38 0 0 1 167 31.3" fill="none" stroke="#32D6D0" stroke-width="5.5" stroke-linecap="round" filter="url(#shvGlow)"/>
+                                <line x1="180" y1="67" x2="169.7" y2="38.8" stroke="#E8EAED" stroke-width="2"/>
+                                <circle cx="180" cy="67" r="3.5" fill="#33383E" stroke="#0B0D0F" stroke-width="1"/>
+                                <text x="125" y="64" text-anchor="middle" font-family="Sora, sans-serif" font-size="20" font-weight="700" fill="#E8EAED">187</text>
+                                <text x="125" y="76" text-anchor="middle" font-family="Sora, sans-serif" font-size="7.5" fill="#6E7681" letter-spacing="1">KM/H</text>
+                                <rect x="90" y="103" width="70" height="7" rx="2" fill="#1A1D21" stroke="#0B0D0F" stroke-width="0.8"/>
+                                <rect x="90" y="103" width="44" height="7" rx="2" fill="#2D8CEB" filter="url(#shvGlow)"/>
+                                <polygon points="13,13 92,13 42,122 13,122" fill="#FFFFFF" opacity="0.035"/>
+                            </svg>
+                        </div>
+                        <div class="sh-info">
+                            <div class="t">RDM-7 Dash</div>
+                            <div class="d">Design layouts, bind channels, preview live, push to the device.</div>
+                            <div class="s">OPEN LAYOUT EDITOR &#8594;</div>
+                        </div>
+                    </div>
+
+                    <div class="sh-card sh-kpcard" tabindex="0" role="button" onclick="_kpOpen()" onkeydown="if(event.key==='Enter')_kpOpen()">
+                        <div class="sh-visual">
+                            <svg viewBox="0 0 140 140" aria-hidden="true">
+                                <defs>
+                                    <linearGradient id="shvKb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E3136"/><stop offset="0.5" stop-color="#17181B"/><stop offset="1" stop-color="#101113"/></linearGradient>
+                                    <radialGradient id="shvCap" cx="0.5" cy="0.3" r="0.9"><stop offset="0" stop-color="#3D4147"/><stop offset="0.7" stop-color="#1E2024"/><stop offset="1" stop-color="#121417"/></radialGradient>
+                                    <filter id="shvKGlow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                                </defs>
+                                <rect x="5" y="5" width="130" height="130" rx="16" fill="url(#shvKb)" stroke="#000" stroke-width="1.5"/>
+                                <rect x="12" y="12" width="56" height="56" rx="10" fill="#17191C" stroke="#08090B" stroke-width="1.5"/>
+                                <rect x="72" y="12" width="56" height="56" rx="10" fill="#17191C" stroke="#08090B" stroke-width="1.5"/>
+                                <rect x="12" y="72" width="56" height="56" rx="10" fill="#17191C" stroke="#08090B" stroke-width="1.5"/>
+                                <rect x="72" y="72" width="56" height="56" rx="10" fill="#17191C" stroke="#08090B" stroke-width="1.5"/>
+                                <g>
+                                    <circle cx="40" cy="40" r="21" fill="#0A0C0E"/>
+                                    <circle cx="40" cy="40" r="18" fill="none" stroke="#2EE04A" stroke-width="3.4" filter="url(#shvKGlow)"/>
+                                    <circle cx="40" cy="40" r="14" fill="url(#shvCap)" stroke="#0A0C0E" stroke-width="1.2"/>
+                                    <g transform="translate(31,31) scale(0.45)" style="color:rgba(240,244,248,0.85)"><path fill="currentColor" d="M20 6.5 30.5 19h-6.6v14h-7.8V19H9.5z"/></g>
+                                </g>
+                                <g>
+                                    <circle cx="100" cy="40" r="21" fill="#0A0C0E"/>
+                                    <circle cx="100" cy="40" r="18" fill="none" stroke="#1A1D21" stroke-width="3.4"/>
+                                    <circle cx="100" cy="40" r="14" fill="url(#shvCap)" stroke="#0A0C0E" stroke-width="1.2"/>
+                                    <g transform="translate(91,31) scale(0.45)" style="color:rgba(240,244,248,0.55)"><g fill="currentColor"><ellipse cx="18.5" cy="20" rx="10.5" ry="7.6"/><circle cx="32" cy="17" r="3.6"/><rect x="10" y="26.2" width="4.6" height="4.6" rx="2"/><rect x="22.4" y="26.2" width="4.6" height="4.6" rx="2"/></g></g>
+                                </g>
+                                <g>
+                                    <circle cx="40" cy="100" r="21" fill="#0A0C0E"/>
+                                    <circle cx="40" cy="100" r="18" fill="none" stroke="#1A1D21" stroke-width="3.4"/>
+                                    <circle cx="40" cy="100" r="14" fill="url(#shvCap)" stroke="#0A0C0E" stroke-width="1.2"/>
+                                    <g transform="translate(31,91) scale(0.45)" style="color:rgba(240,244,248,0.55)"><path fill="currentColor" d="M20 33.5 9.5 21h6.6V7h7.8v14h6.6z"/></g>
+                                </g>
+                                <g>
+                                    <circle cx="100" cy="100" r="21" fill="#0A0C0E"/>
+                                    <circle cx="100" cy="100" r="18" fill="none" stroke="#FF2E23" stroke-width="3.4" filter="url(#shvKGlow)"/>
+                                    <circle cx="100" cy="100" r="14" fill="url(#shvCap)" stroke="#0A0C0E" stroke-width="1.2"/>
+                                    <g transform="translate(91,91) scale(0.45)" style="color:rgba(240,244,248,0.85)"><g fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"><path d="M20 6.8v11"/><path d="M26.8 10.6a10.6 10.6 0 1 1-13.6 0"/></g></g>
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="sh-info">
+                            <div class="t">CAN Keypad</div>
+                            <div class="d">Blink PKP buttons, LED rings bound to channels, night dim.</div>
+                            <div class="s">OPEN CONFIGURATOR &#8594;</div>
+                        </div>
+                    </div>
+
+                    <div class="sh-card sh-small dev" tabindex="-1" aria-disabled="true">
+                        <div class="sh-visual">
+                            <svg viewBox="0 0 130 85" aria-hidden="true">
+                                <defs>
+                                    <radialGradient id="shvDome" cx="0.42" cy="0.3" r="0.9"><stop offset="0" stop-color="#33373C"/><stop offset="1" stop-color="#16181B"/></radialGradient>
+                                </defs>
+                                <ellipse cx="65" cy="70" rx="36" ry="6.5" fill="#000" opacity="0.35"/>
+                                <ellipse cx="65" cy="62" rx="32" ry="9" fill="#17191C" stroke="#0B0D0F" stroke-width="1"/>
+                                <path d="M 33 62 A 32 27 0 0 1 97 62 Z" fill="url(#shvDome)" stroke="#0B0D0F" stroke-width="1"/>
+                                <ellipse cx="54" cy="45" rx="12" ry="7" fill="#FFFFFF" opacity="0.06" transform="rotate(-14 54 45)"/>
+                                <path d="M 33 62 C 24 62 20 66 14 66" fill="none" stroke="#101214" stroke-width="4" stroke-linecap="round"/>
+                                <path d="M 55 22 A 14 14 0 0 1 75 22" fill="none" stroke="#4A5057" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M 59 27 A 8 8 0 0 1 71 27" fill="none" stroke="#4A5057" stroke-width="2" stroke-linecap="round"/>
+                                <circle cx="65" cy="31" r="1.6" fill="#4A5057"/>
+                            </svg>
+                        </div>
+                        <div class="sh-info">
+                            <div class="t">GPS Lap Timer</div>
+                            <div class="d">25 Hz GPS + IMU puck. Predictive delta on the dash.</div>
+                            <div class="s">IN DEVELOPMENT</div>
+                        </div>
+                    </div>
+
+                    <div class="sh-card sh-small dev" tabindex="-1" aria-disabled="true">
+                        <div class="sh-visual">
+                            <svg viewBox="0 0 130 85" aria-hidden="true">
+                                <defs>
+                                    <linearGradient id="shvBox" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A2D31"/><stop offset="1" stop-color="#141618"/></linearGradient>
+                                </defs>
+                                <ellipse cx="65" cy="70" rx="42" ry="6" fill="#000" opacity="0.35"/>
+                                <rect x="25" y="24" width="80" height="42" rx="6" fill="url(#shvBox)" stroke="#000" stroke-width="1.2"/>
+                                <path d="M 31 25 H 99" stroke="#3A3F45" stroke-width="1" opacity="0.5"/>
+                                <rect x="10" y="34" width="16" height="22" rx="2.5" fill="#101214" stroke="#000" stroke-width="1"/>
+                                <circle cx="18" cy="39.5" r="1.6" fill="#4A5057"/><circle cx="18" cy="45" r="1.6" fill="#4A5057"/><circle cx="18" cy="50.5" r="1.6" fill="#4A5057"/>
+                                <line x1="105" y1="32" x2="113" y2="32" stroke="#4A5057" stroke-width="2"/>
+                                <line x1="105" y1="40" x2="113" y2="40" stroke="#4A5057" stroke-width="2"/>
+                                <line x1="105" y1="48" x2="113" y2="48" stroke="#4A5057" stroke-width="2"/>
+                                <line x1="105" y1="56" x2="113" y2="56" stroke="#4A5057" stroke-width="2"/>
+                                <rect x="36" y="38" width="30" height="2.5" rx="1" fill="#33383E"/>
+                                <rect x="36" y="45" width="22" height="2.5" rx="1" fill="#2A2E33"/>
+                                <circle cx="31" cy="60" r="2.2" fill="#101214"/><circle cx="99" cy="60" r="2.2" fill="#101214"/>
+                            </svg>
+                        </div>
+                        <div class="sh-info">
+                            <div class="t">CAN IO Expander</div>
+                            <div class="d">Analog, thermocouple and power outputs — pins become channels.</div>
+                            <div class="s">IN DEVELOPMENT</div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="kpWorkspace">
+        <div class="kp-topbar">
+            <button class="btn btn-secondary" style="font-size:10px; padding:4px 10px;" onclick="_kpClose()">&#8962; Home</button>
+            <span class="b">Keypad Configurator</span>
+            <span class="kp-chip" id="kpChipModel">PKP-2200-SI · CANopen · node 0x15</span>
+            <span class="kp-chip" id="kpChipLink">no device link — saves to this PC</span>
+            <div class="kp-modes" role="group" aria-label="Mode">
+                <button id="kpBtnDesign" class="on" onclick="_kpSetLive(false)">Design</button>
+                <button id="kpBtnLive" onclick="_kpSetLive(true)">Live (sim)</button>
+            </div>
+            <button class="btn" style="font-size:11px; padding:5px 14px;" onclick="_kpSaveExplicit()">Save</button>
+        </div>
+        <div class="kp-body">
+            <div class="kp-rail" id="kpRail"><div class="kp-rail-title">Model</div></div>
+            <div class="kp-stage">
+                <div class="kp-live-strip" id="kpLiveStrip">
+                    <span class="kp-live-dot"></span>
+                    <span>Simulated car running</span>
+                    <span class="kp-ct" id="kpCtReadout">coolant_temp <b>84.0</b> &#176;C</span>
+                    <span style="color:var(--text-muted); font-size:10.5px;">click keys to press them &#8212; LEDs bound to channels react on their own</span>
+                </div>
+                <div id="kpStageSvg"></div>
+                <div class="kp-hint" id="kpHint">Click any key to configure it.</div>
+            </div>
+            <div class="kp-insp" id="kpInspector"><div class="kp-none">Select a key to configure it</div></div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        "use strict";
+
+        /* ============ keypad configurator (Phase K0) ============ */
+        var LED_COLORS = [
+            { id: "red", hex: "#FF2E23" }, { id: "green", hex: "#2EE04A" }, { id: "blue", hex: "#3B82F6" },
+            { id: "yellow", hex: "#FFD60A" }, { id: "cyan", hex: "#32D6D0" }, { id: "purple", hex: "#AF52DE" },
+            { id: "white", hex: "#E8F4FF" }, { id: "amber", hex: "#FF9F0A" }, { id: "lime", hex: "#A8E05F" }
+        ];
+        var HEX = {}; LED_COLORS.forEach(function (c) { HEX[c.id] = c.hex; });
+        var MODELS = [
+            { id: "pkp2200", name: "PKP-2200", rows: 2, cols: 2 },
+            { id: "pkp2400", name: "PKP-2400", rows: 2, cols: 4 },
+            { id: "pkp2600", name: "PKP-2600", rows: 2, cols: 6 },
+            { id: "pkp3500", name: "PKP-3500", rows: 3, cols: 5 }
+        ];
+        var ICONS = {
+            up: '<path fill="currentColor" d="M20 6.5 30.5 19h-6.6v14h-7.8V19H9.5z"/>',
+            down: '<path fill="currentColor" d="M20 33.5 9.5 21h6.6V7h7.8v14h6.6z"/>',
+            turtle: '<g fill="currentColor"><ellipse cx="18.5" cy="20" rx="10.5" ry="7.6"/><circle cx="32" cy="17" r="3.6"/><path d="M27.5 18.2c1.6-.6 3-.6 4.4 0l-.4 2.6c-1.4-.7-2.6-.9-4-.6z"/><rect x="10" y="26.2" width="4.6" height="4.6" rx="2"/><rect x="22.4" y="26.2" width="4.6" height="4.6" rx="2"/><rect x="12.4" y="9.6" width="4.4" height="4.4" rx="2"/><path d="M8.4 21.8c-2.3.6-3.4-.4-3.2-2.1 1.2-.6 2.5-.3 3.5.6z"/></g>',
+            power: '<g fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"><path d="M20 6.8v11"/><path d="M26.8 10.6a10.6 10.6 0 1 1-13.6 0"/></g>',
+            fan: '<g fill="currentColor"><circle cx="20" cy="20" r="3.4"/><path d="M20 17c-1-6-6-8-9-6 2 3 4 5 7 7zM23 20c6-1 8-6 6-9-3 2-5 4-7 7zM17 23c-6 1-8 6-6 9 3-2 5-4 7-7zM20 23c1 6 6 8 9 6-2-3-4-5-7-7z" transform="rotate(45 20 20)"/></g>',
+            pump: '<path fill="currentColor" d="M20 7.5c5 7 8 11 8 15a8 8 0 1 1-16 0c0-4 3-8 8-15z"/>',
+            light: '<g><path fill="currentColor" d="M17 12a8.5 8.5 0 0 0 0 16c4 0 6-2 6-8s-2-8-6-8z"/><g stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M27 14h6M27 20h6M27 26h6"/></g></g>',
+            moon: '<path fill="currentColor" d="M25 8a11.5 11.5 0 1 0 7 20.5A13 13 0 0 1 25 8z"/>',
+            bolt: '<path fill="currentColor" d="M22 7 12 22h7l-3 11 12-16h-7z"/>',
+            page: '<g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 10l10 10-10 10M24 10l8 10-8 10"/></g>',
+            blank: ""
+        };
+        var DEFAULT_KEYS = [
+            { label: "MAP ▲", text: false, icon: "up", mode: "paired", preset: "Map up", follows: "self", color: "green", behavior: "solid" },
+            { label: "PIT", text: false, icon: "turtle", mode: "toggle", preset: "Pit limiter", follows: "self", color: "amber", behavior: "slow" },
+            { label: "MAP ▼", text: false, icon: "down", mode: "paired", preset: "Map down", follows: "self", color: "blue", behavior: "solid" },
+            { label: "MAIN", text: false, icon: "power", mode: "toggle", preset: "Ignition / main", follows: "self", color: "red", behavior: "solid" },
+            { label: "FAN", text: false, icon: "fan", mode: "toggle", preset: "Fan override", follows: "coolant_temp", color: "amber", behavior: "solid" },
+            { label: "PUMP", text: false, icon: "pump", mode: "toggle", preset: "Fuel pump", follows: "self", color: "green", behavior: "solid" },
+            { label: "LAUNCH", text: false, icon: "bolt", mode: "momentary", preset: "Launch arm", follows: "self", color: "red", behavior: "fast" },
+            { label: "NIGHT", text: false, icon: "moon", mode: "toggle", preset: "Dash: night mode", follows: "self", color: "yellow", behavior: "solid" },
+            { label: "LIGHTS", text: false, icon: "light", mode: "toggle", preset: "Headlights", follows: "self", color: "white", behavior: "solid" },
+            { label: "ALS", text: true, icon: "blank", mode: "toggle", preset: "Anti-lag", follows: "self", color: "red", behavior: "slow" },
+            { label: "WIPER", text: true, icon: "blank", mode: "state3", preset: "Wiper sequence", follows: "self", color: "cyan", behavior: "solid" },
+            { label: "PAGE", text: false, icon: "page", mode: "momentary", preset: "Dash: next page", follows: "self", color: "cyan", behavior: "solid" },
+            { label: "LOG", text: true, icon: "blank", mode: "momentary", preset: "Log marker", follows: "self", color: "lime", behavior: "solid" },
+            { label: "", text: true, icon: "blank", mode: "momentary", preset: "— unassigned —", follows: "self", color: "red", behavior: "solid" },
+            { label: "", text: true, icon: "blank", mode: "momentary", preset: "— unassigned —", follows: "self", color: "red", behavior: "solid" }
+        ];
+        var KP_LS = "rdm7_keypads_v1";
+
+        var kp = {
+            model: MODELS[0], keys: JSON.parse(JSON.stringify(DEFAULT_KEYS)),
+            selected: 1, live: false, night: false, brightDay: 48, brightNight: 12,
+            keyOn: {}, keyDown: 0, coolant: 84.0, coolantDir: 1
+        };
+
+        function kpLoadCfg() {
+            try {
+                var all = JSON.parse(localStorage.getItem(KP_LS) || "{}");
+                var c = all[kp.model.id];
+                if (c && c.keys) {
+                    kp.keys = JSON.parse(JSON.stringify(DEFAULT_KEYS));
+                    c.keys.forEach(function (k, i) { if (i < kp.keys.length) kp.keys[i] = Object.assign(kp.keys[i], k); });
+                    if (typeof c.brightDay === "number") kp.brightDay = c.brightDay;
+                    if (typeof c.brightNight === "number") kp.brightNight = c.brightNight;
+                } else {
+                    kp.keys = JSON.parse(JSON.stringify(DEFAULT_KEYS));
+                }
+            } catch (e) { kp.keys = JSON.parse(JSON.stringify(DEFAULT_KEYS)); }
+        }
+        function kpSaveCfg() {
+            try {
+                var all = JSON.parse(localStorage.getItem(KP_LS) || "{}");
+                all[kp.model.id] = {
+                    keys: kp.keys.slice(0, kp.model.rows * kp.model.cols),
+                    brightDay: kp.brightDay, brightNight: kp.brightNight
+                };
+                localStorage.setItem(KP_LS, JSON.stringify(all));
+            } catch (e) { console.warn("keypad save failed:", e); }
+        }
+        window._kpSaveExplicit = function () {
+            kpSaveCfg();
+            if (typeof showToast === "function") showToast("Keypad config saved on this PC — device sync arrives with the keypad firmware update", "success");
+        };
+
+        var CELL = 104, SEAM = 7, PAD = 20, CAP_R = 27, RING_R = 36, WELL_R = 42, MARGIN = 44;
+        function keyAssigned(k) { return k.label !== "" || k.preset.indexOf("unassigned") === -1; }
+        function ledActive(i) {
+            var k = kp.keys[i];
+            if (!keyAssigned(k)) return false;
+            if (kp.live) { if (k.follows === "coolant_temp") return true; return !!kp.keyOn[i]; }
+            return true;
+        }
+        function ledColor(i) {
+            var k = kp.keys[i];
+            if (kp.live && k.follows === "coolant_temp" && kp.coolant > 95) return HEX.red;
+            return HEX[k.color];
+        }
+        function ledBehavior(i) {
+            var k = kp.keys[i];
+            if (kp.live && k.follows === "coolant_temp" && kp.coolant > 95) return "fast";
+            return k.behavior;
+        }
+        function kpBrightness() { return (kp.night ? kp.brightNight : kp.brightDay) / 63; }
+
+        function kpBuildSvg() {
+            var m = kp.model;
+            var hw = PAD * 2 + m.cols * CELL + (m.cols - 1) * SEAM;
+            var hh = PAD * 2 + m.rows * CELL + (m.rows - 1) * SEAM + 14;
+            var w = hw + MARGIN * 2, h = hh + MARGIN * 2;
+            var br = kpBrightness();
+            var s = '<svg viewBox="0 0 ' + w + " " + h + '" width="' + Math.min(w, 640) + '" xmlns="http://www.w3.org/2000/svg" font-family=\'Sora, "Segoe UI", sans-serif\'>';
+            s += '<defs>' +
+                '<linearGradient id="kpHous" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E3136"/><stop offset="0.08" stop-color="#232529"/><stop offset="0.55" stop-color="#17181B"/><stop offset="1" stop-color="#101113"/></linearGradient>' +
+                '<linearGradient id="kpRim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8B939C" stop-opacity="0.55"/><stop offset="0.18" stop-color="#565C63" stop-opacity="0.18"/><stop offset="0.6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.4"/></linearGradient>' +
+                '<linearGradient id="kpGloss" x1="0" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.075"/><stop offset="0.28" stop-color="#fff" stop-opacity="0.02"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/></linearGradient>' +
+                '<radialGradient id="kpCell" cx="0.5" cy="0.22" r="1.1"><stop offset="0" stop-color="#222428"/><stop offset="0.55" stop-color="#18191C"/><stop offset="1" stop-color="#111214"/></radialGradient>' +
+                '<radialGradient id="kpCapr" cx="0.5" cy="0.26" r="0.95"><stop offset="0" stop-color="#43474D"/><stop offset="0.35" stop-color="#2C2F34"/><stop offset="0.75" stop-color="#1B1D21"/><stop offset="1" stop-color="#0E0F12"/></radialGradient>' +
+                '<radialGradient id="kpCaprDown" cx="0.5" cy="0.34" r="0.95"><stop offset="0" stop-color="#31343a"/><stop offset="0.6" stop-color="#1E2024"/><stop offset="1" stop-color="#0B0C0E"/></radialGradient>' +
+                '<radialGradient id="kpWell" cx="0.5" cy="0.5" r="0.5"><stop offset="0.7" stop-color="#08090B"/><stop offset="0.9" stop-color="#0E0F12"/><stop offset="1" stop-color="#17181B"/></radialGradient>' +
+                '<radialGradient id="kpFloor" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.55"/><stop offset="0.7" stop-color="#000" stop-opacity="0.28"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>' +
+                '<filter id="kpLedCrisp" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+                '<filter id="kpLedBloom" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="7.5"/></filter>' +
+                '<filter id="kpSoft2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2"/></filter>' +
+                '<filter id="kpGrain" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0" result="wn"/><feComposite in="wn" in2="SourceAlpha" operator="in"/></filter>' +
+                '<style>@keyframes kpBlinkS{50%{opacity:0.08}}@keyframes kpBlinkF{50%{opacity:0.08}}' +
+                '.kp-blink-slow{animation:kpBlinkS 1.5s step-start infinite}.kp-blink-fast{animation:kpBlinkF 0.42s step-start infinite}' +
+                '@media (prefers-reduced-motion: reduce){.kp-blink-slow,.kp-blink-fast{animation:none}}</style>' +
+                '</defs>';
+            var X = MARGIN, Y = MARGIN;
+            s += '<ellipse cx="' + (X + hw / 2) + '" cy="' + (Y + hh - 2) + '" rx="' + (hw * 0.56) + '" ry="' + (hh * 0.16) + '" fill="url(#kpFloor)" transform="translate(0,' + (hh * 0.09) + ')"/>';
+            s += '<rect x="' + X + '" y="' + (Y + 2.5) + '" width="' + hw + '" height="' + hh + '" rx="24" fill="#000" opacity="0.55" filter="url(#kpSoft2)"/>';
+            s += '<rect x="' + X + '" y="' + Y + '" width="' + hw + '" height="' + hh + '" rx="24" fill="url(#kpHous)"/>';
+            s += '<rect x="' + (X + 0.8) + '" y="' + (Y + 0.8) + '" width="' + (hw - 1.6) + '" height="' + (hh - 1.6) + '" rx="23.2" fill="none" stroke="url(#kpRim)" stroke-width="1.6"/>';
+            s += '<rect x="' + X + '" y="' + Y + '" width="' + hw + '" height="' + (hh * 0.55) + '" rx="24" fill="url(#kpGloss)"/>';
+            s += '<rect x="' + X + '" y="' + Y + '" width="' + hw + '" height="' + hh + '" rx="24" filter="url(#kpGrain)" opacity="0.05"/>';
+            s += '<text x="' + (X + hw / 2) + '" y="' + (Y + hh - 8) + '" text-anchor="middle" font-size="8" letter-spacing="2.6" fill="#43484F">' + kp.model.name + '-SI &#183; CAN KEYPAD</text>';
+            for (var r = 0; r < m.rows; r++) {
+                for (var c = 0; c < m.cols; c++) {
+                    var i = r * m.cols + c;
+                    var k = kp.keys[i];
+                    var x = X + PAD + c * (CELL + SEAM), y = Y + PAD + r * (CELL + SEAM);
+                    var cx = x + CELL / 2, cy = y + CELL / 2;
+                    var on = ledActive(i), col = ledColor(i), beh = ledBehavior(i);
+                    var down = kp.keyDown === i + 1;
+                    var blinkCls = beh === "slow" ? "kp-blink-slow" : beh === "fast" ? "kp-blink-fast" : "";
+                    var dy = down ? 1.6 : 0;
+                    s += '<g class="kp-keyg" data-i="' + i + '" style="cursor:pointer">';
+                    s += '<rect x="' + x + '" y="' + y + '" width="' + CELL + '" height="' + CELL + '" rx="16" fill="#060708"/>';
+                    s += '<rect x="' + (x + 1.4) + '" y="' + (y + 1.4) + '" width="' + (CELL - 2.8) + '" height="' + (CELL - 2.8) + '" rx="14.8" fill="url(#kpCell)"/>';
+                    s += '<path d="M ' + (x + 16) + " " + (y + 2.2) + " H " + (x + CELL - 16) + '" stroke="#4A5057" stroke-width="1" opacity="0.4" fill="none"/>';
+                    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + WELL_R + '" fill="url(#kpWell)"/>';
+                    s += '<path d="M ' + (cx - WELL_R + 4) + " " + (cy - 10) + " A " + (WELL_R - 3) + " " + (WELL_R - 3) + " 0 0 1 " + (cx + WELL_R - 4) + " " + (cy - 10) + '" stroke="#000" stroke-width="5" opacity="0.45" fill="none" filter="url(#kpSoft2)"/>';
+                    if (on) {
+                        var op = 0.3 + 0.7 * br;
+                        s += '<g class="' + blinkCls + '" opacity="' + op + '">' +
+                            '<circle cx="' + cx + '" cy="' + cy + '" r="' + RING_R + '" fill="none" stroke="' + col + '" stroke-width="12" opacity="0.5" filter="url(#kpLedBloom)"/>' +
+                            '<circle cx="' + cx + '" cy="' + cy + '" r="' + RING_R + '" fill="none" stroke="' + col + '" stroke-width="5" filter="url(#kpLedCrisp)"/>' +
+                            '<circle cx="' + cx + '" cy="' + cy + '" r="' + (RING_R - 0.6) + '" fill="none" stroke="#FFFFFF" stroke-width="1.4" opacity="0.65"/>' +
+                            "</g>";
+                    } else {
+                        s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + RING_R + '" fill="none" stroke="#191C20" stroke-width="5"/>' +
+                            '<circle cx="' + cx + '" cy="' + (cy + 1) + '" r="' + (RING_R + 2.6) + '" fill="none" stroke="#33383E" stroke-width="0.8" opacity="0.5"/>' +
+                            '<circle cx="' + cx + '" cy="' + cy + '" r="' + (RING_R - 2.4) + '" fill="none" stroke="#0A0C0E" stroke-width="1.2"/>';
+                    }
+                    s += '<ellipse cx="' + cx + '" cy="' + (cy + 3.5 + dy) + '" rx="' + (CAP_R + 1.5) + '" ry="' + (CAP_R - 1) + '" fill="#000" opacity="' + (down ? 0.35 : 0.5) + '" filter="url(#kpSoft2)"/>';
+                    s += '<circle cx="' + cx + '" cy="' + (cy + dy) + '" r="' + CAP_R + '" fill="url(#' + (down ? "kpCaprDown" : "kpCapr") + ')"/>';
+                    s += '<circle cx="' + cx + '" cy="' + (cy + dy) + '" r="' + CAP_R + '" filter="url(#kpGrain)" opacity="0.07"/>';
+                    s += '<circle cx="' + cx + '" cy="' + (cy + dy) + '" r="' + (CAP_R - 0.6) + '" fill="none" stroke="#000" stroke-width="1.4" opacity="0.55"/>';
+                    s += '<path d="M ' + (cx - CAP_R + 5) + " " + (cy - 11 + dy) + " A " + (CAP_R - 4) + " " + (CAP_R - 4) + " 0 0 1 " + (cx + CAP_R - 5) + " " + (cy - 11 + dy) + '" stroke="#B9C2CB" stroke-width="1.3" opacity="' + (down ? 0.1 : 0.22) + '" fill="none" filter="url(#kpSoft2)"/>';
+                    if (on) s += '<circle cx="' + cx + '" cy="' + (cy + dy) + '" r="' + (CAP_R - 1.2) + '" fill="none" stroke="' + col + '" stroke-width="1.6" opacity="' + (0.1 + 0.1 * br) + '"/>';
+                    var insOp = keyAssigned(k) ? (0.62 + 0.34 * br) : 0.16;
+                    if (!k.text && ICONS[k.icon]) {
+                        s += '<g transform="translate(' + (cx - 18.4) + "," + (cy - 17.4 + dy) + ') scale(0.92)" style="color:rgba(0,0,0,0.6)">' + ICONS[k.icon] + "</g>";
+                        s += '<g transform="translate(' + (cx - 18.4) + "," + (cy - 18.4 + dy) + ') scale(0.92)" style="color:rgba(240,244,248,' + insOp.toFixed(2) + ')">' + ICONS[k.icon] + "</g>";
+                    } else if (k.label) {
+                        s += '<text x="' + cx + '" y="' + (cy + 5.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" fill="rgba(0,0,0,0.6)">' + k.label + "</text>";
+                        s += '<text x="' + cx + '" y="' + (cy + 4.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" fill="rgba(240,244,248,' + insOp.toFixed(2) + ')">' + k.label + "</text>";
+                    }
+                    if (!kp.live && kp.selected === i) {
+                        s += '<rect x="' + (x - 2.5) + '" y="' + (y - 2.5) + '" width="' + (CELL + 5) + '" height="' + (CELL + 5) + '" rx="18" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="7 5"/>';
+                    }
+                    s += "</g>";
+                }
+            }
+            s += "</svg>";
+            return s;
+        }
+
+        function kpRenderStage() {
+            var el = document.getElementById("kpStageSvg");
+            if (!el) return;
+            el.innerHTML = kpBuildSvg();
+            el.querySelectorAll(".kp-keyg").forEach(function (g) {
+                g.addEventListener("click", function () {
+                    var i = parseInt(g.getAttribute("data-i"), 10);
+                    if (kp.live) { kpPressKey(i); }
+                    else { kp.selected = i; kpRenderStage(); kpRenderInspector(); }
+                });
+            });
+        }
+
+        var kpSimTimer = null;
+        function kpPressKey(i) {
+            var k = kp.keys[i];
+            if (!keyAssigned(k)) return;
+            kp.keyDown = i + 1;
+            kpRenderStage();
+            setTimeout(function () {
+                kp.keyDown = 0;
+                if (k.mode !== "momentary") kp.keyOn[i] = !kp.keyOn[i];
+                else { kp.keyOn[i] = true; setTimeout(function () { kp.keyOn[i] = false; kpRenderStage(); }, 450); }
+                kpRenderStage();
+            }, 130);
+        }
+        function kpSimTick() {
+            kp.coolant += kp.coolantDir * (0.6 + Math.abs(Math.sin(kp.coolant)) * 0.8);
+            if (kp.coolant > 103) kp.coolantDir = -1;
+            if (kp.coolant < 82) kp.coolantDir = 1;
+            var hot = kp.coolant > 95;
+            var el = document.getElementById("kpCtReadout");
+            if (el) {
+                el.className = "kp-ct" + (hot ? " hot" : "");
+                el.innerHTML = 'coolant_temp <b>' + kp.coolant.toFixed(1) + "</b> &#176;C" + (hot ? " &#8212; HIGH" : "");
+            }
+            kpRenderStage();
+        }
+        window._kpSetLive = function (on) {
+            kp.live = on;
+            var d = document.getElementById("kpBtnDesign"), l = document.getElementById("kpBtnLive");
+            if (d) d.className = on ? "" : "on";
+            if (l) l.className = on ? "on" : "";
+            var strip = document.getElementById("kpLiveStrip");
+            if (strip) strip.className = "kp-live-strip" + (on ? " show" : "");
+            var hint = document.getElementById("kpHint");
+            if (hint) hint.textContent = on
+                ? "Simulated live mode. With keypad firmware on the dash, this mirrors the physical unit — real presses light up here."
+                : "Click any key to configure it.";
+            if (on) { kp.keyOn = {}; if (!kpSimTimer) kpSimTimer = setInterval(kpSimTick, 700); }
+            else if (kpSimTimer) { clearInterval(kpSimTimer); kpSimTimer = null; }
+            kpRenderStage(); kpRenderInspector();
+        };
+
+        function opt(v, label, cur) { return '<option value="' + v + '"' + (v === cur ? " selected" : "") + ">" + label + "</option>"; }
+        function kpRenderInspector() {
+            var box = document.getElementById("kpInspector");
+            if (!box) return;
+            if (kp.live) { box.innerHTML = '<div class="kp-none">Live mode — configuration locked.<br><br>Switch to Design to edit.</div>'; return; }
+            var i = kp.selected, k = kp.keys[i];
+            if (i == null || !k) { box.innerHTML = '<div class="kp-none">Select a key to configure it</div>'; return; }
+            var chan = (k.label || "key" + (i + 1)).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") + "_sw";
+            var iconOpts = [["up", "▲ arrow"], ["down", "▼ arrow"], ["turtle", "turtle (limiter)"], ["power", "power"], ["fan", "fan"], ["pump", "fuel pump"], ["light", "headlight"], ["moon", "night"], ["bolt", "launch"], ["page", "page"], ["blank", "text label"]];
+            var html =
+                "<h2>Key " + (i + 1) + " — " + (k.label || "unassigned") + "</h2>" +
+                '<div class="kp-sub">' + kp.model.name + "-SI · TPDO1 0x195 bit " + i + "</div>" +
+                '<div class="kp-grp"><div class="kp-gt">Button</div>' +
+                '<div class="kp-field"><label>Label</label><input type="text" id="kpFLabel" value="' + k.label + '" maxlength="7"></div>' +
+                '<div class="kp-field"><label>Icon insert</label><select id="kpFIcon">' +
+                iconOpts.map(function (o) { return opt(o[0], o[1], k.text ? "blank" : k.icon); }).join("") +
+                "</select></div>" +
+                '<div class="kp-field"><label>Channel</label><input type="text" id="kpFChan" value="' + chan + '"></div>' +
+                '<div class="kp-field"><label>Mode</label><select id="kpFMode">' +
+                opt("momentary", "Momentary", k.mode) + opt("toggle", "Toggle", k.mode) +
+                opt("state3", "3-position (cycle)", k.mode) + opt("paired", "Paired ▲▼ with next key", k.mode) +
+                "</select></div>" +
+                '<div class="kp-field"><label>Function preset</label><select id="kpFPreset">' +
+                ["— unassigned —", "Pit limiter", "Ignition / main", "Launch arm", "Anti-lag", "Fan override", "Fuel pump", "Headlights", "Map up", "Map down", "Map switch", "Wiper sequence", "Log marker", "Dash: next page", "Dash: night mode"]
+                    .map(function (p) { return opt(p, p, k.preset); }).join("") +
+                "</select></div></div>" +
+                '<div class="kp-grp"><div class="kp-gt">LED ring</div>' +
+                '<div class="kp-field"><label>Follows</label><select id="kpFFollows">' +
+                opt("self", "This button’s state", k.follows) +
+                opt("coolant_temp", "coolant_temp › high warn", k.follows) +
+                opt("oil_press", "oil_press ‹ low warn", k.follows) +
+                opt("fan_output", "fan_output (RDM IO)", k.follows) +
+                "</select></div>" +
+                '<div class="kp-field"><label>Color</label><div class="kp-swatches">' +
+                LED_COLORS.map(function (c) {
+                    return '<button class="kp-sw' + (k.color === c.id ? " on" : "") + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '" aria-label="' + c.id + '"></button>';
+                }).join("") +
+                "</div></div>" +
+                '<div class="kp-field"><label>Behavior</label><div class="kp-seg" id="kpFBeh">' +
+                ["solid", "slow", "fast"].map(function (b) {
+                    return '<button data-b="' + b + '"' + (k.behavior === b ? ' class="on"' : "") + ">" + (b === "solid" ? "Solid" : b === "slow" ? "Slow blink" : "Fast blink") + "</button>";
+                }).join("") +
+                "</div></div></div>" +
+                '<div class="kp-grp"><div class="kp-gt">Keypad — brightness</div>' +
+                '<div class="kp-field"><label>Day</label><div class="kp-slider"><input type="range" id="kpFDay" min="0" max="63" value="' + kp.brightDay + '"><span class="val" id="kpVDay">' + kp.brightDay + "</span></div></div>" +
+                '<div class="kp-field"><label>Night (follows dash night mode)</label><div class="kp-slider"><input type="range" id="kpFNight" min="0" max="63" value="' + kp.brightNight + '"><span class="val" id="kpVNight">' + kp.brightNight + "</span></div></div>" +
+                '<div class="kp-field"><label>Preview</label><div class="kp-seg" id="kpFDayNight">' +
+                '<button data-n="0"' + (!kp.night ? ' class="on"' : "") + ">Day</button>" +
+                '<button data-n="1"' + (kp.night ? ' class="on"' : "") + ">Night</button>" +
+                "</div></div></div>";
+            if (k.follows !== "self") {
+                html += '<div class="kp-note">LED bound to <b>' + k.follows + "</b> — it shows the car’s real state, not just the button (switch to Live to watch it react).</div>";
+            }
+            box.innerHTML = html;
+            var g = function (id) { return document.getElementById(id); };
+            g("kpFLabel").addEventListener("input", function (e) { k.label = e.target.value.toUpperCase(); kpSaveCfg(); kpRenderStage(); });
+            g("kpFIcon").addEventListener("change", function (e) {
+                if (e.target.value === "blank") { k.text = true; k.icon = "blank"; }
+                else { k.text = false; k.icon = e.target.value; }
+                kpSaveCfg(); kpRenderStage();
+            });
+            g("kpFMode").addEventListener("change", function (e) { k.mode = e.target.value; kpSaveCfg(); });
+            g("kpFPreset").addEventListener("change", function (e) { k.preset = e.target.value; kpSaveCfg(); kpRenderStage(); });
+            g("kpFFollows").addEventListener("change", function (e) { k.follows = e.target.value; kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
+            box.querySelectorAll(".kp-sw").forEach(function (b) {
+                b.addEventListener("click", function () { k.color = b.getAttribute("data-c"); kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
+            });
+            g("kpFBeh").querySelectorAll("button").forEach(function (b) {
+                b.addEventListener("click", function () { k.behavior = b.getAttribute("data-b"); kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
+            });
+            g("kpFDay").addEventListener("input", function (e) { kp.brightDay = +e.target.value; g("kpVDay").textContent = e.target.value; kpSaveCfg(); kpRenderStage(); });
+            g("kpFNight").addEventListener("input", function (e) { kp.brightNight = +e.target.value; g("kpVNight").textContent = e.target.value; kpSaveCfg(); kpRenderStage(); });
+            g("kpFDayNight").querySelectorAll("button").forEach(function (b) {
+                b.addEventListener("click", function () { kp.night = b.getAttribute("data-n") === "1"; kpRenderInspector(); kpRenderStage(); });
+            });
+        }
+
+        var kpRailBuilt = false;
+        function kpBuildRail() {
+            if (kpRailBuilt) return;
+            kpRailBuilt = true;
+            var rail = document.getElementById("kpRail");
+            MODELS.forEach(function (m) {
+                var b = document.createElement("button");
+                b.className = "kp-model" + (m.id === kp.model.id ? " on" : "");
+                var mini = '<span class="mini" style="grid-template-columns:repeat(' + m.cols + ',8px)">';
+                for (var j = 0; j < m.rows * m.cols; j++) mini += "<i></i>";
+                mini += "</span>";
+                b.innerHTML = mini + m.name + '<br><span style="color:var(--text-muted);font-size:9.5px">' + (m.rows * m.cols) + " keys</span>";
+                b.addEventListener("click", function () {
+                    kpSaveCfg();
+                    kp.model = m;
+                    if (kp.selected >= m.rows * m.cols) kp.selected = 0;
+                    kpLoadCfg();
+                    var chip = document.getElementById("kpChipModel");
+                    if (chip) chip.textContent = m.name + "-SI · CANopen · node 0x15";
+                    document.querySelectorAll(".kp-model").forEach(function (x) { x.className = "kp-model"; });
+                    b.className = "kp-model on";
+                    kpRenderStage(); kpRenderInspector();
+                });
+                rail.appendChild(b);
+            });
+        }
+
+        window._kpOpen = function () {
+            var home = document.getElementById("suiteHome");
+            if (home) home.style.display = "none";
+            kpBuildRail();
+            kpLoadCfg();
+            var ws = document.getElementById("kpWorkspace");
+            if (ws) ws.style.display = "flex";
+            kpRenderStage(); kpRenderInspector();
+        };
+        window._kpClose = function () {
+            if (kpSimTimer) { clearInterval(kpSimTimer); kpSimTimer = null; kp.live = false; }
+            kpSaveCfg();
+            var ws = document.getElementById("kpWorkspace");
+            if (ws) ws.style.display = "none";
+            window._suiteHomeShow();
+        };
+
+        /* ============ splash + home ============ */
+        var connPollTimer = null;
+        function pollConn() {
+            var t = document.getElementById("shConnText");
+            var c = document.getElementById("shConn");
+            if (!t || !c) return;
+            var lbl = document.getElementById("connModeLabel");
+            var mode = document.getElementById("connectionMode");
+            var label = lbl ? lbl.textContent.trim() : "";
+            if (mode && mode.value === "local") { t.textContent = "Offline — This PC is its own dash"; c.className = "sh-conn"; }
+            else if (label && !/not connected|scanning|connecting|^wifi$|^local$|^usb/i.test(label)) {
+                t.textContent = "Connected — " + label; c.className = "sh-conn ok";
+            }
+            else { t.textContent = label || "Not connected"; c.className = "sh-conn"; }
+        }
+        window._suiteHomeShow = function () {
+            var ws = document.getElementById("kpWorkspace");
+            if (ws && ws.style.display !== "none") { window._kpClose(); return; }
+            var home = document.getElementById("suiteHome");
+            if (home) home.style.display = "flex";
+            pollConn();
+            if (!connPollTimer) connPollTimer = setInterval(pollConn, 1500);
+        };
+        window._suiteOpenDash = function () {
+            var home = document.getElementById("suiteHome");
+            if (home) home.style.display = "none";
+            if (connPollTimer) { clearInterval(connPollTimer); connPollTimer = null; }
+        };
+        document.addEventListener("keydown", function (e) {
+            if (e.key !== "Escape") return;
+            var ws = document.getElementById("kpWorkspace");
+            var home = document.getElementById("suiteHome");
+            if (ws && ws.style.display === "flex") { window._kpClose(); e.stopPropagation(); }
+            else if (home && home.style.display === "flex") { window._suiteOpenDash(); e.stopPropagation(); }
+        }, true);
+
+        /* boot: splash then home — only inside the Tauri app (the same dist is
+           served by dev rigs in plain browsers, where the editor should show
+           immediately) */
+        function bootSuite() {
+            if (!window.__TAURI__) return;
+            /* the WASM module (emscripten/SDL) rewrites document.title to its
+               internal name after init — pin the product name */
+            var titleEl = document.querySelector("title");
+            if (titleEl) new MutationObserver(function () {
+                if (document.title !== "RDM Studio") document.title = "RDM Studio";
+            }).observe(titleEl, { childList: true });
+            var splash = document.getElementById("suiteSplash");
+            var ver = (typeof _DESKTOP_VERSION !== "undefined") ? _DESKTOP_VERSION : "";
+            var v1 = document.getElementById("shVer"); if (v1) v1.textContent = "v" + ver;
+            var v2 = document.getElementById("shHomeVer"); if (v2) v2.textContent = "v" + ver;
+            window._suiteHomeShow();
+            if (!splash) return;
+            splash.style.display = "flex";
+            var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            var dismiss = function () {
+                splash.classList.add("sh-out");
+                setTimeout(function () { splash.style.display = "none"; }, 500);
+            };
+            var t = setTimeout(dismiss, reduced ? 1100 : 2450);
+            splash.addEventListener("click", function () { clearTimeout(t); dismiss(); });
+        }
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootSuite);
+        else bootSuite();
+    })();
+    </script>
+
+##[ end ]##
+
 ##[ block js-desktop-runtime ]##
 ##[ anchor ]##
         const RDM_LAYOUT_MAX_BYTES = 32768;
@@ -408,6 +1272,8 @@
                 toggle_live:    () => call(window.toggleLivePreview),
                 connect_wifi:   () => call(window._openWifiPicker),
                 scan:           () => call(window._scanForDevices),
+                home:           () => call(window._suiteHomeShow),
+                keypad:         () => call(window._kpOpen),
                 transfer:       () => call(window.openTransferModal),
                 device_manager: () => call(window.openDeviceManager),
                 go_local:       () => { const s = document.getElementById('connectionMode'); if (s) s.value = 'local'; call(window._onConnectionModeChange, 'local'); },

@@ -1540,6 +1540,8 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .build()?;
 
     let view = SubmenuBuilder::new(app, "View")
+        .text("home", "Home")
+        .separator()
         .text("fit", "Fit to Screen")
         .text("reset_view", "Reset View")
         .separator()
@@ -1551,6 +1553,7 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .text("connect_wifi", "Connect over WiFi…")
         .text("scan", "Scan for Devices")
         .separator()
+        .text("keypad", "Keypad Configurator…")
         .text("transfer", "Transfer Layouts…")
         .text("device_manager", "Device Manager…")
         .separator()
