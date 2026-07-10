@@ -63,7 +63,7 @@ Key backend subsystems:
 
 ### Frontend (`src/`)
 - **`firmware-base.html` + `tauri-overlay.html` → `dist/index.html`** — the SPA (~22k lines merged). See "Frontend is BUILT, not edited" above.
-- **`transport.js`** — Transport abstraction layer exposing `window.RDM` API. Implementations: LocalTransport, WifiTransport (+ hotspot variant), UsbTransport, plus the `fetch()` interceptor that reroutes the firmware's raw `/api/*` calls through the active transport under Tauri.
+- **`transport.js`** — Transport abstraction layer exposing `window.RDM` API. Implementations: LocalTransport, WifiTransport (+ hotspot variant), UsbTransport, plus the `fetch()` interceptor that reroutes the firmware's raw `/api/*` calls through the active transport under Tauri. **Local (Offline) is a "virtual dash"**: `_localRouteApiCall` serves `/api/layout/*`, `/api/image|font/list`, `/api/storage/info`, `/api/device/info`, etc. from `LocalTransport` (localStorage/IndexedDB), so the firmware editor code works offline unchanged. It keeps its own active layout in `rdm7_local_active`. The interceptor routes ALL modes (including local) through `proxyApiCall` — the earlier `mode!=='local'` skip made offline `/api` calls 404 on the tauri.localhost origin. `RDM.local` (the local store) and `RDM.deviceTransport()` (device when connected) are exposed so layout **transfer** can read/write both stores at once.
 - **`build/`** — WASM module. Loaded at runtime for real-time canvas rendering of dashboard widgets/signals.
 
 ### Communication Flow

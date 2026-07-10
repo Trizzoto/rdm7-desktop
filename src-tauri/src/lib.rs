@@ -1551,7 +1551,9 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .text("connect_wifi", "Connect over WiFi…")
         .text("scan", "Scan for Devices")
         .separator()
+        .text("transfer", "Transfer Layouts…")
         .text("device_manager", "Device Manager…")
+        .separator()
         .text("go_local", "Go Offline (Local)")
         .build()?;
 

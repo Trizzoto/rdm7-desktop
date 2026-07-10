@@ -1103,6 +1103,76 @@
      *  USB API proxy — maps /api/* URLs to UsbTransport methods
      * ═══════════════════════════════════════════════════════════════ */
 
+    /* ── Local "virtual dash" router ──────────────────────────────────
+     * Offline (Local) is its own dash: the firmware editor code talks to it
+     * via the same /api/* calls it uses for a real device, and this serves
+     * them from LocalTransport (localStorage/IndexedDB). Returns
+     * { status, data }; a 404 makes the editor fall through (e.g. no live
+     * /current, so loadLayout falls back to /raw?name=). */
+    const LOCAL_ACTIVE_KEY = 'rdm7_local_active';
+    async function _localRouteApiCall(url, method, body) {
+        const qIdx = url.indexOf('?');
+        const pathname = qIdx >= 0 ? url.slice(0, qIdx) : url;
+        const qs = qIdx >= 0 ? url.slice(qIdx + 1) : '';
+        const params = {};
+        if (qs) qs.split('&').forEach(p => {
+            const eq = p.indexOf('=');
+            if (eq >= 0) params[p.slice(0, eq)] = decodeURIComponent(p.slice(eq + 1));
+        });
+        const T = LocalTransport;
+        const ok = (data) => ({ status: 200, data: data === undefined ? { ok: true } : data });
+
+        if (pathname === '/api/layout/list') {
+            const layouts = await T.listLayouts();
+            let active = localStorage.getItem(LOCAL_ACTIVE_KEY);
+            if (!active || !layouts.includes(active)) active = layouts[0] || 'default';
+            return ok({ layouts, active });
+        }
+        /* No "live in-memory" layout offline — 404 so loadLayout uses /raw. */
+        if (pathname === '/api/layout/current') return { status: 404, data: '' };
+        if (pathname === '/api/layout/raw') {
+            const l = await T.loadLayout(params.name || 'default');
+            return l ? ok(l) : { status: 404, data: '' };
+        }
+        if (pathname === '/api/layout/save' && method === 'POST') {
+            const name = (body && body.name) || 'default';
+            await T.saveLayout(name, body);
+            localStorage.setItem(LOCAL_ACTIVE_KEY, name);
+            return ok();
+        }
+        if (pathname === '/api/layout/set' && method === 'POST') {
+            if (body && body.name) localStorage.setItem(LOCAL_ACTIVE_KEY, body.name);
+            return ok();
+        }
+        if (pathname === '/api/layout/delete') {
+            if (params.name) await T.deleteLayout(params.name);
+            return ok();
+        }
+        if (pathname === '/api/layout/rename' && method === 'POST') {
+            if (body && body.from && body.to) {
+                await T.renameLayout(body.from, body.to);
+                if (localStorage.getItem(LOCAL_ACTIVE_KEY) === body.from)
+                    localStorage.setItem(LOCAL_ACTIVE_KEY, body.to);
+            }
+            return ok();
+        }
+        if (pathname === '/api/layout/version') return ok({ version: 0 });
+        if (pathname === '/api/image/list') return ok(await T.listImages());
+        if (pathname === '/api/font/list') return ok(await T.listFonts());
+        if (pathname === '/api/signals/values') return ok({ signals: [] });
+        if (pathname === '/api/storage/info') {
+            /* Rough localStorage/IndexedDB budget — enough for the UI meter. */
+            return ok({ total: 8 * 1024 * 1024, used: 0, free: 8 * 1024 * 1024, maxBytes: 8 * 1024 * 1024, totalBytes: 0 });
+        }
+        if (pathname === '/api/device/info') {
+            return ok({ serial: 'LOCAL', name: 'This PC', schema: 17, offline: true,
+                        display: { width: 800, height: 480, shape: 'rect' } });
+        }
+        if (pathname === '/api/selftest') return ok({ ok: true, offline: true });
+        /* Device-only families (CAN, OTA, channels, dimmer, …): harmless no-op. */
+        return ok({ ok: true });
+    }
+
     async function _usbRouteApiCall(url, method, body, t) {
         const qIdx = url.indexOf('?');
         const pathname = qIdx >= 0 ? url.slice(0, qIdx) : url;
@@ -1201,6 +1271,13 @@
 
         /* ── Connection Management ───────────────────────────── */
         get transport() { return this._transport; },
+
+        /* The local store is always reachable regardless of the active
+         * transport — layout transfer reads/writes both the device and the
+         * local "offline dash" at once. */
+        get local() { return LocalTransport; },
+        /* The device transport when connected, else null. */
+        deviceTransport() { return this.mode !== 'local' ? this._transport : null; },
 
         setMode(mode, opts) {
             opts = opts || {};
@@ -1470,7 +1547,13 @@
                     return makeResp({ error: String(e) }, 503);
                 }
             }
-            return makeResp({ error: 'No device connected' }, 503);
+            /* Local (offline) — serve from the virtual local dash. */
+            try {
+                const r = await _localRouteApiCall(url, method, bodyObj);
+                return makeResp(r.data, r.status);
+            } catch (e) {
+                return makeResp({ error: String(e) }, 500);
+            }
         },
 
         /* ── Native File Dialogs (Tauri only, falls back to browser) ── */
@@ -1541,13 +1624,16 @@
     /* ── fetch interceptor: route /api/* through RDM transport when in Tauri ──
        Without this, firmware's raw fetch('/api/...') calls resolve to
        tauri://localhost/api/... instead of the connected device.
-       Local mode passes through so error handling in each function still fires. */
+       Local mode is ALSO routed — through the virtual local-dash server in
+       proxyApiCall — so the firmware editor's raw fetch('/api/...') calls
+       (layout list/load/save, etc.) work offline against the local store
+       instead of 404ing on the tauri.localhost origin. */
     if (typeof window.__TAURI_INTERNALS__ !== 'undefined' || typeof window.__TAURI__ !== 'undefined') {
         const _origFetch = window.fetch.bind(window);
         window.fetch = async function(input, init) {
             const url = typeof input === 'string' ? input
                 : (input instanceof Request ? input.url : String(input));
-            if (url.startsWith('/api/') && RDM.mode !== 'local') {
+            if (url.startsWith('/api/')) {
                 return RDM.proxyApiCall(url, init);
             }
             return _origFetch(input, init);

@@ -308,6 +308,31 @@
         </div>
     </div>
 
+    <!-- Desktop: Transfer Layouts (This PC ⇄ Device) -->
+    <div id="transferModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeTransferModal()">
+        <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:600px; max-width:95vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span style="font-weight:600; font-size:14px;">Transfer Layouts</span>
+                <button class="close-btn" onclick="closeTransferModal()" style="font-size:18px;">&times;</button>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); margin-bottom:14px;">Copy a layout and its images &amp; fonts between this computer and the connected dash.</div>
+            <div style="display:flex; gap:14px; align-items:stretch;">
+                <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+                    <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-bottom:6px;">💻 This PC</div>
+                    <div id="xferLocalList" style="flex:1; min-height:180px; max-height:44vh; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); padding:4px;"></div>
+                </div>
+                <div style="display:flex; flex-direction:column; justify-content:center; gap:10px;">
+                    <button class="btn btn-secondary" onclick="_xferUpload()" title="Copy the selected This PC layout to the device" style="font-size:14px; padding:6px 10px;">→</button>
+                    <button class="btn btn-secondary" onclick="_xferDownload()" title="Copy the selected device layout to This PC" style="font-size:14px; padding:6px 10px;">←</button>
+                </div>
+                <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+                    <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-bottom:6px;">📟 <span id="xferDeviceLabel">Device</span></div>
+                    <div id="xferDeviceList" style="flex:1; min-height:180px; max-height:44vh; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); padding:4px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 ##[ end ]##
 
 ##[ block js-desktop-runtime ]##
@@ -383,6 +408,7 @@
                 toggle_live:    () => call(window.toggleLivePreview),
                 connect_wifi:   () => call(window._openWifiPicker),
                 scan:           () => call(window._scanForDevices),
+                transfer:       () => call(window.openTransferModal),
                 device_manager: () => call(window.openDeviceManager),
                 go_local:       () => { const s = document.getElementById('connectionMode'); if (s) s.value = 'local'; call(window._onConnectionModeChange, 'local'); },
                 shortcuts:      () => { const m = document.getElementById('helpModal'); if (m) m.style.display = 'flex'; },
@@ -418,9 +444,16 @@
                 _stopHealthCheck();
                 _connectionOk = false;
                 RDM.setMode('local');
-                _setConnState('var(--text-muted)', 'Local');
+                _setConnState('var(--text-muted)', 'This PC');
                 _updateConnectionUI();
-                fetchLayouts();
+                /* Local is its own dash — restore its last-open layout (served
+                 * by the virtual local-dash router, which reports its own
+                 * active), not the device's. Re-render once it's loaded so the
+                 * WASM drops the device layout instead of showing a stale
+                 * frame. */
+                Promise.resolve(fetchLayouts()).then(() => {
+                    if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+                });
             } else if (mode === 'wifi') {
                 _openWifiPicker();
             } else if (mode === 'hotspot') {
@@ -783,6 +816,188 @@
             const modal = document.getElementById('wifiPickerModal');
             if (modal) modal.style.display = 'none';
             _connectToDevice(ip, 80);
+        }
+
+        /* ── Layout transfer: This PC ⇄ Device ────────────────────────────
+         * Offline (Local) is its own dash with its own layout library; a
+         * connected device has its own. Transfer copies a layout AND its
+         * referenced images/fonts between the two stores. */
+
+        function _deviceLabel() {
+            const s = RDM.getConnectionSettings();
+            const known = RDM.getKnownDevices().find(d => d.serial === s.serial);
+            return (known && known.hostname) || (s.serial ? 'RDM-7 ' + s.serial : (s.ip || 'Device'));
+        }
+
+        /* Every image/font a layout references (for asset transfer). */
+        function _collectLayoutAssets(layout) {
+            const defs = typeof WIDGET_DEFS !== 'undefined' ? WIDGET_DEFS : {};
+            const images = new Set(), fonts = new Set();
+            for (const w of (layout.widgets || [])) {
+                if (!w.config || !w.type) continue;
+                const def = defs[w.type];
+                if (!def || !def.fields) continue;
+                for (const f of def.fields) {
+                    const v = w.config[f.name];
+                    if (!v || typeof v !== 'string') continue;
+                    if (f.type === 'image_picker') images.add(v);
+                    else if (f.type === 'font' && v.includes(':')) fonts.add(v.split(':')[0].trim());
+                }
+            }
+            return { images: [...images], fonts: [...fonts] };
+        }
+
+        /* rdmimg header: "RDMI" + width(u16 LE) + height(u16 LE). */
+        function _rdmimgDims(b64) {
+            try {
+                const bin = atob(b64.slice(0, 24));
+                const w = bin.charCodeAt(4) | (bin.charCodeAt(5) << 8);
+                const h = bin.charCodeAt(6) | (bin.charCodeAt(7) << 8);
+                return { width: w || 0, height: h || 0 };
+            } catch (e) { return { width: 0, height: 0 }; }
+        }
+
+        /* Read a layout by name from a transport, robust to the device's
+         * active layout having no saved file (name = display name, loaded via
+         * /current not /raw). Uses the already-open currentLayout when it's
+         * the one asked for. */
+        async function _readLayout(name, src) {
+            /* The device's active layout may have no saved file (served via
+             * /current, not /raw) — use the already-open currentLayout. */
+            if (typeof currentLayout !== 'undefined' && currentLayout &&
+                currentLayout.name === name && src === RDM.deviceTransport()) {
+                return JSON.parse(JSON.stringify(currentLayout));
+            }
+            const l = await src.loadLayout(name);   /* saved file via /raw */
+            if (l) return l;
+            throw new Error('"' + name + '" not found');
+        }
+
+        /* Copy a layout + assets from one transport to another. The local
+         * store keeps asset DATA and the picker LIST separately, so when the
+         * destination is local we also register metadata. */
+        async function _copyLayout(name, src, dst, dstLabel) {
+            const toLocal = dst === RDM.local;
+            const layout = await _readLayout(name, src);
+            if (!layout) throw new Error('"' + name + '" not found');
+            /* Store under the requested name even if the device served it via
+             * /current (the JSON's internal name may differ). */
+            layout.name = name;
+            const { images, fonts } = _collectLayoutAssets(layout);
+            let imgN = 0, fontN = 0;
+            for (const img of images) {
+                try {
+                    if (await dst.getImageData(img)) continue;   /* already there */
+                    const b64 = await src.getImageData(img);
+                    if (!b64) continue;
+                    await dst.setImageData(img, b64);
+                    if (toLocal && dst.addImageMeta) await dst.addImageMeta({ name: img, ..._rdmimgDims(b64) });
+                    imgN++;
+                } catch (e) { console.warn('image', img, e); }
+            }
+            for (const fam of fonts) {
+                try {
+                    if (await dst.getFontData(fam)) continue;
+                    const b64 = await src.getFontData(fam);
+                    if (!b64) continue;
+                    await dst.setFontData(fam, b64);
+                    if (toLocal && dst.addFontMeta) await dst.addFontMeta(fam);
+                    fontN++;
+                } catch (e) { console.warn('font', fam, e); }
+            }
+            await dst.saveLayout(name, layout);
+            return { imgN, fontN, images: images.length, fonts: fonts.length };
+        }
+
+        async function _transferLayout(dir, name) {
+            const dev = RDM.deviceTransport();
+            if (!dev) { showToast('Connect to a device first', 'error'); return; }
+            if (!name) return;
+            const toDevice = dir === 'upload';
+            const src = toDevice ? RDM.local : dev;
+            const dst = toDevice ? dev : RDM.local;
+            const dstName = toDevice ? _deviceLabel() : 'This PC';
+            try {
+                const existing = await dst.listLayouts();
+                const names = existing.map(l => l.name || l);
+                if (names.includes(name) &&
+                    !confirm('"' + name + '" already exists on ' + dstName + '. Overwrite it?')) return;
+                updateStatus((toDevice ? 'Uploading "' : 'Downloading "') + name + '"...');
+                const r = await _copyLayout(name, src, dst, dstName);
+                const assets = (r.imgN || r.fontN)
+                    ? ' (+' + r.imgN + ' img, ' + r.fontN + ' font)' : '';
+                showToast((toDevice ? 'Uploaded "' : 'Downloaded "') + name + '" to ' + dstName + assets, 'success');
+                _renderTransferLists();
+            } catch (e) { showToast('Transfer failed: ' + (e.message || e), 'error'); }
+        }
+
+        /* ── Transfer modal ─────────────────────────────────────────────── */
+        async function openTransferModal() {
+            if (!RDM.deviceTransport()) { showToast('Connect to a device to transfer layouts', 'error'); return; }
+            const modal = document.getElementById('transferModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            const dl = document.getElementById('xferDeviceLabel');
+            if (dl) dl.textContent = _deviceLabel();
+            await _renderTransferLists();
+        }
+        function closeTransferModal() {
+            const modal = document.getElementById('transferModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        let _xferSel = { local: null, device: null };
+        async function _renderTransferLists() {
+            const dev = RDM.deviceTransport();
+            const localList = document.getElementById('xferLocalList');
+            const devList = document.getElementById('xferDeviceList');
+            if (!localList || !devList) return;
+            const paint = (el, names, side) => {
+                el.innerHTML = '';
+                if (!names.length) {
+                    el.innerHTML = '<div style="color:var(--text-muted);font-size:11px;padding:10px;text-align:center;">No layouts</div>';
+                    return;
+                }
+                names.forEach(n => {
+                    const row = document.createElement('div');
+                    row.textContent = n;
+                    row.style.cssText = 'padding:6px 10px;font-size:12px;border-radius:var(--radius-sm);cursor:pointer;' +
+                        (_xferSel[side] === n ? 'background:var(--accent);color:#000;' : 'color:var(--text);');
+                    row.onclick = () => { _xferSel[side] = n; _paintSelections(); };
+                    el.appendChild(row);
+                });
+            };
+            try {
+                const [loc, drv] = await Promise.all([
+                    RDM.local.listLayouts(),
+                    dev.listLayouts().then(l => l.map(x => x.name || x))
+                ]);
+                _xferLocalNames = loc; _xferDeviceNames = drv;
+                paint(localList, loc, 'local');
+                paint(devList, drv, 'device');
+            } catch (e) { showToast('Could not list layouts: ' + (e.message || e), 'error'); }
+        }
+        let _xferLocalNames = [], _xferDeviceNames = [];
+        function _paintSelections() {
+            const localList = document.getElementById('xferLocalList');
+            const devList = document.getElementById('xferDeviceList');
+            const rep = (el, names, side) => {
+                Array.from(el.children).forEach((row, i) => {
+                    const n = names[i];
+                    row.style.background = _xferSel[side] === n ? 'var(--accent)' : 'transparent';
+                    row.style.color = _xferSel[side] === n ? '#000' : 'var(--text)';
+                });
+            };
+            if (localList) rep(localList, _xferLocalNames, 'local');
+            if (devList) rep(devList, _xferDeviceNames, 'device');
+        }
+        async function _xferUpload() {
+            if (!_xferSel.local) { showToast('Pick a layout under This PC first', 'info'); return; }
+            await _transferLayout('upload', _xferSel.local);
+        }
+        async function _xferDownload() {
+            if (!_xferSel.device) { showToast('Pick a device layout first', 'info'); return; }
+            await _transferLayout('download', _xferSel.device);
         }
 
         if (typeof window.__TAURI_INTERNALS__ !== 'undefined' || typeof window.__TAURI__ !== 'undefined') {
