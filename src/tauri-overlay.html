@@ -426,6 +426,10 @@
         .sh-actions a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         /* Desktop: the editor header joins the suite chrome */
         body.suite-desktop header { background: var(--bg-toolbar); box-shadow: var(--shadow-sm); }
+        /* LIVE pill is redundant on desktop — the WASM preview mirrors the
+           layout with live values continuously. CONTROL (mirror + remote
+           touch) stays. The pill remains in the on-device/phone editor. */
+        body.suite-desktop #pillLive { display: none !important; }
         /* Layering contract: banners, modals and toasts must sit ABOVE the
            suite overlays (Home/keypad are 15000, splash 20000). Their inline
            z-indexes predate the suite, hence the importants. */
@@ -1366,7 +1370,7 @@
                 fit:            () => call(window.zoomToFit),
                 reset_view:     () => call(window.resetView),
                 toggle_sim:     () => call(window.toggleSimulation),
-                toggle_live:    () => call(window.toggleLivePreview),
+                control:        () => call(window.toggleLiveControl),
                 connect_wifi:   () => call(window._openWifiPicker),
                 scan:           () => call(window._scanForDevices),
                 home:           () => call(window._suiteHomeShow),

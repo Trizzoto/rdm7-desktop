@@ -1530,6 +1530,21 @@
             const t = this._transport;
             if (t.name === 'wifi' || t.name === 'hotspot') {
                 const fullUrl = (t.baseUrl || 'http://192.168.4.1') + url;
+                /* Binary endpoints must NOT go through http_fetch — its body
+                 * is a Rust String, which mangles JPEG bytes. This is what
+                 * broke CONTROL's mirror (fetch('/api/screenshot') → garbage
+                 * blob). Fetch the bytes losslessly and hand back a real
+                 * Response so .blob() Just Works. */
+                if (method === 'GET' && /^\/api\/screenshot(\?|$)/.test(url)) {
+                    try {
+                        const bytes = await _tauriInvoke('http_fetch_binary', {
+                            url: fullUrl, timeout_ms: 15000,
+                        });
+                        return new Response(new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' }), { status: 200 });
+                    } catch (e) {
+                        return makeResp({ error: String(e) }, 0);
+                    }
+                }
                 try {
                     const resp = await _tauriInvoke('http_fetch', {
                         req: { url: fullUrl, method, body: bodyText, timeout_ms: 15000 }

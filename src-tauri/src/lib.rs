@@ -1546,7 +1546,7 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .text("reset_view", "Reset View")
         .separator()
         .text("toggle_sim", "Toggle Simulator")
-        .text("toggle_live", "Toggle Live View")
+        .text("control", "Control Device Screen…")
         .build()?;
 
     let device = SubmenuBuilder::new(app, "Device")
