@@ -2428,8 +2428,15 @@
                 if (r.ok) {
                     const j = await r.json();
                     for (const s of (j.signals || [])) {
-                        if (!s || !s.name || s.stale) continue;
-                        /* an active test slider owns its signal */
+                        if (!s || !s.name || typeof s.value !== 'number') continue;
+                        /* Mirror STALE values too. The firmware keeps painting a
+                         * widget with its last value even after the 2 s stale
+                         * mark — so a channel that's present-but-stale (e.g.
+                         * FUEL_LEVEL retained at 38.8 while nothing on the bus
+                         * refreshes it) shows on the device. Skipping stale here
+                         * left those widgets (the c_fuel arc) blank in the mirror
+                         * while they rendered fine on the dash. Inject regardless
+                         * of stale for true parity. */
                         if (typeof _testValues !== 'undefined' && _testValues[s.name] !== undefined) continue;
                         injectWasmSignal(s.name, s.value);
                     }
