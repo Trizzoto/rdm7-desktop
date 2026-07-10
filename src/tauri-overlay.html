@@ -985,14 +985,14 @@
             }
         }
 
-        /* The WASM canvas doubles as the "device screen" backdrop while no
-         * real device is connected; once connected, the screenshot/live
-         * backdrop is ground truth and the WASM layer hides. */
+        /* The WASM canvas is the editor's backdrop whenever the engine is
+         * up: offline it runs the bench sim, connected it live-mirrors the
+         * dash's signal values. (The LIVE MJPEG layer still overlays it for
+         * a ground-truth device stream when toggled.) */
         function _updateWasmCanvasVisibility() {
             const el = document.getElementById('canvas');
             if (!el) return;
-            const show = _wasmReady && !_wasmCrashed &&
-                (typeof RDM === 'undefined' || RDM.mode === 'local' || !_connectionOk);
+            const show = _wasmReady && !_wasmCrashed;
             const wasHidden = el.style.display === 'none';
             el.style.display = show ? 'block' : 'none';
             /* The WASM render is pixel-accurate — while it's the backdrop,
@@ -1000,13 +1000,24 @@
              * meant for when there's NO accurate backdrop) must stay out of
              * the way. renderPreview() re-evaluates via _wasmBackdropActive. */
             if (typeof renderPreview === 'function') renderPreview();
-            /* Becoming visible after a while hidden (e.g. device just
-             * disconnected / switched to local): the last rendered frame is
-             * stale — re-push the current layout. */
+            /* Becoming visible after a while hidden: the last rendered frame
+             * is stale — re-push the current layout. */
             if (show && wasHidden && typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
-            /* Keep the offline preview alive with bench-sim data (a dash
-             * with no data freezes gauges in their no-signal glow state). */
-            if (show) _wasmSimStart(); else _wasmSimStop();
+            /* Data source: live device values when connected, bench sim
+             * otherwise. */
+            const connected = typeof RDM !== 'undefined' && RDM.mode !== 'local' && _connectionOk;
+            if (connected !== _wasmLastConnected) {
+                _wasmLastConnected = connected;
+                /* The asset source changed (IndexedDB ↔ device): forget
+                 * earlier misses so images/fonts re-fetch from the new
+                 * source instead of staying failed forever. */
+                _wasmFailedImages.clear();
+                _wasmFailedFonts.clear();
+                if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+            }
+            if (show && connected) { _wasmSimStop(); _wasmLiveStart(); }
+            else if (show)         { _wasmLiveStop(); _wasmSimStart(); }
+            else                   { _wasmLiveStop(); _wasmSimStop(); }
         }
 
         /* Queried by the firmware's renderPreview() gate (overlay-patched)
@@ -1070,10 +1081,59 @@
             setTimeout(_dlProgressHide, 800);
         }
 
+        /* Sync layout-referenced TTF families into the WASM's MEMFS so text
+         * renders in the real fonts (device fonts over wifi/usb, IndexedDB
+         * offline) instead of falling back to small built-ins. */
+        const _wasmRegisteredFonts = new Set();
+        const _wasmFailedFonts = new Set();
+
+        async function _syncWasmFonts() {
+            if (!wasmModule || _wasmCrashed) return;
+            const defs = typeof WIDGET_DEFS !== 'undefined' ? WIDGET_DEFS : {};
+            const needed = [];
+            for (const w of (currentLayout.widgets || [])) {
+                if (!w.config || !w.type) continue;
+                const def = defs[w.type];
+                if (!def || !def.fields) continue;
+                for (const f of def.fields) {
+                    if (f.type !== 'font') continue;
+                    const v = w.config[f.name];
+                    if (typeof v !== 'string' || !v.includes(':')) continue;  /* legacy built-ins skip */
+                    const fam = v.split(':')[0].trim();
+                    if (fam && !_wasmRegisteredFonts.has(fam) && !_wasmFailedFonts.has(fam) && !needed.includes(fam))
+                        needed.push(fam);
+                }
+            }
+            for (const fam of needed) {
+                try {
+                    let data = await RDM.getFontData(fam);
+                    if (!data) { _wasmFailedFonts.add(fam); continue; }
+                    let u8;
+                    if (data instanceof Blob) {
+                        u8 = new Uint8Array(await data.arrayBuffer());
+                    } else if (typeof data === 'string') {
+                        const bin = atob(data);
+                        u8 = new Uint8Array(bin.length);
+                        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+                    } else { _wasmFailedFonts.add(fam); continue; }
+                    const ptr = wasmModule._malloc(u8.length);
+                    if (!ptr) { _wasmFailedFonts.add(fam); continue; }
+                    wasmModule.HEAPU8.set(u8, ptr);
+                    wasmModule.ccall('register_font', null, ['string', 'number', 'number'], [fam, ptr, u8.length]);
+                    wasmModule._free(ptr);
+                    _wasmRegisteredFonts.add(fam);
+                } catch (e) {
+                    _wasmFailedFonts.add(fam);
+                    if (e instanceof WebAssembly.RuntimeError) { _wasmCrashed = true; return; }
+                }
+            }
+        }
+
         async function updateWasmPreview() {
             if (!wasmModule || _wasmCrashed) return;
             try {
                 await _syncWasmImages();
+                await _syncWasmFonts();
                 if (_wasmCrashed) return;
                 wasmModule.ccall('load_layout_json', null, ['string'], [JSON.stringify(buildFirmwarePayload())]);
                 if (typeof _testValues === 'object') {
@@ -1155,6 +1215,45 @@
 
         function _wasmSimStop() {
             if (_wasmSimTimer) { clearInterval(_wasmSimTimer); _wasmSimTimer = null; }
+        }
+
+        /* ── Live mirror: drive the WASM with the connected dash's values ──
+         * Offline the backdrop runs the bench sim; connected it mirrors the
+         * device instead — poll /api/signals/values (the fetch interceptor
+         * routes it through the active transport) and inject every fresh
+         * value, so the desktop renders the live dash pixel-for-pixel. */
+        let _wasmLiveTimer = null;
+        let _wasmLiveBusy = false;
+        let _wasmLastConnected = false;
+
+        function _wasmLiveStart() {
+            if (_wasmLiveTimer) return;
+            _wasmLiveTimer = setInterval(_wasmLiveTick, 200);
+            _wasmLiveTick();
+        }
+
+        function _wasmLiveStop() {
+            if (_wasmLiveTimer) { clearInterval(_wasmLiveTimer); _wasmLiveTimer = null; }
+            _wasmLiveBusy = false;
+        }
+
+        async function _wasmLiveTick() {
+            if (_wasmLiveBusy || !_wasmBackdropActive()) return;
+            if (typeof RDM === 'undefined' || RDM.mode === 'local' || !_connectionOk) return;
+            _wasmLiveBusy = true;
+            try {
+                const r = await fetch('/api/signals/values');
+                if (r.ok) {
+                    const j = await r.json();
+                    for (const s of (j.signals || [])) {
+                        if (!s || !s.name || s.stale) continue;
+                        /* an active test slider owns its signal */
+                        if (typeof _testValues !== 'undefined' && _testValues[s.name] !== undefined) continue;
+                        injectWasmSignal(s.name, s.value);
+                    }
+                }
+            } catch (e) { /* transient — the health check owns disconnect handling */ }
+            finally { _wasmLiveBusy = false; }
         }
 ##[ end ]##
 
