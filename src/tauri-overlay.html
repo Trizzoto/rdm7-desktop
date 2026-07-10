@@ -353,7 +353,16 @@
             transition: opacity 0.45s ease;
         }
         #suiteSplash.sh-out { opacity: 0; pointer-events: none; }
-        .sh-lockup { display: flex; align-items: center; gap: 24px; }
+        .sh-lockup { display: flex; flex-direction: column; align-items: center; gap: 0; }
+        .rdm-logo { display: inline-block; vertical-align: middle; }
+        .sh-splash-logo svg { display: block; width: 100%; height: auto; }
+        .sh-splash-logo {
+            width: 300px; height: auto; line-height: 0;
+            filter: drop-shadow(0 10px 26px rgba(0,0,0,0.5));
+            opacity: 0; transform: translateY(14px) scale(0.96);
+            animation: shLogoIn 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s forwards;
+        }
+        @keyframes shLogoIn { to { opacity: 1; transform: translateY(0) scale(1); } }
         .sh-gauge { width: 92px; height: 92px; }
         .sh-needle {
             transform-origin: 50px 50px;
@@ -374,14 +383,14 @@
             opacity: 0; animation: shRise 0.6s ease 0.15s forwards;
         }
         .sh-studio {
-            font-family: 'Sora', sans-serif; font-weight: 400; font-size: 15px;
-            letter-spacing: 0.58em; color: var(--text-muted); margin: 8px 0 0 3px;
-            opacity: 0; animation: shRise 0.6s ease 0.38s forwards;
+            font-family: 'Sora', sans-serif; font-weight: 400; font-size: 16px;
+            letter-spacing: 0.62em; color: var(--text-muted); margin: 18px 0 0 0.62em;
+            opacity: 0; animation: shRise 0.6s ease 0.48s forwards;
         }
         .sh-line {
-            height: 2px; background: var(--accent); margin-top: 12px;
-            transform: scaleX(0); transform-origin: left;
-            animation: shLine 0.7s cubic-bezier(0.65, 0, 0.35, 1) 0.55s forwards;
+            height: 2px; width: 300px; background: var(--accent); margin-top: 14px;
+            transform: scaleX(0); transform-origin: center;
+            animation: shLine 0.7s cubic-bezier(0.65, 0, 0.35, 1) 0.62s forwards;
         }
         .sh-ver {
             position: absolute; bottom: 26px; left: 0; right: 0; text-align: center;
@@ -391,8 +400,7 @@
         @keyframes shRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes shLine { to { transform: scaleX(1); } }
         @media (prefers-reduced-motion: reduce) {
-            .sh-needle, .sh-rdm, .sh-studio, .sh-line, .sh-ver { animation: none; opacity: 1; transform: none; }
-            .sh-needle { transform: rotate(74deg); }
+            .sh-splash-logo, .sh-studio, .sh-line, .sh-ver { animation: none; opacity: 1; transform: none; }
         }
 
         /* ---- home launcher ---- */
@@ -558,60 +566,16 @@
 
     <div id="suiteSplash">
         <div class="sh-lockup">
-            <svg class="sh-gauge" viewBox="0 0 100 100" aria-hidden="true">
-                <defs>
-                    <radialGradient id="shgFace" cx="0.5" cy="0.38" r="0.8">
-                        <stop offset="0" stop-color="#26292D"/><stop offset="0.65" stop-color="#1B1D20"/><stop offset="1" stop-color="#121416"/>
-                    </radialGradient>
-                    <linearGradient id="shgRim" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0" stop-color="#6E767F"/><stop offset="0.5" stop-color="#33383E"/><stop offset="1" stop-color="#15171A"/>
-                    </linearGradient>
-                    <radialGradient id="shgHub" cx="0.4" cy="0.35" r="0.8">
-                        <stop offset="0" stop-color="#454B52"/><stop offset="1" stop-color="#191C1F"/>
-                    </radialGradient>
-                </defs>
-                <circle cx="50" cy="50" r="48" fill="#000" opacity="0.5"/>
-                <circle cx="50" cy="50" r="47" fill="none" stroke="url(#shgRim)" stroke-width="2.4"/>
-                <circle cx="50" cy="50" r="45.4" fill="url(#shgFace)"/>
-                <circle cx="50" cy="50" r="41.5" fill="none" stroke="#101214" stroke-width="1" opacity="0.8"/>
-                <path d="M 87.1 44.8 A 37.5 37.5 0 0 1 82.5 68.8" fill="none" stroke="#E0524D" stroke-width="4" opacity="0.85"/>
-                <g stroke="#CCD2D9" stroke-width="2.1">
-                    <g transform="rotate(-120 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
-                    <g transform="rotate(-80 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
-                    <g transform="rotate(-40 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
-                    <line x1="50" y1="9.5" x2="50" y2="16.5"/>
-                    <g transform="rotate(40 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
-                    <g transform="rotate(80 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
-                    <g transform="rotate(120 50 50)"><line x1="50" y1="9.5" x2="50" y2="16.5"/></g>
-                </g>
-                <g stroke="#767D85" stroke-width="1.2">
-                    <g transform="rotate(-100 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
-                    <g transform="rotate(-60 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
-                    <g transform="rotate(-20 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
-                    <g transform="rotate(20 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
-                    <g transform="rotate(60 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
-                    <g transform="rotate(100 50 50)"><line x1="50" y1="10" x2="50" y2="14.5"/></g>
-                </g>
-                <g class="sh-needle">
-                    <polygon points="48.9,53.5 51.1,53.5 50.5,15.5 49.5,15.5" fill="#0A0C0E" opacity="0.4" transform="translate(1.1,1.6)"/>
-                    <polygon points="48.9,53.5 51.1,53.5 50.5,15.5 49.5,15.5" fill="var(--accent)"/>
-                </g>
-                <circle cx="50" cy="50" r="6.2" fill="url(#shgHub)" stroke="#0B0D0F" stroke-width="1"/>
-                <circle cx="50" cy="50" r="2" fill="#0D0E10"/>
-                <ellipse cx="40" cy="31" rx="20" ry="11" fill="#FFFFFF" opacity="0.028" transform="rotate(-18 40 31)"/>
-            </svg>
-            <div class="sh-word">
-                <div class="sh-rdm">RDM</div>
-                <div class="sh-studio">STUDIO</div>
-                <div class="sh-line"></div>
-            </div>
+            <div class="sh-splash-logo" id="shSplashLogo"></div>
+            <div class="sh-studio">STUDIO</div>
+            <div class="sh-line"></div>
         </div>
         <div class="sh-ver" id="shVer"></div>
     </div>
 
     <div id="suiteHome">
         <div class="sh-topbar">
-            <span class="b">RDM Studio</span>
+            <span class="b" id="shHomeBrand" style="display:inline-flex; align-items:center; gap:8px;"></span>
             <span class="v" id="shHomeVer"></span>
         </div>
         <div class="sh-center">
@@ -790,6 +754,26 @@
     <script>
     (function () {
         "use strict";
+
+        /* RDM wordmark — the real logo as inline SVG so it's crisp from the
+         * 19 px header to the 300 px splash off one definition. Red slab,
+         * italic letters. Sized by the .rdm-logo width/height set per use. */
+        var RDM_LOGO_SVG =
+            '<svg class="rdm-logo" viewBox="0 0 268 132" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="RDM">' +
+              '<polygon points="34,5 262,5 234,127 6,127" fill="#E31E24"/>' +
+              '<text x="132" y="99" text-anchor="middle" font-family="\'Arial Black\',\'Arial Bold\',Arial,sans-serif" font-weight="900" font-style="italic" font-size="92" letter-spacing="-4" fill="#fff">RDM</text>' +
+            '</svg>';
+
+        function _populateLogos() {
+            var splash = document.getElementById('shSplashLogo');
+            if (splash && !splash.firstChild) splash.innerHTML = RDM_LOGO_SVG;
+            var home = document.getElementById('shHomeBrand');
+            if (home && !home.firstChild) {
+                home.innerHTML =
+                    RDM_LOGO_SVG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:20px;width:auto"') +
+                    '<span style="font-family:Sora,sans-serif;font-weight:400;font-size:13px;letter-spacing:0.03em;color:var(--text-muted);">Studio</span>';
+            }
+        }
 
         /* ============ keypad configurator (Phase K0) ============ */
         var LED_COLORS = [
@@ -1270,10 +1254,12 @@
                     brand.style.cssText = "display:inline-flex; align-items:center; gap:10px;";
                     brand.innerHTML =
                         '<button class="btn btn-secondary" style="font-size:11px; padding:4px 10px;" onclick="_suiteHomeShow()" title="Home (Esc)">&#8962;</button>' +
-                        '<span style="font-family:Sora,sans-serif; font-weight:600; font-size:13px; letter-spacing:0.01em; white-space:nowrap;">RDM Studio</span>';
+                        RDM_LOGO_SVG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:19px;width:auto"') +
+                        '<span style="font-family:Sora,sans-serif; font-weight:400; font-size:13px; letter-spacing:0.03em; color:var(--text-muted); white-space:nowrap;">Studio</span>';
                     hdrTitle.insertBefore(brand, hdrTitle.firstChild);
                 }
             } catch (e) { console.warn("header brand injection failed:", e); }
+            _populateLogos();
             /* the WASM module (emscripten/SDL) rewrites document.title to its
                internal name after init — pin the product name */
             var titleEl = document.querySelector("title");
@@ -2451,6 +2437,18 @@
             }, 250); // 250ms debounce
 ##[ insert-after ]##
             if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+##[ end ]##
+
+#! When the device's active layout changes (on-dash switcher / menu / another
+#! client), syncFromDevice() reloads currentLayout and re-renders the editor —
+#! but it never refreshed the WASM backdrop, so the preview kept showing the
+#! old layout ("changing layouts on the device, the desktop wasm doesnt update").
+#! Refresh the WASM whenever a device sync lands.
+##[ block hook-sync-wasm ]##
+##[ anchor ]##
+                    updateStatus('Synced from device');
+##[ insert-after ]##
+                    if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
 ##[ end ]##
 
 ##[ block hook-screen-dims ]##
