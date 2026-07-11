@@ -676,6 +676,19 @@
         .kp-busline i { font-style: normal; }
         .kp-busline i.on { color: #6fbf73; font-weight: 700; }
         .kp-busline .idle { opacity: 0.7; }
+        /* LED alerts (inspector) */
+        .kp-alert { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px; margin-bottom: 7px; }
+        .kp-alert-top { display: flex; gap: 5px; align-items: center; margin-bottom: 5px; }
+        .kp-alert-top .kp-bus-in { flex: 1; }
+        .kp-alert-x { flex: 0 0 auto; width: 22px; height: 22px; background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 14px; line-height: 1; cursor: pointer; }
+        .kp-alert-x:hover { border-color: #e05d52; color: #e05d52; }
+        .kp-alert-cond { display: flex; gap: 5px; margin-bottom: 6px; }
+        .kp-alert-op { flex: 0 0 46px; text-align: center; }
+        .kp-alert-val { flex: 1; min-width: 0; }
+        .kp-alert-beh { flex: 0 0 62px; }
+        .kp-alert-sw { display: flex; gap: 4px; flex-wrap: wrap; }
+        .kp-asw { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border); padding: 0; cursor: pointer; box-shadow: var(--shadow-inset); }
+        .kp-asw.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent); }
         @media (max-width: 900px) {
             .kp-body { flex-wrap: wrap; overflow-y: auto; }
             .kp-rail { width: 100%; flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border); }
@@ -1459,8 +1472,8 @@
             { label: "MAP ▲", text: false, icon: "up", mode: "paired", preset: "Map up", follows: "self", color: "green", behavior: "solid" },
             { label: "PIT", text: false, icon: "turtle", mode: "toggle", preset: "Pit limiter", follows: "self", color: "amber", behavior: "slow" },
             { label: "MAP ▼", text: false, icon: "down", mode: "paired", preset: "Map down", follows: "self", color: "blue", behavior: "solid" },
-            { label: "MAIN", text: false, icon: "power", mode: "toggle", preset: "Ignition / main", follows: "self", color: "red", behavior: "solid" },
-            { label: "FAN", text: false, icon: "fan", mode: "toggle", preset: "Fan override", follows: "coolant_temp", color: "amber", behavior: "solid" },
+            { label: "MAIN", text: false, icon: "power", mode: "toggle", preset: "Ignition / main", follows: "self", color: "green", behavior: "solid", alerts: [{ chan: "coolant_temp", op: ">", val: 100, color: "red", behavior: "fast" }, { chan: "coolant_temp", op: ">", val: 92, color: "amber", behavior: "slow" }] },
+            { label: "FAN", text: false, icon: "fan", mode: "toggle", preset: "Fan override", follows: "coolant_temp", color: "green", behavior: "solid", alerts: [{ chan: "coolant_temp", op: ">", val: 100, color: "red", behavior: "fast" }, { chan: "coolant_temp", op: ">", val: 92, color: "amber", behavior: "slow" }] },
             { label: "PUMP", text: false, icon: "pump", mode: "toggle", preset: "Fuel pump", follows: "self", color: "green", behavior: "solid" },
             { label: "LAUNCH", text: false, icon: "bolt", mode: "momentary", preset: "Launch arm", follows: "self", color: "red", behavior: "fast" },
             { label: "NIGHT", text: false, icon: "moon", mode: "toggle", preset: "Dash: night mode", follows: "self", color: "yellow", behavior: "solid" },
@@ -1483,6 +1496,7 @@
             startShow: 1, activeStart: true, periodMs: 0, hbMs: 0,   /* device config */
             clip: null   /* copied key style (icon/mode/preset/follows/color/behavior) */
         };
+        window.__kp = kp;   /* debug/support handle (mirrors window.__ca / __ltMap) */
 
         /* ── Real Blink PKP CAN protocol (from the official CANopen/J1939 manuals
            in docs/research/keypad-datasheets/). The keypad is a pure CANopen
@@ -1702,27 +1716,57 @@
 
         var CELL = 104, SEAM = 7, PAD = 20, CAP_R = 27, RING_R = 36, WELL_R = 42, MARGIN = 44;
         function keyAssigned(k) { return k.label !== "" || k.preset.indexOf("unassigned") === -1; }
+        /* LED alerts — the dash watches a channel and, when a condition trips,
+           sends the keypad a different colour/blink (LED-ON/blink PDO). A key
+           can carry several conditions (multiple allocations); they're checked
+           top-down, first match wins, so put the most severe first. */
+        function _kpChanRange(chan) {
+            var c = (chan || "").toLowerCase();
+            if (/coolant|water|clt|_temp|iat|egt|oil_t/.test(c)) return [60, 115];
+            if (/oil_p|oilpress|oil_press|fuel_p/.test(c)) return [6, 75];
+            if (/rpm/.test(c)) return [700, 7400];
+            if (/boost|map/.test(c)) return [-12, 26];
+            if (/fuel_l|fuel$|level/.test(c)) return [3, 98];
+            if (/volt|batt/.test(c)) return [11.4, 14.7];
+            if (/afr|lambda/.test(c)) return [10.5, 16.5];
+            if (/speed|vss/.test(c)) return [0, 230];
+            return [0, 100];
+        }
+        function kpSimVal(chan) {
+            if (chan === "coolant_temp") return kp.coolant;    /* the real coolant oscillator */
+            var r = _kpChanRange(chan), mid = (r[0] + r[1]) / 2, amp = (r[1] - r[0]) / 2, h = 0;
+            for (var i = 0; i < (chan || "").length; i++) h += chan.charCodeAt(i);
+            return mid + amp * Math.sin((kp.simPhase || 0) / 5 + h);
+        }
+        function kpActiveAlert(i) {
+            var k = kp.keys[i]; if (!k || !k.alerts || !k.alerts.length) return null;
+            for (var j = 0; j < k.alerts.length; j++) {
+                var a = k.alerts[j]; if (!a || !a.chan) continue;
+                var v = kpSimVal(a.chan);
+                var hit = a.op === "<" ? v < a.val : a.op === "=" ? Math.abs(v - a.val) < (Math.abs(a.val) * 0.02 + 0.5) : v > a.val;
+                if (hit) return a;
+            }
+            return null;
+        }
         function ledActive(i) {
             var k = kp.keys[i];
             if (!keyAssigned(k)) return false;
             if (kp.live) {
-                /* Function-state semantics: every key lights when its function
-                 * is toggled on — including channel-bound keys (press FAN, the
-                 * amber ring lights; that's the request state). The simulated
-                 * alarm (coolant > 95) lights a coolant-bound key regardless. */
-                if (k.follows === "coolant_temp" && kp.coolant > 95) return true;
+                /* a tripped alert lights the key regardless of press; otherwise
+                 * the LED shows the button's own toggle state. */
+                if (kpActiveAlert(i)) return true;
                 return !!kp.keyOn[i];
             }
             return true;
         }
         function ledColor(i) {
             var k = kp.keys[i];
-            if (kp.live && k.follows === "coolant_temp" && kp.coolant > 95) return HEX.red;
+            if (kp.live) { var a = kpActiveAlert(i); if (a) return HEX[a.color] || HEX.red; }
             return HEX[k.color];
         }
         function ledBehavior(i) {
             var k = kp.keys[i];
-            if (kp.live && k.follows === "coolant_temp" && kp.coolant > 95) return "fast";
+            if (kp.live) { var a = kpActiveAlert(i); if (a) return a.behavior || "fast"; }
             return k.behavior;
         }
         function kpBrightness() { return (kp.night ? kp.brightNight : kp.brightDay) / 63; }
@@ -1862,16 +1906,19 @@
             kp.coolant += kp.coolantDir * (0.6 + Math.abs(Math.sin(kp.coolant)) * 0.8);
             if (kp.coolant > 103) kp.coolantDir = -1;
             if (kp.coolant < 82) kp.coolantDir = 1;
+            kp.simPhase = (kp.simPhase || 0) + 1;
             var hot = kp.coolant > 95;
             var el = document.getElementById("kpCtReadout");
             if (el) {
                 el.className = "kp-ct" + (hot ? " hot" : "");
                 el.innerHTML = 'coolant_temp <b>' + kp.coolant.toFixed(1) + "</b> &#176;C" + (hot ? " &#8212; HIGH" : "");
             }
-            /* Only re-render the keypad when the alarm state flips. Re-drawing
-             * every tick restarted the CSS blink animations mid-cycle, so slow
-             * blink never reached its off phase (looked stuck solid). */
-            if (hot !== kp._lastHot) { kp._lastHot = hot; kpRenderStage(); }
+            /* Re-render only when the set of tripped alerts changes (or the
+             * coolant alarm flips) — re-drawing every tick would restart the CSS
+             * blink animations mid-cycle. */
+            var n = kp.model.rows * kp.model.cols, sig = "";
+            for (var i = 0; i < n; i++) { var a = kpActiveAlert(i); if (a) sig += i + a.color + a.behavior + "|"; }
+            if (sig !== kp._alertSig || hot !== kp._lastHot) { kp._alertSig = sig; kp._lastHot = hot; kpRenderStage(); }
         }
         window._kpSetLive = function (on) {
             kp.live = on;
@@ -1890,6 +1937,56 @@
         };
 
         function opt(v, label, cur) { return '<option value="' + v + '"' + (v === cur ? " selected" : "") + ">" + label + "</option>"; }
+
+        /* ── LED alerts UI ── */
+        function _kpAlertChanOptions(cur) {
+            var opts = [];
+            if (_kpChanList && _kpChanList.length) opts = _kpChanList.map(function (c) { return [c.v, c.t]; });
+            else opts = [["coolant_temp", "coolant_temp"], ["oil_press", "oil_press"], ["oil_temp", "oil_temp"], ["rpm", "rpm"], ["boost", "boost"], ["fuel_level", "fuel_level"], ["battery", "battery"], ["afr", "afr"]];
+            if (cur && !opts.some(function (o) { return o[0] === cur; })) opts.unshift([cur, cur]);
+            return opts.map(function (o) { return opt(o[0], o[1], cur); }).join("");
+        }
+        function _kpAlertsHtml(k, ki) {
+            var alerts = k.alerts || [];
+            var rows = alerts.map(function (a, ai) {
+                var sw = LED_COLORS.map(function (c) {
+                    return '<button class="kp-asw' + (a.color === c.id ? " on" : "") + '" style="background:' + c.hex + '" title="' + c.id + '" onclick="kpAlertColor(' + ki + ',' + ai + ",'" + c.id + "')\"></button>";
+                }).join("");
+                return '<div class="kp-alert">' +
+                    '<div class="kp-alert-top"><select class="kp-bus-in" onchange="kpAlertSet(' + ki + ',' + ai + ",'chan',this.value)\">" + _kpAlertChanOptions(a.chan) + "</select>" +
+                    '<button class="kp-alert-x" title="remove" onclick="kpAlertDel(' + ki + ',' + ai + ')">&#215;</button></div>' +
+                    '<div class="kp-alert-cond"><select class="kp-bus-in kp-alert-op" onchange="kpAlertSet(' + ki + ',' + ai + ",'op',this.value)\">" +
+                    opt(">", "&gt;", a.op) + opt("<", "&lt;", a.op) + opt("=", "=", a.op) + "</select>" +
+                    '<input class="kp-bus-in kp-alert-val" value="' + a.val + '" onchange="kpAlertSet(' + ki + ',' + ai + ",'val',this.value)\">" +
+                    '<select class="kp-bus-in kp-alert-beh" onchange="kpAlertSet(' + ki + ',' + ai + ",'behavior',this.value)\">" +
+                    opt("solid", "Solid", a.behavior) + opt("slow", "Slow", a.behavior) + opt("fast", "Fast", a.behavior) + "</select></div>" +
+                    '<div class="kp-alert-sw">' + sw + "</div></div>";
+            }).join("");
+            return '<div class="kp-grp"><div class="kp-gt">LED alerts</div>' +
+                (alerts.length ? rows : '<div class="kp-note" style="margin-top:0">No alerts. The LED shows the base colour above. Add a condition to override it when a channel crosses a threshold.</div>') +
+                '<button class="ws-btn-line" style="margin-top:8px" onclick="kpAlertAdd(' + ki + ')">+ Add alert</button>' +
+                '<div class="kp-note">The dash watches the channel and sends this colour/blink to the key (LED PDO 0x2xx/0x3xx) when it trips. Stack several — checked top-down, first match wins, so put the most severe first. Switch to <b>Live (sim)</b> to watch them fire.</div></div>';
+        }
+        function _kpKey() { return kp.keys[kp.selected]; }
+        window.kpAlertAdd = function (ki) {
+            var k = kp.keys[ki]; if (!k) return; if (!k.alerts) k.alerts = [];
+            k.alerts.push({ chan: "coolant_temp", op: ">", val: 100, color: "red", behavior: "fast" });
+            kpSaveCfg(); kpRenderInspector(); kpRenderStage();
+        };
+        window.kpAlertDel = function (ki, ai) {
+            var k = kp.keys[ki]; if (!k || !k.alerts) return;
+            k.alerts.splice(ai, 1); kpSaveCfg(); kpRenderInspector(); kpRenderStage();
+        };
+        window.kpAlertSet = function (ki, ai, field, val) {
+            var k = kp.keys[ki]; if (!k || !k.alerts || !k.alerts[ai]) return;
+            k.alerts[ai][field] = field === "val" ? (parseFloat(val) || 0) : val;
+            kpSaveCfg(); kpRenderStage();
+        };
+        window.kpAlertColor = function (ki, ai, color) {
+            var k = kp.keys[ki]; if (!k || !k.alerts || !k.alerts[ai]) return;
+            k.alerts[ai].color = color; kpSaveCfg(); kpRenderInspector(); kpRenderStage();
+        };
+
         function kpRenderInspector() {
             var box = document.getElementById("kpInspector");
             if (!box) return;
@@ -1922,7 +2019,7 @@
                 '<div class="kp-field"><label>Follows</label><select id="kpFFollows">' +
                 _kpFollowsOptions(k.follows) +
                 "</select></div>" +
-                '<div class="kp-field"><label>Color</label><div class="kp-swatches">' +
+                '<div class="kp-field"><label>Base color (normal)</label><div class="kp-swatches">' +
                 LED_COLORS.map(function (c) {
                     return '<button class="kp-sw' + (k.color === c.id ? " on" : "") + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '" aria-label="' + c.id + '"></button>';
                 }).join("") +
@@ -1932,6 +2029,7 @@
                     return '<button data-b="' + b + '"' + (k.behavior === b ? ' class="on"' : "") + ">" + (b === "solid" ? "Solid" : b === "slow" ? "Slow blink" : "Fast blink") + "</button>";
                 }).join("") +
                 "</div></div></div>" +
+                _kpAlertsHtml(k, i) +
                 '<div class="kp-grp"><div class="kp-gt">Keypad — brightness</div>' +
                 '<div class="kp-field"><label>Day</label><div class="kp-slider"><input type="range" id="kpFDay" min="0" max="63" value="' + kp.brightDay + '"><span class="val" id="kpVDay">' + kp.brightDay + "</span></div></div>" +
                 '<div class="kp-field"><label>Night (follows dash night mode)</label><div class="kp-slider"><input type="range" id="kpFNight" min="0" max="63" value="' + kp.brightNight + '"><span class="val" id="kpVNight">' + kp.brightNight + "</span></div></div>" +
