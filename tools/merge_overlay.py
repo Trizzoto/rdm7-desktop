@@ -40,7 +40,7 @@ DIST = ROOT / "src" / "dist"
 
 # Static assets copied verbatim into dist (relative to src/)
 ASSETS = ["transport.js", "rdm_logo_data.js", "favicon.ico", "dash_default_layout.jpg", "rdm_logo.png"]
-ASSET_DIRS = ["build"]
+ASSET_DIRS = ["build", "leaflet"]
 
 DIRECTIVE = re.compile(r"^##\[\s*(.+?)\s*\]##\s*$")
 OPS = ("insert-after", "insert-before", "replace-with")

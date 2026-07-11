@@ -154,6 +154,9 @@
     <script src="build/index.js"></script>
     <script src="rdm_logo_data.js"></script>
     <script src="transport.js"></script>
+    <!-- vendored Leaflet (lap-timer real map; tiles are the only remote part) -->
+    <link rel="stylesheet" href="leaflet/leaflet.css">
+    <script src="leaflet/leaflet.js"></script>
 ##[ end ]##
 
 #! desktopUpdateBanner id is intentionally distinct from firmware's updateBanner
@@ -733,25 +736,58 @@
         /* ---- IO expander stage ---- */
         .io-stage-pad { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 24px 16px; }
         .io-stage-pad svg { max-width: 840px; width: 100%; height: auto; }
-        #ioStageSvg, #ltStageSvg { width: 100%; display: flex; justify-content: center; }
+        #ioStageSvg { width: 100%; display: flex; justify-content: center; }
         .io-hint { color: var(--text-muted); font-size: 11px; margin-top: 14px; text-align: center; }
         .io-pin { cursor: pointer; }
         .io-pin:hover .io-pin-body { stroke: var(--border-light); }
         .io-pin.sel .io-pin-body { stroke: #2d8ceb; stroke-width: 1.6; }
 
-        /* ---- lap timer stage ---- */
-        .lt-stage-pad { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 18px 16px; }
-        .lt-stage-pad svg { max-width: 720px; width: 100%; height: auto; }
+        /* ---- lap timer stage (real map) ---- */
+        #ltMap { position: absolute; inset: 0; background: #0B0D0F; }
+        #ltMap .leaflet-control-attribution {
+            background: rgba(12,14,16,0.72); color: #5A6068;
+            font-family: 'JetBrains Mono', monospace; font-size: 8.5px;
+        }
+        #ltMap .leaflet-control-attribution a { color: #7C8590; }
+        #ltMap .leaflet-control-zoom a {
+            background: var(--panel); color: var(--text); border-color: var(--border);
+        }
+        .lt-trackchip {
+            position: absolute; top: 12px; left: 54px; z-index: 900;
+            background: rgba(20,22,24,0.88); border: 1px solid var(--border); border-radius: var(--radius-md);
+            padding: 6px 12px; font-family: 'Sora', sans-serif; font-size: 12px; font-weight: 600; color: var(--text);
+            pointer-events: none;
+        }
+        .lt-trackchip small { display: block; font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 400; color: var(--text-muted); }
         .lt-timerbar {
-            display: none; align-items: center; gap: 18px; background: var(--panel); border: 1px solid var(--border);
-            border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 8px 16px; margin-bottom: 16px; flex-wrap: wrap;
+            display: none; position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 900;
+            align-items: center; gap: 18px; background: rgba(20,22,24,0.92); border: 1px solid var(--border);
+            border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 8px 16px; flex-wrap: wrap;
         }
         .lt-timerbar.show { display: flex; }
         .lt-t { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
         .lt-t b { font-size: 16px; color: var(--text); font-weight: 600; display: block; }
         .lt-delta { min-width: 120px; text-align: center; border-radius: var(--radius-sm); padding: 3px 10px; font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; background: var(--bg); }
         .lt-delta.neg { color: #4ade80; } .lt-delta.pos { color: #e05d52; }
-        .lt-hint { color: var(--text-muted); font-size: 11px; margin-top: 12px; text-align: center; }
+        .lt-hint { color: var(--text-muted); font-size: 11px; text-align: center; }
+        .lt-float {
+            position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 900;
+            background: rgba(20,22,24,0.88); border: 1px solid var(--border); border-radius: var(--radius-md);
+            padding: 6px 12px; white-space: nowrap; pointer-events: none;
+        }
+        .lt-handle {
+            width: 14px; height: 14px; border-radius: 50%; background: #F0F4F8;
+            border: 2.5px solid #0A0C0E; box-shadow: 0 0 0 1.5px rgba(240,244,248,0.4); cursor: grab;
+        }
+        .lt-handle.rot { width: 11px; height: 11px; background: #2d8ceb; box-shadow: 0 0 0 1.5px rgba(45,140,235,0.4); }
+        .lt-handle.sec { background: #FF9F0A; box-shadow: 0 0 0 1.5px rgba(255,159,10,0.4); }
+        .lt-tip {
+            background: rgba(20,22,24,0.9) !important; border: 1px solid var(--border) !important;
+            color: #FF9F0A !important; font-family: 'JetBrains Mono', monospace !important;
+            font-size: 9.5px !important; font-weight: 700 !important; padding: 1px 6px !important;
+            box-shadow: none !important;
+        }
+        .lt-tip::before { display: none; }
     </style>
 
     <div id="suiteSplash">
@@ -1033,7 +1069,9 @@
         </div>
         <div class="ws-body">
             <div class="ws-rail" id="ltRail"></div>
-            <div class="ws-stage"><div class="lt-stage-pad">
+            <div class="ws-stage" style="position:relative;">
+                <div id="ltMap"></div>
+                <div class="lt-trackchip" id="ltTrackChip"></div>
                 <div class="lt-timerbar" id="ltTimerbar">
                     <span class="lt-t">LAP <b id="ltTCur">0:00.00</b></span>
                     <span class="lt-delta" id="ltTDelta">+0.00</span>
@@ -1043,9 +1081,8 @@
                     <span class="lt-t">S2 <b id="ltTS2">&#8212;</b></span>
                     <span class="lt-t">LAP <b id="ltTN">0</b></span>
                 </div>
-                <div id="ltStageSvg"></div>
-                <div class="lt-hint" id="ltHint">Drag the start/finish gate anywhere along the track. Sectors drag too.</div>
-            </div></div>
+                <div class="lt-hint lt-float" id="ltHint">Drag the white gate onto the real start/finish line &#8212; zoom right in on the tarmac.</div>
+            </div>
             <div class="ws-insp" id="ltInspector"></div>
         </div>
     </div>
@@ -2243,43 +2280,58 @@
         };
 
         /* ============ GPS Lap Timer ============ */
-        /* Track outlines are OUR OWN stylized drawings (approximate layouts,
-           not survey data, not derived from any vendor track database — that
-           stays true when the real curated DB ships). Start/finish follows
-           what the whole market converged on: pick a circuit and the gate
-           comes with it, or place the gate yourself; a drive-through "set at
-           the line" arms once the node is on the car. */
-        var LT_LS = "rdm7_laptimer_v1";
+        /* REAL map (Tommy's call): vendored Leaflet + Esri World Imagery
+           satellite tiles — keyless, so the app ships without anyone
+           creating a Google billing account. The tile layer is one line to
+           swap if a Google Maps API key ever lands. Start/finish follows
+           what the whole market converged on: pick a circuit, then drag the
+           gate onto the REAL line you can see in the imagery; drive-through
+           capture arms once the node is on the car. */
+        var LT_LS = "rdm7_laptimer_v2";
         var LT_TRACKS = [
-            { id: "mallala", name: "Mallala", country: "SA · AUS", km: 2.6, dir: 1, center: [-34.9053, 138.5069],
-              pts: [[80,300],[80,150],[130,90],[230,70],[420,60],[520,90],[600,140],[640,220],[600,290],[500,320],[380,300],[300,330],[180,340]] },
-            { id: "bend_gt", name: "The Bend GT", country: "SA · AUS", km: 4.95, dir: 1, center: [-35.2833, 139.3167],
-              pts: [[70,240],[90,140],[160,80],[260,60],[350,90],[400,140],[470,110],[540,70],[620,100],[650,180],[610,240],[540,260],[560,310],[500,350],[400,330],[330,360],[240,350],[150,320],[100,300]] },
-            { id: "phillip", name: "Phillip Island", country: "VIC · AUS", km: 4.45, dir: -1, center: [-38.5019, 145.2358],
-              pts: [[90,320],[70,230],[110,150],[200,100],[330,80],[470,70],[590,90],[650,160],[620,230],[520,240],[430,210],[350,240],[380,300],[300,350],[180,360]] },
-            { id: "smp", name: "Sydney MSP Gardner", country: "NSW · AUS", km: 3.93, dir: 1, center: [-33.8039, 150.8703],
-              pts: [[100,300],[80,190],[130,110],[240,80],[380,90],[480,70],[590,110],[640,200],[590,280],[480,300],[420,260],[330,290],[250,340],[160,350]] },
-            { id: "winton", name: "Winton", country: "VIC · AUS", km: 3.0, dir: 1, center: [-36.5183, 146.0861],
-              pts: [[120,280],[100,180],[160,120],[260,100],[330,140],[400,110],[500,90],[590,130],[620,210],[560,270],[470,250],[400,290],[320,270],[240,320],[170,330]] }
+            { id: "mallala", name: "Mallala", country: "SA · AUS", km: 2.6, center: [-34.4145, 138.5042], zoom: 15 },
+            { id: "bend_gt", name: "The Bend GT", country: "SA · AUS", km: 4.95, center: [-35.3083, 139.5167], zoom: 15 },
+            { id: "phillip", name: "Phillip Island", country: "VIC · AUS", km: 4.45, center: [-38.4997, 145.2358], zoom: 15 },
+            { id: "smp", name: "Sydney MSP Gardner", country: "NSW · AUS", km: 3.93, center: [-33.8039, 150.8703], zoom: 15 },
+            { id: "winton", name: "Winton", country: "VIC · AUS", km: 3.0, center: [-36.5183, 146.0861], zoom: 16 }
         ];
         var lt = {
-            cfg: null, sim: false, drag: null, path: null,
-            simState: null, selTrack: null
+            cfg: null, sim: false, map: null, layer: null,
+            simState: null, simLayer: null, carMarker: null
         };
         var _ltSimTimer = null;
 
         function ltDefaults() {
             return {
                 active: "mallala",
-                tracks: {},   /* per-track: {gateT, gateW, s1, s2, sectorsOn, method} */
+                tracks: {},   /* per-track: {gate:{lat,lng,hdg,w}, s1:{lat,lng,hdg}, s2:{lat,lng,hdg}, sectorsOn, method} */
                 node: { rate: 25, baseId: "640", bitrate: 500 },
                 engine: { minLap: 20, ref: "best" }
             };
         }
         function ltTrackCfg() {
             var t = lt.cfg.tracks[lt.cfg.active];
-            if (!t) t = lt.cfg.tracks[lt.cfg.active] = { gateT: 0.02, gateW: 25, s1: 0.36, s2: 0.7, sectorsOn: true, method: "library" };
+            if (!t) {
+                var c = ltTrack().center;
+                t = lt.cfg.tracks[lt.cfg.active] = {
+                    gate: { lat: c[0], lng: c[1], hdg: 0, w: 25 },
+                    s1: { lat: c[0] + 0.0022, lng: c[1] + 0.0015, hdg: 90 },
+                    s2: { lat: c[0] - 0.0022, lng: c[1] - 0.0015, hdg: 90 },
+                    sectorsOn: true, method: "map"
+                };
+            }
             return t;
+        }
+        /* metres per degree at a latitude */
+        function ltMpd(lat) {
+            return { la: 111320, lo: 111320 * Math.cos(lat * Math.PI / 180) };
+        }
+        function ltGateEnds(g, w) {
+            var m = ltMpd(g.lat);
+            var perp = (g.hdg + 90) * Math.PI / 180;
+            var dx = Math.sin(perp) * w / 2, dy = Math.cos(perp) * w / 2;
+            return [[g.lat + dy / m.la, g.lng + dx / m.lo],
+                    [g.lat - dy / m.la, g.lng - dx / m.lo]];
         }
         function ltLoad() {
             try {
@@ -2295,141 +2347,69 @@
         }
 
         /* Catmull-Rom → dense sampled closed loop with arc length. */
-        function ltBuildPath(track) {
-            var p = track.pts, n = p.length, SAMPLES_PER_SEG = 26;
-            var pts = [];
-            for (var i = 0; i < n; i++) {
-                var p0 = p[(i - 1 + n) % n], p1 = p[i], p2 = p[(i + 1) % n], p3 = p[(i + 2) % n];
-                for (var s = 0; s < SAMPLES_PER_SEG; s++) {
-                    var u = s / SAMPLES_PER_SEG, u2 = u * u, u3 = u2 * u;
-                    pts.push([
-                        0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * u + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * u2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * u3),
-                        0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * u + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * u2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * u3)
-                    ]);
-                }
-            }
-            var cum = [0];
-            for (var j = 1; j <= pts.length; j++) {
-                var a = pts[j - 1], b = pts[j % pts.length];
-                cum.push(cum[j - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]));
-            }
-            var total = cum[pts.length];
-            return { pts: pts, cum: cum, total: total, mPerPx: (track.km * 1000) / total };
-        }
-        function ltPointAt(t) {
-            var P = lt.path;
-            t = ((t % 1) + 1) % 1;
-            var target = t * P.total, lo = 0, hi = P.pts.length;
-            while (lo < hi) { var mid = (lo + hi) >> 1; if (P.cum[mid] < target) lo = mid + 1; else hi = mid; }
-            var i = Math.max(1, lo), a = P.pts[i - 1], b = P.pts[i % P.pts.length];
-            var seg = P.cum[i] - P.cum[i - 1] || 1;
-            var f = (target - P.cum[i - 1]) / seg;
-            return {
-                x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f,
-                nx: -(b[1] - a[1]) / seg, ny: (b[0] - a[0]) / seg,
-                tx: (b[0] - a[0]) / seg, ty: (b[1] - a[1]) / seg
-            };
-        }
-        function ltNearestT(x, y) {
-            var P = lt.path, best = 0, bd = 1e12;
-            for (var i = 0; i < P.pts.length; i += 2) {
-                var d = (P.pts[i][0] - x) * (P.pts[i][0] - x) + (P.pts[i][1] - y) * (P.pts[i][1] - y);
-                if (d < bd) { bd = d; best = i; }
-            }
-            return P.cum[best] / P.total;
-        }
-        function ltGateLatLon() {
-            var track = ltTrack(), tc = ltTrackCfg(), g = ltPointAt(tc.gateT);
-            var mPerPx = lt.path.mPerPx;
-            var dLat = -(g.y - 215) * mPerPx / 111320;
-            var dLon = (g.x - 360) * mPerPx / (111320 * Math.cos(track.center[0] * Math.PI / 180));
-            return [(track.center[0] + dLat).toFixed(5), (track.center[1] + dLon).toFixed(5)];
+        function ltMapInit() {
+            if (lt.map || typeof L === "undefined") return;
+            var track = ltTrack();
+            lt.map = L.map("ltMap", {
+                center: track.center, zoom: track.zoom,
+                zoomControl: true, attributionControl: true,
+                worldCopyJump: true
+            });
+            /* Esri World Imagery — keyless satellite. Swap this one layer for
+               the Google Maps JS API the day an API key exists. */
+            L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+                maxZoom: 19,
+                attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics"
+            }).addTo(lt.map);
+            lt.layer = L.layerGroup().addTo(lt.map);
+            lt.simLayer = L.layerGroup().addTo(lt.map);
         }
 
-        function ltGateHtml(t, w, cls, label) {
-            var g = ltPointAt(t);
-            var halfPx = (w / 2) / lt.path.mPerPx;
-            var x1 = g.x + g.nx * halfPx, y1 = g.y + g.ny * halfPx;
-            var x2 = g.x - g.nx * halfPx, y2 = g.y - g.ny * halfPx;
-            var s = "";
-            if (cls === "sf") {
-                s += "<line x1='" + x1 + "' y1='" + y1 + "' x2='" + x2 + "' y2='" + y2 + "' stroke='#0A0C0E' stroke-width='9' stroke-linecap='round'/>";
-                s += "<line x1='" + x1 + "' y1='" + y1 + "' x2='" + x2 + "' y2='" + y2 + "' stroke='#F0F4F8' stroke-width='5.5' stroke-linecap='round' stroke-dasharray='4 4'/>";
-            } else {
-                s += "<line x1='" + x1 + "' y1='" + y1 + "' x2='" + x2 + "' y2='" + y2 + "' stroke='#FF9F0A' stroke-width='3.5' stroke-linecap='round' opacity='0.9'/>";
-            }
-            s += "<circle cx='" + g.x + "' cy='" + g.y + "' r='13' fill='transparent' style='cursor:grab' data-drag='" + cls + (label ? "_" + label : "") + "'/>";
-            if (label) s += "<text x='" + (g.x + g.nx * (halfPx + 13)) + "' y='" + (g.y + g.ny * (halfPx + 13) + 3.5) + "' text-anchor='middle' font-family='JetBrains Mono, monospace' font-size='9.5' font-weight='700' fill='" + (cls === "sf" ? "#F0F4F8" : "#FF9F0A") + "'>" + label + "</text>";
-            return s;
+        function ltHandleIcon(cls) {
+            return L.divIcon({ className: "", html: "<div class='lt-handle " + cls + "'></div>", iconSize: [14, 14], iconAnchor: [7, 7] });
         }
 
-        function ltRenderStage() {
-            var host = document.getElementById("ltStageSvg");
-            if (!host) return;
+        /* A gate = the line + a draggable centre handle + a draggable
+           rotate handle riding one end. Writes straight back into gcfg. */
+        function ltAddGate(gcfg, opts) {
+            var w = opts.width;
+            var line = L.polyline(ltGateEnds(gcfg, w), {
+                color: opts.color, weight: opts.sf ? 5 : 3.5, opacity: 0.95,
+                dashArray: opts.sf ? "6 6" : null
+            }).addTo(lt.layer);
+            if (opts.sf) {
+                L.polyline(ltGateEnds(gcfg, w), { color: "#0A0C0E", weight: 9, opacity: 0.8 }).addTo(lt.layer).bringToBack();
+            }
+            var center = L.marker([gcfg.lat, gcfg.lng], { icon: ltHandleIcon(opts.sf ? "" : "sec"), draggable: true }).addTo(lt.layer);
+            if (opts.label) center.bindTooltip(opts.label, { permanent: true, direction: "top", offset: [0, -10], className: "lt-tip" });
+            var rot = L.marker(ltGateEnds(gcfg, w)[0], { icon: ltHandleIcon("rot"), draggable: true }).addTo(lt.layer);
+            center.on("drag", function (e) {
+                gcfg.lat = e.latlng.lat; gcfg.lng = e.latlng.lng;
+                line.setLatLngs(ltGateEnds(gcfg, w));
+                rot.setLatLng(ltGateEnds(gcfg, w)[0]);
+                ltRenderInspectorLatLon();
+            });
+            center.on("dragend", function () { ltSave(); ltRenderMap(); ltRenderInspector(); });
+            rot.on("drag", function (e) {
+                var m = ltMpd(gcfg.lat);
+                var dx = (e.latlng.lng - gcfg.lng) * m.lo, dy = (e.latlng.lat - gcfg.lat) * m.la;
+                gcfg.hdg = (Math.atan2(dx, dy) * 180 / Math.PI - 90 + 360) % 360;
+                line.setLatLngs(ltGateEnds(gcfg, w));
+            });
+            rot.on("dragend", function () { ltSave(); ltRenderMap(); ltRenderInspector(); });
+        }
+
+        function ltRenderMap() {
+            if (!lt.map) return;
             var track = ltTrack(), tc = ltTrackCfg();
-            if (!lt.path || lt.selTrack !== track.id) { lt.path = ltBuildPath(track); lt.selTrack = track.id; }
-            var P = lt.path;
-            var d = "M " + P.pts[0][0].toFixed(1) + " " + P.pts[0][1].toFixed(1);
-            for (var i = 1; i < P.pts.length; i++) d += " L " + P.pts[i][0].toFixed(1) + " " + P.pts[i][1].toFixed(1);
-            d += " Z";
-            var s = "<svg id='ltSvg' viewBox='0 0 720 430' xmlns='http://www.w3.org/2000/svg'>";
-            s += "<defs><filter id='ltGlow' x='-60%' y='-60%' width='220%' height='220%'><feGaussianBlur stdDeviation='2.4'/></filter></defs>";
-            /* asphalt + edges + centreline */
-            s += "<path d='" + d + "' fill='none' stroke='#0B0D0F' stroke-width='19' stroke-linejoin='round'/>";
-            s += "<path d='" + d + "' fill='none' stroke='#26292D' stroke-width='15' stroke-linejoin='round'/>";
-            s += "<path d='" + d + "' fill='none' stroke='#3A3F45' stroke-width='0.8' stroke-dasharray='7 9' opacity='0.6'/>";
-            /* direction chevrons */
-            for (var c = 0.12; c < 1; c += 0.25) {
-                var g = ltPointAt(track.dir === -1 ? 1 - c : c);
-                var dir = track.dir === -1 ? -1 : 1;
-                s += "<path d='M " + (g.x - g.tx * 5 * dir + g.nx * 4) + " " + (g.y - g.ty * 5 * dir + g.ny * 4) +
-                     " L " + (g.x + g.tx * 5 * dir) + " " + (g.y + g.ty * 5 * dir) +
-                     " L " + (g.x - g.tx * 5 * dir - g.nx * 4) + " " + (g.y - g.ty * 5 * dir - g.ny * 4) +
-                     "' fill='none' stroke='#4A5057' stroke-width='1.6' stroke-linecap='round'/>";
-            }
-            /* sectors then start/finish on top */
+            lt.layer.clearLayers();
+            ltAddGate(tc.gate, { width: tc.gate.w, color: "#F0F4F8", sf: true });
             if (tc.sectorsOn) {
-                s += ltGateHtml(tc.s1, tc.gateW * 0.8, "sec", "S1");
-                s += ltGateHtml(tc.s2, tc.gateW * 0.8, "sec", "S2");
+                ltAddGate(tc.s1, { width: tc.gate.w * 0.8, color: "#FF9F0A", label: "S1" });
+                ltAddGate(tc.s2, { width: tc.gate.w * 0.8, color: "#FF9F0A", label: "S2" });
             }
-            s += ltGateHtml(tc.gateT, tc.gateW, "sf", "");
-            /* sim car */
-            if (lt.sim && lt.simState) {
-                var cp = ltPointAt(lt.simState.t);
-                s += "<circle cx='" + cp.x + "' cy='" + cp.y + "' r='7' fill='#2d8ceb' opacity='0.5' filter='url(#ltGlow)'/>";
-                s += "<circle cx='" + cp.x + "' cy='" + cp.y + "' r='4' fill='#7CC0FF'/>";
-            }
-            /* track title */
-            s += "<text x='360' y='24' text-anchor='middle' font-family='Sora, sans-serif' font-weight='600' font-size='15' fill='#E8EDF2'>" + track.name + "</text>";
-            s += "<text x='360' y='40' text-anchor='middle' font-family='JetBrains Mono, monospace' font-size='9' fill='#5A6068'>" + track.country + " · " + track.km.toFixed(2) + " km · " + (track.dir === -1 ? "anticlockwise" : "clockwise") + " · layout approximate</text>";
-            s += "</svg>";
-            host.innerHTML = s;
-            /* drag wiring */
-            var svg = document.getElementById("ltSvg");
-            if (svg) {
-                svg.addEventListener("pointerdown", function (e) {
-                    var tgt = e.target.getAttribute && e.target.getAttribute("data-drag");
-                    if (!tgt) return;
-                    lt.drag = tgt.indexOf("sec_S1") === 0 ? "s1" : tgt.indexOf("sec_S2") === 0 ? "s2" : "gate";
-                    svg.setPointerCapture(e.pointerId);
-                    e.preventDefault();
-                });
-                svg.addEventListener("pointermove", function (e) {
-                    if (!lt.drag) return;
-                    var r = svg.getBoundingClientRect();
-                    var x = (e.clientX - r.left) * (720 / r.width);
-                    var y = (e.clientY - r.top) * (430 / r.height);
-                    var t = ltNearestT(x, y);
-                    var tc2 = ltTrackCfg();
-                    if (lt.drag === "gate") tc2.gateT = t;
-                    else if (lt.drag === "s1") tc2.s1 = t;
-                    else tc2.s2 = t;
-                    ltRenderStage(); ltRenderInspectorLatLon();
-                });
-                svg.addEventListener("pointerup", function () {
-                    if (lt.drag) { lt.drag = null; ltSave(); ltRenderInspector(); }
-                });
-            }
+            var chip = document.getElementById("ltTrackChip");
+            if (chip) chip.innerHTML = track.name + "<small>" + track.country + " · " + track.km.toFixed(2) + " km</small>";
         }
 
         function ltBuildRail() {
@@ -2443,7 +2423,10 @@
                 b.addEventListener("click", function () {
                     lt.cfg.active = t.id;
                     ltStopSim();
-                    ltSave(); ltBuildRail(); ltRenderStage(); ltRenderInspector();
+                    ltSave(); ltBuildRail();
+                    var nt = ltTrack();
+                    if (lt.map) lt.map.flyTo(nt.center, nt.zoom, { duration: 1.1 });
+                    ltRenderMap(); ltRenderInspector();
                 });
                 rail.appendChild(b);
             });
@@ -2462,14 +2445,17 @@
 
         function ltRenderInspectorLatLon() {
             var el = document.getElementById("ltLatLon");
-            if (el) { var ll = ltGateLatLon(); el.value = ll[0] + ", " + ll[1]; }
+            if (el) {
+                var g = ltTrackCfg().gate;
+                el.value = g.lat.toFixed(5) + ", " + g.lng.toFixed(5);
+            }
         }
 
         function ltRenderInspector() {
             var insp = document.getElementById("ltInspector");
             if (!insp) return;
             var tc = ltTrackCfg();
-            var ll = ltGateLatLon();
+            var g = tc.gate;
             var connected = typeof RDM !== "undefined" && RDM.mode !== "local" &&
                             typeof _connectionOk !== "undefined" && _connectionOk;
             var h = "<h2>" + ltTrack().name + "</h2><div class='ws-sub'>lap engine runs on the dash · ±0.02 s</div>";
@@ -2480,9 +2466,12 @@
                 h += "<button class='ws-btn-line' " + (connected ? "" : "disabled") + " onclick='showToast(\"Armed — the next time the car crosses the line, it becomes start/finish.\", \"info\")'>" + (connected ? "Arm capture" : "Arm capture — needs the GPS node on the car") + "</button>" +
                      "<div class='ws-note'>Park the app, drive across the line once. The node timestamps the crossing at 25 Hz and the gate sets itself.</div>";
             } else {
-                h += "<div class='ws-field'><label>Gate position (drag it on the map)</label><input type='text' id='ltLatLon' value='" + ll[0] + ", " + ll[1] + "' " + (tc.method === "map" ? "" : "disabled") + " onchange='ltLatLonEdit(this)'></div>";
+                h += "<div class='ws-field'><label>Gate position (drag the white line on the map)</label><input type='text' id='ltLatLon' value='" + g.lat.toFixed(5) + ", " + g.lng.toFixed(5) + "' onchange='ltLatLonEdit(this)'></div>";
             }
-            h += "<div class='ws-field'><label>Gate width</label><div class='ws-slider'><input type='range' min='10' max='50' step='5' value='" + tc.gateW + "' oninput='ltGateW(this.value)'><span class='val' id='ltGwVal'>" + tc.gateW + " m</span></div></div></div>";
+            h += "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
+                 "<div class='ws-field'><label>Heading</label><input type='number' value='" + Math.round(g.hdg) + "' onchange='ltHdgEdit(this)'></div>" +
+                 "<div class='ws-field'><label>Width (m)</label><input type='number' value='" + g.w + "' onchange='ltGateW(this.value)'></div></div>" +
+                 "<div class='ws-note'>Zoom onto the tarmac and drop the line exactly where the paint is. The blue dot spins the gate square to the straight.</div></div>";
             h += "<div class='ws-grp'><div class='ws-gt'>Sectors</div>" +
                  "<div class='ws-field'>" + ltSegHtml("sectorsOn", tc.sectorsOn ? "1" : "0", [["1", "2 splits"], ["0", "Off"]], "ltSectors") + "</div>" +
                  (tc.sectorsOn ? "<div class='ws-note'>Drag S1 / S2 along the track. Splits publish as the <b>sector</b> channel.</div>" : "") + "</div>";
@@ -2504,19 +2493,33 @@
             insp.innerHTML = h;
         }
         window.ltMethod = function (v) { ltTrackCfg().method = v; ltSave(); ltRenderInspector(); };
-        window.ltSectors = function (v) { ltTrackCfg().sectorsOn = v === "1"; ltSave(); ltRenderStage(); ltRenderInspector(); };
+        window.ltSectors = function (v) { ltTrackCfg().sectorsOn = v === "1"; ltSave(); ltRenderMap(); ltRenderInspector(); };
         window.ltRef = function (v) { lt.cfg.engine.ref = v; ltSave(); ltRenderInspector(); };
         window.ltRate = function (v) { lt.cfg.node.rate = parseInt(v, 10); ltSave(); ltRenderInspector(); };
         window.ltGateW = function (v) {
-            ltTrackCfg().gateW = parseInt(v, 10);
-            var el = document.getElementById("ltGwVal");
-            if (el) el.textContent = v + " m";
-            ltSave(); ltRenderStage();
+            var w = parseInt(v, 10);
+            if (w >= 5 && w <= 120) { ltTrackCfg().gate.w = w; ltSave(); ltRenderMap(); }
+        };
+        window.ltHdgEdit = function (el) {
+            var h = parseFloat(el.value);
+            if (!isNaN(h)) { ltTrackCfg().gate.hdg = ((h % 360) + 360) % 360; ltSave(); ltRenderMap(); }
         };
         window.ltMinLap = function (el) { var v = parseInt(el.value, 10); if (v > 0) { lt.cfg.engine.minLap = v; ltSave(); } };
         window.ltBaseId = function (el) { lt.cfg.node.baseId = el.value.replace(/[^0-9a-fA-F]/g, ""); ltSave(); };
         window.ltBitrate = function (el) { lt.cfg.node.bitrate = parseInt(el.value, 10); ltSave(); };
-        window.ltLatLonEdit = function (el) { showToast("Gate pinned — on real hardware this snaps to the nearest point on your driven line.", "info"); };
+        window.ltLatLonEdit = function (el) {
+            var m = el.value.split(",");
+            var la = parseFloat(m[0]), lo = parseFloat(m[1]);
+            if (isNaN(la) || isNaN(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
+                showToast("Use decimal degrees: -34.40900, 138.50280", "error");
+                ltRenderInspectorLatLon();
+                return;
+            }
+            var g = ltTrackCfg().gate;
+            g.lat = la; g.lng = lo;
+            ltSave(); ltRenderMap();
+            if (lt.map) lt.map.panTo([la, lo]);
+        };
 
         /* ── lap simulation: curvature-limited speed profile + predictive delta ── */
         function ltFmtTime(t) {
@@ -2524,46 +2527,80 @@
             var m = Math.floor(t / 60), s = t - m * 60;
             return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
         }
-        function ltBuildSpeedProfile() {
-            var P = lt.path, n = P.pts.length, mPerPx = P.mPerPx;
+        /* Demo loop: a ~1.7 km stadium anchored ON the gate, square to its
+           heading. Real laps trace the car's driven GPS line — this exists
+           so the timing engine can be felt before the node ships. */
+        function ltBuildDemoLoop() {
+            var g = ltTrackCfg().gate;
+            var mpd = ltMpd(g.lat);
+            var A = 380, B = 150, N = 400;                 /* semi-axes m, samples */
+            var hd = g.hdg * Math.PI / 180;
+            var ux = Math.sin(hd), uy = Math.cos(hd);      /* travel dir (E,N) */
+            var vx = Math.cos(hd), vy = -Math.sin(hd);     /* right-hand perp */
+            var cx = g.lng * mpd.lo + vx * B;              /* centre, metres E/N */
+            var cy = g.lat * mpd.la + vy * B;
+            var pts = [], latlng = [], cum = [0];
+            for (var i = 0; i < N; i++) {
+                var th = -Math.PI / 2 + (i / N) * Math.PI * 2;
+                var x = cx + ux * A * Math.cos(th) + vx * B * Math.sin(th);
+                var y = cy + uy * A * Math.cos(th) + vy * B * Math.sin(th);
+                pts.push([x, y]);
+                latlng.push([y / mpd.la, x / mpd.lo]);
+            }
+            for (var j = 1; j <= N; j++) {
+                var a = pts[j - 1], b = pts[j % N];
+                cum.push(cum[j - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+            }
+            return { pts: pts, latlng: latlng, cum: cum, total: cum[N] };
+        }
+        function ltBuildSpeedProfile(P) {
+            var n = P.pts.length;
             var v = new Array(n);
             for (var i = 0; i < n; i++) {
                 var a = P.pts[(i - 4 + n) % n], b = P.pts[i], c = P.pts[(i + 4) % n];
                 var abx = b[0] - a[0], aby = b[1] - a[1], bcx = c[0] - b[0], bcy = c[1] - b[1];
                 var cross = abx * bcy - aby * bcx;
                 var lab = Math.hypot(abx, aby), lbc = Math.hypot(bcx, bcy);
-                var kappa = Math.abs(cross) / (lab * lbc * Math.hypot(b[0] - a[0] + bcx, b[1] - a[1] + bcy) / 2 + 0.001);
-                kappa /= mPerPx;   /* 1/px → 1/m */
+                var kappa = Math.abs(cross) / (lab * lbc * Math.hypot(abx + bcx, aby + bcy) / 2 + 0.001);
                 var vmax = Math.sqrt(11 / Math.max(kappa, 0.0004));   /* ~1.1 g lateral */
                 v[i] = Math.min(Math.max(vmax, 12), 53);              /* 43–190 km/h window */
             }
             /* backward pass: braking limit, forward pass: traction limit */
             for (var p = 0; p < 3; p++) {
                 for (var j = n - 1; j >= 0; j--) {
-                    var d1 = ((P.cum[j + 1] || P.total) - P.cum[j]) * mPerPx;
+                    var d1 = (P.cum[j + 1] || P.total) - P.cum[j];
                     v[j] = Math.min(v[j], Math.sqrt(v[(j + 1) % n] * v[(j + 1) % n] + 2 * 9.5 * d1));
                 }
                 for (var k = 0; k < n; k++) {
-                    var d2 = ((P.cum[k + 1] || P.total) - P.cum[k]) * mPerPx;
+                    var d2 = (P.cum[k + 1] || P.total) - P.cum[k];
                     v[(k + 1) % n] = Math.min(v[(k + 1) % n], Math.sqrt(v[k] * v[k] + 2 * 4.2 * d2));
                 }
             }
             return v;
         }
         function ltStartSim() {
-            var tc = ltTrackCfg();
+            var loop = ltBuildDemoLoop();
             lt.simState = {
-                t: tc.gateT, lapT: 0, lapN: 0, last: null, best: null,
-                bestProfile: null, curProfile: [], lastIdx: -1,
-                s1t: null, s2t: null, speeds: ltBuildSpeedProfile(), jitter: 1
+                loop: loop, t: 0, lapT: 0, lapN: 0, last: null, best: null,
+                bestProfile: null, curProfile: [],
+                s1t: null, s2t: null, speeds: ltBuildSpeedProfile(loop), jitter: 1
             };
+            lt.simLayer.clearLayers();
+            L.polyline(loop.latlng.concat([loop.latlng[0]]), {
+                color: "#2d8ceb", weight: 2.5, opacity: 0.55, dashArray: "5 7"
+            }).addTo(lt.simLayer);
+            lt.carMarker = L.circleMarker(loop.latlng[0], {
+                radius: 6, color: "#7CC0FF", weight: 2, fillColor: "#2d8ceb", fillOpacity: 0.9
+            }).addTo(lt.simLayer);
+            if (lt.map) lt.map.fitBounds(L.latLngBounds(loop.latlng).pad(0.15));
             var tb = document.getElementById("ltTimerbar");
             if (tb) tb.classList.add("show");
             if (!_ltSimTimer) _ltSimTimer = setInterval(_ltSimTick, 50);
         }
         function ltStopSim() {
             if (_ltSimTimer) { clearInterval(_ltSimTimer); _ltSimTimer = null; }
-            lt.simState = null; lt.sim = false;
+            lt.simState = null; lt.sim = false; lt.carMarker = null;
+            if (lt.simLayer) lt.simLayer.clearLayers();
             var tb = document.getElementById("ltTimerbar");
             if (tb) tb.classList.remove("show");
             var st = document.getElementById("ltBtnSetup"), si = document.getElementById("ltBtnSim");
@@ -2571,27 +2608,25 @@
             if (si) si.className = "";
         }
         function _ltSimTick() {
-            var S = lt.simState, P = lt.path, tc = ltTrackCfg();
+            var S = lt.simState;
             if (!S) return;
-            var idx = Math.floor((((S.t % 1) + 1) % 1) * P.pts.length) % P.pts.length;
+            var P = S.loop, n = P.pts.length;
+            var idx = Math.floor((((S.t % 1) + 1) % 1) * n) % n;
             /* lap-to-lap variation so delta has something to show */
             var v = S.speeds[idx] * S.jitter;
-            var dPx = (v / P.mPerPx) * 0.05;
-            var newT = S.t + dPx / P.total;
+            var newT = S.t + (v * 0.05) / P.total;
             S.lapT += 0.05;
             /* profile sample for predictive delta (N=200 distance bins) */
-            var bin = Math.floor((((S.t - tc.gateT) % 1 + 1) % 1) * 200);
+            var bin = Math.floor((((S.t % 1) + 1) % 1) * 200);
             S.curProfile[bin] = S.lapT;
-            /* gate crossings */
-            function crossed(mark) {
-                var a = ((S.t - mark) % 1 + 1) % 1, b = ((newT - mark) % 1 + 1) % 1;
-                return a > 0.5 && b < 0.5 || (a < b - 0.5);
+            /* the demo loop starts AT the gate, so sector marks sit at fixed
+               loop fractions; real hardware uses the placed S1/S2 gates */
+            if (ltTrackCfg().sectorsOn) {
+                if (S.t < 1 / 3 && newT >= 1 / 3) { S.s1t = S.lapT; var e1 = document.getElementById("ltTS1"); if (e1) e1.textContent = ltFmtTime(S.s1t); }
+                if (S.t < 2 / 3 && newT >= 2 / 3) { S.s2t = S.lapT; var e2 = document.getElementById("ltTS2"); if (e2) e2.textContent = ltFmtTime(S.s2t); }
             }
-            if (tc.sectorsOn) {
-                if (crossed(tc.s1) && S.lapT > 2) { S.s1t = S.lapT; var e1 = document.getElementById("ltTS1"); if (e1) e1.textContent = ltFmtTime(S.s1t); }
-                if (crossed(tc.s2) && S.lapT > 2) { S.s2t = S.lapT; var e2 = document.getElementById("ltTS2"); if (e2) e2.textContent = ltFmtTime(S.s2t); }
-            }
-            if (crossed(tc.gateT) && S.lapT > lt.cfg.engine.minLap * 0.3) {
+            if (newT >= 1) {
+                newT -= 1;
                 S.last = S.lapT;
                 if (S.best === null || S.last < S.best) { S.best = S.last; S.bestProfile = S.curProfile.slice(); }
                 S.lapN++; S.lapT = 0; S.curProfile = []; S.s1t = null; S.s2t = null;
@@ -2610,7 +2645,7 @@
                     ed.className = "lt-delta " + (delta >= 0 ? "pos" : "neg");
                 } else { ed.textContent = "—"; ed.className = "lt-delta"; }
             }
-            ltRenderStage();
+            if (lt.carMarker) lt.carMarker.setLatLng(P.latlng[idx]);
         }
         window._ltSetSim = function (sim) {
             lt.sim = sim;
@@ -2618,8 +2653,8 @@
             if (st) st.className = sim ? "" : "on";
             if (si) si.className = sim ? "on" : "";
             var hint = document.getElementById("ltHint");
-            if (sim) { ltStartSim(); if (hint) hint.textContent = "Simulated lap running — the delta bar runs against your best lap, exactly like it will on the dash."; }
-            else { ltStopSim(); ltRenderStage(); if (hint) hint.textContent = "Drag the start/finish gate anywhere along the track. Sectors drag too."; }
+            if (sim) { ltStartSim(); if (hint) hint.textContent = "Demo lap on a practice loop at your gate — real laps trace the car's GPS line. Delta runs vs best, like on the dash."; }
+            else { ltStopSim(); if (hint) hint.textContent = "Drag the white gate onto the real start/finish line — zoom right in on the tarmac."; }
         };
 
         window._ltOpen = function () {
@@ -2628,7 +2663,14 @@
             ltBuildRail();
             var ws = document.getElementById("ltWorkspace");
             if (ws) ws.style.display = "flex";
-            ltRenderStage(); ltRenderInspector();
+            /* Leaflet needs a laid-out container: init after display:flex */
+            ltMapInit();
+            if (lt.map) {
+                lt.map.invalidateSize();
+                var t = ltTrack();
+                lt.map.setView(t.center, t.zoom);
+            }
+            ltRenderMap(); ltRenderInspector();
         };
         window._ltClose = function () {
             ltStopSim();
