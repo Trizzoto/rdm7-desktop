@@ -351,10 +351,48 @@
     <!-- ================= Desktop suite shell: splash / home / keypad ================= -->
     <style>
         /* ---- splash ---- */
+        /* ── Dash editor: channel test-slider panel (desktop preview) ──
+           Sits BELOW the suite overlays (z<15000) so it auto-hides whenever
+           Home or a workspace is open, and shows only over the editor. */
+        body:not(.suite-desktop) .dt-fab, body:not(.suite-desktop) .dt-panel { display: none !important; }
+        .dt-fab {
+            position: fixed; left: 14px; bottom: 14px; z-index: 14500;
+            display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px;
+            background: var(--panel-elevated); border: 1px solid var(--border-light); border-radius: 20px;
+            color: var(--text); font-family: 'Sora', sans-serif; font-size: 12px; font-weight: 600;
+            cursor: pointer; box-shadow: var(--shadow-md);
+        }
+        .dt-fab:hover { border-color: var(--accent); }
+        .dt-fab .dot { width: 8px; height: 8px; border-radius: 50%; background: #6FBF73; }
+        .dt-fab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .dt-fab.on .dot { background: #fff; }
+        .dt-panel {
+            position: fixed; left: 14px; bottom: 56px; z-index: 14500; width: 296px; max-height: 62vh;
+            background: var(--panel); border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg); display: none; flex-direction: column; overflow: hidden;
+        }
+        .dt-panel.show { display: flex; }
+        .dt-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        .dt-head .t { font-family: 'Sora', sans-serif; font-size: 12px; font-weight: 600; color: var(--text); }
+        .dt-head .clr { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); cursor: pointer; }
+        .dt-head .clr:hover { color: #e05d52; }
+        .dt-body { overflow-y: auto; padding: 6px 12px 12px; }
+        .dt-row { padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .dt-row .lab { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+        .dt-row .nm { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text); }
+        .dt-row .vv { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-hover); font-weight: 600; }
+        .dt-row.act .nm { color: var(--accent-hover); }
+        .dt-row .x { font-size: 10px; color: var(--text-muted); cursor: pointer; padding: 0 2px; }
+        .dt-row .x:hover { color: #e05d52; }
+        .dt-row input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
+        .dt-none { color: var(--text-muted); font-size: 11px; padding: 16px 4px; text-align: center; line-height: 1.5; }
+
         #suiteSplash {
             position: fixed; inset: 0; z-index: 20000;
             background: radial-gradient(ellipse 70% 60% at 50% 44%, #2e2e2e, #1b1b1b 80%);
-            display: none; align-items: center; justify-content: center;
+            /* visible from the FIRST paint so the editor / WASM canvas never
+               flashes before it — bootSuite hides it on non-Tauri (dev browser). */
+            display: flex; align-items: center; justify-content: center;
             transition: opacity 0.45s ease;
         }
         #suiteSplash.sh-out { opacity: 0; pointer-events: none; }
@@ -582,6 +620,10 @@
         .kp-insp { width: 300px; min-height: 0; max-height: 100%; background: var(--panel); border-left: 1px solid var(--border); padding: 12px 14px; flex-shrink: 0; overflow-y: auto; }
         .kp-insp h2 { font-family: 'Sora', sans-serif; font-size: 12.5px; font-weight: 600; margin: 0 0 1px; }
         .kp-sub { color: var(--text-muted); font-size: 10px; font-family: 'JetBrains Mono', monospace; margin-bottom: 10px; }
+        .kp-keyacts { display: flex; gap: 6px; margin: 0 0 10px; }
+        .kp-keyacts button { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text); font-family: 'Sora', sans-serif; font-size: 10.5px; font-weight: 600; padding: 5px 0; cursor: pointer; }
+        .kp-keyacts button:hover { border-color: var(--accent); }
+        .kp-keyacts button:disabled { color: var(--text-muted); cursor: not-allowed; border-color: var(--border); }
         .kp-grp { border-top: 1px solid var(--border); padding: 10px 0 2px; margin-top: 6px; }
         .kp-gt { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 8px; }
         .kp-field { margin-bottom: 9px; }
@@ -951,6 +993,11 @@
         .lt-lap .gap { margin-left: auto; font-size: 10px; }
         .lt-lap .gap.pos { color: #e05d52; } .lt-lap .gap.neg { color: #4ade80; }
         .lt-lap .star { color: #FFD60A; }
+        .lt-lap .t small { display: block; font-weight: 400; font-size: 8.5px; color: var(--text-muted); margin-top: 1px; }
+        .lt-consist { display: flex; align-items: center; gap: 10px; margin: 2px 4px 8px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); }
+        .lt-consist .sc { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 700; line-height: 1; }
+        .lt-consist .lb { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted); line-height: 1.5; }
+        .lt-consist .lb b { color: var(--text); font-weight: 600; }
         .lt-sectbl { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
         .lt-sectbl th { color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; text-align: right; padding: 3px 6px; font-weight: 600; }
         .lt-sectbl th:first-child { text-align: left; }
@@ -1385,7 +1432,8 @@
         var kp = {
             model: MODELS[0], keys: JSON.parse(JSON.stringify(DEFAULT_KEYS)),
             selected: 1, live: false, night: false, brightDay: 48, brightNight: 12,
-            keyOn: {}, keyDown: 0, coolant: 84.0, coolantDir: 1
+            keyOn: {}, keyDown: 0, coolant: 84.0, coolantDir: 1,
+            clip: null   /* copied key style (icon/mode/preset/follows/color/behavior) */
         };
 
         function kpLoadCfg() {
@@ -1632,6 +1680,9 @@
             var html =
                 "<h2>Key " + (i + 1) + " — " + (k.label || "unassigned") + "</h2>" +
                 '<div class="kp-sub">' + kp.model.name + "-SI · TPDO1 0x195 bit " + i + "</div>" +
+                '<div class="kp-keyacts"><button onclick="kpCopyKey()" title="copy this key\'s LED colour, behaviour and mode">Copy style</button>' +
+                '<button onclick="kpPasteKey()"' + (kp.clip ? "" : " disabled") + ' title="paste the copied LED style onto this key">Paste</button>' +
+                '<button onclick="kpApplyAll()" title="give every key this LED style — icons &amp; labels kept">Apply to all</button></div>' +
                 '<div class="kp-grp"><div class="kp-gt">Button</div>' +
                 '<div class="kp-field"><label>Label</label><input type="text" id="kpFLabel" value="' + k.label + '" maxlength="7"></div>' +
                 '<div class="kp-field"><label>Icon insert</label><select id="kpFIcon">' +
@@ -1693,6 +1744,29 @@
                 b.addEventListener("click", function () { kp.night = b.getAttribute("data-n") === "1"; kpRenderInspector(); kpRenderStage(); });
             });
         }
+
+        /* copy / paste / apply-all a key's LED look + mode (colour, behaviour,
+           mode). NOT follows/icon/label/preset — each key keeps what it tracks
+           and its own identity; only the colour/blink/mode transfers. */
+        function _kpStyle(k) { return { mode: k.mode, color: k.color, behavior: k.behavior }; }
+        window.kpCopyKey = function () {
+            var k = kp.keys[kp.selected]; if (!k) return;
+            kp.clip = _kpStyle(k); kpRenderInspector();
+            if (typeof showToast === "function") showToast("Key style copied — paste it onto another key", "success");
+        };
+        window.kpPasteKey = function () {
+            var k = kp.keys[kp.selected]; if (!k || !kp.clip) return;
+            Object.assign(k, kp.clip); kpSaveCfg(); kpRenderInspector(); kpRenderStage();
+            if (typeof showToast === "function") showToast("Style pasted onto key " + (kp.selected + 1), "success");
+        };
+        window.kpApplyAll = function () {
+            var src = kp.keys[kp.selected]; if (!src) return;
+            kp.clip = _kpStyle(src);
+            var n = kp.model.rows * kp.model.cols;
+            for (var i = 0; i < n; i++) if (kp.keys[i]) Object.assign(kp.keys[i], kp.clip);
+            kpSaveCfg(); kpRenderInspector(); kpRenderStage();
+            if (typeof showToast === "function") showToast("Applied this style to all " + n + " keys", "success");
+        };
 
         var kpRailBuilt = false;
         function kpBuildRail() {
@@ -4290,8 +4364,18 @@
             var laps = specs.map(function (sp, i) {
                 var L = ltAnGenLap(loop, speeds, sp);
                 L.n = i + 1; L.sec = ltAnSectors(L);
+                L.vmax = 0; L.vmin = 1e9;
+                L.samples.forEach(function (s) { if (s.v > L.vmax) L.vmax = s.v; if (s.v < L.vmin) L.vmin = s.v; });
                 return L;
             });
+            /* session consistency: tighter lap times → higher score. Shown with
+               the raw spread so the number is grounded, not a black box. */
+            var times = laps.map(function (L) { return L.time; });
+            var mean = times.reduce(function (a, b) { return a + b; }, 0) / times.length;
+            var variance = times.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / times.length;
+            var std = Math.sqrt(variance);
+            var consistency = Math.max(0, Math.min(100, Math.round(100 - (std / mean) * 800)));
+            var spread = Math.max.apply(null, times) - Math.min.apply(null, times);
             var best = 0; laps.forEach(function (L, i) { if (L.time < laps[best].time) best = i; });
             /* select the 2nd-fastest lap by default so the delta trace + the
                coaching call-out have a real story on first view (comparing the
@@ -4304,7 +4388,8 @@
             var vmin = 1e9, vmax = -1e9;
             laps.forEach(function (L) { L.samples.forEach(function (s) { if (s.v < vmin) vmin = s.v; if (s.v > vmax) vmax = s.v; }); });
             lt.an = { loop: loop, laps: laps, best: best, sel: second < 0 ? best : second, ref: best, bestSec: bestSec,
-                      theoretical: bestSec[0] + bestSec[1] + bestSec[2], vmin: vmin, vmax: vmax };
+                      theoretical: bestSec[0] + bestSec[1] + bestSec[2], vmin: vmin, vmax: vmax,
+                      consistency: consistency, spread: spread };
             lt.anCursor = 0.5;
         }
 
@@ -4452,13 +4537,17 @@
             var rail = document.getElementById("ltRail");
             if (!rail || !lt.an) return;
             var an = lt.an;
-            rail.innerHTML = "<div class='ws-rail-title'>Session · laps</div>";
+            var cCol = an.consistency >= 80 ? "#6FBF73" : an.consistency >= 55 ? "#FF9F0A" : "#e05d52";
+            rail.innerHTML = "<div class='ws-rail-title'>Session · laps</div>" +
+                "<div class='lt-consist' title='how tight your lap times are — higher is more repeatable'>" +
+                "<span class='sc' style='color:" + cCol + "'>" + an.consistency + "</span>" +
+                "<span class='lb'>consistency<br><b>±" + an.spread.toFixed(2) + "s</b> spread</span></div>";
             an.laps.forEach(function (L, i) {
                 var gap = L.time - an.laps[an.best].time;
                 var b = document.createElement("button");
                 b.className = "lt-lap" + (an.sel === i ? " on" : "");
                 b.innerHTML = "<span class='n'>L" + L.n + (i === an.best ? " <span class='star'>&#9733;</span>" : "") + "</span>" +
-                    "<span class='t'>" + ltFmtTime(L.time) + "</span>" +
+                    "<span class='t'>" + ltFmtTime(L.time) + "<small>" + Math.round(L.vmax * 3.6) + " km/h</small></span>" +
                     (i === an.best ? "<span class='gap'>best</span>" : "<span class='gap pos'>+" + gap.toFixed(2) + "</span>");
                 b.addEventListener("click", function () { ltAnSelectLap(i); });
                 rail.appendChild(b);
@@ -4693,9 +4782,77 @@
         /* boot: splash then home — only inside the Tauri app (the same dist is
            served by dev rigs in plain browsers, where the editor should show
            immediately) */
+        /* ── Dash editor: channel test-slider panel ──────────────────────
+           Drag any bound channel and watch the WASM preview (rules, redlines,
+           warnings) react with no car. Reuses the editor's setTestValue /
+           clearTestValue plumbing; injectWasmSignal gives an immediate paint. */
+        function dtInit() {
+            if (document.getElementById("dtFab")) return;
+            var fab = document.createElement("button");
+            fab.id = "dtFab"; fab.className = "dt-fab";
+            fab.innerHTML = "<span class='dot'></span>Test signals";
+            fab.title = "Drive each bound channel by hand and watch the preview react";
+            fab.addEventListener("click", dtToggle);
+            var panel = document.createElement("div");
+            panel.id = "dtPanel"; panel.className = "dt-panel";
+            panel.innerHTML = "<div class='dt-head'><span class='t'>Test signals</span><span class='clr' onclick='dtClearAll()'>reset all</span></div><div class='dt-body' id='dtBody'></div>";
+            document.body.appendChild(panel);
+            document.body.appendChild(fab);
+        }
+        var _dtActive = {};   /* channel → true while a slider is overriding it */
+        function dtToggle() {
+            var p = document.getElementById("dtPanel"), f = document.getElementById("dtFab");
+            if (!p) return;
+            var show = !p.classList.contains("show");
+            p.classList.toggle("show", show); f.classList.toggle("on", show);
+            if (show) dtBuild();
+        }
+        function dtBuild() {
+            var body = document.getElementById("dtBody");
+            if (!body || typeof currentLayout === "undefined") return;
+            var seen = {}, rows = [];
+            (currentLayout.widgets || []).forEach(function (w) {
+                var sn = _getWidgetSignalName(w);
+                if (!sn || seen[sn]) return;
+                seen[sn] = true;
+                rows.push({ name: sn, b: _getTestBounds(w) });
+            });
+            if (!rows.length) { body.innerHTML = "<div class='dt-none'>No channels bound in this layout yet.<br>Bind a widget to a channel, then drive it here.</div>"; return; }
+            body.innerHTML = rows.map(function (r) {
+                var mid = _dtActive[r.name] !== undefined ? _dtActive[r.name] : (r.b.min + r.b.max) / 2;
+                var dec = (r.b.step < 1) ? 1 : 0;
+                return "<div class='dt-row" + (_dtActive[r.name] !== undefined ? " act" : "") + "' id='dtr_" + _dtId(r.name) + "'>" +
+                    "<div class='lab'><span class='nm'>" + r.name + "</span><span class='vv'>" + (+mid).toFixed(dec) + "</span>" +
+                    "<span class='x' onclick='dtReset(\"" + r.name + "\")' title='release to live/sim'>&#10005;</span></div>" +
+                    "<input type='range' min='" + r.b.min + "' max='" + r.b.max + "' step='" + r.b.step + "' value='" + mid + "' " +
+                    "oninput='dtSet(\"" + r.name + "\", this.value, " + dec + ")'></div>";
+            }).join("");
+        }
+        function _dtId(n) { return n.replace(/[^a-z0-9]/gi, "_"); }
+        window.dtSet = function (name, val, dec) {
+            var v = parseFloat(val);
+            _dtActive[name] = v;
+            try { setTestValue(name, v); } catch (e) {}
+            try { injectWasmSignal(name, v); } catch (e) {}
+            var row = document.getElementById("dtr_" + _dtId(name));
+            if (row) { row.classList.add("act"); var vv = row.querySelector(".vv"); if (vv) vv.textContent = v.toFixed(dec); }
+        };
+        window.dtReset = function (name) {
+            delete _dtActive[name];
+            try { clearTestValue(name); } catch (e) {}
+            dtBuild();
+        };
+        window.dtClearAll = function () {
+            Object.keys(_dtActive).forEach(function (n) { try { clearTestValue(n); } catch (e) {} });
+            _dtActive = {}; dtBuild();
+        };
+
         function bootSuite() {
-            if (!window.__TAURI__) return;
+            /* Splash is display:flex by default (covers first paint). In a plain
+               browser (dev server, no Tauri) there's no suite chrome, so hide it. */
+            if (!window.__TAURI__) { var sp = document.getElementById("suiteSplash"); if (sp) sp.style.display = "none"; return; }
             document.body.classList.add("suite-desktop");
+            dtInit();
             /* editor header joins the suite: swap the legacy logo image for the
                wordmark and add a Home button at the far left */
             try {
