@@ -2287,6 +2287,10 @@
                 _wasmFailedImages.clear();
                 _wasmFailedFonts.clear();
                 _wasmChanCache = null;   /* channel registry is device-side state */
+                /* Warm the registry now so the first layout switch after
+                 * connecting is already fast (not blocked on the ~350 ms
+                 * /api/channels fetch). No-op offline. */
+                if (connected && typeof _refetchWasmChannels === 'function') _refetchWasmChannels();
                 if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
             }
             if (show && connected) { _wasmSimStop(); _wasmLiveStart(); }
@@ -2408,29 +2412,50 @@
          * values through the bound CHANNEL (display units, decimals) and
          * colors zones from channel thresholds. Without the registry the
          * right-dial readouts rendered "13" where the dash shows "13.9 v".
-         * Push the device's /api/channels payload before each layout load
-         * (widgets bind while the layout applies). 5 s TTL — channel edits
-         * are debounced-saved and every save schedules a preview refresh,
-         * so the next-but-one refresh always carries them. */
+         *
+         * Channels are DEVICE-GLOBAL (channels.json), not per-layout — so a
+         * layout switch never changes them. Blocking every switch on a
+         * /api/channels refetch (~350 ms over WiFi for 50 KB) was the bulk of
+         * the "preview takes a while to update between layouts" lag. Instead
+         * push the CACHED copy synchronously (a few ms) and refresh in the
+         * BACKGROUND only when the cache is missing or stale — the refresh,
+         * when it lands, re-pushes and schedules one more repaint so an
+         * edited channel still propagates within a beat. */
         let _wasmChanCache = null;
         let _wasmChanAt = 0;
+        let _wasmChanFetching = false;
 
-        async function _syncWasmChannels() {
-            if (!wasmModule || _wasmCrashed) return;
-            try {
-                if (typeof RDM !== 'undefined' && RDM.mode !== 'local' && _connectionOk &&
-                    (!_wasmChanCache || Date.now() - _wasmChanAt > 5000)) {
-                    const r = await fetch('/api/channels');
-                    if (r.ok) {
-                        /* The firmware's JSON writer double-encodes the degree
-                         * sign ("Â°C") — normalize so the preview renders the
-                         * same "°C" glyph the dash itself draws. */
-                        _wasmChanCache = (await r.text()).replace(/Â°/g, '°');
-                        _wasmChanAt = Date.now();
+        function _refetchWasmChannels() {
+            if (_wasmChanFetching) return;
+            if (typeof RDM === 'undefined' || RDM.mode === 'local' || !_connectionOk) return;
+            _wasmChanFetching = true;
+            fetch('/api/channels')
+                .then(r => r.ok ? r.text() : null)
+                .then(txt => {
+                    if (!txt) return;
+                    /* The firmware's JSON writer double-encodes the degree sign
+                     * ("Â°C") — normalize so the preview draws the same "°C". */
+                    _wasmChanCache = txt.replace(/Â°/g, '°');
+                    _wasmChanAt = Date.now();
+                    if (wasmModule && !_wasmCrashed) {
+                        try { wasmModule.ccall('load_channels_json', null, ['string'], [_wasmChanCache]); } catch (e) {}
+                        /* Rebind widgets against the fresh registry. */
+                        if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
                     }
-                }
-                if (_wasmChanCache) wasmModule.ccall('load_channels_json', null, ['string'], [_wasmChanCache]);
-            } catch (e) { /* offline/older wasm — widgets fall back to config values */ }
+                })
+                .catch(() => {})
+                .finally(() => { _wasmChanFetching = false; });
+        }
+
+        function _syncWasmChannels() {
+            if (!wasmModule || _wasmCrashed) return;
+            /* Push what we already have — instant, no network, no block. */
+            if (_wasmChanCache) {
+                try { wasmModule.ccall('load_channels_json', null, ['string'], [_wasmChanCache]); } catch (e) {}
+            }
+            /* Warm/refresh out of band (30 s TTL — channel edits already
+             * schedule their own preview refresh, so this is just a backstop). */
+            if (!_wasmChanCache || Date.now() - _wasmChanAt > 30000) _refetchWasmChannels();
         }
 
         async function updateWasmPreview() {
@@ -2438,7 +2463,7 @@
             try {
                 await _syncWasmImages();
                 await _syncWasmFonts();
-                await _syncWasmChannels();
+                _syncWasmChannels();
                 if (_wasmCrashed) return;
                 wasmModule.ccall('load_layout_json', null, ['string'], [JSON.stringify(buildFirmwarePayload())]);
                 if (typeof _testValues === 'object') {
@@ -2459,7 +2484,12 @@
         function scheduleWasmPreview() {
             if (_wasmCrashed) return;
             if (_wasmPreviewTimer) clearTimeout(_wasmPreviewTimer);
-            _wasmPreviewTimer = setTimeout(updateWasmPreview, 150);
+            /* Debounce coalesces bursts of live edits (a drag fires ~60/s) into
+             * one rebuild after the user pauses — so this only ever delays the
+             * repaint, never adds rebuilds mid-drag. A rebuild is ~25 ms, so
+             * 90 ms is ample coalescing while keeping an explicit layout switch
+             * feeling immediate (was 150 ms). */
+            _wasmPreviewTimer = setTimeout(updateWasmPreview, 90);
         }
 
         function injectWasmSignal(name, value) {
@@ -2591,21 +2621,64 @@
                 updateStatus(`Switched device to ${name}`);
 ##[ insert-after ]##
                 if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+                /* The device switch (POST /set) now runs in the background so
+                 * the preview doesn't wait on it — surface a late failure. */
+                if (typeof setPromise !== 'undefined' && setPromise) {
+                    setPromise.then(r => { if (r && !r.ok) showToast('Device didn’t switch — try again', 'error'); });
+                }
 ##[ end ]##
 
-#! ROOT CAUSE of "switching layouts leaves the preview stale": the firmware's
-#! GET /api/layout/raw?name= does not URL-decode, so any layout whose name has
-#! a space ("RD Cluster") comes back "Layout not found" — the switch flow had
-#! already POSTed /api/layout/set (device DOES switch), then threw here,
-#! leaving currentLayout + WASM on the old layout and the 3 s sync nagging
-#! "reload to sync" forever. Since set just made `name` the ACTIVE layout,
-#! fetch it via /api/layout/current — no name in the URL, works on every
-#! firmware in the field.
+#! Two problems with the stock switch flow, fixed together here:
+#!  (a) SPEED — it awaited POST /api/layout/set BEFORE fetching the JSON, and
+#!      /set blocks until the firmware has rebuilt its ENTIRE physical
+#!      dashboard (proportional to widget count: ~1.8 s for a 42-widget
+#!      layout on the ESP32). The preview only needs the layout JSON, so the
+#!      editor sat idle for over a second waiting on the device's screen.
+#!  (b) SPACE-NAMED LAYOUTS — GET /raw?name= didn't URL-decode on older
+#!      firmware, so "RD Cluster" 404'd and the switch threw.
+#! Fix: fire /set WITHOUT awaiting it (device switches in the background) and
+#! read the JSON in parallel via /raw?name= — the preview renders in ~30 ms
+#! instead of waiting on the reload. If /raw 404s (old firmware + a space in
+#! the name), fall back to the correct-but-slower ordered path: await the
+#! switch, then read the now-active layout via /current (offline the local
+#! router serves /raw fine, so the fast path always wins there).
 ##[ block fix-space-name-switch ]##
 ##[ anchor ]##
+                const setResp = await fetch('/api/layout/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                if (!setResp.ok) {
+                    const errText = await setResp.text().catch(() => '');
+                    throw new Error(errText || 'set-active failed');
+                }
+
                 const response = await fetch(`/api/layout/raw?name=${encodeURIComponent(name)}`);
+                if (!response.ok) throw new Error();
 ##[ replace-with ]##
-                const response = await fetch('/api/layout/current');
+                /* Kick the device switch off in the background — don't block
+                 * the preview on the firmware's full dashboard rebuild. */
+                const setPromise = fetch('/api/layout/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                }).catch(() => null);
+
+                /* Read the named layout file directly, in parallel with the
+                 * switch. Older firmware doesn't URL-decode ?name=, so a
+                 * space-named layout 404s there — fall back to awaiting the
+                 * switch then reading the active layout via /current. */
+                let response = await fetch(`/api/layout/raw?name=${encodeURIComponent(name)}`);
+                if (!response.ok) {
+                    const setResp = await setPromise;
+                    if (setResp && !setResp.ok) {
+                        const errText = await setResp.text().catch(() => '');
+                        throw new Error(errText || 'set-active failed');
+                    }
+                    response = await fetch('/api/layout/current');
+                    if (!response.ok) throw new Error();
+                }
 ##[ end ]##
 
 #! When the device's active layout changes (on-dash switcher / menu / another
