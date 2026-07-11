@@ -1114,7 +1114,22 @@
      * { status, data }; a 404 makes the editor fall through (e.g. no live
      * /current, so loadLayout falls back to /raw?name=). */
     const LOCAL_ACTIVE_KEY = 'rdm7_local_active';
-    async function _localRouteApiCall(url, method, body) {
+    function _bytesToB64(bytes) {
+        let bin = '';
+        const chunk = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunk) {
+            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+        return btoa(bin);
+    }
+    function _b64ToBytes(b64) {
+        const bin = atob(b64);
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+    }
+
+    async function _localRouteApiCall(url, method, body, binBody) {
         const qIdx = url.indexOf('?');
         const pathname = qIdx >= 0 ? url.slice(0, qIdx) : url;
         const qs = qIdx >= 0 ? url.slice(qIdx + 1) : '';
@@ -1162,7 +1177,39 @@
         }
         if (pathname === '/api/layout/version') return ok({ version: 0 });
         if (pathname === '/api/image/list') return ok(await T.listImages());
-        if (pathname === '/api/font/list') return ok(await T.listFonts());
+        if (pathname === '/api/font/list') {
+            /* firmware: bare array of family names; ?details=1 → [{name,size}] */
+            const fonts = await T.listFonts();
+            if (params.details === '1') return ok(fonts.map(f => typeof f === 'string' ? { name: f, size: 0 } : f));
+            return ok(fonts.map(f => typeof f === 'string' ? f : f.name));
+        }
+        /* Font / image binary I/O — the editor uploads via raw fetch (octet-stream
+           body), which arrives here as binBody. Store it so the WASM preview can
+           render it and it survives to "This PC". */
+        if (pathname === '/api/font/upload' && method === 'POST') {
+            if (binBody && binBody.length && params.name) {
+                await T.setFontData(params.name, _bytesToB64(binBody));
+                await T.addFontMeta({ name: params.name, size: binBody.length });
+            }
+            return ok();
+        }
+        if (pathname === '/api/image/upload' && method === 'POST') {
+            if (binBody && binBody.length && params.name) {
+                await T.setImageData(params.name, _bytesToB64(binBody));
+                await T.addImageMeta({ name: params.name, size: binBody.length });
+            }
+            return ok();
+        }
+        if (pathname === '/api/font/data' && params.name) {
+            const b64 = await T.getFontData(params.name);
+            return b64 ? { status: 200, binary: _b64ToBytes(b64) } : { status: 404, data: '' };
+        }
+        if (pathname === '/api/image/data' && params.name) {
+            const b64 = await T.getImageData(params.name);
+            return b64 ? { status: 200, binary: _b64ToBytes(b64) } : { status: 404, data: '' };
+        }
+        if (pathname === '/api/font/delete' && params.name) { await T.deleteFont(params.name); return ok(); }
+        if (pathname === '/api/image/delete' && params.name) { await T.deleteImage(params.name); return ok(); }
         if (pathname === '/api/signals/values') return ok({ signals: [] });
         if (pathname === '/api/storage/info') {
             /* Rough localStorage/IndexedDB budget — enough for the UI meter. */
@@ -1177,7 +1224,7 @@
         return ok({ ok: true });
     }
 
-    async function _usbRouteApiCall(url, method, body, t) {
+    async function _usbRouteApiCall(url, method, body, t, binBody) {
         const qIdx = url.indexOf('?');
         const pathname = qIdx >= 0 ? url.slice(0, qIdx) : url;
         const qs = qIdx >= 0 ? url.slice(qIdx + 1) : '';
@@ -1209,6 +1256,18 @@
         if (pathname === '/api/device/info') return t.getDeviceInfo();
         if (pathname === '/api/image/list') return { images: await t.listImages() };
         if (pathname === '/api/font/list') return { fonts: await t.listFonts() };
+        if (pathname === '/api/font/upload' && method === 'POST') {
+            if (binBody && binBody.length && params.name) await t.setFontData(params.name, _bytesToB64(binBody));
+            return { ok: true };
+        }
+        if (pathname === '/api/image/upload' && method === 'POST') {
+            if (binBody && binBody.length && params.name) await t.setImageData(params.name, _bytesToB64(binBody));
+            return { ok: true };
+        }
+        if (pathname === '/api/font/data' && params.name) { const b = await t.getFontData(params.name); return b ? _b64ToBytes(b) : null; }
+        if (pathname === '/api/image/data' && params.name) { const b = await t.getImageData(params.name); return b ? _b64ToBytes(b) : null; }
+        if (pathname === '/api/font/delete' && params.name) { await t.deleteFont(params.name); return { ok: true }; }
+        if (pathname === '/api/image/delete' && params.name) { await t.deleteImage(params.name); return { ok: true }; }
         if (pathname === '/api/storage/info') return t.getStorageInfo();
         if (pathname === '/api/signals/values') return t.getSignalValues();
         if (pathname === '/api/signal/simulate') {
@@ -1512,8 +1571,18 @@
         /* ── API proxy — routes raw /api/* fetches through the active transport ── */
         async proxyApiCall(url, init) {
             const method = (init && init.method) || 'GET';
+            /* A binary upload body (font/image octet-stream) must survive as raw
+               bytes. The old code JSON.stringify'd it → "{}" for an ArrayBuffer,
+               which silently destroyed every font/image the editor uploaded. */
+            let binBody = null;
+            if (init && init.body != null && typeof init.body !== 'string') {
+                const b = init.body;
+                if (b instanceof ArrayBuffer) binBody = new Uint8Array(b);
+                else if (ArrayBuffer.isView(b)) binBody = new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+                else if (typeof Blob !== 'undefined' && b instanceof Blob) binBody = new Uint8Array(await b.arrayBuffer());
+            }
             let bodyText = null;
-            if (init && init.body) {
+            if (binBody == null && init && init.body) {
                 bodyText = typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
             }
             let bodyObj = null;
@@ -1534,17 +1603,30 @@
             const t = this._transport;
             if (t.name === 'wifi' || t.name === 'hotspot') {
                 const fullUrl = (t.baseUrl || 'http://192.168.4.1') + url;
-                /* Binary endpoints must NOT go through http_fetch — its body
-                 * is a Rust String, which mangles JPEG bytes. This is what
-                 * broke CONTROL's mirror (fetch('/api/screenshot') → garbage
-                 * blob). Fetch the bytes losslessly and hand back a real
-                 * Response so .blob() Just Works. */
-                if (method === 'GET' && /^\/api\/screenshot(\?|$)/.test(url)) {
+                /* Binary UPLOAD (font/image octet-stream POST) — send the raw
+                 * bytes, never a JSON string. */
+                if (binBody) {
+                    try {
+                        const respText = await _tauriInvoke('http_upload_binary', {
+                            url: fullUrl, data: Array.from(binBody), timeout_ms: 30000,
+                        });
+                        return makeResp(respText || { ok: true }, 200);
+                    } catch (e) {
+                        return makeResp({ error: String(e) }, 0);
+                    }
+                }
+                /* Binary DOWNLOAD (screenshot / font-data / image-data) must NOT
+                 * go through http_fetch — its Rust-String body mangles the bytes
+                 * (this broke CONTROL's mirror and custom-font preview). Fetch
+                 * losslessly and hand back a real Response so .blob()/.arrayBuffer
+                 * Just Work. */
+                if (method === 'GET' && /^\/api\/(screenshot|font\/data|image\/data)(\?|$)/.test(url)) {
                     try {
                         const bytes = await _tauriInvoke('http_fetch_binary', {
                             url: fullUrl, timeout_ms: 15000,
                         });
-                        return new Response(new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' }), { status: 200 });
+                        const type = /screenshot/.test(url) ? 'image/jpeg' : 'application/octet-stream';
+                        return new Response(new Blob([new Uint8Array(bytes)], { type }), { status: 200 });
                     } catch (e) {
                         return makeResp({ error: String(e) }, 0);
                     }
@@ -1560,7 +1642,8 @@
             }
             if (t.name === 'usb') {
                 try {
-                    const result = await _usbRouteApiCall(url, method, bodyObj, t);
+                    const result = await _usbRouteApiCall(url, method, bodyObj, t, binBody);
+                    if (result instanceof Uint8Array) return new Response(new Blob([result]), { status: 200 });
                     return makeResp(result);
                 } catch (e) {
                     return makeResp({ error: String(e) }, 503);
@@ -1568,7 +1651,8 @@
             }
             /* Local (offline) — serve from the virtual local dash. */
             try {
-                const r = await _localRouteApiCall(url, method, bodyObj);
+                const r = await _localRouteApiCall(url, method, bodyObj, binBody);
+                if (r && r.binary) return new Response(new Blob([r.binary], { type: r.type || 'application/octet-stream' }), { status: r.status || 200 });
                 return makeResp(r.data, r.status);
             } catch (e) {
                 return makeResp({ error: String(e) }, 500);
