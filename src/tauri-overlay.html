@@ -738,8 +738,9 @@
         .ca-dec .m { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted); }
 
         /* ---- analyzer: multi-bit signal probe ---- */
-        .ca-probe-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+        .ca-probe-tools { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; margin-bottom: 8px; }
         .ca-probe-tools .ws-seg { flex: 0 0 auto; }
+        .ca-probe-tools .ca-badge { white-space: nowrap; flex-shrink: 0; }
         .ca-probe-tools .ws-seg button { padding: 4px 10px; }
         .ca-bitgrid { display: flex; flex-direction: column; gap: 3px; user-select: none; }
         .ca-bitrow { display: flex; align-items: center; gap: 4px; }
@@ -2046,7 +2047,7 @@
                     if (tr) tr.querySelectorAll(".ca-b.chg").forEach(function (el) { el.classList.remove("chg"); });
                 });
             }, 130);
-            if (ca.mode === "monitor" && ca.sel !== null) { caPushHist(); caRenderInspector(false); }
+            if (ca.mode === "monitor" && ca.sel !== null && !ca.dragging) { caPushHist(); caRenderInspector(false); }
         }
         var chgFadeQueue = [];
 
@@ -2071,12 +2072,29 @@
             }
             return set;
         }
-        function caProbeCells() { var p = ca.probe; return caCellsFor(p.start, p.len, p.le); }
-        function caProbeValue(bytes) {
-            var p = ca.probe;
-            var raw = _wsExtractBits(bytes, p.start, p.len, p.le, p.signed);
-            return raw * p.scale + p.offset;
+        /* The probe drags in VISUAL reading order (MSB0 = byte*8+col) so the
+           highlight always tracks the cursor in both endians. The endian toggle
+           re-interprets the VALUE (byte-swap), not the selection — like SavvyCAN. */
+        function caProbeCells() { var p = ca.probe; return caCellsFor(p.start, p.len, false); }
+        /* Decode the exact bits under the highlight. Motorola = MSB-first of the
+           visual run; Intel = little-endian byte order over that same run. */
+        function caDecodeField(bytes, start, len, le, signed) {
+            if (!le) return _wsExtractBits(bytes, start, len, false, signed);
+            var val = 0, shift = 0, i = 0;
+            while (i < len) {
+                var by = (start + i) >> 3, gv = 0, bits = 0;
+                while (i < len && ((start + i) >> 3) === by) {
+                    gv = gv * 2 + ((bytes[by] >> (7 - ((start + i) & 7))) & 1);
+                    bits++; i++;
+                }
+                val += gv * Math.pow(2, shift);  /* first physical byte = least significant */
+                shift += bits;
+            }
+            if (signed && len < 53) { var sb = Math.pow(2, len - 1); if (val >= sb) val -= sb * 2; }
+            return val;
         }
+        function caProbeRaw(bytes) { var p = ca.probe; return caDecodeField(bytes, p.start, p.len, p.le, p.signed); }
+        function caProbeValue(bytes) { var p = ca.probe; return caProbeRaw(bytes) * p.scale + p.offset; }
 
         /* history keyed by id so pinned traces (any id) keep plotting */
         function caPushHist() {
@@ -2100,7 +2118,7 @@
                     "<div class='ca-probe-tools'>" +
                         "<div class='ws-seg' style='width:120px;'><button id='caEndBE' onclick='caProbeEndian(0)'>Motorola</button><button id='caEndLE' onclick='caProbeEndian(1)'>Intel</button></div>" +
                         "<label style='font-size:10.5px;color:var(--text-muted);display:inline-flex;align-items:center;gap:5px;cursor:pointer;'><input type='checkbox' id='caSigned' onchange='caProbeSigned(this.checked)'>signed</label>" +
-                        "<span class='ca-badge' id='caProbeBits'></span>" +
+                        "<span class='ca-badge' id='caProbeBits' style='margin-left:auto;'></span>" +
                     "</div>" +
                     "<div class='ca-bitgrid' id='caBitGrid'>";
                 for (var by = 0; by < 8; by++) {
@@ -2110,9 +2128,10 @@
                     h += "</div></div>";
                 }
                 h += "</div>" +
-                    "<div style='font-size:9px;color:var(--text-muted);margin-top:5px;'>amber = bit changed just now &#183; click a byte label for the whole byte</div>" +
+                    "<div style='font-size:9px;color:var(--text-muted);margin-top:5px;'>amber = bit changed just now &#183; click a byte label for the whole byte &#183; <b>&#8592;/&#8594;</b> move, <b>Shift</b> resize</div>" +
                     "<div class='ca-alchips' id='caAllocChips'></div>" +
                     "<div class='ca-probe-read'><span class='big' id='caProbeVal'>—</span><span class='sub' id='caProbeRaw'></span></div>" +
+                    "<div id='caProbeNote' style='font-size:9px;color:#FF9F0A;margin:-2px 0 4px;'></div>" +
                     "<div class='ca-probe-fields'>" +
                         "<div class='ws-field'><label>Scale</label><input type='number' step='any' id='caScale' value='1' oninput='caProbeScale(this.value)'></div>" +
                         "<div class='ws-field'><label>Offset</label><input type='number' step='any' id='caOffset' value='0' oninput='caProbeOffset(this.value)'></div>" +
@@ -2192,11 +2211,15 @@
             }
             /* decoded readout */
             var val = caProbeValue(r.bytes);
-            var rawv = _wsExtractBits(r.bytes, p.start, p.len, p.le, p.signed);
+            var rawv = caProbeRaw(r.bytes);
             var pv = document.getElementById("caProbeVal");
             if (pv) pv.textContent = (Math.abs(val) < 100 ? val.toFixed(2) : Math.round(val)).toString();
             var pr = document.getElementById("caProbeRaw");
             if (pr) pr.textContent = "raw " + rawv + " · 0x" + (rawv >>> 0).toString(16).toUpperCase();
+            var note = document.getElementById("caProbeNote");
+            if (note) note.textContent = (p.le && (p.start % 8 || p.len % 8))
+                ? "⚠ Intel fields are byte-aligned — snap to whole bytes for a decode the dash can use"
+                : "";
             caRenderTraces();
             caDrawProbe();
         }
@@ -2207,7 +2230,7 @@
             if (!ca.traces.length) { box.innerHTML = "<div style='font-size:10px;color:var(--text-muted);'>Nothing pinned — <b style='color:var(--text)'>+ Pin to graph</b> keeps the current field plotted in colour, so you can select different bits and compare candidates side by side.</div>"; return; }
             box.innerHTML = ca.traces.map(function (t, i) {
                 var r = ca.rows[t.id];
-                var cur = r ? (t.scale * _wsExtractBits(r.bytes, t.start, t.len, t.le, t.signed) + t.offset) : NaN;
+                var cur = r ? (t.scale * caDecodeField(r.bytes, t.start, t.len, t.le, t.signed) + t.offset) : NaN;
                 return "<div class='ca-trace'><span class='sw' style='background:" + t.color + "'></span>" +
                     "<span class='nm'>" + _wsFmtHex(t.id) + " " + t.start + ":" + t.len + (t.le ? " I" : " M") + "</span>" +
                     "<span class='rg'>" + (isNaN(cur) ? "—" : (Math.abs(cur) < 100 ? cur.toFixed(1) : Math.round(cur))) + "</span>" +
@@ -2223,7 +2246,7 @@
             /* Build the plot set: pinned traces + the live (unpinned) probe as dashed. */
             var series = ca.traces.map(function (t) {
                 return { color: t.color, dash: false, vals: ca.hist.map(function (s) {
-                    return s.f[t.id] ? (t.scale * _wsExtractBits(s.f[t.id], t.start, t.len, t.le, t.signed) + t.offset) : null; }) };
+                    return s.f[t.id] ? (t.scale * caDecodeField(s.f[t.id], t.start, t.len, t.le, t.signed) + t.offset) : null; }) };
             });
             series.push({ color: "#F0F4F8", dash: true, vals: ca.hist.map(function (s) {
                 return (ca.sel !== null && s.f[ca.sel]) ? caProbeValue(s.f[ca.sel]) : null; }) });
@@ -2263,24 +2286,69 @@
             }
         }
 
-        /* --- probe interactions --- */
+        /* --- probe interactions ---
+           Drag in MSB0 visual space (byte*8+col) so the selection is always a
+           contiguous run of cells under the cursor, regardless of endian. */
         ca.dragging = false;
         function caBitDown(byte, col) {
             var r = ca.rows[ca.sel]; if (!r || byte >= r.dlc) return;
             ca.dragging = true;
-            ca.probeAnchor = caCellToFlat(byte, col, ca.probe.le);
+            ca.probeAnchor = byte * 8 + col;
             ca.probe.start = ca.probeAnchor; ca.probe.len = 1;
-            caRenderInspector(false);
+            caProbeLiveUpdate();
         }
         function caBitEnter(byte, col) {
             if (!ca.dragging) return;
             var r = ca.rows[ca.sel]; if (!r || byte >= r.dlc) return;
-            var cur = caCellToFlat(byte, col, ca.probe.le);
+            var cur = byte * 8 + col;
             ca.probe.start = Math.min(ca.probeAnchor, cur);
             ca.probe.len = Math.abs(cur - ca.probeAnchor) + 1;
-            caRenderInspector(false);
+            caProbeLiveUpdate();
         }
-        document.addEventListener("mouseup", function () { ca.dragging = false; });
+        /* Lightweight update during a drag — repaint cell highlights + readouts
+           only, skip the heat/allocation/canvas rebuild for a smooth drag. */
+        function caProbeLiveUpdate() {
+            var r = ca.rows[ca.sel], p = ca.probe;
+            if (!r) return;
+            var cells = caProbeCells();
+            for (var b = 0; b < 8; b++) for (var c = 0; c < 8; c++) {
+                var el = document.getElementById("cb_" + b + "_" + c);
+                if (!el) continue;
+                el.classList.toggle("sel", !!cells[b + "_" + c]);
+            }
+            var bb = document.getElementById("caProbeBits");
+            if (bb) bb.textContent = "bits " + p.start + "–" + (p.start + p.len - 1) + " · " + p.len + "b";
+            var val = caProbeValue(r.bytes), raw = caProbeRaw(r.bytes);
+            var pv = document.getElementById("caProbeVal");
+            if (pv) pv.textContent = (Math.abs(val) < 100 ? val.toFixed(2) : Math.round(val)).toString();
+            var pr = document.getElementById("caProbeRaw");
+            if (pr) pr.textContent = "raw " + raw + " · 0x" + (raw >>> 0).toString(16).toUpperCase();
+            var note = document.getElementById("caProbeNote");
+            if (note) note.textContent = (p.le && (p.start % 8 || p.len % 8))
+                ? "⚠ Intel fields are byte-aligned — snap to whole bytes for a decode the dash can use" : "";
+        }
+        document.addEventListener("mouseup", function () {
+            if (ca.dragging) { ca.dragging = false; caRenderInspector(false); }  /* one full refresh on release */
+        });
+        /* Keyboard nudge for precise fields: ←/→ move the field, Shift+←/→ resize.
+           Ignored while typing in an input and outside the analyzer's probe. */
+        document.addEventListener("keydown", function (e) {
+            var ws = document.getElementById("caWorkspace");
+            if (!ws || ws.style.display === "none" || ca.mode !== "monitor" || ca.sel === null) return;
+            if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+            var ae = document.activeElement;
+            if (ae && (ae.tagName === "INPUT" || ae.tagName === "SELECT" || ae.tagName === "TEXTAREA")) return;
+            var p = ca.probe, r = ca.rows[ca.sel], maxbit = (r ? r.dlc : 8) * 8, moved = false;
+            var right = e.key === "ArrowRight";
+            if (e.shiftKey) {
+                if (right && p.start + p.len < maxbit) { p.len++; moved = true; }
+                else if (!right && p.len > 1) { p.len--; moved = true; }
+            } else {
+                if (right && p.start + p.len < maxbit) { p.start++; moved = true; }
+                else if (!right && p.start > 0) { p.start--; moved = true; }
+            }
+            if (moved) { e.preventDefault(); caRenderInspector(false); }
+        });
         window.caBitDown = caBitDown; window.caBitEnter = caBitEnter;
         window.caProbeByte = function (byte) {
             var r = ca.rows[ca.sel]; if (!r || byte >= r.dlc) return;
