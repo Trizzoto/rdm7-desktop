@@ -755,6 +755,18 @@
         /* live activity: a bit that just toggled flashes amber then fades —
            "what's moving?" is THE question when reversing a frame */
         .ca-bit.hot { box-shadow: inset 0 0 0 1.5px rgba(255,159,10,0.9); transition: background 0.12s, color 0.12s, border-color 0.12s; }
+        .ca-bit { position: relative; }
+        /* SavvyCAN-style allocation strip: bits already claimed by a channel
+           decode carry that channel's colour along the cell's bottom edge */
+        .ca-al { position: absolute; left: 2px; right: 2px; bottom: 1px; height: 3px; border-radius: 1px; background: transparent; pointer-events: none; }
+        .ca-alchips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+        .ca-alchip {
+            display: inline-flex; align-items: center; gap: 5px; font-family: 'JetBrains Mono', monospace;
+            font-size: 9px; color: var(--text-muted); background: var(--bg); border: 1px solid var(--border);
+            border-radius: 3px; padding: 2px 7px; cursor: pointer;
+        }
+        .ca-alchip:hover { color: var(--text); border-color: var(--border-light); }
+        .ca-alchip i { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
         .ca-bit.one { color: var(--text); }
         .ca-bit.sel { border-color: var(--accent); background: rgba(45,140,235,0.16); color: var(--text); }
         .ca-bit.sel.one { background: var(--accent); color: #fff; }
@@ -2053,13 +2065,14 @@
            counts MSB0 across bytes; little-endian counts LSB0 within each byte. */
         function caCellToFlat(byte, col, le) { return le ? (byte * 8 + (7 - col)) : (byte * 8 + col); }
         function caFlatToCell(flat, le) { return { byte: flat >> 3, col: le ? (7 - (flat & 7)) : (flat & 7) }; }
-        function caProbeCells() {              /* set of "byte_col" keys currently read */
-            var set = {}, p = ca.probe;
-            for (var k = p.start; k < p.start + p.len && k < 64; k++) {
-                var c = caFlatToCell(k, p.le); set[c.byte + "_" + c.col] = true;
+        function caCellsFor(start, len, le) {  /* set of "byte_col" keys a field covers */
+            var set = {};
+            for (var k = start; k < start + len && k < 64; k++) {
+                var c = caFlatToCell(k, le); set[c.byte + "_" + c.col] = true;
             }
             return set;
         }
+        function caProbeCells() { var p = ca.probe; return caCellsFor(p.start, p.len, p.le); }
         function caProbeValue(bytes) {
             var p = ca.probe;
             var raw = _wsExtractBits(bytes, p.start, p.len, p.le, p.signed);
@@ -2094,11 +2107,12 @@
                 for (var by = 0; by < 8; by++) {
                     h += "<div class='ca-bitrow'><span class='lbl' onclick='caProbeByte(" + by + ")' title='select whole byte' style='cursor:pointer'>B" + by + "</span><div class='ca-bitcells'>";
                     for (var co = 0; co < 8; co++)
-                        h += "<div class='ca-bit' id='cb_" + by + "_" + co + "' onmousedown='caBitDown(" + by + "," + co + ")' onmouseenter='caBitEnter(" + by + "," + co + ")'>0</div>";
+                        h += "<div class='ca-bit' id='cb_" + by + "_" + co + "' title='bit M" + (by * 8 + co) + " / I" + (by * 8 + (7 - co)) + "' onmousedown='caBitDown(" + by + "," + co + ")' onmouseenter='caBitEnter(" + by + "," + co + ")'><span>0</span><i class='ca-al'></i></div>";
                     h += "</div></div>";
                 }
                 h += "</div>" +
                     "<div style='font-size:9px;color:var(--text-muted);margin-top:5px;'>amber = bit changed just now &#183; click a byte label for the whole byte</div>" +
+                    "<div class='ca-alchips' id='caAllocChips'></div>" +
                     "<div class='ca-probe-read'><span class='big' id='caProbeVal'>—</span><span class='sub' id='caProbeRaw'></span></div>" +
                     "<div class='ca-probe-fields'>" +
                         "<div class='ws-field'><label>Scale</label><input type='number' step='any' id='caScale' value='1' oninput='caProbeScale(this.value)'></div>" +
@@ -2113,15 +2127,19 @@
                 var chansAll = (_wsChannels || []).filter(function (c) { return c.source !== "math"; })
                     .sort(function (a, b) { return (a.label || a.id).localeCompare(b.label || b.id); });
                 if (_caIsConnected() && chansAll.length) {
-                    h += "<div class='ca-send'><select id='caChanSel'>" +
+                    h += "<div style='font-size:10px;color:var(--text-muted);margin:10px 0 3px;'>&#8230;or write it straight onto a dash channel &#8212; widgets bound to it use these bits from then on:</div>" +
+                         "<div class='ca-send'><select id='caChanSel'><option value=''>&#8212; choose a channel &#8212;</option>" +
                          chansAll.map(function (c) { return "<option value='" + c.id + "'>" + (c.label || c.id) + "</option>"; }).join("") +
-                         "</select><button class='ws-btn-line ca-pinbtn' onclick='caProbeSend()'>Write decode &#8594; dash</button></div>";
+                         "</select><button class='ws-btn-line ca-pinbtn' onclick='caProbeSend()'>Write &#8594; dash</button></div>";
                 }
-                h += "<canvas class='ca-probe-canvas' id='caProbeCanvas' width='620' height='300'></canvas>" +
+                h += "<div class='ws-gt' style='margin-top:14px;'>Live trace</div>" +
+                    "<div style='font-size:9px;color:var(--text-muted);'>white dashes = the bits selected above, plotted over time &#183; colours = pinned fields</div>" +
+                    "<canvas class='ca-probe-canvas' id='caProbeCanvas' width='620' height='300'></canvas>" +
                     "<div class='ca-traces' id='caTraces'></div>" +
                     "</div>" +
                     "<div class='ws-note'><b>Find a signal:</b> drag a run of bits, then operate the car — throttle, revs, temperature. When the plotted line tracks what you're doing, that's your field. Pin a few and compare, or jump to <b>Match&#160;OBD</b> to auto-find it from an OBD2 reading.</div>";
                 insp.innerHTML = h;
+                ca._allocSig = null;   /* fresh container — repopulate the allocation chips */
                 document.getElementById("caScale").value = parseFloat(p.scale.toPrecision(8));
                 document.getElementById("caOffset").value = parseFloat(p.offset.toPrecision(8));
             }
@@ -2143,6 +2161,33 @@
                 }
             }
             ca._heatPrevB = r.bytes.slice();
+            /* allocation map: which bits existing channel decodes already claim
+               (SavvyCAN-style) — coloured strip per channel + clickable legend */
+            var chansHere = ca.decodeMap ? (ca.decodeMap[r.id] || []) : [];
+            var alloc = new Array(64).fill(null);
+            chansHere.slice(0, CA_TRACE_COLORS.length).forEach(function (c, k) {
+                var d = c.decode;
+                var cs = caCellsFor(d.bit_start || 0, d.bit_length || 16, d.endian === 1);
+                Object.keys(cs).forEach(function (key) {
+                    var pp = key.split("_");
+                    alloc[(+pp[0]) * 8 + (+pp[1])] = CA_TRACE_COLORS[k % CA_TRACE_COLORS.length];
+                });
+            });
+            var chipsEl = document.getElementById("caAllocChips");
+            var allocSig = r.id + ":" + chansHere.map(function (c) { return c.id; }).join();
+            if (chipsEl && allocSig !== ca._allocSig) {
+                ca._allocSig = allocSig;
+                chipsEl.innerHTML = chansHere.length
+                    ? chansHere.slice(0, CA_TRACE_COLORS.length).map(function (c, k) {
+                        var d = c.decode;
+                        return "<span class='ca-alchip' title='click to load this field into the probe' " +
+                               "onclick='caProbeGoto(" + (d.bit_start || 0) + "," + (d.bit_length || 16) + "," + (d.endian === 1) + "," +
+                               (d.scale !== undefined ? d.scale : 1) + "," + (d.offset || 0) + ")'>" +
+                               "<i style='background:" + CA_TRACE_COLORS[k % CA_TRACE_COLORS.length] + "'></i>" +
+                               (c.label || c.id) + " " + (d.bit_start || 0) + "&#8211;" + ((d.bit_start || 0) + (d.bit_length || 16) - 1) + "</span>";
+                      }).join("")
+                    : "<span style='font-size:9px;color:var(--text-muted)'>no channels claim bits on this ID yet — free real estate</span>";
+            }
             var cells = caProbeCells();
             for (var b2 = 0; b2 < 8; b2++) for (var c2 = 0; c2 < 8; c2++) {
                 var el = document.getElementById("cb_" + b2 + "_" + c2);
@@ -2151,7 +2196,8 @@
                 var bitVal = inDlc ? ((r.bytes[b2] >> (7 - c2)) & 1) : 0;
                 var sel = cells[b2 + "_" + c2];
                 var hot = inDlc && (nowH - ca._heat[b2 * 8 + c2]) < 1200 && ca._heat[b2 * 8 + c2] > 0;
-                el.textContent = inDlc ? bitVal : "·";
+                el.firstChild.textContent = inDlc ? bitVal : "·";
+                el.lastChild.style.background = (inDlc && alloc[b2 * 8 + c2]) || "transparent";
                 el.className = "ca-bit" + (!inDlc ? " mute" : "") + (bitVal ? " one" : "") + (sel ? " sel" : "") + (hot ? " hot" : "");
             }
             /* decoded readout */
@@ -2168,7 +2214,7 @@
         function caRenderTraces() {
             var box = document.getElementById("caTraces");
             if (!box) return;
-            if (!ca.traces.length) { box.innerHTML = "<div style='font-size:10px;color:var(--text-muted);'>Pin fields to overlay them here.</div>"; return; }
+            if (!ca.traces.length) { box.innerHTML = "<div style='font-size:10px;color:var(--text-muted);'>Nothing pinned — <b style='color:var(--text)'>+ Pin to graph</b> keeps the current field plotted in colour, so you can select different bits and compare candidates side by side.</div>"; return; }
             box.innerHTML = ca.traces.map(function (t, i) {
                 var r = ca.rows[t.id];
                 var cur = r ? (t.scale * _wsExtractBits(r.bytes, t.start, t.len, t.le, t.signed) + t.offset) : NaN;
@@ -2199,7 +2245,10 @@
                 return;
             }
             var mn = Math.min.apply(null, all), mx = Math.max.apply(null, all);
-            if (mx === mn) mx = mn + 1;
+            /* a steady value plots CENTERED (not hugging the floor) with a hint —
+               a flat line at the bottom edge reads as "broken" */
+            var flat = mx === mn;
+            if (flat) { mn -= 0.5; mx += 0.5; }
             var n = ca.hist.length;
             var X = function (i) { return pad + (i / (n - 1)) * (W - 2 * pad); };
             var Y = function (v) { return H - pad - ((v - mn) / (mx - mn)) * (H - 2 * pad - 4); };
@@ -2216,8 +2265,12 @@
             });
             ctx.setLineDash([]);
             ctx.fillStyle = "#7C8590"; ctx.font = "10px 'JetBrains Mono', monospace";
-            ctx.fillText(parseFloat(mx.toPrecision(5)), 4, 11);
-            ctx.fillText(parseFloat(mn.toPrecision(5)), 4, H - 3);
+            if (flat) {
+                ctx.fillText("steady at " + parseFloat(all[0].toPrecision(6)) + " — operate the car to make it move", 8, 14);
+            } else {
+                ctx.fillText(parseFloat(mx.toPrecision(5)), 4, 11);
+                ctx.fillText(parseFloat(mn.toPrecision(5)), 4, H - 3);
+            }
         }
 
         /* --- probe interactions --- */
@@ -2244,6 +2297,13 @@
             ca.probe.start = byte * 8; ca.probe.len = 8; caRenderInspector(false);
         };
         window.caProbeEndian = function (le) { ca.probe.le = !!le; caRenderInspector(true); };
+        /* legend chip → load that channel's field (bits/endian/scale/offset)
+           into the probe so its decoded value reads in real units */
+        window.caProbeGoto = function (start, len, le, scale, offset) {
+            ca.probe.start = start; ca.probe.len = Math.min(len, 64); ca.probe.le = !!le;
+            ca.probe.scale = isFinite(scale) ? scale : 1; ca.probe.offset = isFinite(offset) ? offset : 0;
+            caRenderInspector(true);
+        };
         window.caProbeSigned = function (s) { ca.probe.signed = !!s; caRenderInspector(false); };
         window.caProbeScale = function (v) { var f = parseFloat(v); ca.probe.scale = isFinite(f) ? f : 1; caRenderInspector(false); };
         window.caProbeOffset = function (v) { var f = parseFloat(v); ca.probe.offset = isFinite(f) ? f : 0; caRenderInspector(false); };
@@ -2268,6 +2328,7 @@
             var selEl = document.getElementById("caChanSel");
             if (!selEl || ca.sel === null) return;
             var chId = selEl.value, p = ca.probe;
+            if (!chId) { showToast("Pick which channel should use this decode first", "info"); return; }
             var ch = (_wsChannels || []).filter(function (c) { return c.id === chId; })[0];
             var label = ch ? (ch.label || ch.id) : chId;
             fetch("/api/channels/update", {
