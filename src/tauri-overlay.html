@@ -720,6 +720,14 @@
         .ca-table th.on::after { content: " \25BE"; color: var(--accent-hover); }
         /* IDs that stopped transmitting (>3 s old) fade — dead data shouldn't look live */
         .ca-table tr.stale td { opacity: 0.42; }
+        /* "dim idle": frames whose payload isn't moving recede so active ones pop */
+        .ca-table tr.idle td { opacity: 0.3; }
+        .ca-bitrate { background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); border-radius: var(--radius-sm); font-family: 'JetBrains Mono', monospace; font-size: 9.5px; padding: 1px 3px; cursor: pointer; }
+        .ca-bitrate:focus { outline: none; border-color: var(--accent); }
+        .ca-ctx { position: fixed; z-index: 16000; background: var(--panel-elevated); border: 1px solid var(--border-light); border-radius: var(--radius-md); box-shadow: var(--shadow-md); padding: 4px; min-width: 200px; }
+        .ca-ctx-title { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--accent-hover); padding: 4px 10px 6px; border-bottom: 1px solid var(--border); margin-bottom: 3px; }
+        .ca-ctx-item { font-family: 'Sora', sans-serif; font-size: 11px; color: var(--text); padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+        .ca-ctx-item:hover { background: var(--accent); color: #fff; }
         .ca-table td { padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--text); white-space: nowrap; }
         .ca-table tr.row { cursor: pointer; }
         .ca-table tr.row:hover td { background: rgba(255,255,255,0.025); }
@@ -1192,8 +1200,12 @@
                     <div class="ca-strip">
                         <span class="ca-stat">IDs <b id="caStatIds">0</b></span>
                         <span class="ca-stat">frames/s <b id="caStatFps">0</b></span>
-                        <span class="ca-stat" id="caStatCap"></span>
-                        <label class="ca-toggle" title="hide frames whose data isn't changing — flip a switch and watch what appears"><input type="checkbox" id="caOnlyChg" onchange="caSetOnlyChanging(this.checked)">only changing</label>
+                        <span class="ca-stat">bus <b id="caBusLoad">—</b></span>
+                        <select class="ca-bitrate" id="caBitrate" onchange="caSetBitrate(this.value)" title="assumed CAN bitrate (for the bus-load estimate)">
+                            <option value="125000">125k</option><option value="250000">250k</option>
+                            <option value="500000" selected>500k</option><option value="1000000">1M</option>
+                        </select>
+                        <label class="ca-toggle" title="fade the frames whose data isn't changing so the active ones stand out"><input type="checkbox" id="caDimIdle" onchange="caSetDimIdle(this.checked)">dim idle</label>
                         <button class="ca-mini" id="caShowAll" onclick="caShowAll()" style="display:none;">Show all</button>
                         <button class="ca-mini" id="caMarkBtn" onclick="caMark()" title="snapshot the bus now, then any byte that changes from this snapshot is outlined — do an action and see exactly what moved">Mark</button>
                         <button class="ca-mini" onclick="caClearCapture()" title="clear the captured IDs and start fresh">Clear</button>
@@ -1208,6 +1220,13 @@
                         </tr></thead>
                         <tbody id="caRows"></tbody>
                     </table></div>
+                </div>
+                <!-- right-click context menu (isolate / hide) -->
+                <div id="caCtxMenu" class="ca-ctx" style="display:none;">
+                    <div class="ca-ctx-title" id="caCtxTitle"></div>
+                    <div class="ca-ctx-item" onclick="caCtxIsolate()">Isolate this ID (hide others)</div>
+                    <div class="ca-ctx-item" onclick="caCtxHide()">Hide this ID</div>
+                    <div class="ca-ctx-item" onclick="caShowAll(); caCtxClose()">Show all IDs</div>
                 </div>
                 <!-- Match: correlation workbench -->
                 <div id="caMatchStage" class="cm-stage" style="display:none;"></div>
@@ -1791,8 +1810,10 @@
         var ca = {
             paused: false, sel: null, sort: "id", demo: false, mode: "monitor",
             hidden: {},        /* id -> true : IDs the user unticked (SavvyCAN declutter) */
-            onlyChanging: false, /* hide IDs whose payload hasn't changed recently */
+            dimIdle: false,    /* fade (not hide) IDs whose payload hasn't changed recently */
             markRef: null,     /* id -> snapshot bytes[] : "freeze & compare" reference */
+            bitrate: 500000,   /* assumed CAN bitrate for the bus-load estimate */
+            busLoad: 0, _ctxId: null,
             rows: {},          /* id -> {id,ext,dlc,bytes[8],count,hz,age,_lastChg} */
             prev: {},          /* id -> previous bytes[] for change flash */
             lastCounts: {}, lastPollT: 0, fps: 0,
@@ -1925,6 +1946,14 @@
                 ca.lastCounts[k] = r.count;
             });
             if (dt > 0.05) ca.fps = Math.round(ca.fps * 0.7 + (totalD / dt) * 0.3);
+            /* Bus-load estimate: Σ(hz × bits/frame) / bitrate. bits/frame =
+               overhead (≈47 std / 67 ext) + dlc×8, +10% for bit-stuffing. */
+            var bits = 0;
+            Object.keys(ca.rows).forEach(function (k) {
+                var r = ca.rows[k];
+                if (r.hz) bits += r.hz * ((r.ext ? 67 : 47) + (r.dlc || 8) * 8);
+            });
+            ca.busLoad = Math.min(100, bits * 1.1 / ca.bitrate * 100);
             ca.lastPollT = now;
         }
 
@@ -2013,7 +2042,37 @@
             caRender();
         };
         window.caShowAll = function () { ca.hidden = {}; caRender(); };
-        window.caSetOnlyChanging = function (v) { ca.onlyChanging = !!v; caRender(); };
+        window.caSetDimIdle = function (v) { ca.dimIdle = !!v; caRender(); };
+        window.caSetBitrate = function (v) { ca.bitrate = parseInt(v, 10) || 500000; caComputeRates(); caRender(); };
+        /* right-click: isolate one ID (hide all others) or hide/show */
+        function caCtxClose() { var m = document.getElementById("caCtxMenu"); if (m) m.style.display = "none"; }
+        window.caCtxClose = caCtxClose;
+        window.caCtxIsolate = function () {
+            var id = ca._ctxId; if (id == null) return;
+            ca.hidden = {};
+            Object.keys(ca.rows).forEach(function (k) { if (ca.rows[k].id !== id) ca.hidden[ca.rows[k].id] = true; });
+            caCtxClose(); caRender();
+        };
+        window.caCtxHide = function () { if (ca._ctxId != null) ca.hidden[ca._ctxId] = true; caCtxClose(); caRender(); };
+        document.addEventListener("contextmenu", function (e) {
+            var ws = document.getElementById("caWorkspace");
+            if (!ws || ws.style.display === "none" || ca.mode !== "monitor") return;
+            var tr = e.target.closest ? e.target.closest("#caRows tr") : null;
+            if (!tr) return;
+            e.preventDefault();
+            var id = parseInt(tr.id.replace("car_", ""), 10);
+            if (isNaN(id)) return;
+            ca._ctxId = id;
+            var m = document.getElementById("caCtxMenu");
+            if (m) {
+                document.getElementById("caCtxTitle").textContent = _wsFmtHex(id);
+                var mw = 210, mh = 118;
+                m.style.left = Math.min(e.clientX, window.innerWidth - mw) + "px";
+                m.style.top = Math.min(e.clientY, window.innerHeight - mh) + "px";
+                m.style.display = "block";
+            }
+        });
+        document.addEventListener("click", function () { caCtxClose(); });
         window.caMark = function () {
             if (ca.markRef) ca.markRef = null;             /* toggle off */
             else { ca.markRef = {}; Object.keys(ca.rows).forEach(function (k) { var r = ca.rows[k]; ca.markRef[r.id] = r.bytes.slice(); }); }
@@ -2046,12 +2105,8 @@
                            caRowName(r).toLowerCase().indexOf(filter) >= 0;
                 });
             }
-            /* SavvyCAN declutter: unticked IDs + (optionally) static frames */
+            /* SavvyCAN declutter: unticked IDs removed entirely */
             list = list.filter(function (r) { return !ca.hidden[r.id]; });
-            if (ca.onlyChanging) {
-                var nowC = performance.now();
-                list = list.filter(function (r) { return r._lastChg && (nowC - r._lastChg) < 2000; });
-            }
             list.sort(function (a, b) {
                 if (ca.sort === "hz") return (b.hz || 0) - (a.hz || 0);
                 if (ca.sort === "count") return b.count - a.count;
@@ -2059,7 +2114,7 @@
                 return a.id - b.id;
             });
             /* keyed in-place update so the change-flash CSS transitions live */
-            var seen = {};
+            var seen = {}, nowRender = performance.now();
             list.forEach(function (r, idx) {
                 var key = "car_" + r.id;
                 seen[key] = true;
@@ -2073,7 +2128,8 @@
                     tbody.appendChild(tr);
                 }
                 if (tbody.children[idx] !== tr) tbody.insertBefore(tr, tbody.children[idx] || null);
-                tr.className = "row" + (ca.sel === r.id ? " sel" : "") + (r.age > 3000 ? " stale" : "");
+                var idle = ca.dimIdle && !(r._lastChg && (nowRender - r._lastChg) < 2000);
+                tr.className = "row" + (ca.sel === r.id ? " sel" : "") + (r.age > 3000 ? " stale" : "") + (idle ? " idle" : "");
                 var tds = tr.children;
                 tds[1].innerHTML = "<span class='ca-id'>" + _wsFmtHex(r.id) + "</span>" + (r.ext ? "<span class='ca-ext'>EXT</span>" : "");
                 tds[2].textContent = caRowName(r);
@@ -2101,6 +2157,7 @@
             var si = document.getElementById("caStatIds");
             if (si) si.textContent = list.length + (nHidden ? " (" + nHidden + " hidden)" : "");
             var sf = document.getElementById("caStatFps"); if (sf) sf.textContent = ca.fps;
+            var bl = document.getElementById("caBusLoad"); if (bl) bl.textContent = "~" + Math.round(ca.busLoad) + "%";
             var sa = document.getElementById("caShowAll"); if (sa) sa.style.display = nHidden ? "inline-flex" : "none";
             var chkAll = document.getElementById("caChkAll"); if (chkAll) chkAll.checked = nHidden === 0;
             ["id", "name", "hz", "count"].forEach(function (k) {
