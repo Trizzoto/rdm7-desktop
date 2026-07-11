@@ -701,8 +701,9 @@
         .ca-stat b { color: var(--text); font-weight: 600; }
         .ca-toggle { display: inline-flex; align-items: center; gap: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); cursor: pointer; }
         .ca-toggle input { accent-color: var(--accent); margin: 0; }
-        .ca-mini { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text); font-family: 'Sora', sans-serif; font-size: 10px; font-weight: 600; padding: 3px 10px; cursor: pointer; display: inline-flex; align-items: center; }
+        .ca-mini { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text); font-family: 'Sora', sans-serif; font-size: 10px; font-weight: 600; padding: 3px 10px; cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap; }
         .ca-mini:hover { border-color: var(--accent); }
+        .ca-mini.on { background: #FF9F0A; border-color: #FF9F0A; color: #1a1200; }
         .ca-table th.ca-chk, .ca-table td.ca-chk { width: 22px; padding: 0 0 0 12px; }
         .ca-table td.ca-chk input, .ca-table th.ca-chk input { accent-color: var(--accent); margin: 0; cursor: pointer; vertical-align: middle; }
         .ca-filter { margin-left: auto; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 4px 9px; width: 190px; }
@@ -728,6 +729,7 @@
         .ca-name { color: var(--text-muted); font-size: 10px; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
         .ca-b { display: inline-block; width: 21px; text-align: center; padding: 1px 0; border-radius: 3px; margin-right: 2px; transition: background 0.6s, color 0.6s; }
         .ca-b.chg { background: var(--accent); color: #fff; transition: none; }
+        .ca-b.diff { box-shadow: inset 0 0 0 1.6px rgba(255,159,10,0.9); }  /* differs from marked reference */
         .ca-b.mute { color: #3E444B; }
         .ca-dim { color: var(--text-muted); }
         .ca-bytegrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px; }
@@ -1193,6 +1195,8 @@
                         <span class="ca-stat" id="caStatCap"></span>
                         <label class="ca-toggle" title="hide frames whose data isn't changing — flip a switch and watch what appears"><input type="checkbox" id="caOnlyChg" onchange="caSetOnlyChanging(this.checked)">only changing</label>
                         <button class="ca-mini" id="caShowAll" onclick="caShowAll()" style="display:none;">Show all</button>
+                        <button class="ca-mini" id="caMarkBtn" onclick="caMark()" title="snapshot the bus now, then any byte that changes from this snapshot is outlined — do an action and see exactly what moved">Mark</button>
+                        <button class="ca-mini" onclick="caClearCapture()" title="clear the captured IDs and start fresh">Clear</button>
                         <input class="ca-filter" id="caFilter" placeholder="filter: id hex or name&#8230;" oninput="caRender()">
                     </div>
                     <div class="ca-table"><table>
@@ -1788,6 +1792,7 @@
             paused: false, sel: null, sort: "id", demo: false, mode: "monitor",
             hidden: {},        /* id -> true : IDs the user unticked (SavvyCAN declutter) */
             onlyChanging: false, /* hide IDs whose payload hasn't changed recently */
+            markRef: null,     /* id -> snapshot bytes[] : "freeze & compare" reference */
             rows: {},          /* id -> {id,ext,dlc,bytes[8],count,hz,age,_lastChg} */
             prev: {},          /* id -> previous bytes[] for change flash */
             lastCounts: {}, lastPollT: 0, fps: 0,
@@ -2009,6 +2014,19 @@
         };
         window.caShowAll = function () { ca.hidden = {}; caRender(); };
         window.caSetOnlyChanging = function (v) { ca.onlyChanging = !!v; caRender(); };
+        window.caMark = function () {
+            if (ca.markRef) ca.markRef = null;             /* toggle off */
+            else { ca.markRef = {}; Object.keys(ca.rows).forEach(function (k) { var r = ca.rows[k]; ca.markRef[r.id] = r.bytes.slice(); }); }
+            var b = document.getElementById("caMarkBtn");
+            if (b) { b.classList.toggle("on", !!ca.markRef); b.textContent = ca.markRef ? "Clear mark" : "Mark"; }
+            caRender();
+        };
+        window.caClearCapture = function () {
+            ca.rows = {}; ca.prev = {}; ca.lastCounts = {}; ca.hist = []; ca.markRef = null; ca.hidden = {}; ca.sel = null;
+            var b = document.getElementById("caMarkBtn"); if (b) { b.classList.remove("on"); b.textContent = "Mark"; }
+            var insp = document.getElementById("caInspector"); if (insp) insp.innerHTML = "<div class='ws-none'>Select a frame to inspect its bytes</div>";
+            caRender();
+        };
 
         function caRowName(r) {
             var chans = ca.decodeMap ? ca.decodeMap[r.id] : null;
@@ -2062,11 +2080,13 @@
                 tds[3].textContent = r.hz !== undefined ? (r.hz >= 10 ? Math.round(r.hz) : r.hz.toFixed(1)) + " Hz" : "—";
                 tds[4].textContent = r.count;
                 var prev = ca.prev[r.id] || [];
+                var mref = ca.markRef && ca.markRef[r.id];
                 var html = "";
                 for (var b = 0; b < 8; b++) {
                     var inDlc = b < r.dlc;
                     var chg = inDlc && prev.length && r.bytes[b] !== prev[b];
-                    html += "<span class='ca-b" + (chg ? " chg" : "") + (!inDlc ? " mute" : "") + "'>" +
+                    var diff = inDlc && mref && r.bytes[b] !== mref[b];   /* differs from the marked reference */
+                    html += "<span class='ca-b" + (chg ? " chg" : "") + (diff ? " diff" : "") + (!inDlc ? " mute" : "") + "'>" +
                             (inDlc ? r.bytes[b].toString(16).toUpperCase().padStart(2, "0") : "··") + "</span>";
                 }
                 tds[5].innerHTML = html;
