@@ -1164,7 +1164,8 @@
             return ok();
         }
         if (pathname === '/api/layout/delete') {
-            if (params.name) await T.deleteLayout(params.name);
+            const nm = params.name || (body && body.name);   /* editor sends name in the body */
+            if (nm) await T.deleteLayout(nm);
             return ok();
         }
         if (pathname === '/api/layout/rename' && method === 'POST') {

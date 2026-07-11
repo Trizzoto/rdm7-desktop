@@ -1519,6 +1519,7 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .separator()
         .text("save", "Save / Apply")
         .text("save_as", "Save As…")
+        .text("delete_layout", "Delete Layout…")
         .separator()
         .text("export_json", "Export Layout JSON…")
         .text("export_rdm", "Export .rdm Bundle…")

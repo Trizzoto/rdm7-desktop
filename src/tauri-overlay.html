@@ -5647,6 +5647,7 @@
                 open_rdm:       () => call(window.importRdm),
                 save:           () => call(window.saveActiveLayout),
                 save_as:        () => call(window.layoutEditorSaveAs),
+                delete_layout:  () => call(window._menuDeleteLayout),
                 export_json:    () => call(window.downloadJson),
                 export_rdm:     () => call(window.exportRdm),
                 backup_all:     () => call(window.backupAllDeviceLayouts),
@@ -5696,6 +5697,56 @@
         function _menuAbout() {
             showToast('RDM Studio v' + _DESKTOP_VERSION, 'info');
         }
+
+        /* File → Delete Layout… — a small picker; delete any saved layout
+           (device or This PC) with an inline confirm. 'default' is protected. */
+        window._menuDeleteLayout = async function () {
+            let data;
+            try { data = await (await fetch('/api/layout/list')).json(); }
+            catch (e) { showToast('Could not load layouts', 'error'); return; }
+            const layouts = Array.isArray(data) ? data : (data.layouts || []);
+            const active = (data && data.active) || '';
+            const deletable = layouts.filter(n => n !== 'default');
+            if (!deletable.length) { showToast('No layouts to delete — the built-in default is protected', 'info'); return; }
+            const where = (RDM._transport && RDM._transport.name === 'local') ? 'This PC' : 'the dash';
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,8,0.82);backdrop-filter:blur(6px);z-index:16000;display:flex;align-items:center;justify-content:center;';
+            const rowHtml = deletable.map(n =>
+                '<div class="dl-row" data-n="' + encodeURIComponent(n) + '" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--bg);">' +
+                '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:\'JetBrains Mono\',monospace;font-size:12px;color:var(--text);">' + n +
+                (n === active ? ' <span style="color:var(--text-muted);font-size:10px;">(open)</span>' : '') + '</span>' +
+                '<button class="dl-del" style="flex:0 0 auto;background:transparent;border:1px solid #5a2e2e;border-radius:6px;color:#e05d52;font-size:11px;font-weight:600;padding:5px 12px;cursor:pointer;">Delete</button></div>').join('');
+            overlay.innerHTML =
+                '<div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;min-width:340px;max-width:440px;max-height:72vh;overflow:auto;box-shadow:var(--shadow-md);">' +
+                '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Delete a layout</div>' +
+                '<div style="font-size:11px;color:var(--text-muted);margin-bottom:14px;">Removes it from ' + where + '. This can\'t be undone. The built-in default is protected.</div>' +
+                '<div id="dlList">' + rowHtml + '</div>' +
+                '<div style="display:flex;justify-content:flex-end;margin-top:12px;"><button id="dlClose" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-size:12px;">Close</button></div></div>';
+            document.body.appendChild(overlay);
+            const close = () => overlay.remove();
+            overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+            overlay.querySelector('#dlClose').onclick = close;
+            overlay.querySelectorAll('.dl-row').forEach(row => {
+                const name = decodeURIComponent(row.getAttribute('data-n'));
+                const btn = row.querySelector('.dl-del');
+                btn.onclick = async () => {
+                    if (btn.dataset.confirm !== '1') {
+                        btn.dataset.confirm = '1'; btn.textContent = 'Confirm?';
+                        btn.style.background = '#5a2e2e'; btn.style.color = '#fff';
+                        setTimeout(() => { if (btn.dataset.confirm === '1') { btn.dataset.confirm = '0'; btn.textContent = 'Delete'; btn.style.background = 'transparent'; btn.style.color = '#e05d52'; } }, 2600);
+                        return;
+                    }
+                    try {
+                        const r = await fetch('/api/layout/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) });
+                        if (!r.ok) throw new Error();
+                        showToast('Deleted "' + name + '"', 'success');
+                        row.remove();
+                        if (typeof fetchLayouts === 'function') fetchLayouts();
+                        if (!overlay.querySelectorAll('.dl-row').length) close();
+                    } catch (e) { showToast('Delete failed', 'error'); }
+                };
+            });
+        };
 
         function _onConnectionModeChange(mode) {
             _stopWifiRecovery();
