@@ -785,6 +785,12 @@
         .lt-handle.sec { background: #FF9F0A; box-shadow: 0 0 0 1.5px rgba(255,159,10,0.4); }
         .lt-flagpin { cursor: grab; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.55)); }
         .lt-flagpin:active { cursor: grabbing; }
+        .lt-libact {
+            font-size: 11px; color: var(--text-muted); cursor: pointer; padding: 0 3px;
+            border-radius: 3px; line-height: 1.4; flex-shrink: 0;
+        }
+        .lt-libact:hover { color: var(--text); background: var(--panel-elevated); }
+        .lt-libact.danger:hover { color: #e05d52; }
         .lt-tip {
             background: rgba(20,22,24,0.9) !important; border: 1px solid var(--border) !important;
             color: #FF9F0A !important; font-family: 'JetBrains Mono', monospace !important;
@@ -2347,7 +2353,12 @@
            gate onto the REAL line you can see in the imagery; drive-through
            capture arms once the node is on the car. */
         var LT_LS = "rdm7_laptimer_v2";
-        var LT_TRACKS = [
+        var LT_LIBS_LS = "rdm7_track_libs";
+        var LT_FILE_EXT = ".rdmtrax";   /* RDM track pack — a library of 1..N tracks */
+        /* Built-in library (ships with the node). Definitions live in code;
+           per-track gate/sector config lives in lt.cfg.tracks[id] just like a
+           user track, so exporting a built-in circuit carries the user's line. */
+        var LT_BUILTIN = [
             { id: "mallala", name: "Mallala", country: "SA · AUS", km: 2.6, center: [-34.4145, 138.5042], zoom: 15 },
             { id: "bend_gt", name: "The Bend GT", country: "SA · AUS", km: 4.95, center: [-35.3083, 139.5167], zoom: 15 },
             { id: "phillip", name: "Phillip Island", country: "VIC · AUS", km: 4.45, center: [-38.4997, 145.2358], zoom: 15 },
@@ -2356,7 +2367,7 @@
         ];
         var lt = {
             cfg: null, sim: false, mode: "setup", map: null, layer: null,
-            simState: null, simLayer: null, carMarker: null,
+            simState: null, simLayer: null, carMarker: null, libs: [],
             an: null, anLayer: null, anCursorMarker: null, anCh: "delta", anCursor: 0.5
         };
         var _ltSimTimer = null;
@@ -2364,11 +2375,21 @@
         function ltDefaults() {
             return {
                 active: "mallala",
-                tracks: {},   /* per-track: {gate:{lat,lng,hdg,w}, s1:{lat,lng,hdg}, s2:{lat,lng,hdg}, sectorsOn, method} */
+                tracks: {},   /* id → {gate:{lat,lng,hdg,w}, s1, s2, sectorsOn, method} */
                 node: { rate: 25, baseId: "640", bitrate: 500 },
                 engine: { minLap: 20, ref: "best" }
             };
         }
+        function ltUid(p) { return (p || "id") + "_" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36); }
+        function ltUserLibs() { return lt.libs.filter(function (l) { return !l.builtin; }); }
+        function ltTrackById(id) {
+            var f = null;
+            lt.libs.forEach(function (l) { l.tracks.forEach(function (t) { if (t.id === id) f = { track: t, lib: l }; }); });
+            return f;
+        }
+        function ltTrack() { var f = ltTrackById(lt.cfg.active); return f ? f.track : LT_BUILTIN[0]; }
+        function ltTrackLib() { var f = ltTrackById(lt.cfg.active); return f ? f.lib : lt.libs[0]; }
+
         function ltTrackCfg() {
             var t = lt.cfg.tracks[lt.cfg.active];
             if (!t) {
@@ -2398,13 +2419,139 @@
                 var s = JSON.parse(localStorage.getItem(LT_LS) || "null");
                 lt.cfg = s && s.active ? s : ltDefaults();
             } catch (e) { lt.cfg = ltDefaults(); }
+            var userLibs = [];
+            try { userLibs = JSON.parse(localStorage.getItem(LT_LIBS_LS) || "[]") || []; } catch (e) { userLibs = []; }
+            lt.libs = [{ id: "builtin", name: "RDM Circuits", builtin: true, tracks: LT_BUILTIN }].concat(userLibs);
+            if (!ltTrackById(lt.cfg.active)) lt.cfg.active = LT_BUILTIN[0].id;
         }
-        function ltSave() { try { localStorage.setItem(LT_LS, JSON.stringify(lt.cfg)); } catch (e) {} }
+        function ltSave() {
+            try { localStorage.setItem(LT_LS, JSON.stringify(lt.cfg)); } catch (e) {}
+            try { localStorage.setItem(LT_LIBS_LS, JSON.stringify(ltUserLibs())); } catch (e) {}
+        }
         window.ltSaveExplicit = function () { ltSave(); showToast("Lap timer setup saved on this PC", "success"); };
 
-        function ltTrack() {
-            return LT_TRACKS.filter(function (t) { return t.id === lt.cfg.active; })[0] || LT_TRACKS[0];
+        /* ── Track packs: export / import / create / delete ────────────────
+         * A .rdmtrax file is a portable library of tracks — each carrying its
+         * name, coordinates and the placed start/finish + sector lines. This
+         * is how the community shares circuits: export a pack, hand it over,
+         * import it. (Marketplace browse/upload rides the same format later.) */
+        function ltPackTrack(t) {
+            var cfg = lt.cfg.tracks[t.id];
+            return { id: t.id, name: t.name, country: t.country, km: t.km, center: t.center, zoom: t.zoom,
+                     cfg: cfg ? JSON.parse(JSON.stringify(cfg)) : null };
         }
+        function ltDownload(fname, obj) {
+            var a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }));
+            a.download = fname; a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        }
+        function ltSafeName(s) { return (s || "tracks").replace(/[^A-Za-z0-9_-]+/g, "_"); }
+
+        window._ltExportLib = function (libId) {
+            var lib = lt.libs.filter(function (l) { return l.id === libId; })[0];
+            if (!lib || !lib.tracks.length) { showToast("Nothing to export in that library", "info"); return; }
+            ltDownload(ltSafeName(lib.name) + LT_FILE_EXT,
+                { format: "rdm-tracks", version: 1, name: lib.name, tracks: lib.tracks.map(ltPackTrack) });
+            showToast("Exported " + lib.tracks.length + " track" + (lib.tracks.length > 1 ? "s" : "") + " — share the " + LT_FILE_EXT + " file", "success");
+        };
+        window._ltExportTrack = function (id) {
+            var f = ltTrackById(id); if (!f) return;
+            ltDownload(ltSafeName(f.track.name) + LT_FILE_EXT,
+                { format: "rdm-tracks", version: 1, name: f.track.name, tracks: [ltPackTrack(f.track)] });
+            showToast("Exported " + f.track.name, "success");
+        };
+        function ltImportData(d, fname) {
+            if (!d || d.format !== "rdm-tracks" || !Array.isArray(d.tracks)) { showToast("Not an RDM track pack", "error"); return; }
+            var libName = d.name || (fname || "Imported").replace(/\.rdmtrax$/i, "");
+            var lib = { id: ltUid("lib"), name: libName, tracks: [] };
+            d.tracks.forEach(function (pt) {
+                var id = pt.id || ltUid("trk");
+                if (ltTrackById(id)) id = ltUid("trk");   /* dodge id collisions */
+                lib.tracks.push({ id: id, name: pt.name || "Track", country: pt.country || "imported",
+                    km: pt.km || 3, center: pt.center || [0, 0], zoom: pt.zoom || 15 });
+                if (pt.cfg) lt.cfg.tracks[id] = pt.cfg;
+            });
+            if (!lib.tracks.length) { showToast("That pack had no tracks", "info"); return; }
+            lt.libs.push(lib); ltSave(); ltBuildRail();
+            showToast("Imported " + lib.tracks.length + " track" + (lib.tracks.length > 1 ? "s" : "") + " into “" + libName + "”", "success");
+        };
+        window._ltImportData = ltImportData;   /* exposed for automation */
+        window._ltImport = function () {
+            var inp = document.createElement("input");
+            inp.type = "file"; inp.accept = ".rdmtrax,application/json";
+            inp.onchange = function () {
+                var f = inp.files[0]; if (!f) return;
+                var r = new FileReader();
+                r.onload = function () { try { ltImportData(JSON.parse(r.result), f.name); } catch (e) { showToast("Couldn't read that file", "error"); } };
+                r.readAsText(f);
+            };
+            inp.click();
+        };
+        window._ltNewLib = function () {
+            var name = prompt("Name the new library", "My Circuits");
+            if (!name) return;
+            lt.libs.push({ id: ltUid("lib"), name: name.trim(), tracks: [] });
+            ltSave(); ltBuildRail();
+            showToast("Library “" + name.trim() + "” created", "success");
+        };
+        window._ltNewTrack = function () {
+            var name = prompt("Name this track", "My Track");
+            if (!name) return;
+            /* land it in the active track's library if that's a user one, else
+               the first user library, else spin up "My Tracks" */
+            var lib = ltTrackLib();
+            if (!lib || lib.builtin) lib = ltUserLibs()[0];
+            if (!lib) { lib = { id: ltUid("lib"), name: "My Tracks", tracks: [] }; lt.libs.push(lib); }
+            var c = lt.map ? lt.map.getCenter() : { lat: 0, lng: 0 };
+            var z = lt.map ? lt.map.getZoom() : 15;
+            var id = ltUid("trk");
+            lib.tracks.push({ id: id, name: name.trim(), country: "custom", km: 3.0, center: [c.lat, c.lng], zoom: z });
+            var cur = ltTrackCfg();
+            lt.cfg.tracks[id] = {
+                gate: { lat: c.lat, lng: c.lng, hdg: cur.gate.hdg, w: cur.gate.w },
+                s1: { lat: c.lat + 0.002, lng: c.lng + 0.001, hdg: 90 },
+                s2: { lat: c.lat - 0.002, lng: c.lng - 0.001, hdg: 90 },
+                sectorsOn: true, method: "map"
+            };
+            lt.cfg.active = id; ltSave(); ltBuildRail(); _ltSetMode("setup");
+            showToast("New track “" + name.trim() + "” — drag the flag onto its start/finish", "success");
+        };
+        window._ltRenameLib = function (libId) {
+            var lib = lt.libs.filter(function (l) { return l.id === libId; })[0];
+            if (!lib || lib.builtin) return;
+            var n = prompt("Rename library", lib.name);
+            if (n && n.trim()) { lib.name = n.trim(); ltSave(); ltBuildRail(); }
+        };
+        window._ltDelLib = function (libId) {
+            var lib = lt.libs.filter(function (l) { return l.id === libId; })[0];
+            if (!lib || lib.builtin) return;
+            if (!confirm("Delete the library “" + lib.name + "” and its " + lib.tracks.length + " track(s)?")) return;
+            lib.tracks.forEach(function (t) { delete lt.cfg.tracks[t.id]; });
+            lt.libs = lt.libs.filter(function (l) { return l.id !== libId; });
+            if (!ltTrackById(lt.cfg.active)) lt.cfg.active = LT_BUILTIN[0].id;
+            ltSave(); ltBuildRail(); _ltSetMode("setup");
+        };
+        window._ltDelTrack = function (id) {
+            var f = ltTrackById(id); if (!f || f.lib.builtin) return;
+            if (!confirm("Delete track “" + f.track.name + "”?")) return;
+            f.lib.tracks = f.lib.tracks.filter(function (t) { return t.id !== id; });
+            delete lt.cfg.tracks[id];
+            if (lt.cfg.active === id) lt.cfg.active = LT_BUILTIN[0].id;
+            ltSave(); ltBuildRail(); _ltSetMode("setup");
+        };
+        window._ltDupTrack = function () {
+            /* clone the active (e.g. a built-in) into a user library so it can
+               be renamed, re-lined and shared */
+            var src = ltTrack(), cfg = ltTrackCfg();
+            var lib = ltUserLibs()[0];
+            if (!lib) { lib = { id: ltUid("lib"), name: "My Tracks", tracks: [] }; lt.libs.push(lib); }
+            var id = ltUid("trk");
+            lib.tracks.push({ id: id, name: src.name + " (copy)", country: src.country, km: src.km, center: src.center.slice(), zoom: src.zoom });
+            lt.cfg.tracks[id] = JSON.parse(JSON.stringify(cfg));
+            lt.cfg.active = id; ltSave(); ltBuildRail(); ltRenderInspector();
+            showToast("Copied to “" + lib.name + "” — now yours to edit and share", "success");
+        };
 
         /* Catmull-Rom → dense sampled closed loop with arc length. */
         function ltMapInit() {
@@ -2544,27 +2691,59 @@
             if (chip) chip.innerHTML = track.name + "<small>" + track.country + " · " + track.km.toFixed(2) + " km</small>";
         }
 
+        window._ltPickTrack = function (id) {
+            lt.cfg.active = id; ltSave();
+            var nt = ltTrack();
+            if (lt.map) lt.map.flyTo(nt.center, nt.zoom, { duration: 1.1 });
+            _ltSetMode("setup");
+        };
         function ltBuildRail() {
             var rail = document.getElementById("ltRail");
             if (!rail) return;
-            rail.innerHTML = "<div class='ws-rail-title'>Track library</div>";
-            LT_TRACKS.forEach(function (t) {
-                var b = document.createElement("button");
-                b.className = "ws-item" + (lt.cfg.active === t.id ? " on" : "");
-                b.innerHTML = "<span class='st'></span>" + t.name + "<span class='tag'>" + t.km.toFixed(1) + " km</span>";
-                b.addEventListener("click", function () {
-                    lt.cfg.active = t.id;
-                    ltSave();
-                    var nt = ltTrack();
-                    if (lt.map) lt.map.flyTo(nt.center, nt.zoom, { duration: 1.1 });
-                    _ltSetMode("setup");
+            rail.innerHTML = "";
+            /* toolbar: create / import */
+            var bar = document.createElement("div");
+            bar.style.cssText = "display:flex; gap:5px; margin-bottom:8px;";
+            bar.innerHTML =
+                "<button class='ws-btn-line' style='flex:1;' onclick='_ltNewTrack()' title='Capture the current map view as a new track'>+ Track</button>" +
+                "<button class='ws-btn-line' style='flex:1;' onclick='_ltImport()' title='Import a .rdmtrax pack'>Import</button>" +
+                "<button class='ws-btn-line' style='flex:1;' onclick='_ltNewLib()' title='New empty library'>+ Library</button>";
+            rail.appendChild(bar);
+
+            lt.libs.forEach(function (lib) {
+                var head = document.createElement("div");
+                head.className = "ws-rail-title";
+                head.style.cssText = "display:flex; align-items:center; gap:4px;";
+                var acts = lib.builtin
+                    ? "<span class='lt-libact' title='Export library' onclick=\"event.stopPropagation();_ltExportLib('" + lib.id + "')\">&#8681;</span>"
+                    : "<span class='lt-libact' title='Export library' onclick=\"event.stopPropagation();_ltExportLib('" + lib.id + "')\">&#8681;</span>" +
+                      "<span class='lt-libact' title='Rename' onclick=\"event.stopPropagation();_ltRenameLib('" + lib.id + "')\">&#9998;</span>" +
+                      "<span class='lt-libact danger' title='Delete library' onclick=\"event.stopPropagation();_ltDelLib('" + lib.id + "')\">&#10005;</span>";
+                head.innerHTML = "<span style='flex:1;'>" + lib.name + " &#183; " + lib.tracks.length + "</span>" + acts;
+                rail.appendChild(head);
+
+                if (!lib.tracks.length) {
+                    var empty = document.createElement("div");
+                    empty.style.cssText = "font-size:10px; color:var(--text-muted); padding:2px 8px 6px;";
+                    empty.textContent = "empty — add or import tracks";
+                    rail.appendChild(empty);
+                }
+                lib.tracks.forEach(function (t) {
+                    var b = document.createElement("div");
+                    b.className = "ws-item" + (lt.cfg.active === t.id ? " on" : "");
+                    b.style.cursor = "pointer";
+                    b.innerHTML = "<span class='st'></span><span style='flex:1;' onclick=\"_ltPickTrack('" + t.id + "')\">" + t.name +
+                        "</span><span class='tag'>" + (t.km ? t.km.toFixed(1) + "k" : "") + "</span>" +
+                        "<span class='lt-libact' title='Export track' onclick=\"event.stopPropagation();_ltExportTrack('" + t.id + "')\">&#8681;</span>" +
+                        (lib.builtin ? "" : "<span class='lt-libact danger' title='Delete track' onclick=\"event.stopPropagation();_ltDelTrack('" + t.id + "')\">&#10005;</span>");
+                    rail.appendChild(b);
                 });
-                rail.appendChild(b);
             });
+
             var note = document.createElement("div");
             note.className = "ws-note";
-            note.style.margin = "10px 4px 0";
-            note.innerHTML = "<b>~100 circuits</b> ship with the node — our own coordinates, AU/NZ complete. Community submissions get reviewed, RaceChrono-style.";
+            note.style.margin = "12px 4px 0";
+            note.innerHTML = "<b>~100 circuits</b> ship with the node. Build your own libraries and share them as <b>" + LT_FILE_EXT + "</b> packs &#8212; export, hand them round, import. Marketplace browse &amp; upload rides the same format.";
             rail.appendChild(note);
         }
 
@@ -2589,7 +2768,16 @@
             var g = tc.gate;
             var connected = typeof RDM !== "undefined" && RDM.mode !== "local" &&
                             typeof _connectionOk !== "undefined" && _connectionOk;
-            var h = "<h2>" + ltTrack().name + "</h2><div class='ws-sub'>lap engine runs on the dash · ±0.02 s</div>";
+            var f = ltTrackById(lt.cfg.active);
+            var isUser = f && !f.lib.builtin;
+            var h = "<h2>" + ltTrack().name + "</h2><div class='ws-sub'>" + (f ? f.lib.name : "") + " &#183; lap engine on the dash</div>";
+            h += "<div class='ws-grp' style='border-top:none; padding-top:2px;'>";
+            if (isUser) h += "<div class='ws-field'><label>Track name</label><input type='text' value='" + ltTrack().name.replace(/'/g, "&#39;") + "' onchange='ltRenameTrack(this)'></div>";
+            h += "<div style='display:flex; gap:5px;'>" +
+                 "<button class='ws-btn-line' style='flex:1;' onclick=\"_ltExportTrack('" + lt.cfg.active + "')\">Export track</button>" +
+                 (isUser ? "<button class='ws-btn-line' style='flex:1;' onclick=\"_ltDelTrack('" + lt.cfg.active + "')\">Delete</button>"
+                         : "<button class='ws-btn-line' style='flex:1;' onclick='_ltDupTrack()'>Duplicate to edit</button>") +
+                 "</div></div>";
             h += "<div class='ws-grp'><div class='ws-gt'>Start / finish</div>" +
                  "<div class='ws-field'><label>How the line is set</label>" +
                  ltSegHtml("method", tc.method, [["library", "Library"], ["map", "On map"], ["drive", "At the line"]], "ltMethod") + "</div>";
@@ -2620,9 +2808,13 @@
                  "<div class='ws-field'><label>Bitrate</label><select onchange='ltBitrate(this)'>" +
                  [125, 250, 500, 1000].map(function (b) { return "<option value='" + b + "'" + (lt.cfg.node.bitrate === b ? " selected" : "") + ">" + b + " kbit/s</option>"; }).join("") +
                  "</select></div></div>" +
-                 "<div class='ws-note'>Open protocol, DBC published. Channels on the dash: <b>gps_speed · lat_g · lon_g · lap_time · lap_delta · sector · best_lap</b>.</div></div>";
+                 "<div class='ws-note'>Open protocol, DBC published. Channels on the dash: <b>gps_speed · lat_g · lon_g · lap_time · lap_delta · sector · best_sector · best_lap</b>.</div></div>";
             insp.innerHTML = h;
         }
+        window.ltRenameTrack = function (el) {
+            var f = ltTrackById(lt.cfg.active);
+            if (f && !f.lib.builtin && el.value.trim()) { f.track.name = el.value.trim(); ltSave(); ltBuildRail(); ltRenderInspector(); }
+        };
         window.ltMethod = function (v) { ltTrackCfg().method = v; ltSave(); ltRenderInspector(); };
         window.ltSectors = function (v) { ltTrackCfg().sectorsOn = v === "1"; ltSave(); ltRenderMap(); ltRenderInspector(); };
         window.ltRef = function (v) { lt.cfg.engine.ref = v; ltSave(); ltRenderInspector(); };
