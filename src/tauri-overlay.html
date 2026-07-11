@@ -649,6 +649,23 @@
         }
         .kp-note b { color: var(--text); }
         .kp-none { color: var(--text-muted); font-size: 11px; padding: 28px 8px; text-align: center; }
+        /* bus & adoption (rail) + what-fires (inspector) + live bus trace */
+        .kp-bus-sel { width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-md); padding: 6px 8px; font-size: 11px; font-family: 'Sora', sans-serif; margin-bottom: 8px; cursor: pointer; }
+        .kp-bus-sel:focus { outline: none; border-color: var(--accent); }
+        .kp-bus-id { display: flex; flex-wrap: wrap; gap: 3px 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; margin: 0 2px 6px; }
+        .kp-bus-id span { color: var(--text-muted); }
+        .kp-bus-id b { color: var(--accent); font-weight: 600; margin-right: 4px; }
+        .kp-bus-note { font-size: 10px; color: var(--text-muted); line-height: 1.5; margin: 8px 2px; }
+        .kp-fire { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+        .kp-fire .lbl { font-size: 10.5px; color: var(--text-muted); }
+        .kp-fire .frame { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); }
+        .kp-fire .frame i { font-style: normal; color: var(--text-muted); }
+        .kp-fire .frame i.on { color: #6fbf73; font-weight: 700; }
+        .kp-busline { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); }
+        .kp-busline .tx { color: var(--accent); font-weight: 700; }
+        .kp-busline i { font-style: normal; }
+        .kp-busline i.on { color: #6fbf73; font-weight: 700; }
+        .kp-busline .idle { opacity: 0.7; }
         @media (max-width: 900px) {
             .kp-body { overflow-y: auto; }
             .kp-rail { width: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); }
@@ -978,6 +995,10 @@
         .lt-an-read { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); }
         .lt-an-read b { color: var(--text); }
         .lt-an-canvas { width: 100%; height: 132px; display: block; cursor: crosshair; }
+        /* telemetry HUD overlay — the broadcast lower-third that composites onto video */
+        .lt-hud { display: none; position: absolute; left: 50%; transform: translateX(-50%); top: 14px; z-index: 901; pointer-events: none; }
+        .lt-hud.show { display: block; }
+        .lt-hud canvas { display: block; width: 380px; height: 90px; filter: drop-shadow(0 6px 18px rgba(0,0,0,0.55)); }
 
         /* analyse inspector bits */
         .lt-lap {
@@ -1005,6 +1026,17 @@
         .lt-sectbl td:first-child { text-align: left; color: var(--text-muted); }
         .lt-sectbl td.best { color: #C9A0FF; }
         .lt-sectbl tr.opt td { color: #4ade80; border-top: 1px solid var(--border); font-weight: 600; }
+        .lt-sectbl tr.sel td { background: rgba(45,140,235,0.10); }
+        .lt-sectbl tr.sel td:first-child { color: var(--accent); }
+        /* channel min/max/avg report — the numbers racers scan first */
+        .lt-rep { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .lt-rep .cell { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 8px; }
+        .lt-rep .cell .k { font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+        .lt-rep .cell .v { font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 700; color: var(--text); line-height: 1.15; }
+        .lt-rep .cell .v small { font-size: 9px; font-weight: 400; color: var(--text-muted); }
+        .lt-rep .cell .sub { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted); margin-top: 1px; }
+        .lt-expbtns { display: flex; gap: 6px; }
+        .lt-expbtns .ws-btn-line { flex: 1; }
         .lt-gg { width: 100%; height: 150px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); }
         .lt-coach {
             background: var(--bg); border: 1px solid var(--border); border-left: 3px solid #FF9F0A;
@@ -1213,6 +1245,7 @@
                     <span class="kp-live-dot"></span>
                     <span>Simulated car running</span>
                     <span class="kp-ct" id="kpCtReadout">coolant_temp <b>84.0</b> &#176;C</span>
+                    <span class="kp-busline" id="kpBusLine"></span>
                     <span style="color:var(--text-muted); font-size:10.5px;">click keys to press them &#8212; LEDs bound to channels react on their own</span>
                 </div>
                 <div id="kpStageSvg"></div>
@@ -1343,6 +1376,8 @@
                     <canvas class="lt-an-canvas" id="ltAnCanvas" width="1600" height="300"></canvas>
                     <div class="lt-an-read" id="ltAnRead"></div>
                 </div>
+                <!-- Analyse: broadcast telemetry overlay — the data that burns onto track video -->
+                <div class="lt-hud" id="ltHud"><canvas id="ltHudCanvas" width="760" height="180"></canvas></div>
                 <div class="lt-hint lt-float" id="ltHint">Drag the white gate onto the real start/finish line &#8212; zoom right in on the tarmac.</div>
             </div>
             <div class="ws-insp" id="ltInspector"></div>
@@ -1433,7 +1468,49 @@
             model: MODELS[0], keys: JSON.parse(JSON.stringify(DEFAULT_KEYS)),
             selected: 1, live: false, night: false, brightDay: 48, brightNight: 12,
             keyOn: {}, keyDown: 0, coolant: 84.0, coolantDir: 1,
+            vendor: "blink",   /* CAN adoption identity — see KP_VENDORS */
             clip: null   /* copied key style (icon/mode/preset/follows/color/behavior) */
+        };
+
+        /* One-click adoption: re-badge the keypad onto whichever ECU ecosystem
+         * the car runs. Frame IDs follow the CANopen PDO map (TPDO1 = 0x180+node,
+         * LED RPDO1 = 0x200+node); Haltech/MoTeC ship their keypads at a fixed
+         * node so an Elite/C-series sees the buttons with no custom template. */
+        var KP_VENDORS = [
+            { id: "blink",   name: "Blink Marine", proto: "CANopen",        node: 0x15, note: "Native Blink protocol — CANopen node 0x15. Drops onto any open CAN bus; buttons + LED command on the standard PDOs." },
+            { id: "haltech", name: "Haltech",      proto: "Haltech keypad", node: 0x0C, note: "Adopts the Haltech CAN keypad address so a Nexus / Elite sees every button natively — no custom CAN template to build." },
+            { id: "motec",   name: "MoTeC",        proto: "MoTeC keypad",   node: 0x0A, note: "MoTeC keypad address — buttons arrive as CAN inputs you map straight into the C-series or dash template." },
+            { id: "rdm",     name: "RDM open",     proto: "CANopen",        node: 0x15, note: "Fully open RDM map — same PDOs as Blink but yours to re-ID. Every button + LED is a named signal in the exported DBC." }
+        ];
+        function kpVendor() { for (var i = 0; i < KP_VENDORS.length; i++) if (KP_VENDORS[i].id === (kp.vendor || "blink")) return KP_VENDORS[i]; return KP_VENDORS[0]; }
+        function kpTpdo1() { return 0x180 + kpVendor().node; }
+        function kpLedId() { return 0x200 + kpVendor().node; }
+        function kpHex(n) { return "0x" + n.toString(16).toUpperCase(); }
+        function kpSigName(k, i) {
+            var lbl = ((k && k.label) || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+            return "KEY" + (i + 1) + (lbl ? "_" + lbl : "");
+        }
+        function kpFrameMap() {
+            var n = kp.model.rows * kp.model.cols, keys = [];
+            for (var i = 0; i < n; i++) keys.push({ i: i, name: kpSigName(kp.keys[i], i) });
+            return [
+                { id: kpTpdo1(), name: "KP_BUTTONS", tx: true,  sigs: keys.map(function (k) { return { name: k.name,          start: k.i, len: 1 }; }) },
+                { id: kpLedId(), name: "KP_LEDS",    tx: false, sigs: keys.map(function (k) { return { name: k.name + "_LED",  start: k.i, len: 1 }; }) }
+            ];
+        }
+        window.kpExportDbc = function () {
+            var v = kpVendor();
+            var lines = ['VERSION "RDM Keypad ' + kp.model.name + ' · ' + v.name + ' v1"', "", "BU_: RDM_KEYPAD ECU", ""];
+            kpFrameMap().forEach(function (f) {
+                lines.push("BO_ " + f.id + " " + f.name + ": 8 " + (f.tx ? "RDM_KEYPAD" : "ECU"));
+                f.sigs.forEach(function (sg) {
+                    lines.push(' SG_ ' + sg.name + " : " + sg.start + "|" + sg.len + '@1+ (1,0) [0|1] "" ' + (f.tx ? "ECU" : "RDM_KEYPAD"));
+                });
+                lines.push("");
+            });
+            lines.push('CM_ "Exported by RDM Studio — ' + v.name + " adoption of the " + kp.model.name + ' keypad.";');
+            _ltDownload("rdm_keypad_" + kp.model.id + "_" + v.id + ".dbc", lines.join("\n"), "text/plain");
+            if (typeof showToast === "function") showToast("DBC exported — buttons + LEDs, named per key", "success");
         };
 
         function kpLoadCfg() {
@@ -1445,8 +1522,10 @@
                     c.keys.forEach(function (k, i) { if (i < kp.keys.length) kp.keys[i] = Object.assign(kp.keys[i], k); });
                     if (typeof c.brightDay === "number") kp.brightDay = c.brightDay;
                     if (typeof c.brightNight === "number") kp.brightNight = c.brightNight;
+                    kp.vendor = c.vendor || "blink";
                 } else {
                     kp.keys = JSON.parse(JSON.stringify(DEFAULT_KEYS));
+                    kp.vendor = "blink";
                 }
             } catch (e) { kp.keys = JSON.parse(JSON.stringify(DEFAULT_KEYS)); }
         }
@@ -1455,7 +1534,7 @@
                 var all = JSON.parse(localStorage.getItem(KP_LS) || "{}");
                 all[kp.model.id] = {
                     keys: kp.keys.slice(0, kp.model.rows * kp.model.cols),
-                    brightDay: kp.brightDay, brightNight: kp.brightNight
+                    brightDay: kp.brightDay, brightNight: kp.brightNight, vendor: kp.vendor
                 };
                 localStorage.setItem(KP_LS, JSON.stringify(all));
             } catch (e) { console.warn("keypad save failed:", e); }
@@ -1622,6 +1701,20 @@
                     else { kp.selected = i; kpRenderStage(); kpRenderInspector(); }
                 });
             });
+            kpUpdateBusLine();
+        }
+
+        /* live "what's on the bus" — the TPDO1 button frame assembled from every
+           key currently held/latched, with the set bytes lit. */
+        function kpUpdateBusLine() {
+            var el = document.getElementById("kpBusLine");
+            if (!el) return;
+            if (!kp.live) { el.innerHTML = ""; return; }
+            var bytes = [0, 0, 0, 0, 0, 0, 0, 0], n = kp.model.rows * kp.model.cols, any = false;
+            for (var i = 0; i < n; i++) if (kp.keyOn[i]) { bytes[Math.floor(i / 8)] |= (1 << (i % 8)); any = true; }
+            el.innerHTML = "<span class='tx'>TX</span> " + kpHex(kpTpdo1()) + " [ " +
+                bytes.map(function (b) { return "<i" + (b ? " class='on'" : "") + ">" + ("0" + b.toString(16).toUpperCase()).slice(-2) + "</i>"; }).join(" ") + " ]" +
+                (any ? "" : " <span class='idle'>idle — press a key</span>");
         }
 
         var kpSimTimer = null;
@@ -1679,7 +1772,7 @@
             var iconOpts = [["up", "▲ arrow"], ["down", "▼ arrow"], ["turtle", "turtle (limiter)"], ["power", "power"], ["fan", "fan"], ["pump", "fuel pump"], ["light", "headlight"], ["moon", "night"], ["bolt", "launch"], ["page", "page"], ["blank", "text label"]];
             var html =
                 "<h2>Key " + (i + 1) + " — " + (k.label || "unassigned") + "</h2>" +
-                '<div class="kp-sub">' + kp.model.name + "-SI · TPDO1 0x195 bit " + i + "</div>" +
+                '<div class="kp-sub">' + kp.model.name + "-SI · " + kpVendor().name + " · TPDO1 " + kpHex(kpTpdo1()) + " bit " + i + "</div>" +
                 '<div class="kp-keyacts"><button onclick="kpCopyKey()" title="copy this key\'s LED colour, behaviour and mode">Copy style</button>' +
                 '<button onclick="kpPasteKey()"' + (kp.clip ? "" : " disabled") + ' title="paste the copied LED style onto this key">Paste</button>' +
                 '<button onclick="kpApplyAll()" title="give every key this LED style — icons &amp; labels kept">Apply to all</button></div>' +
@@ -1718,6 +1811,19 @@
                 '<button data-n="0"' + (!kp.night ? ' class="on"' : "") + ">Day</button>" +
                 '<button data-n="1"' + (kp.night ? ' class="on"' : "") + ">Night</button>" +
                 "</div></div></div>";
+            /* what-fires — the exact CAN frame that transmits when this key is pressed */
+            var byteIdx = Math.floor(i / 8), bit = i % 8, val = 1 << bit, cells = "";
+            for (var bi = 0; bi < 8; bi++) {
+                var bv = bi === byteIdx ? val : 0;
+                cells += "<i" + (bi === byteIdx ? " class='on'" : "") + ">" + ("0" + bv.toString(16).toUpperCase()).slice(-2) + "</i>";
+            }
+            var modeNote = k.mode === "momentary" ? "Momentary — high only while held." :
+                k.mode === "toggle" ? "Toggle — the bit latches on / off each press." :
+                k.mode === "state3" ? "3-position — cycles states each press." : "Paired ▲▼ — shares the frame with the next key.";
+            html += "<div class='kp-grp'><div class='kp-gt'>On the bus — what fires</div>" +
+                "<div class='kp-fire'><span class='lbl'>Press &#8594;</span><span class='frame'>" + kpHex(kpTpdo1()) + " [ " + cells + " ]</span></div>" +
+                "<div class='kp-note'>Byte " + byteIdx + ", bit " + bit + ". " + modeNote + " The ECU reads this bit of " + kpHex(kpTpdo1()) + ".</div>" +
+                "<div class='kp-note' style='margin-top:6px;'>Switch to <b>Live (sim)</b> and press keys to watch the whole frame build on the bus.</div></div>";
             if (k.follows !== "self") {
                 html += '<div class="kp-note">LED bound to <b>' + k.follows + "</b> — it shows the car’s real state, not just the button (switch to Live to watch it react).</div>";
             }
@@ -1785,15 +1891,47 @@
                     kp.model = m;
                     if (kp.selected >= m.rows * m.cols) kp.selected = 0;
                     kpLoadCfg();
-                    var chip = document.getElementById("kpChipModel");
-                    if (chip) chip.textContent = m.name + "-SI · CANopen · node 0x15";
+                    kpUpdateChip();
                     document.querySelectorAll(".kp-model").forEach(function (x) { x.className = "kp-model"; });
                     b.className = "kp-model on";
-                    kpRenderStage(); kpRenderInspector();
+                    kpRenderBus(); kpRenderStage(); kpRenderInspector();
                 });
                 rail.appendChild(b);
             });
+            var busTitle = document.createElement("div");
+            busTitle.className = "kp-rail-title"; busTitle.style.marginTop = "16px"; busTitle.textContent = "Bus & adoption";
+            rail.appendChild(busTitle);
+            var busBox = document.createElement("div");
+            busBox.id = "kpBusBox";
+            rail.appendChild(busBox);
         }
+
+        function kpUpdateChip() {
+            var chip = document.getElementById("kpChipModel");
+            if (chip) chip.textContent = kp.model.name + "-SI · " + kpVendor().proto + " · node " + kpHex(kpVendor().node);
+        }
+        function kpRenderBus() {
+            var box = document.getElementById("kpBusBox");
+            if (!box) return;
+            var v = kpVendor();
+            var h = "<select id='kpVendorSel' class='kp-bus-sel'>" +
+                KP_VENDORS.map(function (x) { return opt(x.id, x.name, kp.vendor || "blink"); }).join("") + "</select>" +
+                "<div class='kp-bus-id'>" +
+                "<span>node</span><b>" + kpHex(v.node) + "</b>" +
+                "<span>buttons</span><b>" + kpHex(kpTpdo1()) + "</b>" +
+                "<span>LEDs</span><b>" + kpHex(kpLedId()) + "</b></div>" +
+                "<div class='kp-bus-note'>" + v.note + "</div>" +
+                "<button class='ws-btn-line' onclick='kpExportDbc()'>Export .dbc</button>" +
+                "<div class='kp-bus-note'>Drop the DBC into MoTeC, Haltech, Link or SavvyCAN — every button and LED shows up named. Open CAN is the thing we don't lock down.</div>";
+            box.innerHTML = h;
+            var sel = document.getElementById("kpVendorSel");
+            if (sel) sel.addEventListener("change", function (e) { kpSetVendor(e.target.value); });
+        }
+        window.kpSetVendor = function (id) {
+            kp.vendor = id; kpSaveCfg();
+            kpRenderBus(); kpUpdateChip(); kpRenderInspector(); kpRenderStage();
+            if (typeof showToast === "function") showToast("Keypad now speaks " + kpVendor().name + " (" + kpHex(kpTpdo1()) + ")", "success");
+        };
 
         window._kpOpen = function () {
             _wsCloseAll("kpWorkspace");
@@ -1802,6 +1940,7 @@
             _kpLoadChannels();
             var ws = document.getElementById("kpWorkspace");
             if (ws) ws.style.display = "flex";
+            kpRenderBus(); kpUpdateChip();
             kpRenderStage(); kpRenderInspector();
         };
         window._kpClose = function () {
@@ -3470,7 +3609,7 @@
         var lt = {
             cfg: null, sim: false, mode: "setup", map: null, layer: null,
             simState: null, simLayer: null, carMarker: null, libs: [], selGate: "gate",
-            an: null, anLayer: null, anCursorMarker: null, anCh: "delta", anCursor: 0.5
+            an: null, anLayer: null, anCursorMarker: null, anCh: "delta", anCursor: 0.5, hud: false
         };
         var _ltSimTimer = null;
 
@@ -4428,9 +4567,77 @@
             if (!el) return;
             el.innerHTML = LT_AN_CH.map(function (c) {
                 return "<button class='" + (lt.anCh === c.k ? "on" : "") + "' onclick=\"ltAnSetCh('" + c.k + "')\">" + c.t + "</button>";
-            }).join("") + "<span style='font-size:9.5px;color:var(--text-muted);margin-left:6px;'>vs reference lap</span>";
+            }).join("") + "<span style='font-size:9.5px;color:var(--text-muted);margin-left:6px;'>vs reference lap</span>" +
+                "<button class='" + (lt.hud ? "on" : "") + "' style='margin-left:auto' onclick='ltHudToggle()' " +
+                "title='broadcast telemetry overlay — the data that burns onto your track video'>&#9635; HUD overlay</button>";
         }
         window.ltAnSetCh = function (k) { lt.anCh = k; ltAnRenderTabs(); ltAnRenderGraph(); };
+
+        /* ── telemetry HUD overlay ── the broadcast lower-third that RaceRender
+           burns onto track video. Scrubs with the graph cursor so you preview
+           exactly what the overlay looks like at any point on the lap. */
+        window.ltHudToggle = function () {
+            lt.hud = !lt.hud;
+            var el = document.getElementById("ltHud");
+            if (el) el.classList.toggle("show", lt.hud);
+            ltAnRenderTabs();
+            if (lt.hud) ltHudRender();
+        };
+        function _hudRR(ctx, x, y, w, h, r) {
+            ctx.beginPath(); ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+        }
+        function ltHudRender() {
+            var cv = document.getElementById("ltHudCanvas");
+            if (!cv || !lt.an || !lt.hud) return;
+            var sel = lt.an.laps[lt.an.sel], ref = lt.an.laps[lt.an.ref];
+            var cur = ltAnSampleAtFrac(sel, lt.anCursor);
+            var dv = ltAnTimeAtDist(sel, cur.d) - ltAnTimeAtDist(ref, cur.d);
+            var W = cv.width, H = cv.height, ctx = cv.getContext("2d");
+            ctx.clearRect(0, 0, W, H);
+            ctx.fillStyle = "rgba(9,10,12,0.84)"; _hudRR(ctx, 0, 0, W, H, 18); ctx.fill();
+            ctx.strokeStyle = "rgba(255,255,255,0.09)"; ctx.lineWidth = 2; _hudRR(ctx, 1, 1, W - 2, H - 2, 17); ctx.stroke();
+            ctx.fillStyle = "#2d8ceb"; _hudRR(ctx, 0, 0, W, 6, 3); ctx.fill();
+            ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+            /* speed + gear */
+            var kmh = Math.round(cur.v * 3.6);
+            ctx.fillStyle = "#fff"; ctx.font = "700 62px 'JetBrains Mono',monospace"; ctx.fillText(String(kmh), 22, 92);
+            ctx.fillStyle = "#7C8590"; ctx.font = "600 14px Sora,sans-serif"; ctx.fillText("KM/H", 24, 116);
+            var gear = Math.max(1, Math.min(6, Math.round(kmh / 38) + 1));
+            ctx.fillStyle = "#7C8590"; ctx.font = "600 11px Sora,sans-serif"; ctx.fillText("GEAR", 178, 44);
+            ctx.fillStyle = "#7CC0FF"; ctx.font = "700 46px 'JetBrains Mono',monospace"; ctx.fillText(String(gear), 180, 92);
+            ctx.strokeStyle = "rgba(255,255,255,0.10)"; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(234, 28); ctx.lineTo(234, H - 22); ctx.stroke();
+            /* rpm + throttle/brake */
+            var bx = 300, bw = 210;
+            ctx.fillStyle = "#7C8590"; ctx.font = "600 11px 'JetBrains Mono',monospace"; ctx.fillText("RPM", 250, 46);
+            ctx.textAlign = "right"; ctx.fillStyle = "#fff"; ctx.font = "700 15px 'JetBrains Mono',monospace"; ctx.fillText(Math.round(cur.rpm), bx + bw, 46); ctx.textAlign = "left";
+            var rf = Math.max(0, Math.min(1, cur.rpm / 7200)), redFrac = 6200 / 7200;
+            ctx.fillStyle = "rgba(255,255,255,0.08)"; _hudRR(ctx, bx, 54, bw, 20, 5); ctx.fill();
+            ctx.fillStyle = "rgba(224,93,82,0.22)"; _hudRR(ctx, bx + bw * redFrac, 54, bw * (1 - redFrac), 20, 5); ctx.fill();
+            ctx.save(); _hudRR(ctx, bx, 54, bw, 20, 5); ctx.clip();
+            ctx.fillStyle = cur.rpm > 6200 ? "#e05d52" : "#2d8ceb"; ctx.fillRect(bx, 54, bw * rf, 20); ctx.restore();
+            ctx.fillStyle = "#7C8590"; ctx.font = "600 10px Sora,sans-serif"; ctx.fillText("THR", 250, 108);
+            ctx.fillStyle = "rgba(255,255,255,0.08)"; _hudRR(ctx, bx, 98, bw, 14, 4); ctx.fill();
+            ctx.save(); _hudRR(ctx, bx, 98, bw, 14, 4); ctx.clip();
+            ctx.fillStyle = "#4ade80"; ctx.fillRect(bx, 98, bw * cur.thr / 100, 14); ctx.restore();
+            ctx.fillStyle = "#7C8590"; ctx.fillText("BRK", 250, 138);
+            ctx.fillStyle = "rgba(255,255,255,0.08)"; _hudRR(ctx, bx, 128, bw, 14, 4); ctx.fill();
+            ctx.save(); _hudRR(ctx, bx, 128, bw, 14, 4); ctx.clip();
+            ctx.fillStyle = "#e05d52"; ctx.fillRect(bx, 128, bw * cur.brk / 100, 14); ctx.restore();
+            ctx.strokeStyle = "rgba(255,255,255,0.10)"; ctx.beginPath(); ctx.moveTo(532, 28); ctx.lineTo(532, H - 22); ctx.stroke();
+            /* delta + g-ball */
+            ctx.fillStyle = "#7C8590"; ctx.font = "600 11px Sora,sans-serif"; ctx.fillText("Δ vs BEST", 552, 44);
+            ctx.fillStyle = dv > 0 ? "#e05d52" : "#4ade80"; ctx.font = "700 40px 'JetBrains Mono',monospace";
+            ctx.fillText((dv >= 0 ? "+" : "") + dv.toFixed(2), 552, 88);
+            var gx = 632, gy = 138, gr = 30;
+            ctx.strokeStyle = "rgba(255,255,255,0.16)"; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(gx, gy, gr, 0, 2 * Math.PI); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(gx - gr, gy); ctx.lineTo(gx + gr, gy); ctx.moveTo(gx, gy - gr); ctx.lineTo(gx, gy + gr); ctx.stroke();
+            ctx.fillStyle = "#FF9F0A"; ctx.beginPath(); ctx.arc(gx + (cur.lg / 1.4) * gr, gy - (cur.tg / 1.4) * gr, 4, 0, 2 * Math.PI); ctx.fill();
+            ctx.fillStyle = "#7C8590"; ctx.font = "600 9px Sora,sans-serif"; ctx.fillText("g-force", gx + gr + 6, gy - 6);
+        }
 
         function ltAnRenderGraph() {
             var cv = document.getElementById("ltAnCanvas");
@@ -4526,6 +4733,7 @@
                 Math.round(cur.thr) + "</b>% &nbsp; " + Math.round(cur.rpm) + " rpm &nbsp; Δ <b style='color:" +
                 (dv > 0 ? "#e05d52" : "#4ade80") + "'>" + (dv >= 0 ? "+" : "") + dv.toFixed(2) + "</b>";
             ltAnRenderGraph(); ltAnRenderGG();
+            if (lt.hud) ltHudRender();
         }
 
         window.ltAnSelectLap = function (i) {
@@ -4558,12 +4766,54 @@
             rail.appendChild(note);
         }
 
+        /* per-lap channel min/max/avg — the numbers a driver scans first */
+        function ltLapStats(lap) {
+            var s = lap.samples, n = s.length || 1;
+            var vsum = 0, rpmMax = 0, rpmSum = 0, thrFull = 0, thrSum = 0, brkMax = 0, decelMax = 0, latMax = 0;
+            s.forEach(function (p) {
+                vsum += p.v; rpmSum += p.rpm; if (p.rpm > rpmMax) rpmMax = p.rpm;
+                thrSum += p.thr; if (p.thr > 90) thrFull++;
+                if (p.brk > brkMax) brkMax = p.brk;
+                if (-p.tg > decelMax) decelMax = -p.tg;
+                if (Math.abs(p.lg) > latMax) latMax = Math.abs(p.lg);
+            });
+            return { vmax: lap.vmax * 3.6, vmin: lap.vmin * 3.6, vavg: vsum / n * 3.6,
+                rpmMax: rpmMax, rpmAvg: rpmSum / n, thrFullPct: thrFull / n * 100, thrAvg: thrSum / n,
+                brkMax: brkMax, decelMax: decelMax, latMax: latMax };
+        }
+
         function ltAnRenderInspector() {
             var insp = document.getElementById("ltInspector");
             if (!insp || !lt.an) return;
             var an = lt.an, sel = an.laps[an.sel];
             var h = "<h2>Lap " + sel.n + " &#183; " + ltFmtTime(sel.time) + "</h2>" +
                 "<div class='ws-sub'>GPS + CAN, fused on the dash</div>";
+            /* session report — every lap at a glance, best-in-column highlighted */
+            var stats = an.laps.map(ltLapStats);
+            var bestTop = Math.max.apply(null, stats.map(function (x) { return x.vmax; }));
+            var bestAvg = Math.max.apply(null, stats.map(function (x) { return x.vavg; }));
+            h += "<div class='ws-grp'><div class='ws-gt'>Session report</div><table class='lt-sectbl'>" +
+                "<tr><th>Lap</th><th>Time</th><th>S1</th><th>S2</th><th>S3</th><th>Top</th><th>Avg</th></tr>";
+            an.laps.forEach(function (L, i) {
+                var st = stats[i];
+                function sc(k) { return Math.abs(L.sec[k] - an.bestSec[k]) < 0.001 ? " class='best'" : ""; }
+                h += "<tr class='" + (i === an.sel ? "sel" : "") + "'><td>L" + L.n + (i === an.best ? " &#9733;" : "") + "</td>" +
+                    "<td" + (i === an.best ? " class='best'" : "") + ">" + ltFmtTime(L.time) + "</td>" +
+                    "<td" + sc(0) + ">" + L.sec[0].toFixed(2) + "</td><td" + sc(1) + ">" + L.sec[1].toFixed(2) + "</td><td" + sc(2) + ">" + L.sec[2].toFixed(2) + "</td>" +
+                    "<td" + (st.vmax >= bestTop - 0.05 ? " class='best'" : "") + ">" + Math.round(st.vmax) + "</td>" +
+                    "<td" + (st.vavg >= bestAvg - 0.05 ? " class='best'" : "") + ">" + Math.round(st.vavg) + "</td></tr>";
+            });
+            h += "</table><div class='ws-note' style='margin-top:6px;'>Top / Avg in km/h. Purple = best of the session for that column.</div></div>";
+            /* selected-lap channel report */
+            var cs = stats[an.sel];
+            h += "<div class='ws-grp'><div class='ws-gt'>Lap " + sel.n + " channels</div><div class='lt-rep'>" +
+                "<div class='cell'><div class='k'>Top speed</div><div class='v'>" + Math.round(cs.vmax) + " <small>km/h</small></div><div class='sub'>min " + Math.round(cs.vmin) + " · avg " + Math.round(cs.vavg) + "</div></div>" +
+                "<div class='cell'><div class='k'>Max RPM</div><div class='v'>" + Math.round(cs.rpmMax) + "</div><div class='sub'>avg " + Math.round(cs.rpmAvg) + " rpm</div></div>" +
+                "<div class='cell'><div class='k'>Full throttle</div><div class='v'>" + Math.round(cs.thrFullPct) + " <small>% of lap</small></div><div class='sub'>avg pedal " + Math.round(cs.thrAvg) + "%</div></div>" +
+                "<div class='cell'><div class='k'>Peak braking</div><div class='v'>" + cs.decelMax.toFixed(2) + " <small>g</small></div><div class='sub'>" + Math.round(cs.brkMax) + "% pedal</div></div>" +
+                "<div class='cell'><div class='k'>Max lateral</div><div class='v'>" + cs.latMax.toFixed(2) + " <small>g</small></div><div class='sub'>cornering load</div></div>" +
+                "<div class='cell'><div class='k'>Lap time</div><div class='v'>" + ltFmtTime(sel.time) + "</div><div class='sub'>" + (an.sel === an.best ? "session best" : "+" + (sel.time - an.laps[an.best].time).toFixed(2) + " off best") + "</div></div>" +
+                "</div></div>";
             /* sector table + theoretical best */
             h += "<div class='ws-grp'><div class='ws-gt'>Sectors</div><table class='lt-sectbl'>" +
                 "<tr><th>Sector</th><th>This lap</th><th>Best</th></tr>";
@@ -4589,7 +4839,13 @@
                 h += "<span class='big'>Tidy lap</span>Within a few hundredths of your best everywhere &#8212; this is close to your theoretical " + ltFmtTime(an.theoretical) + ".";
             }
             h += "</div></div>";
-            h += "<button class='ws-btn-line' onclick='_ltExportCsv()'>Export lap CSV</button>";
+            h += "<div class='ws-grp'><div class='ws-gt'>Export lap " + sel.n + "</div>" +
+                "<div class='lt-expbtns'>" +
+                "<button class='ws-btn-line' onclick='_ltExportCsv()'>CSV</button>" +
+                "<button class='ws-btn-line' onclick='_ltExportVbo()' title='VBOX .vbo — opens in RaceRender &amp; Circuit Tools'>.vbo</button>" +
+                "<button class='ws-btn-line' onclick='_ltExportGpx()' title='GPX track — Google Earth, RaceRender, RaceChrono'>.gpx</button>" +
+                "</div>" +
+                "<div class='ws-note' style='margin-top:8px;'>The <b>.vbo</b> / <b>.gpx</b> carry GPS + your CAN channels time-synced &#8212; drop them straight into <b>RaceRender</b> to burn this data overlay onto your track video. No manual sync.</div></div>";
             insp.innerHTML = h;
             ltAnRenderGG();
         }
@@ -4601,10 +4857,63 @@
                 lines.push([s.d.toFixed(1), s.t.toFixed(2), s.lat.toFixed(6), s.lng.toFixed(6),
                     (s.v * 3.6).toFixed(1), Math.round(s.thr), Math.round(s.brk), s.rpm, s.lg.toFixed(2), s.tg.toFixed(2)].join(","));
             });
+            _ltDownload("rdm_lap" + sel.n + ".csv", lines.join("\n"), "text/csv");
+        };
+
+        function _ltDownload(name, text, mime) {
             var a = document.createElement("a");
-            a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
-            a.download = "rdm_lap" + sel.n + ".csv"; a.click();
+            a.href = URL.createObjectURL(new Blob([text], { type: mime || "text/plain" }));
+            a.download = name; a.click();
             setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        }
+        function _ltHeading(s, i) {
+            var a = s[Math.max(0, i - 1)], b = s[Math.min(s.length - 1, i + 1)];
+            var dLat = b.lat - a.lat, dLng = (b.lng - a.lng) * Math.cos(a.lat * Math.PI / 180);
+            return (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
+        }
+        function _ltPad(n, w) { n = String(n); while (n.length < w) n = "0" + n; return n; }
+
+        /* VBOX .vbo — the format Circuit Tools & RaceRender ingest natively.
+           lat/long are printed in MINUTES; the RACELOGIC convention is +North /
+           +West, so eastern longitudes are negated. */
+        window._ltExportVbo = function () {
+            var sel = lt.an.laps[lt.an.sel], s = sel.samples;
+            var now = new Date();
+            var t0 = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
+            var created = _ltPad(now.getDate(), 2) + "/" + _ltPad(now.getMonth() + 1, 2) + "/" + now.getFullYear() +
+                " at " + _ltPad(now.getHours(), 2) + ":" + _ltPad(now.getMinutes(), 2) + ":" + _ltPad(now.getSeconds(), 2);
+            var cols = ["sats", "time", "lat", "long", "velocity", "heading", "height", "LongAccel", "LatAccel", "rpm", "throttle"];
+            var units = ["", "", "minutes", "minutes", "kmh", "deg", "m", "g", "g", "rpm", "%"];
+            var L = ["File created on " + created, "Generated by RDM Studio — GPS + CAN fused on the RDM-7 dash", "", "[header]"];
+            cols.forEach(function (c) { L.push(c); });
+            L.push("", "[channel units]");
+            units.forEach(function (u) { L.push(u); });
+            L.push("", "[comments]", "Circuit : " + (ltTrack().name || "RDM session"), "Lap : " + sel.n + "   Time : " + ltFmtTime(sel.time),
+                "", "[column names]", cols.join(" "), "", "[data]");
+            s.forEach(function (p, i) {
+                var tod = t0 + p.t, hh = Math.floor(tod / 3600) % 24, mm = Math.floor((tod % 3600) / 60), ss = tod % 60;
+                L.push(["010", _ltPad(hh, 2) + _ltPad(mm, 2) + (ss < 10 ? "0" : "") + ss.toFixed(2),
+                    (p.lat * 60).toFixed(5), (-p.lng * 60).toFixed(5), (p.v * 3.6).toFixed(3),
+                    _ltHeading(s, i).toFixed(2), "050.00", p.tg.toFixed(3), p.lg.toFixed(3), p.rpm, Math.round(p.thr)].join(" "));
+            });
+            _ltDownload("rdm_lap" + sel.n + ".vbo", L.join("\r\n"), "text/plain");
+        };
+
+        /* GPX 1.1 track with time-stamped points + speed extension — universal
+           (Google Earth, RaceRender, RaceChrono, Strava all read it). */
+        window._ltExportGpx = function () {
+            var sel = lt.an.laps[lt.an.sel], s = sel.samples;
+            var base = Date.now() - Math.round(sel.time * 1000);
+            var x = ['<?xml version="1.0" encoding="UTF-8"?>',
+                '<gpx version="1.1" creator="RDM Studio" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v2">',
+                '<trk><name>RDM lap ' + sel.n + ' — ' + (ltTrack().name || "session") + '</name><trkseg>'];
+            s.forEach(function (p) {
+                var iso = new Date(base + Math.round(p.t * 1000)).toISOString();
+                x.push('<trkpt lat="' + p.lat.toFixed(7) + '" lon="' + p.lng.toFixed(7) + '"><time>' + iso + '</time>' +
+                    '<extensions><gpxtpx:TrackPointExtension><gpxtpx:speed>' + p.v.toFixed(2) + '</gpxtpx:speed></gpxtpx:TrackPointExtension></extensions></trkpt>');
+            });
+            x.push('</trkseg></trk></gpx>');
+            _ltDownload("rdm_lap" + sel.n + ".gpx", x.join("\n"), "application/gpx+xml");
         };
 
         function ltAnWireCanvas() {
@@ -4632,6 +4941,8 @@
             if (mode !== "sim") ltStopSim();
             if (mode !== "analyse" && lt.anLayer) { lt.anLayer.clearLayers(); lt.anCursorMarker = null; }
             if (an) an.classList.remove("show");
+            var hudEl = document.getElementById("ltHud");
+            if (hudEl) hudEl.classList.remove("show");
             if (hint) hint.style.display = "none";
 
             if (mode === "setup") {
@@ -4651,6 +4962,7 @@
                 ltAnRenderTabs(); ltAnWireCanvas();
                 if (an) an.classList.add("show");
                 ltAnRenderMap(); ltAnRenderInspector(); ltAnRenderGraph(); ltAnSetCursor(0.5);
+                if (lt.hud && hudEl) { hudEl.classList.add("show"); ltHudRender(); }
             }
         };
 
