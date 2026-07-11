@@ -794,6 +794,8 @@
         .cm-idlab { color: var(--accent-hover); font-weight: 600; }
         .cm-scatter { width: 100%; height: 170px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); display: block; margin-top: 6px; }
         .cm-none { color: var(--text-muted); font-size: 11px; text-align: center; padding: 22px 8px; line-height: 1.5; }
+        .cm-warn { font-size: 10.5px; color: var(--text-muted); background: rgba(255,159,10,0.08); border: 1px solid rgba(255,159,10,0.35); border-left: 3px solid #FF9F0A; border-radius: var(--radius-sm); padding: 8px 10px; line-height: 1.5; }
+        .cm-warn b { color: #FFB84D; }
         .cm-kv { display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
         .cm-kv span:first-child { color: var(--text-muted); }
         .cm-kv b { color: var(--text); font-weight: 600; }
@@ -1824,7 +1826,10 @@
                     .concat([0, (p.clt + 40) & 255, 0, 0, 0, 0]) },                           /* B3 coolant offset -40 */
                 { id: 0x3E8, dlc: 8, hz: 20, bytes: [0, 0].concat(lo16(Math.round(1385 + 8 * Math.sin(st.t / 5))))
                     .concat([Math.round(st.t * 10) & 255, 0xAA, 0x55, 1]) },                  /* battery ×0.01 + counter */
-                { id: 0x200, dlc: 4, hz: 10, bytes: [Math.round(p.clt + 40) & 255, (Math.sin(st.t) > 0 ? 1 : 0), 0x0F, 0] }
+                /* 0x200 B0-1 = 12-bit throttle ×0.025 motorola (bits 0-11), B2 coolant.
+                   Exercises the non-byte-width / nibble sweep. */
+                (function () { var v = Math.round(p.tps * 40 + nz(4)) & 0xFFF;
+                    return { id: 0x200, dlc: 4, hz: 10, bytes: [(v >> 4) & 255, (v & 0xF) << 4, (p.clt + 40) & 255, 0] }; })()
             ];
             frames.forEach(function (s) {
                 var r = ca.rows[s.id] || { id: s.id, ext: false, dlc: s.dlc, count: 0 };
@@ -1867,10 +1872,14 @@
             ca.lastPollT = now;
         }
 
+        function _caIsConnected() {
+            return typeof RDM !== "undefined" && RDM.mode !== "local" &&
+                   typeof _connectionOk !== "undefined" && _connectionOk;
+        }
+        var _caBusy = false, _caLastObd = 0;
         function _caPoll() {
             if (ca.paused) return;
-            var connected = typeof RDM !== "undefined" && RDM.mode !== "local" &&
-                            typeof _connectionOk !== "undefined" && _connectionOk;
+            var connected = _caIsConnected();
             var chip = document.getElementById("caChipBus");
             if (!connected) {
                 ca.demo = true;
@@ -1879,40 +1888,57 @@
                 return;
             }
             if (ca.demo) { ca.demo = false; ca.rows = {}; ca.prev = {}; ca.lastCounts = {}; _caDemoState = null; ca.match._obdDemo = false; ca.match.obd = {}; }
-            fetch("/api/can/monitor")
-                .then(function (r) { return r.ok ? r.json() : null; })
-                .then(function (j) {
-                    if (!j || !Array.isArray(j.ids)) return;
-                    j.ids.forEach(function (e) {
-                        var r = ca.rows[e.id] || { id: e.id, count: 0 };
-                        r.ext = !!e.ext; r.dlc = e.dlc;
-                        r.bytes = caParseHex(e.data || "");
-                        while (r.bytes.length < 8) r.bytes.push(0);
-                        r.count = e.count; r.age = e.age_ms;
-                        ca.rows[e.id] = r;
-                    });
-                    if (chip) chip.innerHTML = "via RDM-7 &#183; <b>" + j.ids.length + "</b> / " + (j.capacity || 64) + " IDs";
-                    caComputeRates();
-                    caMatchSample();
-                    caRender();
-                })
-                .catch(function () {});
-            /* Pull live OBD2 (and CAN) signal values — the match reference set.
-               Light poll; runs whenever the analyzer is open so the reference
-               list is populated the moment the user opens Match. */
-            fetch("/api/signals/values")
-                .then(function (r) { return r.ok ? r.json() : null; })
-                .then(function (j) {
-                    if (!j || !Array.isArray(j.signals)) return;
-                    var obd = {};
-                    j.signals.forEach(function (s) {
-                        if (s.source === "obd2" && s.seen && !s.stale) obd[s.name] = s.value;
-                    });
-                    ca.match.obd = obd;
-                    ca.match._obdDemo = false;
-                    if (ca.mode === "match") caMatchRenderRail();
-                })
-                .catch(function () {});
+            /* Frame poll — guarded so a slow WiFi round-trip can't stack requests
+               when Match is recording at 10 Hz (in-flight tick is simply skipped). */
+            if (!_caBusy) {
+                _caBusy = true;
+                fetch("/api/can/monitor")
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (j) {
+                        if (j && Array.isArray(j.ids)) {
+                            j.ids.forEach(function (e) {
+                                var r = ca.rows[e.id] || { id: e.id, count: 0 };
+                                r.ext = !!e.ext; r.dlc = e.dlc;
+                                r.bytes = caParseHex(e.data || "");
+                                while (r.bytes.length < 8) r.bytes.push(0);
+                                r.count = e.count; r.age = e.age_ms;
+                                ca.rows[e.id] = r;
+                            });
+                            if (chip) chip.innerHTML = "via RDM-7 &#183; <b>" + j.ids.length + "</b> / " + (j.capacity || 64) + " IDs";
+                            caComputeRates();
+                            caMatchSample();
+                            if (ca.mode !== "match") caRender();   /* table is hidden in match */
+                        }
+                    })
+                    .catch(function () {})
+                    .then(function () { _caBusy = false; });
+            }
+            /* OBD2 reference set — throttled to ~4 Hz even while frames poll at
+               10 Hz (OBD PID responses update slowly; no point refetching faster). */
+            var now = performance.now();
+            if (now - _caLastObd > 240) {
+                _caLastObd = now;
+                fetch("/api/signals/values")
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (j) {
+                        if (!j || !Array.isArray(j.signals)) return;
+                        var obd = {};
+                        j.signals.forEach(function (s) {
+                            if (s.source === "obd2" && s.seen && !s.stale) obd[s.name] = s.value;
+                        });
+                        ca.match.obd = obd;
+                        ca.match._obdDemo = false;
+                        if (ca.mode === "match") caMatchRenderRail();
+                    })
+                    .catch(function () {});
+            }
+        }
+        /* Adaptive cadence: 10 Hz while a live Match recording is running (sharper
+           transient capture + faster convergence), 4 Hz otherwise. */
+        function _caTick() {
+            _caPoll();
+            var fast = _caIsConnected() && ca.mode === "match" && ca.match.recording;
+            _caTimer = setTimeout(_caTick, fast ? 100 : 250);
         }
 
         function caSort(k) { ca.sort = k; caRender(); }
@@ -2287,9 +2313,9 @@
             var frames = {};
             Object.keys(ca.rows).forEach(function (k) { var r = ca.rows[k]; if (r && r.bytes) frames[r.id] = r.bytes.slice(); });
             m.buf.push({ t: performance.now(), ref: ref, frames: frames });
-            if (m.buf.length > 400) m.buf.shift();
+            if (m.buf.length > 600) m.buf.shift();   /* ~60s @10Hz, ~150s @4Hz */
             var now = performance.now();
-            if (now - m.lastRank > 700 && m.buf.length >= 12) { m.lastRank = now; caMatchCorrelate(); }
+            if (now - m.lastRank > 900 && m.buf.length >= 12) { m.lastRank = now; caMatchCorrelate(); }
         }
 
         /* --- stats --- */
@@ -2329,23 +2355,74 @@
             return best;
         }
 
+        /* raw extracted series for a candidate over the whole buffer */
+        function _caFieldRaw(c, buf) {
+            return buf.map(function (s) { return s.frames[c.id] ? _wsExtractBits(s.frames[c.id], c.start, c.len, c.le, false) : null; });
+        }
+        /* pearson of two series, pairing only where both are finite */
+        function _caMutual(a, b) {
+            var xs = [], ys = [];
+            for (var i = 0; i < a.length; i++) if (a[i] !== null && b[i] !== null && isFinite(a[i]) && isFinite(b[i])) { xs.push(a[i]); ys.push(b[i]); }
+            if (xs.length < 10) return null;
+            return _caPearson(xs, ys);
+        }
+        /* Widths swept per candidate. Nibble-aligned starts catch the 10/12-bit
+           analog fields and bit-packed layouts a byte-only sweep would miss. */
+        var CA_MATCH_WIDTHS = [8, 10, 12, 16];
+        function _caIsolateTip(ref) {
+            var n = ((ref && ref.name || "") + " " + (ref && ref.label || "")).toLowerCase();
+            if (/rpm|engine speed|tach/.test(n)) return "rev in neutral — RPM moves while road speed stays put.";
+            if (/speed|vss|vehicle/.test(n)) return "hold a steady throttle and let road speed vary — that decouples it from RPM and pedal.";
+            if (/throttle|pedal|tps|accel/.test(n)) return "blip the throttle at a standstill so RPM and speed lag behind it.";
+            if (/coolant|oil|\btemp|iat|intake|ambient/.test(n)) return "sweep temperature over a wide range (cold start → warm) and avoid long steady cruises.";
+            if (/boost|map|manifold|maf|load/.test(n)) return "vary load in short bursts rather than one long pull.";
+            return "vary this reading on its own — right now several fields are moving together.";
+        }
+
         function caMatchCorrelate() {
             var m = ca.match, buf = m.buf;
+            m.collinear = null;
             if (buf.length < 12) { m.results = []; caMatchRenderStage(); return; }
             var refArr = buf.map(function (s) { return s.ref; });
             if (_caVar(refArr) < 1e-6) { m.results = []; caMatchRenderStage(); caMatchRenderInsp(); return; }
             var last = buf[buf.length - 1].frames;
+            /* Per-id active-byte map (min≠max across the buffer). Lets us skip
+               candidates that touch only constant bytes without building their
+               series — the cheap prefilter that keeps the wider sweep fast. */
+            var activeBytes = {};
+            Object.keys(last).forEach(function (idk) {
+                var id = +idk, act = [false, false, false, false, false, false, false, false];
+                for (var bi = 0; bi < 8; bi++) {
+                    var mn = Infinity, mx = -Infinity;
+                    for (var si = 0; si < buf.length; si++) { var f = buf[si].frames[id]; if (!f) continue; var v = f[bi] || 0; if (v < mn) mn = v; if (v > mx) mx = v; }
+                    act[bi] = mx > mn;
+                }
+                activeBytes[id] = act;
+            });
             var cands = [];
             Object.keys(last).forEach(function (idk) {
                 var id = +idk;
                 var row = ca.rows[id]; var dlc = row ? row.dlc : 8;
-                for (var b1 = 0; b1 < dlc; b1++) cands.push({ id: id, start: b1 * 8, len: 8, le: false });
-                for (var b2 = 0; b2 + 1 < dlc; b2++) { cands.push({ id: id, start: b2 * 8, len: 16, le: false }); cands.push({ id: id, start: b2 * 8, len: 16, le: true }); }
+                var total = dlc * 8;
+                /* nibble-aligned starts × {8,10,12,16}-bit, both endians */
+                for (var s = 0; s + 8 <= total; s += 4) {
+                    for (var w = 0; w < CA_MATCH_WIDTHS.length; w++) {
+                        var width = CA_MATCH_WIDTHS[w];
+                        if (s + width > total) continue;
+                        cands.push({ id: id, start: s, len: width, le: false });
+                        if (width > 8) cands.push({ id: id, start: s, len: width, le: true });
+                    }
+                }
+                /* 32-bit byte-aligned (counters / wide values) */
                 for (var b4 = 0; b4 + 3 < dlc; b4++) { cands.push({ id: id, start: b4 * 8, len: 32, le: false }); cands.push({ id: id, start: b4 * 8, len: 32, le: true }); }
             });
             var out = [];
             cands.forEach(function (c) {
-                var raw = buf.map(function (s) { return s.frames[c.id] ? _wsExtractBits(s.frames[c.id], c.start, c.len, c.le, false) : null; });
+                var b0 = c.start >> 3, b1 = (c.start + c.len - 1) >> 3, act = activeBytes[c.id], any = false;
+                for (var bb = b0; bb <= b1 && act; bb++) if (act[bb]) { any = true; break; }
+                if (!any) return;                                /* span is all-constant — skip */
+                var raw = _caFieldRaw(c, buf);
+                if (_caVar(raw) < 1e-9) return;
                 var best = _caBestCorr(raw, refArr);
                 if (!best || Math.abs(best.r) < 0.55) return;
                 out.push({ id: c.id, start: c.start, len: c.len, le: c.le, r: best.r, lag: best.lag,
@@ -2355,6 +2432,19 @@
             var perId = {}, ranked = [];
             out.forEach(function (o) { perId[o.id] = perId[o.id] || 0; if (perId[o.id] < 2 && ranked.length < 14) { perId[o.id]++; ranked.push(o); } });
             m.results = ranked;
+            /* Collinearity check: if independent high-r candidates also move WITH
+               the winner, the reference sweep didn't isolate it — coach the user. */
+            if (ranked.length >= 2) {
+                var top = ranked[0], topRaw = _caFieldRaw(top, buf), cousins = 0;
+                for (var i = 1; i < ranked.length; i++) {
+                    var c = ranked[i];
+                    var sameOverlap = (c.id === top.id) && !(c.start + c.len <= top.start || top.start + top.len <= c.start);
+                    if (sameOverlap || Math.abs(c.r) < 0.9) continue;   /* subset framing, or weak — not a cousin */
+                    var cr = _caMutual(topRaw, _caFieldRaw(c, buf));
+                    if (cr !== null && Math.abs(cr) > 0.9) cousins++;
+                }
+                if (cousins >= 1) m.collinear = { count: cousins, tip: _caIsolateTip(m.ref) };
+            }
             if (m.sel && !ranked.some(function (o) { return o.key === m.sel; })) m.sel = null;
             if (!m.sel && ranked.length) m.sel = ranked[0].key;
             caMatchRenderStage(); caMatchRenderInsp();
@@ -2375,13 +2465,17 @@
                      "Recording &mdash; make the reading move across its range (rev, drive, warm up). Matching fields will appear here." :
                      "Press <b>Record</b>, then vary the reading. RDM ranks the CAN fields that track it.") + "</div>";
             } else {
+                if (m.collinear) {
+                    h += "<div class='cm-warn'><b>Heads up — " + m.collinear.count + " other field" + (m.collinear.count > 1 ? "s" : "") +
+                         " move" + (m.collinear.count > 1 ? "" : "s") + " with the top hit.</b> They're likely physically coupled (they rose and fell together during this recording), so the ranking can't tell the real one from its neighbours. To be sure: " + m.collinear.tip + "</div>";
+                }
                 h += "<table class='cm-rank'><thead><tr><th>#</th><th>CAN&#160;ID</th><th>Field</th><th>Correlation</th><th>Scale</th><th>Offset</th></tr></thead><tbody>";
                 m.results.forEach(function (o, i) {
                     var ra = Math.abs(o.r), cls = ra > 0.95 ? "" : (ra > 0.8 ? " mid" : " low");
                     h += "<tr class='" + (m.sel === o.key ? "sel" : "") + "' onclick='caMatchSelect(\"" + o.key + "\")'>" +
                          "<td>" + (i + 1) + "</td>" +
                          "<td><span class='cm-idlab'>" + _wsFmtHex(o.id) + "</span></td>" +
-                         "<td>" + o.start + "&#8211;" + (o.start + o.len - 1) + " <span class='cm-badge'>" + (o.le ? "Intel" : "Motorola") + "</span></td>" +
+                         "<td>" + o.start + "&#8211;" + (o.start + o.len - 1) + " · " + o.len + "b <span class='cm-badge'>" + (o.le ? "Intel" : "Motorola") + "</span></td>" +
                          "<td><span class='cm-rbar" + cls + "'><i style='width:" + (ra * 100).toFixed(0) + "%'></i></span> " + (o.r < 0 ? "−" : "") + ra.toFixed(3) + "</td>" +
                          "<td>" + parseFloat(o.scale.toPrecision(4)) + "</td>" +
                          "<td>" + parseFloat(o.offset.toPrecision(4)) + "</td></tr>";
@@ -2563,11 +2657,10 @@
             _wsLoadChannels(function () { caBuildDecodeMap(); });
             var ws = document.getElementById("caWorkspace");
             if (ws) ws.style.display = "flex";
-            if (!_caTimer) _caTimer = setInterval(_caPoll, 250);
-            _caPoll();
+            if (!_caTimer) _caTick(); else _caPoll();
         };
         window._caClose = function () {
-            if (_caTimer) { clearInterval(_caTimer); _caTimer = null; }
+            if (_caTimer) { clearTimeout(_caTimer); _caTimer = null; }
             var ws = document.getElementById("caWorkspace");
             if (ws) ws.style.display = "none";
             window._suiteHomeShow();
