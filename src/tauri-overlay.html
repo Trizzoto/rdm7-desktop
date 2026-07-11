@@ -2286,6 +2286,7 @@
                  * source instead of staying failed forever. */
                 _wasmFailedImages.clear();
                 _wasmFailedFonts.clear();
+                _wasmChanCache = null;   /* channel registry is device-side state */
                 if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
             }
             if (show && connected) { _wasmSimStop(); _wasmLiveStart(); }
@@ -2402,11 +2403,42 @@
             }
         }
 
+        /* ── Channel metadata into the WASM ──────────────────────────────
+         * The preview runs the real firmware widget code, which formats
+         * values through the bound CHANNEL (display units, decimals) and
+         * colors zones from channel thresholds. Without the registry the
+         * right-dial readouts rendered "13" where the dash shows "13.9 v".
+         * Push the device's /api/channels payload before each layout load
+         * (widgets bind while the layout applies). 5 s TTL — channel edits
+         * are debounced-saved and every save schedules a preview refresh,
+         * so the next-but-one refresh always carries them. */
+        let _wasmChanCache = null;
+        let _wasmChanAt = 0;
+
+        async function _syncWasmChannels() {
+            if (!wasmModule || _wasmCrashed) return;
+            try {
+                if (typeof RDM !== 'undefined' && RDM.mode !== 'local' && _connectionOk &&
+                    (!_wasmChanCache || Date.now() - _wasmChanAt > 5000)) {
+                    const r = await fetch('/api/channels');
+                    if (r.ok) {
+                        /* The firmware's JSON writer double-encodes the degree
+                         * sign ("Â°C") — normalize so the preview renders the
+                         * same "°C" glyph the dash itself draws. */
+                        _wasmChanCache = (await r.text()).replace(/Â°/g, '°');
+                        _wasmChanAt = Date.now();
+                    }
+                }
+                if (_wasmChanCache) wasmModule.ccall('load_channels_json', null, ['string'], [_wasmChanCache]);
+            } catch (e) { /* offline/older wasm — widgets fall back to config values */ }
+        }
+
         async function updateWasmPreview() {
             if (!wasmModule || _wasmCrashed) return;
             try {
                 await _syncWasmImages();
                 await _syncWasmFonts();
+                await _syncWasmChannels();
                 if (_wasmCrashed) return;
                 wasmModule.ccall('load_layout_json', null, ['string'], [JSON.stringify(buildFirmwarePayload())]);
                 if (typeof _testValues === 'object') {
@@ -2520,6 +2552,13 @@
                     const j = await r.json();
                     for (const s of (j.signals || [])) {
                         if (!s || !s.name || typeof s.value !== 'number') continue;
+                        /* NEVER-received signals stay untouched: the dash renders
+                         * their widgets in the initial "--" state, and injecting
+                         * the registry's placeholder 0 here made the mirror show
+                         * "0.0" instead. Newer firmware marks them seen:false;
+                         * older firmware omits the field (undefined !== false)
+                         * and keeps the previous behavior. */
+                        if (s.seen === false) continue;
                         /* Mirror STALE values too. The firmware keeps painting a
                          * widget with its last value even after the 2 s stale
                          * mark — so a channel that's present-but-stale (e.g.
