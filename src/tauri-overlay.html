@@ -2558,14 +2558,21 @@
             if (lt.map || typeof L === "undefined") return;
             var track = ltTrack();
             lt.map = L.map("ltMap", {
-                center: track.center, zoom: track.zoom,
+                center: track.center, zoom: track.zoom, maxZoom: 21,
                 zoomControl: true, attributionControl: true,
                 worldCopyJump: true
             });
             /* Esri World Imagery — keyless satellite. Swap this one layer for
-               the Google Maps JS API the day an API key exists. */
+               the Google Maps JS API the day an API key exists.
+               Esri's high-res depth VARIES by area: developed tracks reach
+               z19-20, but rural circuits (Mallala) top out at z18 and return
+               a grey "Map data not yet available" tile past that. maxNativeZoom
+               18 = the level Esri has almost everywhere; maxZoom 21 lets the
+               map keep zooming by UPSCALING those tiles — the satellite softens
+               but never blanks, and the gate/line are vectors so they stay
+               razor-sharp for dropping on the exact paint. */
             L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-                maxZoom: 19,
+                maxNativeZoom: 18, maxZoom: 21,
                 attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics"
             }).addTo(lt.map);
             lt.layer = L.layerGroup().addTo(lt.map);
@@ -2583,26 +2590,25 @@
                 iconSize: [28, 28], iconAnchor: [14, 14]
             });
         }
-        /* Chequered-flag pin for the start/finish gate — always visible at any
-           zoom (the 25 m checkered line alone is ~5 px at the track-overview
-           zoom and impossible to spot). This is the grab handle too. */
+        /* Small flat chequered disc marking the start/finish gate — sits on
+           the line centre (not a tall pin that overlaps everything), visible
+           at any zoom, and it's the grab handle. */
         function ltFlagIcon() {
-            var svg = "<svg width='30' height='38' viewBox='0 0 30 38'>" +
-                "<path d='M15 37 C7 27 2 21 2 14 a13 13 0 0 1 26 0 C28 21 23 27 15 37 Z' fill='#12161A' stroke='#F5F7FA' stroke-width='1.6'/>" +
-                "<g transform='translate(7,7)'>" +
-                "<rect width='16' height='14' rx='2' fill='#F5F7FA'/>" +
-                "<g fill='#0B0D0F'>" +
-                "<rect x='0' y='0' width='4' height='3.5'/><rect x='8' y='0' width='4' height='3.5'/>" +
-                "<rect x='4' y='3.5' width='4' height='3.5'/><rect x='12' y='3.5' width='4' height='3.5'/>" +
-                "<rect x='0' y='7' width='4' height='3.5'/><rect x='8' y='7' width='4' height='3.5'/>" +
-                "<rect x='4' y='10.5' width='4' height='3.5'/><rect x='12' y='10.5' width='4' height='3.5'/>" +
-                "</g></g></svg>";
-            return L.divIcon({ className: "lt-flagpin", html: svg, iconSize: [30, 38], iconAnchor: [15, 37] });
+            var svg = "<svg width='22' height='22' viewBox='0 0 22 22'>" +
+                "<defs><clipPath id='ltfc'><circle cx='11' cy='11' r='8'/></clipPath></defs>" +
+                "<circle cx='11' cy='11' r='9.3' fill='#12161A' stroke='#F5F7FA' stroke-width='1.4'/>" +
+                "<g clip-path='url(#ltfc)'>" +
+                "<rect x='3' y='3' width='16' height='16' fill='#F5F7FA'/>" +
+                "<g fill='#0B0D0F'><rect x='3' y='3' width='5.3' height='5.3'/><rect x='13.7' y='3' width='5.3' height='5.3'/>" +
+                "<rect x='8.3' y='8.3' width='5.4' height='5.4'/><rect x='3' y='13.7' width='5.3' height='5.3'/>" +
+                "<rect x='13.7' y='13.7' width='5.3' height='5.3'/></g></g></svg>";
+            return L.divIcon({ className: "lt-flagpin", html: svg, iconSize: [22, 22], iconAnchor: [11, 11] });
         }
 
-        /* A gate = the line (checkered for start/finish), a draggable centre
-           handle, and a rotate handle riding one end. The LINE ITSELF drags
-           too — grab it anywhere. Writes straight back into gcfg. */
+        /* A gate = the line (checkered for start/finish) + one draggable
+           centre handle. No rotate ball on the map — it cluttered the sectors
+           and got grabbed by accident; rotation lives in the inspector now.
+           The LINE ITSELF drags too — grab it anywhere. */
         function ltAddGate(gcfg, opts) {
             var w = opts.width;
             var lines = [];
@@ -2617,41 +2623,28 @@
                 lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#0A0C0E", weight: 7, opacity: 0.5, lineCap: "butt", className: "lt-gateline" }).addTo(lt.layer));
                 lines.push(L.polyline(ltGateEnds(gcfg, w), { color: opts.color, weight: 4, opacity: 0.95, className: "lt-gateline" }).addTo(lt.layer));
             }
-            /* start/finish gets a chequered-flag pin (always visible + the
-               grab handle); sectors get a labelled amber dot. */
+            /* start/finish gets a small chequered disc; sectors a labelled amber dot. */
             var center;
             if (opts.sf) {
                 center = L.marker([gcfg.lat, gcfg.lng], { icon: ltFlagIcon(), draggable: true, zIndexOffset: 1000 }).addTo(lt.layer);
-                center.bindTooltip("Start / finish — drag onto the line", { direction: "top", offset: [0, -36], className: "lt-tip" });
+                center.bindTooltip("Start / finish — drag onto the line", { direction: "top", offset: [0, -14], className: "lt-tip" });
             } else {
                 center = L.marker([gcfg.lat, gcfg.lng], { icon: ltHandleIcon("sec"), draggable: true }).addTo(lt.layer);
                 if (opts.label) center.bindTooltip(opts.label, { permanent: true, direction: "top", offset: [0, -12], className: "lt-tip" });
             }
-            var rot = L.marker(ltGateEnds(gcfg, w)[0], { icon: ltHandleIcon("rot"), draggable: true }).addTo(lt.layer);
 
             function refresh() {
                 var ends = ltGateEnds(gcfg, w);
                 lines.forEach(function (l) { l.setLatLngs(ends); });
-                if (center) center.setLatLng([gcfg.lat, gcfg.lng]);
-                rot.setLatLng(ends[0]);
+                center.setLatLng([gcfg.lat, gcfg.lng]);
                 ltRenderInspectorLatLon();
             }
 
-            if (center) {
-                center.on("drag", function (e) {
-                    gcfg.lat = e.latlng.lat; gcfg.lng = e.latlng.lng;
-                    refresh();
-                });
-                center.on("dragend", function () { ltSave(); ltRenderMap(); ltRenderInspector(); });
-            }
-            rot.on("drag", function (e) {
-                var m = ltMpd(gcfg.lat);
-                var dx = (e.latlng.lng - gcfg.lng) * m.lo, dy = (e.latlng.lat - gcfg.lat) * m.la;
-                gcfg.hdg = (Math.atan2(dx, dy) * 180 / Math.PI - 90 + 360) % 360;
-                var ends = ltGateEnds(gcfg, w);
-                lines.forEach(function (l) { l.setLatLngs(ends); });
+            center.on("drag", function (e) {
+                gcfg.lat = e.latlng.lat; gcfg.lng = e.latlng.lng;
+                refresh();
             });
-            rot.on("dragend", function () { ltSave(); ltRenderMap(); ltRenderInspector(); });
+            center.on("dragend", function () { ltSave(); ltRenderMap(); ltRenderInspector(); });
 
             /* grab-anywhere: mousedown on any of the gate's lines starts a
                move — pan is parked for the duration. */
@@ -2790,10 +2783,16 @@
             h += "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
                  "<div class='ws-field'><label>Heading</label><input type='number' value='" + Math.round(g.hdg) + "' onchange='ltHdgEdit(this)'></div>" +
                  "<div class='ws-field'><label>Width (m)</label><input type='number' value='" + g.w + "' onchange='ltGateW(this.value)'></div></div>" +
-                 "<div class='ws-note'>Zoom onto the tarmac and drop the line exactly where the paint is. The blue dot spins the gate square to the straight.</div></div>";
+                 "<div class='ws-note'>Zoom onto the tarmac and drag the chequered marker onto the paint. Set <b>Heading</b> to square the line to the straight.</div></div>";
             h += "<div class='ws-grp'><div class='ws-gt'>Sectors</div>" +
-                 "<div class='ws-field'>" + ltSegHtml("sectorsOn", tc.sectorsOn ? "1" : "0", [["1", "2 splits"], ["0", "Off"]], "ltSectors") + "</div>" +
-                 (tc.sectorsOn ? "<div class='ws-note'>Drag S1 / S2 along the track. Splits publish as the <b>sector</b> channel.</div>" : "") + "</div>";
+                 "<div class='ws-field'>" + ltSegHtml("sectorsOn", tc.sectorsOn ? "1" : "0", [["1", "2 splits"], ["0", "Off"]], "ltSectors") + "</div>";
+            if (tc.sectorsOn) {
+                h += "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
+                     "<div class='ws-field'><label>S1 heading</label><input type='number' value='" + Math.round(tc.s1.hdg) + "' onchange='ltSecHdg(1,this)'></div>" +
+                     "<div class='ws-field'><label>S2 heading</label><input type='number' value='" + Math.round(tc.s2.hdg) + "' onchange='ltSecHdg(2,this)'></div></div>" +
+                     "<div class='ws-note'>Drag the S1 / S2 dots along the track. Splits publish as the <b>sector</b> channel.</div>";
+            }
+            h += "</div>";
             h += "<div class='ws-grp'><div class='ws-gt'>Predictive delta</div>" +
                  "<div class='ws-field'><label>Reference lap</label>" +
                  ltSegHtml("ref", lt.cfg.engine.ref, [["best", "Best lap"], ["rolling", "Rolling best"]], "ltRef") + "</div>" +
@@ -2826,6 +2825,12 @@
         window.ltHdgEdit = function (el) {
             var h = parseFloat(el.value);
             if (!isNaN(h)) { ltTrackCfg().gate.hdg = ((h % 360) + 360) % 360; ltSave(); ltRenderMap(); }
+        };
+        window.ltSecHdg = function (n, el) {
+            var h = parseFloat(el.value);
+            if (isNaN(h)) return;
+            ltTrackCfg()["s" + n].hdg = ((h % 360) + 360) % 360;
+            ltSave(); ltRenderMap();
         };
         window.ltMinLap = function (el) { var v = parseInt(el.value, 10); if (v > 0) { lt.cfg.engine.minLap = v; ltSave(); } };
         window.ltBaseId = function (el) { lt.cfg.node.baseId = el.value.replace(/[^0-9a-fA-F]/g, ""); ltSave(); };
