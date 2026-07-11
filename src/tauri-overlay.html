@@ -785,6 +785,11 @@
         .lt-handle.sec { background: #FF9F0A; box-shadow: 0 0 0 1.5px rgba(255,159,10,0.4); }
         .lt-flagpin { cursor: grab; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.55)); }
         .lt-flagpin:active { cursor: grabbing; }
+        .lt-rot {
+            width: 13px; height: 13px; border-radius: 50%; background: rgba(18,22,26,0.5);
+            border: 2.5px solid #F5F7FA; box-shadow: 0 0 4px rgba(0,0,0,0.6); cursor: grab;
+        }
+        .lt-rot:active { cursor: grabbing; }
         .lt-libact {
             font-size: 11px; color: var(--text-muted); cursor: pointer; padding: 0 3px;
             border-radius: 3px; line-height: 1.4; flex-shrink: 0;
@@ -2367,7 +2372,7 @@
         ];
         var lt = {
             cfg: null, sim: false, mode: "setup", map: null, layer: null,
-            simState: null, simLayer: null, carMarker: null, libs: [],
+            simState: null, simLayer: null, carMarker: null, libs: [], selGate: "gate",
             an: null, anLayer: null, anCursorMarker: null, anCh: "delta", anCursor: 0.5
         };
         var _ltSimTimer = null;
@@ -2604,69 +2609,91 @@
                 "<rect x='13.7' y='13.7' width='5.3' height='5.3'/></g></g></svg>";
             return L.divIcon({ className: "lt-flagpin", html: svg, iconSize: [22, 22], iconAnchor: [11, 11] });
         }
+        /* Green "GO" disc for a point-to-point START line. */
+        function ltStartIcon() {
+            var svg = "<svg width='22' height='22' viewBox='0 0 22 22'>" +
+                "<circle cx='11' cy='11' r='9.3' fill='#12161A' stroke='#4ade80' stroke-width='1.7'/>" +
+                "<path d='M8.4 6.8 L15.2 11 L8.4 15.2 Z' fill='#4ade80'/></svg>";
+            return L.divIcon({ className: "lt-flagpin", html: svg, iconSize: [22, 22], iconAnchor: [11, 11] });
+        }
+        /* Hollow light ring = the rotate handle. Shown only on the SELECTED
+           gate (one at a time), so it never sits on the other sectors. */
+        function ltRotIcon() {
+            return L.divIcon({ className: "", html: "<div class='lt-hit'><div class='lt-rot'></div></div>", iconSize: [26, 26], iconAnchor: [13, 13] });
+        }
 
-        /* A gate = the line (checkered for start/finish) + one draggable
-           centre handle. No rotate ball on the map — it cluttered the sectors
-           and got grabbed by accident; rotation lives in the inspector now.
-           The LINE ITSELF drags too — grab it anywhere. */
+        /* A gate = the line + a draggable centre handle. Click a gate to
+           SELECT it; the selected gate (and only it) shows a light rotate
+           handle at one end — so rotation is back on the map without the old
+           blue balls cluttering every sector. Line drags too — grab anywhere. */
         function ltAddGate(gcfg, opts) {
             var w = opts.width;
+            var key = opts.key;
+            var sel = (lt.selGate === key);
             var lines = [];
             if (opts.sf) {
-                /* chequered band: white base + square black blocks. Butt caps
-                   keep the blocks crisp; dash units are screen px so the
-                   checkers read at every zoom. */
-                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#0A0C0E", weight: 11, opacity: 0.55, lineCap: "butt", className: "lt-gateline" }).addTo(lt.layer));
-                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#F5F7FA", weight: 8, opacity: 1, lineCap: "butt", className: "lt-gateline" }).addTo(lt.layer));
-                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#0B0D0F", weight: 8, opacity: 1, lineCap: "butt", dashArray: "8 8", className: "lt-gateline" }).addTo(lt.layer));
+                /* chequered band: white base + square black blocks. */
+                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#0A0C0E", weight: sel ? 13 : 11, opacity: 0.55, lineCap: "butt", className: "lt-gateline" }).addTo(lt.layer));
+                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#F5F7FA", weight: sel ? 9 : 8, opacity: 1, lineCap: "butt", className: "lt-gateline" }).addTo(lt.layer));
+                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#0B0D0F", weight: sel ? 9 : 8, opacity: 1, lineCap: "butt", dashArray: "8 8", className: "lt-gateline" }).addTo(lt.layer));
             } else {
-                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#0A0C0E", weight: 7, opacity: 0.5, lineCap: "butt", className: "lt-gateline" }).addTo(lt.layer));
-                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: opts.color, weight: 4, opacity: 0.95, className: "lt-gateline" }).addTo(lt.layer));
+                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#0A0C0E", weight: sel ? 8 : 7, opacity: 0.5, lineCap: "butt", className: "lt-gateline" }).addTo(lt.layer));
+                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: opts.color, weight: sel ? 5.5 : 4, opacity: sel ? 1 : 0.9, className: "lt-gateline" }).addTo(lt.layer));
             }
-            /* start/finish gets a small chequered disc; sectors a labelled amber dot. */
-            var center;
-            if (opts.sf) {
-                center = L.marker([gcfg.lat, gcfg.lng], { icon: ltFlagIcon(), draggable: true, zIndexOffset: 1000 }).addTo(lt.layer);
-                center.bindTooltip("Start / finish — drag onto the line", { direction: "top", offset: [0, -14], className: "lt-tip" });
-            } else {
-                center = L.marker([gcfg.lat, gcfg.lng], { icon: ltHandleIcon("sec"), draggable: true }).addTo(lt.layer);
-                if (opts.label) center.bindTooltip(opts.label, { permanent: true, direction: "top", offset: [0, -12], className: "lt-tip" });
+            /* centre handle: GO disc (start) / chequered disc (finish or S/F) /
+               amber dot (sector) */
+            var center, tip;
+            if (opts.marker === "start") { center = L.marker([gcfg.lat, gcfg.lng], { icon: ltStartIcon(), draggable: true, zIndexOffset: 1000 }); tip = "Start line"; }
+            else if (opts.sf) { center = L.marker([gcfg.lat, gcfg.lng], { icon: ltFlagIcon(), draggable: true, zIndexOffset: 1000 }); tip = (ltTrackCfg().type === "sprint") ? "Finish line" : "Start / finish"; }
+            else { center = L.marker([gcfg.lat, gcfg.lng], { icon: ltHandleIcon("sec"), draggable: true }); tip = opts.label; }
+            center.addTo(lt.layer);
+            if (tip) center.bindTooltip(tip, { permanent: !opts.sf && opts.marker !== "start", direction: "top", offset: [0, opts.sf || opts.marker === "start" ? -14 : -12], className: "lt-tip" });
+
+            var rot = null;
+            if (sel) {
+                rot = L.marker(ltGateEnds(gcfg, w)[0], { icon: ltRotIcon(), draggable: true, zIndexOffset: 1100 }).addTo(lt.layer);
+                rot.bindTooltip("Rotate", { direction: "top", offset: [0, -12], className: "lt-tip" });
             }
 
             function refresh() {
                 var ends = ltGateEnds(gcfg, w);
                 lines.forEach(function (l) { l.setLatLngs(ends); });
                 center.setLatLng([gcfg.lat, gcfg.lng]);
+                if (rot) rot.setLatLng(ends[0]);
                 ltRenderInspectorLatLon();
             }
+            function selectMe() { if (lt.selGate !== key) { lt.selGate = key; ltRenderMap(); ltRenderInspector(); } }
 
-            center.on("drag", function (e) {
-                gcfg.lat = e.latlng.lat; gcfg.lng = e.latlng.lng;
-                refresh();
-            });
-            center.on("dragend", function () { ltSave(); ltRenderMap(); ltRenderInspector(); });
+            center.on("click", selectMe);
+            center.on("drag", function (e) { gcfg.lat = e.latlng.lat; gcfg.lng = e.latlng.lng; refresh(); });
+            center.on("dragend", function () { lt.selGate = key; ltSave(); ltRenderMap(); ltRenderInspector(); });
 
-            /* grab-anywhere: mousedown on any of the gate's lines starts a
-               move — pan is parked for the duration. */
+            if (rot) {
+                rot.on("drag", function (e) {
+                    var m = ltMpd(gcfg.lat);
+                    var dx = (e.latlng.lng - gcfg.lng) * m.lo, dy = (e.latlng.lat - gcfg.lat) * m.la;
+                    gcfg.hdg = (Math.atan2(dx, dy) * 180 / Math.PI - 90 + 360) % 360;
+                    var ends = ltGateEnds(gcfg, w);
+                    lines.forEach(function (l) { l.setLatLngs(ends); });
+                    rot.setLatLng(ends[0]);
+                });
+                rot.on("dragend", function () { ltSave(); ltRenderMap(); ltRenderInspector(); });
+            }
+
+            /* grab-anywhere: mousedown on any line moves the gate (and selects
+               it on release so its rotate handle appears). */
             lines.forEach(function (l) {
                 l.on("mousedown", function (e) {
                     L.DomEvent.stop(e.originalEvent);
                     lt.map.dragging.disable();
-                    var startLL = e.latlng;
-                    var g0 = { lat: gcfg.lat, lng: gcfg.lng };
-                    function mv(ev) {
-                        gcfg.lat = g0.lat + (ev.latlng.lat - startLL.lat);
-                        gcfg.lng = g0.lng + (ev.latlng.lng - startLL.lng);
-                        refresh();
-                    }
+                    var startLL = e.latlng, g0 = { lat: gcfg.lat, lng: gcfg.lng };
+                    function mv(ev) { gcfg.lat = g0.lat + (ev.latlng.lat - startLL.lat); gcfg.lng = g0.lng + (ev.latlng.lng - startLL.lng); refresh(); }
                     function up() {
-                        lt.map.off("mousemove", mv);
-                        lt.map.off("mouseup", up);
+                        lt.map.off("mousemove", mv); lt.map.off("mouseup", up);
                         lt.map.dragging.enable();
-                        ltSave(); ltRenderMap(); ltRenderInspector();
+                        lt.selGate = key; ltSave(); ltRenderMap(); ltRenderInspector();
                     }
-                    lt.map.on("mousemove", mv);
-                    lt.map.on("mouseup", up);
+                    lt.map.on("mousemove", mv); lt.map.on("mouseup", up);
                 });
             });
         }
@@ -2675,13 +2702,25 @@
             if (!lt.map) return;
             var track = ltTrack(), tc = ltTrackCfg();
             lt.layer.clearLayers();
-            ltAddGate(tc.gate, { width: tc.gate.w, color: "#F0F4F8", sf: true });
+            if (tc.type === "sprint") {
+                /* point-to-point: separate green Start line + chequered Finish */
+                ltAddGate(tc.gate, { width: tc.gate.w, color: "#4ade80", key: "gate", marker: "start" });
+                if (!tc.finish) tc.finish = { lat: tc.gate.lat + 0.004, lng: tc.gate.lng + 0.003, hdg: tc.gate.hdg, w: tc.gate.w };
+                ltAddGate(tc.finish, { width: tc.finish.w, color: "#F0F4F8", key: "finish", sf: true });
+            } else {
+                ltAddGate(tc.gate, { width: tc.gate.w, color: "#F0F4F8", key: "gate", sf: true });
+            }
             if (tc.sectorsOn) {
-                ltAddGate(tc.s1, { width: tc.gate.w * 0.8, color: "#FF9F0A", label: "S1" });
-                ltAddGate(tc.s2, { width: tc.gate.w * 0.8, color: "#FF9F0A", label: "S2" });
+                ltAddGate(tc.s1, { width: tc.gate.w * 0.8, color: "#FF9F0A", key: "s1", label: "S1" });
+                ltAddGate(tc.s2, { width: tc.gate.w * 0.8, color: "#FF9F0A", key: "s2", label: "S2" });
             }
             var chip = document.getElementById("ltTrackChip");
-            if (chip) chip.innerHTML = track.name + "<small>" + track.country + " · " + track.km.toFixed(2) + " km</small>";
+            if (chip) chip.innerHTML = track.name + "<small>" + track.country + " · " + track.km.toFixed(2) + " km" +
+                (tc.type === "sprint" ? " · time attack" : "") + "</small>";
+        }
+        function ltGateCfgByKey(k) {
+            var tc = ltTrackCfg();
+            return k === "finish" ? tc.finish : k === "s1" ? tc.s1 : k === "s2" ? tc.s2 : tc.gate;
         }
 
         window._ltPickTrack = function (id) {
@@ -2747,11 +2786,11 @@
         }
 
         function ltRenderInspectorLatLon() {
-            var el = document.getElementById("ltLatLon");
-            if (el) {
-                var g = ltTrackCfg().gate;
-                el.value = g.lat.toFixed(5) + ", " + g.lng.toFixed(5);
-            }
+            var tc = ltTrackCfg();
+            var a = document.getElementById("ltLatLon");
+            if (a) a.value = tc.gate.lat.toFixed(5) + ", " + tc.gate.lng.toFixed(5);
+            var b = document.getElementById("ltFinishLatLon");
+            if (b && tc.finish) b.value = tc.finish.lat.toFixed(5) + ", " + tc.finish.lng.toFixed(5);
         }
 
         function ltRenderInspector() {
@@ -2771,19 +2810,33 @@
                  (isUser ? "<button class='ws-btn-line' style='flex:1;' onclick=\"_ltDelTrack('" + lt.cfg.active + "')\">Delete</button>"
                          : "<button class='ws-btn-line' style='flex:1;' onclick='_ltDupTrack()'>Duplicate to edit</button>") +
                  "</div></div>";
-            h += "<div class='ws-grp'><div class='ws-gt'>Start / finish</div>" +
+            var sprint = (tc.type === "sprint");
+            h += "<div class='ws-grp'><div class='ws-gt'>Timing</div>" +
+                 "<div class='ws-field'>" + ltSegHtml("type", sprint ? "sprint" : "circuit", [["circuit", "Circuit"], ["sprint", "Time attack"]], "ltType") + "</div>" +
+                 "<div class='ws-note'>" + (sprint
+                    ? "Point-to-point — hillclimb, sprint or stage. Timing runs <b>start line &#8594; finish line</b>, one way."
+                    : "A lap circuit — start and finish are the same line.") + "</div></div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>" + (sprint ? "Start line" : "Start / finish") + "</div>" +
                  "<div class='ws-field'><label>How the line is set</label>" +
                  ltSegHtml("method", tc.method, [["library", "Library"], ["map", "On map"], ["drive", "At the line"]], "ltMethod") + "</div>";
             if (tc.method === "drive") {
-                h += "<button class='ws-btn-line' " + (connected ? "" : "disabled") + " onclick='showToast(\"Armed — the next time the car crosses the line, it becomes start/finish.\", \"info\")'>" + (connected ? "Arm capture" : "Arm capture — needs the GPS node on the car") + "</button>" +
-                     "<div class='ws-note'>Park the app, drive across the line once. The node timestamps the crossing at 25 Hz and the gate sets itself.</div>";
+                h += "<button class='ws-btn-line' " + (connected ? "" : "disabled") + " onclick='showToast(\"Armed — the next time the car crosses the line, it becomes the start.\", \"info\")'>" + (connected ? "Arm capture" : "Arm capture — needs the GPS node on the car") + "</button>" +
+                     "<div class='ws-note'>Park the app, drive across the line once. The node timestamps the crossing at 25 Hz and the line sets itself.</div>";
             } else {
-                h += "<div class='ws-field'><label>Gate position (drag the white line on the map)</label><input type='text' id='ltLatLon' value='" + g.lat.toFixed(5) + ", " + g.lng.toFixed(5) + "' onchange='ltLatLonEdit(this)'></div>";
+                h += "<div class='ws-field'><label>Position (drag the marker on the map)</label><input type='text' id='ltLatLon' value='" + g.lat.toFixed(5) + ", " + g.lng.toFixed(5) + "' onchange='ltLatLonEdit(this)'></div>";
             }
             h += "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
                  "<div class='ws-field'><label>Heading</label><input type='number' value='" + Math.round(g.hdg) + "' onchange='ltHdgEdit(this)'></div>" +
                  "<div class='ws-field'><label>Width (m)</label><input type='number' value='" + g.w + "' onchange='ltGateW(this.value)'></div></div>" +
-                 "<div class='ws-note'>Zoom onto the tarmac and drag the chequered marker onto the paint. Set <b>Heading</b> to square the line to the straight.</div></div>";
+                 "<div class='ws-note'>Click a line to select it, then drag its <b>ring</b> to rotate — or set Heading here. Zoom in and drop the marker on the paint.</div></div>";
+            if (sprint && tc.finish) {
+                h += "<div class='ws-grp'><div class='ws-gt'>Finish line</div>" +
+                     "<div class='ws-field'><label>Position (drag the chequered marker)</label><input type='text' id='ltFinishLatLon' value='" + tc.finish.lat.toFixed(5) + ", " + tc.finish.lng.toFixed(5) + "' onchange='ltFinishLatLon(this)'></div>" +
+                     "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
+                     "<div class='ws-field'><label>Heading</label><input type='number' value='" + Math.round(tc.finish.hdg) + "' onchange='ltFinishHdg(this)'></div>" +
+                     "<div class='ws-field'><label>Width (m)</label><input type='number' value='" + tc.finish.w + "' onchange='ltFinishW(this.value)'></div></div>" +
+                     "<div class='ws-note'>The chequered line is the finish; the green line is the start.</div></div>";
+            }
             h += "<div class='ws-grp'><div class='ws-gt'>Sectors</div>" +
                  "<div class='ws-field'>" + ltSegHtml("sectorsOn", tc.sectorsOn ? "1" : "0", [["1", "2 splits"], ["0", "Off"]], "ltSectors") + "</div>";
             if (tc.sectorsOn) {
@@ -2807,9 +2860,35 @@
                  "<div class='ws-field'><label>Bitrate</label><select onchange='ltBitrate(this)'>" +
                  [125, 250, 500, 1000].map(function (b) { return "<option value='" + b + "'" + (lt.cfg.node.bitrate === b ? " selected" : "") + ">" + b + " kbit/s</option>"; }).join("") +
                  "</select></div></div>" +
-                 "<div class='ws-note'>Open protocol, DBC published. Channels on the dash: <b>gps_speed · lat_g · lon_g · lap_time · lap_delta · sector · best_sector · best_lap</b>.</div></div>";
+                 "<div class='ws-note'>Open protocol, DBC published. Channels on the dash: <b>gps_speed · lat_g · lon_g · " +
+                 (sprint ? "run_time · run_delta · sector · best_sector · best_run" : "lap_time · lap_delta · sector · best_sector · best_lap") +
+                 "</b>.</div></div>";
             insp.innerHTML = h;
         }
+        window.ltType = function (v) {
+            var tc = ltTrackCfg();
+            tc.type = v;
+            if (v === "sprint" && !tc.finish) {
+                tc.finish = { lat: tc.gate.lat + 0.004, lng: tc.gate.lng + 0.003, hdg: tc.gate.hdg, w: tc.gate.w };
+            }
+            lt.selGate = "gate";
+            ltStopSim();
+            ltSave(); ltRenderMap(); ltRenderInspector();
+        };
+        window.ltFinishHdg = function (el) {
+            var h = parseFloat(el.value);
+            if (!isNaN(h)) { ltTrackCfg().finish.hdg = ((h % 360) + 360) % 360; ltSave(); ltRenderMap(); }
+        };
+        window.ltFinishW = function (v) {
+            var w = parseInt(v, 10);
+            if (w >= 5 && w <= 120) { ltTrackCfg().finish.w = w; ltSave(); ltRenderMap(); }
+        };
+        window.ltFinishLatLon = function (el) {
+            var m = el.value.split(","), la = parseFloat(m[0]), lo = parseFloat(m[1]);
+            if (isNaN(la) || isNaN(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) { showToast("Use decimal degrees", "error"); ltRenderInspectorLatLon(); return; }
+            var fin = ltTrackCfg().finish; fin.lat = la; fin.lng = lo;
+            ltSave(); ltRenderMap(); if (lt.map) lt.map.panTo([la, lo]);
+        };
         window.ltRenameTrack = function (el) {
             var f = ltTrackById(lt.cfg.active);
             if (f && !f.lib.builtin && el.value.trim()) { f.track.name = el.value.trim(); ltSave(); ltBuildRail(); ltRenderInspector(); }
@@ -2906,7 +2985,42 @@
             }
             return v;
         }
+        /* Open demo path from the start line to the finish line (a gentle
+           S through a couple of corners) — for the Time Attack sim. */
+        function ltSprintPath() {
+            var tc = ltTrackCfg(), s = tc.gate, f = tc.finish, mpd = ltMpd(s.lat);
+            var sx = s.lng * mpd.lo, sy = s.lat * mpd.la, fx = f.lng * mpd.lo, fy = f.lat * mpd.la;
+            var dx = fx - sx, dy = fy - sy, dist = Math.hypot(dx, dy) || 1;
+            var px = -dy / dist, py = dx / dist;   /* perpendicular */
+            var ctl = [
+                [sx, sy],
+                [sx + dx * 0.28 + px * dist * 0.20, sy + dy * 0.28 + py * dist * 0.20],
+                [sx + dx * 0.55 - px * dist * 0.16, sy + dy * 0.55 - py * dist * 0.16],
+                [sx + dx * 0.80 + px * dist * 0.10, sy + dy * 0.80 + py * dist * 0.10],
+                [fx, fy]
+            ];
+            var pts = [], N = 60;
+            for (var i = 0; i < ctl.length - 1; i++) {
+                var p0 = ctl[Math.max(i - 1, 0)], p1 = ctl[i], p2 = ctl[i + 1], p3 = ctl[Math.min(i + 2, ctl.length - 1)];
+                for (var u5 = 0; u5 < N; u5++) {
+                    var u = u5 / N, u2 = u * u, u3 = u2 * u;
+                    pts.push([
+                        0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * u + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * u2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * u3),
+                        0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * u + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * u2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * u3)
+                    ]);
+                }
+            }
+            pts.push([fx, fy]);
+            var cum = [0], latlng = [[pts[0][1] / mpd.la, pts[0][0] / mpd.lo]];
+            for (var j = 1; j < pts.length; j++) {
+                var a = pts[j - 1], b = pts[j];
+                cum.push(cum[j - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+                latlng.push([b[1] / mpd.la, b[0] / mpd.lo]);
+            }
+            return { pts: pts, latlng: latlng, cum: cum, total: cum[pts.length - 1] };
+        }
         function ltStartSim() {
+            if (ltTrackCfg().type === "sprint") { ltStartSprintSim(); return; }
             var loop = ltBuildDemoLoop();
             lt.simState = {
                 loop: loop, t: 0, lapT: 0, lapN: 0, last: null, best: null,
@@ -2926,6 +3040,23 @@
             if (tb) tb.classList.add("show");
             if (!_ltSimTimer) _ltSimTimer = setInterval(_ltSimTick, 50);
         }
+        function ltStartSprintSim() {
+            var path = ltSprintPath();
+            lt.simState = {
+                sprint: true, path: path, speeds: ltBuildSpeedProfile(path),
+                pos: 0, t: 0, runN: 0, last: null, best: null, bestProfile: null, curProfile: [],
+                jitter: 1, pause: 0
+            };
+            lt.simLayer.clearLayers();
+            L.polyline(path.latlng, { color: "#2d8ceb", weight: 2.5, opacity: 0.55, dashArray: "5 7" }).addTo(lt.simLayer);
+            lt.carMarker = L.circleMarker(path.latlng[0], {
+                radius: 6, color: "#7CC0FF", weight: 2, fillColor: "#2d8ceb", fillOpacity: 0.9
+            }).addTo(lt.simLayer);
+            if (lt.map) lt.map.fitBounds(L.latLngBounds(path.latlng).pad(0.2));
+            var tb = document.getElementById("ltTimerbar");
+            if (tb) tb.classList.add("show");
+            if (!_ltSimTimer) _ltSimTimer = setInterval(_ltSimTick, 50);
+        }
         function ltStopSim() {
             if (_ltSimTimer) { clearInterval(_ltSimTimer); _ltSimTimer = null; }
             lt.simState = null; lt.sim = false; lt.carMarker = null;
@@ -2934,9 +3065,46 @@
             if (tb) tb.classList.remove("show");
             /* button state is owned by _ltSetMode */
         }
+        function _ltSprintTick(S) {
+            var P = S.path, n = P.pts.length;
+            if (S.pause > 0) {   /* brief hold on the start line between runs */
+                S.pause -= 0.05;
+                if (lt.carMarker) lt.carMarker.setLatLng(P.latlng[0]);
+                var ec0 = document.getElementById("ltTCur"); if (ec0) ec0.textContent = "0:00.00";
+                return;
+            }
+            var lo = 0, hi = n;
+            while (lo < hi) { var m = (lo + hi) >> 1; if (P.cum[m] < S.pos) lo = m + 1; else hi = m; }
+            var idx = Math.min(Math.max(lo, 0), n - 1);
+            S.pos += S.speeds[idx] * S.jitter * 0.05; S.t += 0.05;
+            var frac = Math.min(S.pos / P.total, 1), bin = Math.floor(frac * 200);
+            S.curProfile[bin] = S.t;
+            var ec = document.getElementById("ltTCur"); if (ec) ec.textContent = ltFmtTime(S.t);
+            var ed = document.getElementById("ltTDelta");
+            if (ed) {
+                if (S.bestProfile && S.bestProfile[bin] !== undefined && S.t > 0.5) {
+                    var d = S.t - S.bestProfile[bin];
+                    ed.textContent = (d >= 0 ? "+" : "") + d.toFixed(2); ed.className = "lt-delta " + (d >= 0 ? "pos" : "neg");
+                } else { ed.textContent = "—"; ed.className = "lt-delta"; }
+            }
+            if (S.pos >= P.total) {   /* crossed the finish line */
+                S.last = S.t;
+                if (S.best === null || S.last < S.best) { S.best = S.last; S.bestProfile = S.curProfile.slice(); }
+                S.runN++;
+                var el = document.getElementById("ltTLast"); if (el) el.textContent = ltFmtTime(S.last);
+                var eb = document.getElementById("ltTBest"); if (eb) eb.textContent = ltFmtTime(S.best);
+                var en = document.getElementById("ltTN"); if (en) en.textContent = S.runN;
+                var eo = document.getElementById("ltTOpt"); if (eo) eo.textContent = ltFmtTime(S.best);
+                S.pos = 0; S.t = 0; S.curProfile = []; S.jitter = 0.96 + Math.random() * 0.07; S.pause = 0.9;
+                if (lt.carMarker) lt.carMarker.setLatLng(P.latlng[0]);
+                return;
+            }
+            if (lt.carMarker) lt.carMarker.setLatLng(P.latlng[idx]);
+        }
         function _ltSimTick() {
             var S = lt.simState;
             if (!S) return;
+            if (S.sprint) { _ltSprintTick(S); return; }
             var P = S.loop, n = P.pts.length;
             var idx = Math.floor((((S.t % 1) + 1) % 1) * n) % n;
             /* lap-to-lap variation so delta has something to show */
@@ -3360,7 +3528,9 @@
             } else if (mode === "sim") {
                 lt.layer && lt.layer.clearLayers();
                 ltBuildRail(); ltStartSim(); ltRenderInspector();
-                if (hint) { hint.style.display = ""; hint.textContent = "Demo lap on a practice loop at your gate — real laps trace the car's GPS line."; }
+                if (hint) { hint.style.display = ""; hint.textContent = (ltTrackCfg().type === "sprint")
+                    ? "Demo run start → finish — real runs trace the car's GPS line. Delta runs against your best."
+                    : "Demo lap on a practice loop at your gate — real laps trace the car's GPS line."; }
             } else {
                 lt.layer && lt.layer.clearLayers();
                 if (tb) tb.classList.remove("show");
