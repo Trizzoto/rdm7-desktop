@@ -790,6 +790,53 @@
             box-shadow: none !important;
         }
         .lt-tip::before { display: none; }
+
+        /* ---- lap timer: Analyse mode ---- */
+        .lt-analyse {
+            display: none; position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 900;
+            background: rgba(18,20,22,0.94); border: 1px solid var(--border); border-radius: var(--radius-md);
+            box-shadow: var(--shadow-md); padding: 8px 10px 10px;
+        }
+        .lt-analyse.show { display: block; }
+        .lt-an-tabs { display: flex; gap: 4px; margin-bottom: 6px; align-items: center; }
+        .lt-an-tabs button {
+            background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+            color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 10px; font-weight: 600;
+            padding: 3px 10px; cursor: pointer;
+        }
+        .lt-an-tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .lt-an-read { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); }
+        .lt-an-read b { color: var(--text); }
+        .lt-an-canvas { width: 100%; height: 132px; display: block; cursor: crosshair; }
+
+        /* analyse inspector bits */
+        .lt-lap {
+            display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box;
+            background: none; border: 1px solid transparent; border-radius: var(--radius-md);
+            color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 11px;
+            padding: 6px 8px; cursor: pointer; text-align: left;
+        }
+        .lt-lap:hover { background: var(--panel); }
+        .lt-lap.on { border-color: var(--accent); background: var(--panel-elevated); }
+        .lt-lap .n { color: var(--text-muted); width: 34px; }
+        .lt-lap .t { font-weight: 600; }
+        .lt-lap .gap { margin-left: auto; font-size: 10px; }
+        .lt-lap .gap.pos { color: #e05d52; } .lt-lap .gap.neg { color: #4ade80; }
+        .lt-lap .star { color: #FFD60A; }
+        .lt-sectbl { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+        .lt-sectbl th { color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; text-align: right; padding: 3px 6px; font-weight: 600; }
+        .lt-sectbl th:first-child { text-align: left; }
+        .lt-sectbl td { padding: 3px 6px; text-align: right; color: var(--text); }
+        .lt-sectbl td:first-child { text-align: left; color: var(--text-muted); }
+        .lt-sectbl td.best { color: #C9A0FF; }
+        .lt-sectbl tr.opt td { color: #4ade80; border-top: 1px solid var(--border); font-weight: 600; }
+        .lt-gg { width: 100%; height: 150px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+        .lt-coach {
+            background: var(--bg); border: 1px solid var(--border); border-left: 3px solid #FF9F0A;
+            border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 6px; font-size: 11px; line-height: 1.5; color: var(--text-muted);
+        }
+        .lt-coach b { color: var(--text); }
+        .lt-coach .big { display: block; font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #FF9F0A; font-weight: 700; margin-bottom: 2px; }
     </style>
 
     <div id="suiteSplash">
@@ -1064,8 +1111,9 @@
             <span class="ws-chip">GPS-CAN node &#183; 25 Hz &#183; predictive delta on the dash</span>
             <span class="ws-chip" id="ltChipLink">no node link &#8212; saves to this PC</span>
             <div class="ws-modes" role="group" aria-label="Mode">
-                <button id="ltBtnSetup" class="on" onclick="_ltSetSim(false)">Setup</button>
-                <button id="ltBtnSim" onclick="_ltSetSim(true)">Simulate</button>
+                <button id="ltBtnSetup" class="on" onclick="_ltSetMode('setup')">Setup</button>
+                <button id="ltBtnSim" onclick="_ltSetMode('sim')">Simulate</button>
+                <button id="ltBtnAnalyse" onclick="_ltSetMode('analyse')">Analyse</button>
             </div>
             <button class="btn" style="font-size:11px; padding:0 16px;" onclick="ltSaveExplicit()">Save</button>
         </div>
@@ -1079,9 +1127,16 @@
                     <span class="lt-delta" id="ltTDelta">+0.00</span>
                     <span class="lt-t">LAST <b id="ltTLast">&#8212;</b></span>
                     <span class="lt-t">BEST <b id="ltTBest">&#8212;</b></span>
+                    <span class="lt-t">OPT <b id="ltTOpt">&#8212;</b></span>
                     <span class="lt-t">S1 <b id="ltTS1">&#8212;</b></span>
                     <span class="lt-t">S2 <b id="ltTS2">&#8212;</b></span>
                     <span class="lt-t">LAP <b id="ltTN">0</b></span>
+                </div>
+                <!-- Analyse: floating channel/delta graph over the map -->
+                <div class="lt-analyse" id="ltAnalyse">
+                    <div class="lt-an-tabs" id="ltAnTabs"></div>
+                    <canvas class="lt-an-canvas" id="ltAnCanvas" width="1600" height="300"></canvas>
+                    <div class="lt-an-read" id="ltAnRead"></div>
                 </div>
                 <div class="lt-hint lt-float" id="ltHint">Drag the white gate onto the real start/finish line &#8212; zoom right in on the tarmac.</div>
             </div>
@@ -2298,8 +2353,9 @@
             { id: "winton", name: "Winton", country: "VIC · AUS", km: 3.0, center: [-36.5183, 146.0861], zoom: 16 }
         ];
         var lt = {
-            cfg: null, sim: false, map: null, layer: null,
-            simState: null, simLayer: null, carMarker: null
+            cfg: null, sim: false, mode: "setup", map: null, layer: null,
+            simState: null, simLayer: null, carMarker: null,
+            an: null, anLayer: null, anCursorMarker: null, anCh: "delta", anCursor: 0.5
         };
         var _ltSimTimer = null;
 
@@ -2365,6 +2421,7 @@
             }).addTo(lt.map);
             lt.layer = L.layerGroup().addTo(lt.map);
             lt.simLayer = L.layerGroup().addTo(lt.map);
+            lt.anLayer = L.layerGroup().addTo(lt.map);
             window.__ltMap = lt.map;   /* debug/automation handle */
         }
 
@@ -2478,11 +2535,10 @@
                 b.innerHTML = "<span class='st'></span>" + t.name + "<span class='tag'>" + t.km.toFixed(1) + " km</span>";
                 b.addEventListener("click", function () {
                     lt.cfg.active = t.id;
-                    ltStopSim();
-                    ltSave(); ltBuildRail();
+                    ltSave();
                     var nt = ltTrack();
                     if (lt.map) lt.map.flyTo(nt.center, nt.zoom, { duration: 1.1 });
-                    ltRenderMap(); ltRenderInspector();
+                    _ltSetMode("setup");
                 });
                 rail.appendChild(b);
             });
@@ -2639,7 +2695,8 @@
             lt.simState = {
                 loop: loop, t: 0, lapT: 0, lapN: 0, last: null, best: null,
                 bestProfile: null, curProfile: [],
-                s1t: null, s2t: null, speeds: ltBuildSpeedProfile(loop), jitter: 1
+                s1t: null, s2t: null, bestSec: [null, null, null],
+                speeds: ltBuildSpeedProfile(loop), jitter: 1
             };
             lt.simLayer.clearLayers();
             L.polyline(loop.latlng.concat([loop.latlng[0]]), {
@@ -2659,9 +2716,7 @@
             if (lt.simLayer) lt.simLayer.clearLayers();
             var tb = document.getElementById("ltTimerbar");
             if (tb) tb.classList.remove("show");
-            var st = document.getElementById("ltBtnSetup"), si = document.getElementById("ltBtnSim");
-            if (st) st.className = "on";
-            if (si) si.className = "";
+            /* button state is owned by _ltSetMode */
         }
         function _ltSimTick() {
             var S = lt.simState;
@@ -2685,6 +2740,16 @@
                 newT -= 1;
                 S.last = S.lapT;
                 if (S.best === null || S.last < S.best) { S.best = S.last; S.bestProfile = S.curProfile.slice(); }
+                /* theoretical best = sum of best-ever sector times (AiM/VBOX
+                   "ideal lap"): a target you've proven each piece of. */
+                if (S.s1t !== null && S.s2t !== null) {
+                    var sec = [S.s1t, S.s2t - S.s1t, S.lapT - S.s2t];
+                    for (var si = 0; si < 3; si++) if (S.bestSec[si] === null || sec[si] < S.bestSec[si]) S.bestSec[si] = sec[si];
+                    if (S.bestSec[0] !== null && S.bestSec[1] !== null && S.bestSec[2] !== null) {
+                        var eo = document.getElementById("ltTOpt");
+                        if (eo) eo.textContent = ltFmtTime(S.bestSec[0] + S.bestSec[1] + S.bestSec[2]);
+                    }
+                }
                 S.lapN++; S.lapT = 0; S.curProfile = []; S.s1t = null; S.s2t = null;
                 S.jitter = 0.965 + Math.random() * 0.06;   /* next lap ±3% */
                 var el = document.getElementById("ltTLast"); if (el) el.textContent = ltFmtTime(S.last);
@@ -2703,20 +2768,397 @@
             }
             if (lt.carMarker) lt.carMarker.setLatLng(P.latlng[idx]);
         }
-        window._ltSetSim = function (sim) {
-            lt.sim = sim;
-            var st = document.getElementById("ltBtnSetup"), si = document.getElementById("ltBtnSim");
-            if (st) st.className = sim ? "" : "on";
-            if (si) si.className = sim ? "on" : "";
-            var hint = document.getElementById("ltHint");
-            if (sim) { ltStartSim(); if (hint) hint.textContent = "Demo lap on a practice loop at your gate — real laps trace the car's GPS line. Delta runs vs best, like on the dash."; }
-            else { ltStopSim(); if (hint) hint.textContent = "Drag the white gate onto the real start/finish line — zoom right in on the tarmac."; }
+        /* ── Analyse: post-session data workbench ──────────────────────────
+         * Free, cross-platform lap analysis inside the studio — the thing
+         * the whole market gates behind Windows-only, node-locked software
+         * (MoTeC i2, AiM Race Studio). Because the dash is already a CAN
+         * gateway with decoded, named channels, GPS position and engine
+         * data arrive fused and pre-labelled — no DBC hand-mapping, no
+         * dongle. This preview drives it with a realistic demo session so
+         * the workflow is real before the node ships. */
+        var LT_SEG_N = 300;   /* distance-resample bins for delta + graphs */
+
+        function ltAnBuildLoop() {
+            /* a warped ellipse at the gate — corners of varied radius give
+               the speed trace, delta and g-g diagram real texture */
+            var g = ltTrackCfg().gate, mpd = ltMpd(g.lat);
+            var A = 430, B = 200, N = 600;
+            var hd = g.hdg * Math.PI / 180;
+            var ux = Math.sin(hd), uy = Math.cos(hd), vx = Math.cos(hd), vy = -Math.sin(hd);
+            var cx = g.lng * mpd.lo + vx * B, cy = g.lat * mpd.la + vy * B;
+            var pts = [], latlng = [], cum = [0];
+            for (var i = 0; i < N; i++) {
+                var th = -Math.PI / 2 + (i / N) * Math.PI * 2;
+                var ra = A * (1 + 0.16 * Math.sin(3 * th) - 0.09 * Math.cos(2 * th));
+                var rb = B * (1 + 0.28 * Math.sin(2 * th + 0.6));
+                var x = cx + ux * ra * Math.cos(th) + vx * rb * Math.sin(th);
+                var y = cy + uy * ra * Math.cos(th) + vy * rb * Math.sin(th);
+                pts.push([x, y]);
+                latlng.push([y / mpd.la, x / mpd.lo]);
+            }
+            for (var j = 1; j <= N; j++) {
+                var a = pts[j - 1], b = pts[j % N];
+                cum.push(cum[j - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+            }
+            return { pts: pts, latlng: latlng, cum: cum, total: cum[N] };
+        }
+
+        function ltAnGenLap(loop, speeds, opts) {
+            var n = loop.pts.length, total = loop.total;
+            var s = [], t = 0, pos = 0;
+            while (pos < total) {
+                var lo = 0, hi = n;
+                while (lo < hi) { var m = (lo + hi) >> 1; if (loop.cum[m] < pos) lo = m + 1; else hi = m; }
+                var idx = Math.min(Math.max(lo, 0), n - 1);
+                var fr = pos / total;
+                var v = Math.max(speeds[idx] * opts.vscale * (opts.slow ? opts.slow(fr) : 1), 9);
+                var f = (pos - loop.cum[idx]) / ((loop.cum[idx + 1] || total) - loop.cum[idx] || 1);
+                var a = loop.pts[idx], b = loop.pts[(idx + 1) % n];
+                var la = loop.latlng[idx], lb = loop.latlng[(idx + 1) % n];
+                s.push({ d: pos, t: t, x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f,
+                         lat: la[0] + (lb[0] - la[0]) * f, lng: la[1] + (lb[1] - la[1]) * f, v: v });
+                pos += v * 0.05; t += 0.05;
+            }
+            var N = s.length;
+            /* long-g from a smoothed speed derivative — the raw dv/dt ripples
+               with the track's high-frequency curvature and would make the
+               throttle/brake trace flip green/red every few metres. */
+            var W = 6;
+            for (var i = 0; i < N; i++) {
+                var a2 = s[(i - W + N) % N], b2 = s[(i + W) % N];
+                var dt = b2.t - a2.t; if (dt <= 0) dt = W * 0.1;
+                s[i]._tg = (b2.v - a2.v) / dt / 9.81;
+                var c = s[i], pm = s[(i - 1 + N) % N], pn = s[(i + 1) % N];
+                var dt1 = pn.t - pm.t; if (dt1 <= 0) dt1 = 0.1;
+                var h1 = Math.atan2(c.x - pm.x, c.y - pm.y), h2 = Math.atan2(pn.x - c.x, pn.y - c.y);
+                var dh = h2 - h1; while (dh > Math.PI) dh -= 2 * Math.PI; while (dh < -Math.PI) dh += 2 * Math.PI;
+                c.lg = c.v * (dh / dt1) / 9.81;
+            }
+            for (var k = 0; k < N; k++) {
+                var s2 = s[k], tg = s2._tg;
+                s2.tg = tg;
+                /* clean zones: hard decel = braking (throttle off); otherwise
+                   on the power, floored high the way a real trace sits at ~100%
+                   down a straight and eases mid-corner. */
+                var brk = tg < -0.08 ? Math.min(100, -tg / 0.9 * 100) : 0;
+                s2.brk = brk;
+                s2.thr = brk > 4 ? 0 : Math.max(12, Math.min(100, 58 + tg * 150));
+                s2.rpm = Math.round(2200 + ((s2.d % 12) / 12) * 4600 + s2.v * 20);
+                delete s2._tg;
+            }
+            return { samples: s, time: t, total: total };
+        }
+
+        function ltAnTimeAtDist(lap, d) {
+            var s = lap.samples, lo = 0, hi = s.length - 1;
+            if (d <= 0) return 0;
+            if (d >= s[hi].d) return lap.time;
+            while (lo < hi) { var m = (lo + hi) >> 1; if (s[m].d < d) lo = m + 1; else hi = m; }
+            var i = Math.max(lo, 1), a = s[i - 1], b = s[i];
+            var f = (d - a.d) / ((b.d - a.d) || 1);
+            return a.t + (b.t - a.t) * f;
+        }
+        function ltAnSampleAtFrac(lap, fr) {
+            var d = fr * lap.total, s = lap.samples, lo = 0, hi = s.length - 1;
+            while (lo < hi) { var m = (lo + hi) >> 1; if (s[m].d < d) lo = m + 1; else hi = m; }
+            return s[Math.min(Math.max(lo, 0), s.length - 1)];
+        }
+        function ltAnSectors(lap) {
+            var T = lap.total;
+            var a = ltAnTimeAtDist(lap, T / 3), b = ltAnTimeAtDist(lap, 2 * T / 3);
+            return [a, b - a, lap.time - b];
+        }
+
+        function ltAnBuildSession() {
+            var loop = ltAnBuildLoop();
+            var speeds = ltBuildSpeedProfile(loop);
+            /* four laps: a warm-up, the best, and two with a localized dip in
+               one sector so the delta and coaching have something to say */
+            var specs = [
+                { vscale: 0.94, slow: function (f) { return 1 - 0.10 * Math.exp(-Math.pow((f - 0.5) / 0.09, 2)); } },
+                { vscale: 1.00, slow: null },
+                { vscale: 0.985, slow: function (f) { return 1 - 0.09 * Math.exp(-Math.pow((f - 0.82) / 0.07, 2)); } },
+                { vscale: 0.975, slow: function (f) { return 1 - 0.08 * Math.exp(-Math.pow((f - 0.2) / 0.08, 2)); } }
+            ];
+            var laps = specs.map(function (sp, i) {
+                var L = ltAnGenLap(loop, speeds, sp);
+                L.n = i + 1; L.sec = ltAnSectors(L);
+                return L;
+            });
+            var best = 0; laps.forEach(function (L, i) { if (L.time < laps[best].time) best = i; });
+            /* select the 2nd-fastest lap by default so the delta trace + the
+               coaching call-out have a real story on first view (comparing the
+               best against itself is a flat line) */
+            var second = -1;
+            laps.forEach(function (L, i) { if (i !== best && (second < 0 || L.time < laps[second].time)) second = i; });
+            var bestSec = [Infinity, Infinity, Infinity];
+            laps.forEach(function (L) { L.sec.forEach(function (s, k) { if (s < bestSec[k]) bestSec[k] = s; }); });
+            /* speed range for the map colour ramp */
+            var vmin = 1e9, vmax = -1e9;
+            laps.forEach(function (L) { L.samples.forEach(function (s) { if (s.v < vmin) vmin = s.v; if (s.v > vmax) vmax = s.v; }); });
+            lt.an = { loop: loop, laps: laps, best: best, sel: second < 0 ? best : second, ref: best, bestSec: bestSec,
+                      theoretical: bestSec[0] + bestSec[1] + bestSec[2], vmin: vmin, vmax: vmax };
+            lt.anCursor = 0.5;
+        }
+
+        function ltAnSpeedColor(v) {
+            var an = lt.an, f = (v - an.vmin) / ((an.vmax - an.vmin) || 1);
+            f = Math.max(0, Math.min(1, f));
+            var hue = f * 130;   /* 0 red (slow) → 130 green (fast) */
+            return "hsl(" + hue + ",85%,52%)";
+        }
+
+        function ltAnRenderMap() {
+            if (!lt.anLayer) return;
+            lt.anLayer.clearLayers();
+            var an = lt.an; if (!an) return;
+            var ref = an.laps[an.ref], sel = an.laps[an.sel];
+            /* reference ghost */
+            L.polyline(ref.samples.map(function (s) { return [s.lat, s.lng]; }).concat([[ref.samples[0].lat, ref.samples[0].lng]]),
+                { color: "#E8EDF2", weight: 2, opacity: 0.3 }).addTo(lt.anLayer);
+            /* selected lap coloured by speed (segmented) */
+            var s = sel.samples, step = 3;
+            for (var i = 0; i < s.length; i += step) {
+                var a = s[i], b = s[Math.min(i + step, s.length - 1)];
+                L.polyline([[a.lat, a.lng], [b.lat, b.lng]], { color: ltAnSpeedColor(a.v), weight: 4, opacity: 0.95 }).addTo(lt.anLayer);
+            }
+            var cur = ltAnSampleAtFrac(sel, lt.anCursor);
+            lt.anCursorMarker = L.circleMarker([cur.lat, cur.lng], { radius: 7, color: "#fff", weight: 2, fillColor: "#2d8ceb", fillOpacity: 1 }).addTo(lt.anLayer);
+            if (lt.map) lt.map.fitBounds(L.latLngBounds(s.map(function (p) { return [p.lat, p.lng]; })).pad(0.12));
+        }
+
+        var LT_AN_CH = [
+            { k: "delta", t: "Delta-T" }, { k: "speed", t: "Speed" },
+            { k: "throttle", t: "Throttle / brake" }, { k: "rpm", t: "RPM" }
+        ];
+        function ltAnRenderTabs() {
+            var el = document.getElementById("ltAnTabs");
+            if (!el) return;
+            el.innerHTML = LT_AN_CH.map(function (c) {
+                return "<button class='" + (lt.anCh === c.k ? "on" : "") + "' onclick=\"ltAnSetCh('" + c.k + "')\">" + c.t + "</button>";
+            }).join("") + "<span style='font-size:9.5px;color:var(--text-muted);margin-left:6px;'>vs reference lap</span>";
+        }
+        window.ltAnSetCh = function (k) { lt.anCh = k; ltAnRenderTabs(); ltAnRenderGraph(); };
+
+        function ltAnRenderGraph() {
+            var cv = document.getElementById("ltAnCanvas");
+            if (!cv || !lt.an) return;
+            var an = lt.an, sel = an.laps[an.sel], ref = an.laps[an.ref];
+            var W = cv.width, H = cv.height, ctx = cv.getContext("2d");
+            ctx.clearRect(0, 0, W, H);
+            var total = sel.total, pad = 6;
+            function X(d) { return pad + (d / total) * (W - 2 * pad); }
+            /* sector boundary ticks */
+            ctx.strokeStyle = "rgba(255,255,255,0.10)"; ctx.lineWidth = 1;
+            [1 / 3, 2 / 3].forEach(function (f) { ctx.beginPath(); ctx.moveTo(X(f * total), 0); ctx.lineTo(X(f * total), H); ctx.stroke(); });
+
+            function plotChan(lap, pick, color, width, alpha) {
+                ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = width; ctx.beginPath();
+                var mn = pick.mn, mx = pick.mx;
+                lap.samples.forEach(function (s, i) {
+                    var val = pick.f(s);
+                    var y = H - pad - ((val - mn) / (mx - mn)) * (H - 2 * pad);
+                    var x = X(s.d);
+                    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                });
+                ctx.stroke(); ctx.globalAlpha = 1;
+            }
+            var label = "";
+            if (lt.anCh === "delta") {
+                /* cumulative time lost/gained vs reference, filled red/green */
+                ctx.strokeStyle = "rgba(255,255,255,0.14)"; ctx.beginPath(); ctx.moveTo(pad, H / 2); ctx.lineTo(W - pad, H / 2); ctx.stroke();
+                var maxd = 0.35;
+                for (var i = 0; i < LT_SEG_N; i++) {
+                    var d = (i / (LT_SEG_N - 1)) * total;
+                    var dv = ltAnTimeAtDist(sel, d) - ltAnTimeAtDist(ref, d);
+                    maxd = Math.max(maxd, Math.abs(dv));
+                }
+                for (var j = 0; j < LT_SEG_N - 1; j++) {
+                    var d0 = (j / (LT_SEG_N - 1)) * total, d1 = ((j + 1) / (LT_SEG_N - 1)) * total;
+                    var v0 = ltAnTimeAtDist(sel, d0) - ltAnTimeAtDist(ref, d0);
+                    var v1 = ltAnTimeAtDist(sel, d1) - ltAnTimeAtDist(ref, d1);
+                    var y0 = H / 2 - (v0 / maxd) * (H / 2 - pad), y1 = H / 2 - (v1 / maxd) * (H / 2 - pad);
+                    ctx.strokeStyle = ((v0 + v1) / 2) > 0 ? "#e05d52" : "#4ade80"; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(X(d0), y0); ctx.lineTo(X(d1), y1); ctx.stroke();
+                }
+                label = "+ = time lost vs best · " + maxd.toFixed(2) + "s full-scale";
+            } else if (lt.anCh === "speed") {
+                var mn = an.vmin * 3.6 - 6, mx = an.vmax * 3.6 + 6;
+                plotChan(ref, { f: function (s) { return s.v * 3.6; }, mn: mn, mx: mx }, "#E8EDF2", 1.5, 0.35);
+                plotChan(sel, { f: function (s) { return s.v * 3.6; }, mn: mn, mx: mx }, "#2d8ceb", 2, 1);
+                label = "km/h · white = reference lap";
+            } else if (lt.anCh === "throttle") {
+                plotChan(sel, { f: function (s) { return s.thr; }, mn: 0, mx: 100 }, "#4ade80", 2, 1);
+                plotChan(sel, { f: function (s) { return s.brk; }, mn: 0, mx: 100 }, "#e05d52", 2, 1);
+                label = "throttle (green) · brake (red) · 0–100%";
+            } else {
+                plotChan(ref, { f: function (s) { return s.rpm; }, mn: 1500, mx: 7200 }, "#E8EDF2", 1.5, 0.35);
+                plotChan(sel, { f: function (s) { return s.rpm; }, mn: 1500, mx: 7200 }, "#FF9F0A", 2, 1);
+                label = "rpm · from the car's CAN bus · white = reference";
+            }
+            /* cursor line */
+            var cx = X(lt.anCursor * total);
+            ctx.strokeStyle = "#7CC0FF"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
+            var lab = document.getElementById("ltAnTabs");
+            var sp = lab && lab.querySelector("span"); if (sp) sp.textContent = label;
+        }
+
+        function ltAnRenderGG() {
+            var cv = document.getElementById("ltGGCanvas");
+            if (!cv || !lt.an) return;
+            var ctx = cv.getContext("2d"), W = cv.width, H = cv.height, R = Math.min(W, H) / 2 - 12;
+            var cx = W / 2, cy = H / 2, sel = lt.an.laps[lt.an.sel];
+            ctx.clearRect(0, 0, W, H);
+            ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1;
+            [0.5, 1.0].forEach(function (g) { ctx.beginPath(); ctx.arc(cx, cy, R * g, 0, 2 * Math.PI); ctx.stroke(); });
+            ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
+            ctx.fillStyle = "#7C8590"; ctx.font = "8px 'JetBrains Mono',monospace";
+            ctx.fillText("1g", cx + R - 12, cy - 3);
+            ctx.fillStyle = "rgba(45,140,235,0.5)";
+            sel.samples.forEach(function (s) {
+                ctx.beginPath(); ctx.arc(cx + (s.lg / 1.3) * R, cy - (s.tg / 1.3) * R, 1.4, 0, 2 * Math.PI); ctx.fill();
+            });
+            var cur = ltAnSampleAtFrac(sel, lt.anCursor);
+            ctx.fillStyle = "#7CC0FF"; ctx.beginPath();
+            ctx.arc(cx + (cur.lg / 1.3) * R, cy - (cur.tg / 1.3) * R, 3.5, 0, 2 * Math.PI); ctx.fill();
+        }
+
+        function ltAnSetCursor(fr) {
+            lt.anCursor = Math.max(0, Math.min(1, fr));
+            var sel = lt.an.laps[lt.an.sel], ref = lt.an.laps[lt.an.ref];
+            var cur = ltAnSampleAtFrac(sel, lt.anCursor);
+            if (lt.anCursorMarker) lt.anCursorMarker.setLatLng([cur.lat, cur.lng]);
+            var dv = ltAnTimeAtDist(sel, cur.d) - ltAnTimeAtDist(ref, cur.d);
+            var rd = document.getElementById("ltAnRead");
+            if (rd) rd.innerHTML = Math.round(cur.d) + " m &nbsp; <b>" + Math.round(cur.v * 3.6) + "</b> km/h &nbsp; thr <b>" +
+                Math.round(cur.thr) + "</b>% &nbsp; " + Math.round(cur.rpm) + " rpm &nbsp; Δ <b style='color:" +
+                (dv > 0 ? "#e05d52" : "#4ade80") + "'>" + (dv >= 0 ? "+" : "") + dv.toFixed(2) + "</b>";
+            ltAnRenderGraph(); ltAnRenderGG();
+        }
+
+        window.ltAnSelectLap = function (i) {
+            lt.an.sel = i; lt.anCursor = 0.5;
+            ltBuildLapRail(); ltAnRenderMap(); ltAnRenderInspector(); ltAnRenderGraph(); ltAnSetCursor(0.5);
+        };
+
+        function ltBuildLapRail() {
+            var rail = document.getElementById("ltRail");
+            if (!rail || !lt.an) return;
+            var an = lt.an;
+            rail.innerHTML = "<div class='ws-rail-title'>Session · laps</div>";
+            an.laps.forEach(function (L, i) {
+                var gap = L.time - an.laps[an.best].time;
+                var b = document.createElement("button");
+                b.className = "lt-lap" + (an.sel === i ? " on" : "");
+                b.innerHTML = "<span class='n'>L" + L.n + (i === an.best ? " <span class='star'>&#9733;</span>" : "") + "</span>" +
+                    "<span class='t'>" + ltFmtTime(L.time) + "</span>" +
+                    (i === an.best ? "<span class='gap'>best</span>" : "<span class='gap pos'>+" + gap.toFixed(2) + "</span>");
+                b.addEventListener("click", function () { ltAnSelectLap(i); });
+                rail.appendChild(b);
+            });
+            var note = document.createElement("div");
+            note.className = "ws-note"; note.style.margin = "10px 4px 0";
+            note.innerHTML = "Demo session. Real sessions download off the node over WiFi — GPS line + the car's CAN channels, fused and named.";
+            rail.appendChild(note);
+        }
+
+        function ltAnRenderInspector() {
+            var insp = document.getElementById("ltInspector");
+            if (!insp || !lt.an) return;
+            var an = lt.an, sel = an.laps[an.sel];
+            var h = "<h2>Lap " + sel.n + " &#183; " + ltFmtTime(sel.time) + "</h2>" +
+                "<div class='ws-sub'>GPS + CAN, fused on the dash</div>";
+            /* sector table + theoretical best */
+            h += "<div class='ws-grp'><div class='ws-gt'>Sectors</div><table class='lt-sectbl'>" +
+                "<tr><th>Sector</th><th>This lap</th><th>Best</th></tr>";
+            for (var k = 0; k < 3; k++) {
+                var isBest = Math.abs(sel.sec[k] - an.bestSec[k]) < 0.001;
+                h += "<tr><td>S" + (k + 1) + "</td><td class='" + (isBest ? "best" : "") + "'>" + sel.sec[k].toFixed(2) +
+                     "</td><td>" + an.bestSec[k].toFixed(2) + "</td></tr>";
+            }
+            h += "<tr class='opt'><td>Theoretical</td><td>&#8212;</td><td>" + ltFmtTime(an.theoretical) + "</td></tr>";
+            h += "</table><div class='ws-note' style='margin-top:8px;'>Theoretical best splices your quickest sector from any lap &#8212; a target you&#8217;ve proven piece by piece.</div></div>";
+            /* g-g */
+            h += "<div class='ws-grp'><div class='ws-gt'>Grip &#183; g-g</div><canvas class='lt-gg' id='ltGGCanvas' width='300' height='150'></canvas>" +
+                 "<div class='ws-note' style='margin-top:6px;'>Every point is one moment&#8217;s cornering vs braking/accel load. A full circle = using all the grip.</div></div>";
+            /* coaching */
+            var worst = 0; for (var w = 1; w < 3; w++) if ((sel.sec[w] - an.bestSec[w]) > (sel.sec[worst] - an.bestSec[worst])) worst = w;
+            var loss = sel.sec[worst] - an.bestSec[worst];
+            h += "<div class='ws-grp'><div class='ws-gt'>Where the time went</div><div class='lt-coach'>";
+            if (loss > 0.03) {
+                h += "<span class='big'>&#8722;" + loss.toFixed(2) + "s in Sector " + (worst + 1) + "</span>" +
+                     "Your best S" + (worst + 1) + " was <b>" + an.bestSec[worst].toFixed(2) + "s</b> &#8212; matching it drops you to <b>" +
+                     ltFmtTime(sel.time - loss) + "</b>. Scrub the delta trace to see exactly where it slips.";
+            } else {
+                h += "<span class='big'>Tidy lap</span>Within a few hundredths of your best everywhere &#8212; this is close to your theoretical " + ltFmtTime(an.theoretical) + ".";
+            }
+            h += "</div></div>";
+            h += "<button class='ws-btn-line' onclick='_ltExportCsv()'>Export lap CSV</button>";
+            insp.innerHTML = h;
+            ltAnRenderGG();
+        }
+
+        window._ltExportCsv = function () {
+            var sel = lt.an.laps[lt.an.sel];
+            var lines = ["dist_m,time_s,lat,lng,speed_kmh,throttle_pct,brake_pct,rpm,lat_g,long_g"];
+            sel.samples.forEach(function (s) {
+                lines.push([s.d.toFixed(1), s.t.toFixed(2), s.lat.toFixed(6), s.lng.toFixed(6),
+                    (s.v * 3.6).toFixed(1), Math.round(s.thr), Math.round(s.brk), s.rpm, s.lg.toFixed(2), s.tg.toFixed(2)].join(","));
+            });
+            var a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
+            a.download = "rdm_lap" + sel.n + ".csv"; a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        };
+
+        function ltAnWireCanvas() {
+            var cv = document.getElementById("ltAnCanvas");
+            if (!cv || cv._wired) return;
+            cv._wired = true;
+            /* hover anywhere on the trace to scrub — the map dot, g-g point
+               and readout all follow the cursor */
+            cv.addEventListener("mousemove", function (e) {
+                var r = cv.getBoundingClientRect();
+                ltAnSetCursor((e.clientX - r.left) / r.width);
+            });
+        }
+
+        /* ── mode dispatcher: Setup / Simulate / Analyse ── */
+        window._ltSetMode = function (mode) {
+            lt.mode = mode;
+            [["Setup", "setup"], ["Sim", "sim"], ["Analyse", "analyse"]].forEach(function (p) {
+                var b = document.getElementById("ltBtn" + p[0]);
+                if (b) b.className = (mode === p[1]) ? "on" : "";
+            });
+            var an = document.getElementById("ltAnalyse"), tb = document.getElementById("ltTimerbar"),
+                hint = document.getElementById("ltHint");
+            /* always leave the other modes clean first */
+            if (mode !== "sim") ltStopSim();
+            if (mode !== "analyse" && lt.anLayer) { lt.anLayer.clearLayers(); lt.anCursorMarker = null; }
+            if (an) an.classList.remove("show");
+            if (hint) hint.style.display = "none";
+
+            if (mode === "setup") {
+                ltBuildRail(); ltRenderMap(); ltRenderInspector();
+                if (hint) { hint.style.display = ""; hint.textContent = "Drag the white gate onto the real start/finish line — zoom right in on the tarmac."; }
+            } else if (mode === "sim") {
+                lt.layer && lt.layer.clearLayers();
+                ltBuildRail(); ltStartSim(); ltRenderInspector();
+                if (hint) { hint.style.display = ""; hint.textContent = "Demo lap on a practice loop at your gate — real laps trace the car's GPS line."; }
+            } else {
+                lt.layer && lt.layer.clearLayers();
+                if (tb) tb.classList.remove("show");
+                ltAnBuildSession();
+                ltBuildLapRail();
+                ltAnRenderTabs(); ltAnWireCanvas();
+                if (an) an.classList.add("show");
+                ltAnRenderMap(); ltAnRenderInspector(); ltAnRenderGraph(); ltAnSetCursor(0.5);
+            }
         };
 
         window._ltOpen = function () {
             _wsCloseAll("ltWorkspace");
             ltLoad();
-            ltBuildRail();
             var ws = document.getElementById("ltWorkspace");
             if (ws) ws.style.display = "flex";
             /* Leaflet needs a laid-out container: init after display:flex */
@@ -2726,10 +3168,10 @@
                 var t = ltTrack();
                 lt.map.setView(t.center, t.zoom);
             }
-            ltRenderMap(); ltRenderInspector();
+            _ltSetMode("setup");
         };
         window._ltClose = function () {
-            ltStopSim();
+            _ltSetMode("setup");   /* stops sim, clears analyse layers */
             ltSave();
             var ws = document.getElementById("ltWorkspace");
             if (ws) ws.style.display = "none";
