@@ -783,6 +783,8 @@
         }
         .lt-handle.rot { width: 11px; height: 11px; background: #2d8ceb; box-shadow: 0 0 0 1.5px rgba(45,140,235,0.4); }
         .lt-handle.sec { background: #FF9F0A; box-shadow: 0 0 0 1.5px rgba(255,159,10,0.4); }
+        .lt-flagpin { cursor: grab; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.55)); }
+        .lt-flagpin:active { cursor: grabbing; }
         .lt-tip {
             background: rgba(20,22,24,0.9) !important; border: 1px solid var(--border) !important;
             color: #FF9F0A !important; font-family: 'JetBrains Mono', monospace !important;
@@ -2434,6 +2436,22 @@
                 iconSize: [28, 28], iconAnchor: [14, 14]
             });
         }
+        /* Chequered-flag pin for the start/finish gate — always visible at any
+           zoom (the 25 m checkered line alone is ~5 px at the track-overview
+           zoom and impossible to spot). This is the grab handle too. */
+        function ltFlagIcon() {
+            var svg = "<svg width='30' height='38' viewBox='0 0 30 38'>" +
+                "<path d='M15 37 C7 27 2 21 2 14 a13 13 0 0 1 26 0 C28 21 23 27 15 37 Z' fill='#12161A' stroke='#F5F7FA' stroke-width='1.6'/>" +
+                "<g transform='translate(7,7)'>" +
+                "<rect width='16' height='14' rx='2' fill='#F5F7FA'/>" +
+                "<g fill='#0B0D0F'>" +
+                "<rect x='0' y='0' width='4' height='3.5'/><rect x='8' y='0' width='4' height='3.5'/>" +
+                "<rect x='4' y='3.5' width='4' height='3.5'/><rect x='12' y='3.5' width='4' height='3.5'/>" +
+                "<rect x='0' y='7' width='4' height='3.5'/><rect x='8' y='7' width='4' height='3.5'/>" +
+                "<rect x='4' y='10.5' width='4' height='3.5'/><rect x='12' y='10.5' width='4' height='3.5'/>" +
+                "</g></g></svg>";
+            return L.divIcon({ className: "lt-flagpin", html: svg, iconSize: [30, 38], iconAnchor: [15, 37] });
+        }
 
         /* A gate = the line (checkered for start/finish), a draggable centre
            handle, and a rotate handle riding one end. The LINE ITSELF drags
@@ -2452,12 +2470,13 @@
                 lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#0A0C0E", weight: 7, opacity: 0.5, lineCap: "butt", className: "lt-gateline" }).addTo(lt.layer));
                 lines.push(L.polyline(ltGateEnds(gcfg, w), { color: opts.color, weight: 4, opacity: 0.95, className: "lt-gateline" }).addTo(lt.layer));
             }
-            /* start/finish drags by grabbing the band itself — a centre dot
-               would just sit on the checkers. Sectors keep the dot: it
-               carries the S1/S2 label and gives a clear grab point on their
-               thinner lines. */
-            var center = null;
-            if (!opts.sf) {
+            /* start/finish gets a chequered-flag pin (always visible + the
+               grab handle); sectors get a labelled amber dot. */
+            var center;
+            if (opts.sf) {
+                center = L.marker([gcfg.lat, gcfg.lng], { icon: ltFlagIcon(), draggable: true, zIndexOffset: 1000 }).addTo(lt.layer);
+                center.bindTooltip("Start / finish — drag onto the line", { direction: "top", offset: [0, -36], className: "lt-tip" });
+            } else {
                 center = L.marker([gcfg.lat, gcfg.lng], { icon: ltHandleIcon("sec"), draggable: true }).addTo(lt.layer);
                 if (opts.label) center.bindTooltip(opts.label, { permanent: true, direction: "top", offset: [0, -12], className: "lt-tip" });
             }
