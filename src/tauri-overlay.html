@@ -586,8 +586,8 @@
         .kp-modes button { background: none; border: none; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; padding: 0 16px; height: 100%; cursor: pointer; }
         .kp-modes button.on { background: var(--accent); color: #fff; }
         .kp-topbar > .btn:last-child { height: 30px; box-sizing: border-box; }
-        .kp-body { display: flex; flex: 1; min-height: 0; flex-wrap: wrap; overflow: hidden; }
-        .kp-rail { width: 128px; min-height: 0; background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+        .kp-body { display: flex; flex: 1; min-height: 0; flex-wrap: nowrap; overflow: hidden; }
+        .kp-rail { width: 150px; flex-shrink: 0; min-height: 0; background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
         .kp-rail-title { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin: 0 4px 4px; font-weight: 600; }
         .kp-model {
             background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md);
@@ -654,9 +654,9 @@
         .kp-bus-chip { flex: 1 1 auto; background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); border-radius: var(--radius-sm); font-family: 'Sora', sans-serif; font-size: 9.5px; font-weight: 600; padding: 4px 6px; cursor: pointer; white-space: nowrap; }
         .kp-bus-chip:hover { border-color: var(--accent); color: var(--text); }
         .kp-bus-chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
-        .kp-bus-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-        .kp-bus-row label { flex: 0 0 54px; font-size: 9.5px; color: var(--text-muted); }
-        .kp-bus-in { flex: 1; min-width: 0; box-sizing: border-box; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 4px 6px; font-size: 10.5px; font-family: 'JetBrains Mono', monospace; }
+        .kp-bus-row { display: flex; flex-direction: column; align-items: stretch; gap: 3px; margin-bottom: 7px; }
+        .kp-bus-row label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+        .kp-bus-in { width: 100%; min-width: 0; box-sizing: border-box; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 4px 6px; font-size: 10.5px; font-family: 'JetBrains Mono', monospace; }
         .kp-bus-in:focus { outline: none; border-color: var(--accent); }
         .kp-seg2 { display: flex; flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
         .kp-seg2 button { flex: 1; background: none; border: none; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 9.5px; font-weight: 600; padding: 4px 2px; cursor: pointer; white-space: nowrap; }
@@ -677,8 +677,8 @@
         .kp-busline i.on { color: #6fbf73; font-weight: 700; }
         .kp-busline .idle { opacity: 0.7; }
         @media (max-width: 900px) {
-            .kp-body { overflow-y: auto; }
-            .kp-rail { width: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); }
+            .kp-body { flex-wrap: wrap; overflow-y: auto; }
+            .kp-rail { width: 100%; flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border); }
             .kp-rail-title { display: none; }
             .kp-model { flex: 1; }
             .kp-insp { width: 100%; max-height: 46vh; border-left: none; border-top: 1px solid var(--border); }
