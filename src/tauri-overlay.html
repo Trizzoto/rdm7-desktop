@@ -775,6 +775,8 @@
             background: rgba(20,22,24,0.88); border: 1px solid var(--border); border-radius: var(--radius-md);
             padding: 6px 12px; white-space: nowrap; pointer-events: none;
         }
+        .lt-hit { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: grab; }
+        .lt-gateline { cursor: grab; }
         .lt-handle {
             width: 14px; height: 14px; border-radius: 50%; background: #F0F4F8;
             border: 2.5px solid #0A0C0E; box-shadow: 0 0 0 1.5px rgba(240,244,248,0.4); cursor: grab;
@@ -2363,40 +2365,94 @@
             }).addTo(lt.map);
             lt.layer = L.layerGroup().addTo(lt.map);
             lt.simLayer = L.layerGroup().addTo(lt.map);
+            window.__ltMap = lt.map;   /* debug/automation handle */
         }
 
         function ltHandleIcon(cls) {
-            return L.divIcon({ className: "", html: "<div class='lt-handle " + cls + "'></div>", iconSize: [14, 14], iconAnchor: [7, 7] });
+            /* 28px transparent hit area around the visible dot — the 14px
+               dot alone was a fiddly grab target. */
+            return L.divIcon({
+                className: "",
+                html: "<div class='lt-hit'><div class='lt-handle " + cls + "'></div></div>",
+                iconSize: [28, 28], iconAnchor: [14, 14]
+            });
         }
 
-        /* A gate = the line + a draggable centre handle + a draggable
-           rotate handle riding one end. Writes straight back into gcfg. */
+        /* A gate = the line (checkered for start/finish), a draggable centre
+           handle, and a rotate handle riding one end. The LINE ITSELF drags
+           too — grab it anywhere. Writes straight back into gcfg. */
         function ltAddGate(gcfg, opts) {
             var w = opts.width;
-            var line = L.polyline(ltGateEnds(gcfg, w), {
-                color: opts.color, weight: opts.sf ? 5 : 3.5, opacity: 0.95,
-                dashArray: opts.sf ? "6 6" : null
-            }).addTo(lt.layer);
+            var lines = [];
             if (opts.sf) {
-                L.polyline(ltGateEnds(gcfg, w), { color: "#0A0C0E", weight: 9, opacity: 0.8 }).addTo(lt.layer).bringToBack();
+                /* chequered band: white base + square black blocks. Butt caps
+                   keep the blocks crisp; dash units are screen px so the
+                   checkers read at every zoom. */
+                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#0A0C0E", weight: 11, opacity: 0.55, lineCap: "butt", className: "lt-gateline" }).addTo(lt.layer));
+                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#F5F7FA", weight: 8, opacity: 1, lineCap: "butt", className: "lt-gateline" }).addTo(lt.layer));
+                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#0B0D0F", weight: 8, opacity: 1, lineCap: "butt", dashArray: "8 8", className: "lt-gateline" }).addTo(lt.layer));
+            } else {
+                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: "#0A0C0E", weight: 7, opacity: 0.5, lineCap: "butt", className: "lt-gateline" }).addTo(lt.layer));
+                lines.push(L.polyline(ltGateEnds(gcfg, w), { color: opts.color, weight: 4, opacity: 0.95, className: "lt-gateline" }).addTo(lt.layer));
             }
-            var center = L.marker([gcfg.lat, gcfg.lng], { icon: ltHandleIcon(opts.sf ? "" : "sec"), draggable: true }).addTo(lt.layer);
-            if (opts.label) center.bindTooltip(opts.label, { permanent: true, direction: "top", offset: [0, -10], className: "lt-tip" });
+            /* start/finish drags by grabbing the band itself — a centre dot
+               would just sit on the checkers. Sectors keep the dot: it
+               carries the S1/S2 label and gives a clear grab point on their
+               thinner lines. */
+            var center = null;
+            if (!opts.sf) {
+                center = L.marker([gcfg.lat, gcfg.lng], { icon: ltHandleIcon("sec"), draggable: true }).addTo(lt.layer);
+                if (opts.label) center.bindTooltip(opts.label, { permanent: true, direction: "top", offset: [0, -12], className: "lt-tip" });
+            }
             var rot = L.marker(ltGateEnds(gcfg, w)[0], { icon: ltHandleIcon("rot"), draggable: true }).addTo(lt.layer);
-            center.on("drag", function (e) {
-                gcfg.lat = e.latlng.lat; gcfg.lng = e.latlng.lng;
-                line.setLatLngs(ltGateEnds(gcfg, w));
-                rot.setLatLng(ltGateEnds(gcfg, w)[0]);
+
+            function refresh() {
+                var ends = ltGateEnds(gcfg, w);
+                lines.forEach(function (l) { l.setLatLngs(ends); });
+                if (center) center.setLatLng([gcfg.lat, gcfg.lng]);
+                rot.setLatLng(ends[0]);
                 ltRenderInspectorLatLon();
-            });
-            center.on("dragend", function () { ltSave(); ltRenderMap(); ltRenderInspector(); });
+            }
+
+            if (center) {
+                center.on("drag", function (e) {
+                    gcfg.lat = e.latlng.lat; gcfg.lng = e.latlng.lng;
+                    refresh();
+                });
+                center.on("dragend", function () { ltSave(); ltRenderMap(); ltRenderInspector(); });
+            }
             rot.on("drag", function (e) {
                 var m = ltMpd(gcfg.lat);
                 var dx = (e.latlng.lng - gcfg.lng) * m.lo, dy = (e.latlng.lat - gcfg.lat) * m.la;
                 gcfg.hdg = (Math.atan2(dx, dy) * 180 / Math.PI - 90 + 360) % 360;
-                line.setLatLngs(ltGateEnds(gcfg, w));
+                var ends = ltGateEnds(gcfg, w);
+                lines.forEach(function (l) { l.setLatLngs(ends); });
             });
             rot.on("dragend", function () { ltSave(); ltRenderMap(); ltRenderInspector(); });
+
+            /* grab-anywhere: mousedown on any of the gate's lines starts a
+               move — pan is parked for the duration. */
+            lines.forEach(function (l) {
+                l.on("mousedown", function (e) {
+                    L.DomEvent.stop(e.originalEvent);
+                    lt.map.dragging.disable();
+                    var startLL = e.latlng;
+                    var g0 = { lat: gcfg.lat, lng: gcfg.lng };
+                    function mv(ev) {
+                        gcfg.lat = g0.lat + (ev.latlng.lat - startLL.lat);
+                        gcfg.lng = g0.lng + (ev.latlng.lng - startLL.lng);
+                        refresh();
+                    }
+                    function up() {
+                        lt.map.off("mousemove", mv);
+                        lt.map.off("mouseup", up);
+                        lt.map.dragging.enable();
+                        ltSave(); ltRenderMap(); ltRenderInspector();
+                    }
+                    lt.map.on("mousemove", mv);
+                    lt.map.on("mouseup", up);
+                });
+            });
         }
 
         function ltRenderMap() {
