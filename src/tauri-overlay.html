@@ -1793,7 +1793,6 @@
                 obd: {},       /* live OBD2 values by signal name (from /api/signals/values) */
                 results: [],   /* ranked candidates */
                 sel: null,     /* selected candidate key */
-                adoptedKey: null, /* candidate whose decode was written to the dash */
                 lastRank: 0
             }
         };
@@ -2121,17 +2120,8 @@
                     "<div style='display:flex;gap:6px;'>" +
                         "<button class='ws-btn-line ca-pinbtn' onclick='caPinTrace()'>+ Pin to graph</button>" +
                         "<button class='ws-btn-line ca-pinbtn' onclick='caProbeCopy()' title='copy decode JSON'>Copy decode</button>" +
-                    "</div>";
-                /* Connected: write the decode straight onto a channel — the
-                   found-it → dash-shows-it loop with zero copy/paste. */
-                var chansAll = (_wsChannels || []).filter(function (c) { return c.source !== "math"; })
-                    .sort(function (a, b) { return (a.label || a.id).localeCompare(b.label || b.id); });
-                if (_caIsConnected() && chansAll.length) {
-                    h += "<div style='font-size:10px;color:var(--text-muted);margin:10px 0 3px;'>&#8230;or write it straight onto a dash channel &#8212; widgets bound to it use these bits from then on:</div>" +
-                         "<div class='ca-send'><select id='caChanSel'><option value=''>&#8212; choose a channel &#8212;</option>" +
-                         chansAll.map(function (c) { return "<option value='" + c.id + "'>" + (c.label || c.id) + "</option>"; }).join("") +
-                         "</select><button class='ws-btn-line ca-pinbtn' onclick='caProbeSend()'>Write &#8594; dash</button></div>";
-                }
+                    "</div>" +
+                    "<div style='font-size:9px;color:var(--text-muted);margin-top:5px;'>found your signal? note these numbers, then map it in the dash editor&#8217;s <b>Channels</b> tab.</div>";
                 h += "<div class='ws-gt' style='margin-top:14px;'>Live trace</div>" +
                     "<div style='font-size:9px;color:var(--text-muted);'>white dashes = the bits selected above, plotted over time &#183; colours = pinned fields</div>" +
                     "<canvas class='ca-probe-canvas' id='caProbeCanvas' width='620' height='300'></canvas>" +
@@ -2324,27 +2314,6 @@
                 function () { showToast(txt, "info"); });
             else showToast(txt, "info");
         };
-        window.caProbeSend = function () {
-            var selEl = document.getElementById("caChanSel");
-            if (!selEl || ca.sel === null) return;
-            var chId = selEl.value, p = ca.probe;
-            if (!chId) { showToast("Pick which channel should use this decode first", "info"); return; }
-            var ch = (_wsChannels || []).filter(function (c) { return c.id === chId; })[0];
-            var label = ch ? (ch.label || ch.id) : chId;
-            fetch("/api/channels/update", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id: chId, fields: { decode: {
-                    can_id: ca.sel, bit_start: p.start, bit_length: p.len,
-                    endian: p.le ? 1 : 0, is_signed: p.signed, scale: p.scale, offset: p.offset } } })
-            }).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-              .then(function () {
-                  showToast(label + " now decodes " + _wsFmtHex(ca.sel) + " bits " + p.start + "–" + (p.start + p.len - 1) + " — check the dash", "success");
-                  _wsChannels = null;
-                  _wsLoadChannels(function () { caBuildDecodeMap(); caRenderInspector(true); });
-              })
-              .catch(function (e) { showToast("Couldn't write to the dash (" + e + ")", "error"); });
-        };
-
         /* ============ OBD ↔ CAN match ============
          * Correlate every candidate CAN field against a slow OBD2 reading to
          * rediscover the fast native decode (id/bits/endian/scale/offset) that
@@ -2413,7 +2382,7 @@
             var rf = refs.filter(function (x) { return x.name === name; })[0];
             if (!rf) return;
             ca.match.ref = rf;
-            ca.match.buf = []; ca.match.results = []; ca.match.sel = null; ca.match.adoptedKey = null;
+            ca.match.buf = []; ca.match.results = []; ca.match.sel = null;
             ca.match.recording = true;      /* auto-start — it "just works" */
             caMatchRenderRail(); caMatchRenderStage(); caMatchRenderInsp();
         };
@@ -2424,7 +2393,7 @@
             caMatchRenderRail();
         };
         window.caMatchClear = function () {
-            var m = ca.match; m.buf = []; m.results = []; m.sel = null; m.adoptedKey = null;
+            var m = ca.match; m.buf = []; m.results = []; m.sel = null;
             caMatchRenderRail(); caMatchRenderStage(); caMatchRenderInsp();
         };
 
@@ -2580,7 +2549,7 @@
             var st = document.getElementById("caMatchStage");
             if (!st) return;
             var m = ca.match;
-            var h = "<div class='cm-hint'>Correlate a slow <b>OBD2</b> reading against the raw bus to find the <b>fast native CAN</b> field carrying the same value — then adopt its decode and stop polling.</div>";
+            var h = "<div class='cm-hint'>Correlate a slow <b>OBD2</b> reading against the raw bus to find the <b>fast native CAN</b> field carrying the same value — then map it in the dash <b>Channels</b> tab to stop polling.</div>";
             /* Recording status: is this capture actually usable? Sweep quality
                tells the user WHY nothing is matching before they lose faith. */
             if (m.ref) {
@@ -2624,7 +2593,7 @@
                         if (!(o.start + o.len <= (kd.bit_start || 0) || (kd.bit_start || 0) + (kd.bit_length || 16) <= o.start)) { known = kch[ki].label || kch[ki].id; break; }
                     }
                     h += "<tr class='" + (m.sel === o.key ? "sel" : "") + "' onclick='caMatchSelect(\"" + o.key + "\")'>" +
-                         "<td>" + (i + 1) + (m.adoptedKey === o.key ? " <span style='color:#6FBF73'>&#10003;</span>" : "") + "</td>" +
+                         "<td>" + (i + 1) + "</td>" +
                          "<td><span class='cm-idlab'>" + _wsFmtHex(o.id) + "</span></td>" +
                          "<td>" + o.start + "&#8211;" + (o.start + o.len - 1) + " · " + o.len + "b <span class='cm-badge'>" + (o.le ? "Intel" : "Motorola") + "</span>" +
                          (known ? "<span class='cm-known'>= " + known + "</span>" : "") + "</td>" +
@@ -2704,16 +2673,9 @@
                 "<div class='cm-kv'><span>Lag / samples</span><b>" + cand.lag + " &#183; " + m.buf.length + "</b></div></div>" +
                 "<div class='ws-grp'><div class='ws-gt'>OBD2 vs CAN field</div>" +
                 "<canvas class='cm-scatter' id='cmScatter' width='560' height='340'></canvas></div>";
-            var adopted = m.adoptedKey === cand.key;
-            if (connected && m.ref.chId) {
-                h += adopted
-                    ? "<button class='ws-btn-line' style='margin-top:10px;border-color:#6FBF73;color:#6FBF73;' disabled>&#10003; Adopted — " + m.ref.chId + " now reads from CAN</button>"
-                    : "<button class='ws-btn-line' style='margin-top:10px;border-color:var(--accent);color:var(--text);' onclick='caMatchAdopt()'>Adopt on dash &#8594; decode &#8220;" + m.ref.chId + "&#8221; from CAN</button>";
-            } else {
-                h += "<button class='ws-btn-line' style='margin-top:10px;' onclick='caMatchAdopt()'>Copy decode JSON</button>";
-            }
+            h += "<button class='ws-btn-line' style='margin-top:10px;' onclick='caMatchCopy()'>Copy decode</button>";
             h += "<button class='ws-btn-line' style='margin-top:6px;' onclick='caMatchProbe()'>Inspect in probe &#8594; see the bits live</button>";
-            h += "<div class='ws-note'><b>Adopt</b> writes this decode onto the <b>" + m.ref.chId + "</b> channel so it reads from fast CAN (" + (cand.le ? "Intel" : "Motorola") + ", &#215;" + parseFloat(cand.scale.toPrecision(4)) + ") &mdash; no more waiting on the OBD2 poll. Reversible from the dash Channels tab.</div>";
+            h += "<div class='ws-note'>To use this: open the dash editor&#8217;s <b>Channels</b> tab, edit <b>" + m.ref.chId + "</b> (or any channel), and enter this decode &mdash; CAN " + _wsFmtHex(cand.id) + ", bits " + cand.start + "&#8211;" + (cand.start + cand.len - 1) + ", " + (cand.le ? "Intel" : "Motorola") + ", &#215;" + parseFloat(cand.scale.toPrecision(4)) + ". It then reads from fast CAN instead of the OBD2 poll.</div>";
             insp.innerHTML = h;
             caMatchDrawScatter(cand);
         }
@@ -2750,31 +2712,16 @@
             ctx.save(); ctx.translate(9, pad + 30); ctx.rotate(-Math.PI / 2); ctx.fillText(ca.match.ref.label + " →", 0, 0); ctx.restore();
         }
 
-        window.caMatchAdopt = function () {
+        window.caMatchCopy = function () {
             var m = ca.match, cand = m.sel ? caMatchResult(m.sel) : null;
             if (!cand || !m.ref) return;
             var decode = { can_id: cand.id, bit_start: cand.start, bit_length: cand.len,
                            endian: cand.le ? 1 : 0, is_signed: false,
                            scale: parseFloat(cand.scale.toPrecision(6)), offset: parseFloat(cand.offset.toPrecision(6)),
                            unit: m.ref.units || "" };
-            var connected = typeof RDM !== "undefined" && RDM.mode !== "local" && typeof _connectionOk !== "undefined" && _connectionOk;
-            if (!connected || !m.ref.chId) {
-                var txt = JSON.stringify(decode);
-                if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { showToast("Decode copied — paste into the dash Channels tab", "success"); }, function () { showToast(txt, "info"); });
-                else showToast(txt, "info");
-                return;
-            }
-            fetch("/api/channels/update", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id: m.ref.chId, fields: { decode: decode } })
-            }).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-              .then(function () {
-                  showToast(m.ref.label + " now decodes from " + _wsFmtHex(cand.id) + " — fast native CAN, OBD2 poll no longer needed", "success");
-                  m.adoptedKey = cand.key;
-                  _wsChannels = null;
-                  _wsLoadChannels(function () { caBuildDecodeMap(); caMatchRenderStage(); caMatchRenderInsp(); });
-              })
-              .catch(function (e) { showToast("Couldn't write decode to the dash (" + e + ")", "error"); });
+            var txt = JSON.stringify(decode);
+            if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { showToast("Decode copied — enter it in the dash Channels tab", "success"); }, function () { showToast(txt, "info"); });
+            else showToast(txt, "info");
         };
 
         /* Bridge: jump from a Match candidate to the Monitor probe with the
