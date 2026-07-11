@@ -503,6 +503,7 @@
         .sh-kpcard .sh-visual { height: 130px; }
         .sh-small { grid-column: span 6; display: flex; gap: 14px; align-items: center; padding: 12px 14px; }
         .sh-small .sh-visual { width: 106px; height: 72px; flex-shrink: 0; }
+        .sh-third { grid-column: span 4; }
         .sh-visual {
             background: radial-gradient(ellipse 80% 70% at 50% 42%, #2A2C30, #1B1D20 85%);
             border: 1px solid var(--border); border-radius: var(--radius-md);
@@ -611,6 +612,146 @@
             .kp-insp { width: 100%; max-height: 46vh; border-left: none; border-top: 1px solid var(--border); }
         }
         @media (prefers-reduced-motion: reduce) { .kp-live-dot { animation: none; } }
+
+        /* ---- shared workspace chrome (analyzer / IO / lap timer) ----
+         * Same grammar as the keypad workspace + editor header: 30px
+         * controls, topbar brand cluster, rail | stage | inspector. */
+        .ws { position: fixed; inset: 0; z-index: 15000; background: var(--bg-canvas); display: none; flex-direction: column; }
+        .ws-topbar {
+            display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+            background: var(--bg-toolbar); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-sm);
+            flex-wrap: wrap;
+        }
+        .ws-brand { display: inline-flex; align-items: center; gap: 10px; }
+        .ws-brand span {
+            font-family: 'Sora', sans-serif; font-weight: 400; font-size: 13px;
+            letter-spacing: 0.03em; color: var(--text-muted); white-space: nowrap;
+        }
+        .ws-topbar .btn { height: 30px; box-sizing: border-box; }
+        .ws-chip {
+            font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted);
+            background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+            padding: 0 10px; white-space: nowrap; height: 30px; box-sizing: border-box;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .ws-chip b { color: var(--text); font-weight: 600; }
+        .ws-modes {
+            margin-left: auto; display: flex; background: var(--bg); border: 1px solid var(--border);
+            border-radius: var(--radius-md); overflow: hidden; height: 30px; box-sizing: border-box;
+        }
+        .ws-modes button { background: none; border: none; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; padding: 0 16px; height: 100%; cursor: pointer; }
+        .ws-modes button.on { background: var(--accent); color: #fff; }
+        .ws-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+        .ws-rail {
+            width: 208px; min-height: 0; background: var(--bg-sidebar); border-right: 1px solid var(--border);
+            padding: 12px 8px; display: flex; flex-direction: column; gap: 3px; overflow-y: auto; flex-shrink: 0;
+        }
+        .ws-rail-title { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin: 8px 6px 4px; font-weight: 600; }
+        .ws-rail-title:first-child { margin-top: 0; }
+        .ws-item {
+            display: flex; align-items: center; gap: 8px; background: none; border: 1px solid transparent;
+            border-radius: var(--radius-md); color: var(--text-muted); font-family: 'Sora', sans-serif;
+            font-size: 11px; padding: 6px 8px; cursor: pointer; text-align: left; width: 100%; box-sizing: border-box;
+        }
+        .ws-item:hover { color: var(--text); background: var(--panel); }
+        .ws-item.on { border-color: var(--accent); color: var(--text); background: var(--panel-elevated); }
+        .ws-item .tag { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted); }
+        .ws-item .st { width: 7px; height: 7px; border-radius: 50%; background: var(--border-light); flex-shrink: 0; }
+        .ws-item .st.on { background: #6FBF73; }
+        .ws-stage { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: auto; background: var(--bg-canvas); }
+        .ws-insp { width: 316px; min-height: 0; max-height: 100%; background: var(--panel); border-left: 1px solid var(--border); padding: 12px 14px; flex-shrink: 0; overflow-y: auto; }
+        .ws-insp h2 { font-family: 'Sora', sans-serif; font-size: 12.5px; font-weight: 600; margin: 0 0 1px; }
+        .ws-sub { color: var(--text-muted); font-size: 10px; font-family: 'JetBrains Mono', monospace; margin-bottom: 10px; }
+        .ws-grp { border-top: 1px solid var(--border); padding: 10px 0 2px; margin-top: 6px; }
+        .ws-gt { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 8px; }
+        .ws-field { margin-bottom: 9px; }
+        .ws-field label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 3px; }
+        .ws-field input[type=text], .ws-field input[type=number], .ws-field select {
+            width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+            border-radius: var(--radius-md); padding: 5px 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace;
+        }
+        .ws-field input:focus, .ws-field select:focus { outline: none; border-color: var(--accent); }
+        .ws-seg { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+        .ws-seg button { flex: 1; background: none; border: none; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 10.5px; font-weight: 600; padding: 5px 0; cursor: pointer; }
+        .ws-seg button.on { background: var(--accent); color: #fff; }
+        .ws-slider { display: flex; align-items: center; gap: 8px; }
+        .ws-slider input[type=range] { flex: 1; accent-color: var(--accent); }
+        .ws-slider .val { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); min-width: 40px; text-align: right; }
+        .ws-note {
+            font-size: 10.5px; color: var(--text-muted); background: var(--bg);
+            border: 1px solid var(--border); border-left: 3px solid var(--accent);
+            border-radius: var(--radius-sm); padding: 7px 9px; margin-top: 12px; line-height: 1.5;
+        }
+        .ws-note b { color: var(--text); }
+        .ws-none { color: var(--text-muted); font-size: 11px; padding: 28px 8px; text-align: center; }
+        .ws-btn-line {
+            width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--border);
+            border-radius: var(--radius-md); color: var(--text); font-family: 'Sora', sans-serif;
+            font-size: 11px; font-weight: 600; padding: 6px 0; cursor: pointer;
+        }
+        .ws-btn-line:hover { border-color: var(--accent); }
+        .ws-btn-line:disabled { color: var(--text-muted); cursor: not-allowed; border-color: var(--border); }
+
+        /* ---- CAN analyzer table ---- */
+        .ca-strip { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--bg-toolbar); flex-shrink: 0; }
+        .ca-stat { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); }
+        .ca-stat b { color: var(--text); font-weight: 600; }
+        .ca-filter { margin-left: auto; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 4px 9px; width: 190px; }
+        .ca-filter:focus { outline: none; border-color: var(--accent); }
+        .ca-table { flex: 1; overflow-y: auto; }
+        .ca-table table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+        .ca-table th {
+            position: sticky; top: 0; background: var(--bg-sidebar); color: var(--text-muted);
+            font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600;
+            text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
+        }
+        .ca-table th:hover { color: var(--text); }
+        .ca-table td { padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--text); white-space: nowrap; }
+        .ca-table tr.row { cursor: pointer; }
+        .ca-table tr.row:hover td { background: rgba(255,255,255,0.025); }
+        .ca-table tr.row.sel td { background: var(--panel-elevated); }
+        .ca-id { color: var(--accent-hover); font-weight: 600; }
+        .ca-ext { font-size: 8.5px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 3px; padding: 0 3px; margin-left: 5px; vertical-align: 1px; }
+        .ca-name { color: var(--text-muted); font-size: 10px; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
+        .ca-b { display: inline-block; width: 21px; text-align: center; padding: 1px 0; border-radius: 3px; margin-right: 2px; transition: background 0.6s, color 0.6s; }
+        .ca-b.chg { background: var(--accent); color: #fff; transition: none; }
+        .ca-b.mute { color: #3E444B; }
+        .ca-dim { color: var(--text-muted); }
+        .ca-bytegrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px; }
+        .ca-bcell { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 7px; font-family: 'JetBrains Mono', monospace; cursor: pointer; }
+        .ca-bcell:hover { border-color: var(--border-light); }
+        .ca-bcell.watch { border-color: var(--accent); }
+        .ca-bcell .i { font-size: 8.5px; color: var(--text-muted); }
+        .ca-bcell .h { font-size: 13px; color: var(--text); font-weight: 600; }
+        .ca-bcell .d { font-size: 9px; color: var(--text-muted); }
+        .ca-spark { width: 100%; height: 66px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 6px; }
+        .ca-dec { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 9px; margin-bottom: 6px; }
+        .ca-dec .n { font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 600; color: var(--text); }
+        .ca-dec .v { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent-hover); float: right; }
+        .ca-dec .m { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted); }
+
+        /* ---- IO expander stage ---- */
+        .io-stage-pad { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 24px 16px; }
+        .io-stage-pad svg { max-width: 840px; width: 100%; height: auto; }
+        #ioStageSvg, #ltStageSvg { width: 100%; display: flex; justify-content: center; }
+        .io-hint { color: var(--text-muted); font-size: 11px; margin-top: 14px; text-align: center; }
+        .io-pin { cursor: pointer; }
+        .io-pin:hover .io-pin-body { stroke: var(--border-light); }
+        .io-pin.sel .io-pin-body { stroke: #2d8ceb; stroke-width: 1.6; }
+
+        /* ---- lap timer stage ---- */
+        .lt-stage-pad { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 18px 16px; }
+        .lt-stage-pad svg { max-width: 720px; width: 100%; height: auto; }
+        .lt-timerbar {
+            display: none; align-items: center; gap: 18px; background: var(--panel); border: 1px solid var(--border);
+            border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 8px 16px; margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .lt-timerbar.show { display: flex; }
+        .lt-t { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+        .lt-t b { font-size: 16px; color: var(--text); font-weight: 600; display: block; }
+        .lt-delta { min-width: 120px; text-align: center; border-radius: var(--radius-sm); padding: 3px 10px; font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; background: var(--bg); }
+        .lt-delta.neg { color: #4ade80; } .lt-delta.pos { color: #e05d52; }
+        .lt-hint { color: var(--text-muted); font-size: 11px; margin-top: 12px; text-align: center; }
     </style>
 
     <div id="suiteSplash">
@@ -717,7 +858,7 @@
                         </div>
                     </div>
 
-                    <div class="sh-card sh-small dev" tabindex="-1" aria-disabled="true" onclick="showToast('GPS Lap Timer is in development — a 25 Hz GPS + IMU puck with predictive lap delta on the dash.', 'info')">
+                    <div class="sh-card sh-small sh-third" tabindex="0" role="button" onclick="_ltOpen()" onkeydown="if(event.key==='Enter')_ltOpen()">
                         <div class="sh-visual">
                             <svg viewBox="0 0 130 85" aria-hidden="true">
                                 <defs>
@@ -728,19 +869,19 @@
                                 <path d="M 33 62 A 32 27 0 0 1 97 62 Z" fill="url(#shvDome)" stroke="#0B0D0F" stroke-width="1"/>
                                 <ellipse cx="54" cy="45" rx="12" ry="7" fill="#FFFFFF" opacity="0.06" transform="rotate(-14 54 45)"/>
                                 <path d="M 33 62 C 24 62 20 66 14 66" fill="none" stroke="#101214" stroke-width="4" stroke-linecap="round"/>
-                                <path d="M 55 22 A 14 14 0 0 1 75 22" fill="none" stroke="#4A5057" stroke-width="2" stroke-linecap="round"/>
-                                <path d="M 59 27 A 8 8 0 0 1 71 27" fill="none" stroke="#4A5057" stroke-width="2" stroke-linecap="round"/>
-                                <circle cx="65" cy="31" r="1.6" fill="#4A5057"/>
+                                <path d="M 55 22 A 14 14 0 0 1 75 22" fill="none" stroke="#2d8ceb" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+                                <path d="M 59 27 A 8 8 0 0 1 71 27" fill="none" stroke="#2d8ceb" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+                                <circle cx="65" cy="31" r="1.6" fill="#7CC0FF"/>
                             </svg>
                         </div>
                         <div class="sh-info">
                             <div class="t">GPS Lap Timer</div>
-                            <div class="d">25 Hz GPS + IMU puck. Predictive delta on the dash.</div>
-                            <div class="s">IN DEVELOPMENT</div>
+                            <div class="d">Tracks, start/finish, predictive delta.</div>
+                            <div class="s">OPEN CONFIGURATOR &#8594;</div>
                         </div>
                     </div>
 
-                    <div class="sh-card sh-small dev" tabindex="-1" aria-disabled="true" onclick="showToast('CAN IO Expander is in development — analog, thermocouple and power outputs that become channels.', 'info')">
+                    <div class="sh-card sh-small sh-third" tabindex="0" role="button" onclick="_ioOpen()" onkeydown="if(event.key==='Enter')_ioOpen()">
                         <div class="sh-visual">
                             <svg viewBox="0 0 130 85" aria-hidden="true">
                                 <defs>
@@ -751,19 +892,40 @@
                                 <path d="M 31 25 H 99" stroke="#3A3F45" stroke-width="1" opacity="0.5"/>
                                 <rect x="10" y="34" width="16" height="22" rx="2.5" fill="#101214" stroke="#000" stroke-width="1"/>
                                 <circle cx="18" cy="39.5" r="1.6" fill="#4A5057"/><circle cx="18" cy="45" r="1.6" fill="#4A5057"/><circle cx="18" cy="50.5" r="1.6" fill="#4A5057"/>
-                                <line x1="105" y1="32" x2="113" y2="32" stroke="#4A5057" stroke-width="2"/>
-                                <line x1="105" y1="40" x2="113" y2="40" stroke="#4A5057" stroke-width="2"/>
-                                <line x1="105" y1="48" x2="113" y2="48" stroke="#4A5057" stroke-width="2"/>
-                                <line x1="105" y1="56" x2="113" y2="56" stroke="#4A5057" stroke-width="2"/>
-                                <rect x="36" y="38" width="30" height="2.5" rx="1" fill="#33383E"/>
-                                <rect x="36" y="45" width="22" height="2.5" rx="1" fill="#2A2E33"/>
+                                <rect x="38" y="40" width="9" height="7" rx="1.5" fill="#0C0E10" stroke="#2d8ceb" stroke-width="0.8"/>
+                                <rect x="50" y="40" width="9" height="7" rx="1.5" fill="#0C0E10" stroke="#FF9F0A" stroke-width="0.8"/>
+                                <rect x="62" y="40" width="9" height="7" rx="1.5" fill="#0C0E10" stroke="#A8E05F" stroke-width="0.8"/>
+                                <rect x="74" y="40" width="9" height="7" rx="1.5" fill="#0C0E10" stroke="#AF52DE" stroke-width="0.8"/>
+                                <rect x="86" y="40" width="9" height="7" rx="1.5" fill="#0C0E10" stroke="#FF2E23" stroke-width="0.8"/>
                                 <circle cx="31" cy="60" r="2.2" fill="#101214"/><circle cx="99" cy="60" r="2.2" fill="#101214"/>
                             </svg>
                         </div>
                         <div class="sh-info">
-                            <div class="t">CAN IO Expander</div>
-                            <div class="d">Analog, thermocouple and power outputs — pins become channels.</div>
-                            <div class="s">IN DEVELOPMENT</div>
+                            <div class="t">IO Expander</div>
+                            <div class="d">Pins become channels. Rules drive outputs.</div>
+                            <div class="s">OPEN CONFIGURATOR &#8594;</div>
+                        </div>
+                    </div>
+
+                    <div class="sh-card sh-small sh-third" tabindex="0" role="button" onclick="_caOpen()" onkeydown="if(event.key==='Enter')_caOpen()">
+                        <div class="sh-visual">
+                            <svg viewBox="0 0 130 85" aria-hidden="true">
+                                <rect x="14" y="10" width="102" height="65" rx="5" fill="#0C0E10" stroke="#26292D" stroke-width="1.2"/>
+                                <text x="22" y="26" font-family="monospace" font-size="8" fill="#2d8ceb">0x520</text>
+                                <text x="52" y="26" font-family="monospace" font-size="8" fill="#7C8590">14 0C 5A 00</text>
+                                <text x="22" y="38" font-family="monospace" font-size="8" fill="#2d8ceb">0x530</text>
+                                <text x="52" y="38" font-family="monospace" font-size="8" fill="#7C8590">69 05</text>
+                                <rect x="84" y="31" width="12" height="9" rx="2" fill="#2d8ceb"/>
+                                <text x="86" y="38" font-family="monospace" font-size="8" fill="#fff">C1</text>
+                                <text x="22" y="50" font-family="monospace" font-size="8" fill="#2d8ceb">0x7E8</text>
+                                <text x="52" y="50" font-family="monospace" font-size="8" fill="#7C8590">03 41 0C</text>
+                                <polyline points="22,66 34,66 40,58 48,64 58,56 66,62 76,54 86,62 96,58 108,60" fill="none" stroke="#2d8ceb" stroke-width="1.6" opacity="0.85"/>
+                            </svg>
+                        </div>
+                        <div class="sh-info">
+                            <div class="t">CAN Bus Analyzer</div>
+                            <div class="d">Live bus through your dash — no dongle.</div>
+                            <div class="s">OPEN ANALYZER &#8594;</div>
                         </div>
                     </div>
 
@@ -800,6 +962,94 @@
         </div>
     </div>
 
+    <!-- ═══ CAN Bus Analyzer ═══ -->
+    <div id="caWorkspace" class="ws">
+        <div class="ws-topbar">
+            <button class="btn btn-secondary" style="font-size:13px; padding:0 10px;" onclick="_caClose()" title="Home (Esc)">&#8962;</button>
+            <span class="ws-brand" id="caBrand"></span>
+            <span class="ws-chip" id="caChipBus">no dash link &#8212; demo traffic</span>
+            <div class="ws-modes" role="group" aria-label="Mode">
+                <button id="caBtnLive" class="on" onclick="_caSetPaused(false)">Live</button>
+                <button id="caBtnPause" onclick="_caSetPaused(true)">Paused</button>
+            </div>
+            <button class="btn btn-secondary" style="font-size:11px; padding:0 14px;" onclick="_caExportCsv()">Export CSV</button>
+        </div>
+        <div class="ws-body">
+            <div class="ws-stage">
+                <div class="ca-strip">
+                    <span class="ca-stat">IDs <b id="caStatIds">0</b></span>
+                    <span class="ca-stat">frames/s <b id="caStatFps">0</b></span>
+                    <span class="ca-stat" id="caStatCap"></span>
+                    <input class="ca-filter" id="caFilter" placeholder="filter: id hex or name&#8230;" oninput="caRender()">
+                </div>
+                <div class="ca-table"><table>
+                    <thead><tr>
+                        <th onclick="caSort('id')">ID</th><th onclick="caSort('name')">Decodes</th>
+                        <th onclick="caSort('hz')">Rate</th><th onclick="caSort('count')">Count</th>
+                        <th>B0&#8201;&#8201;B1&#8201;&#8201;B2&#8201;&#8201;B3&#8201;&#8201;B4&#8201;&#8201;B5&#8201;&#8201;B6&#8201;&#8201;B7</th>
+                    </tr></thead>
+                    <tbody id="caRows"></tbody>
+                </table></div>
+            </div>
+            <div class="ws-insp" id="caInspector"><div class="ws-none">Select a frame to inspect its bytes</div></div>
+        </div>
+    </div>
+
+    <!-- ═══ RDM IO Expander ═══ -->
+    <div id="ioWorkspace" class="ws">
+        <div class="ws-topbar">
+            <button class="btn btn-secondary" style="font-size:13px; padding:0 10px;" onclick="_ioClose()" title="Home (Esc)">&#8962;</button>
+            <span class="ws-brand" id="ioBrand"></span>
+            <span class="ws-chip">RDM IO-22 &#183; 8 AI &#183; 4 TC &#183; 4 DI &#183; 4 PWM &#183; 2 HS</span>
+            <span class="ws-chip" id="ioChipLink">no device link &#8212; saves to this PC</span>
+            <div class="ws-modes" role="group" aria-label="Mode">
+                <button id="ioBtnDesign" class="on" onclick="_ioSetLive(false)">Design</button>
+                <button id="ioBtnLive" onclick="_ioSetLive(true)">Live (sim)</button>
+            </div>
+            <button class="btn" style="font-size:11px; padding:0 16px;" onclick="ioSaveExplicit()">Save</button>
+        </div>
+        <div class="ws-body">
+            <div class="ws-rail" id="ioRail"></div>
+            <div class="ws-stage"><div class="io-stage-pad">
+                <div id="ioStageSvg"></div>
+                <div class="io-hint" id="ioHint">Click any pin to configure it &#8212; inputs become channels on the bus.</div>
+            </div></div>
+            <div class="ws-insp" id="ioInspector"><div class="ws-none">Select a pin to configure it</div></div>
+        </div>
+    </div>
+
+    <!-- ═══ GPS Lap Timer ═══ -->
+    <div id="ltWorkspace" class="ws">
+        <div class="ws-topbar">
+            <button class="btn btn-secondary" style="font-size:13px; padding:0 10px;" onclick="_ltClose()" title="Home (Esc)">&#8962;</button>
+            <span class="ws-brand" id="ltBrand"></span>
+            <span class="ws-chip">GPS-CAN node &#183; 25 Hz &#183; predictive delta on the dash</span>
+            <span class="ws-chip" id="ltChipLink">no node link &#8212; saves to this PC</span>
+            <div class="ws-modes" role="group" aria-label="Mode">
+                <button id="ltBtnSetup" class="on" onclick="_ltSetSim(false)">Setup</button>
+                <button id="ltBtnSim" onclick="_ltSetSim(true)">Simulate</button>
+            </div>
+            <button class="btn" style="font-size:11px; padding:0 16px;" onclick="ltSaveExplicit()">Save</button>
+        </div>
+        <div class="ws-body">
+            <div class="ws-rail" id="ltRail"></div>
+            <div class="ws-stage"><div class="lt-stage-pad">
+                <div class="lt-timerbar" id="ltTimerbar">
+                    <span class="lt-t">LAP <b id="ltTCur">0:00.00</b></span>
+                    <span class="lt-delta" id="ltTDelta">+0.00</span>
+                    <span class="lt-t">LAST <b id="ltTLast">&#8212;</b></span>
+                    <span class="lt-t">BEST <b id="ltTBest">&#8212;</b></span>
+                    <span class="lt-t">S1 <b id="ltTS1">&#8212;</b></span>
+                    <span class="lt-t">S2 <b id="ltTS2">&#8212;</b></span>
+                    <span class="lt-t">LAP <b id="ltTN">0</b></span>
+                </div>
+                <div id="ltStageSvg"></div>
+                <div class="lt-hint" id="ltHint">Drag the start/finish gate anywhere along the track. Sectors drag too.</div>
+            </div></div>
+            <div class="ws-insp" id="ltInspector"></div>
+        </div>
+    </div>
+
     <script>
     (function () {
         "use strict";
@@ -817,14 +1067,22 @@
                     RDM_LOGO_IMG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:20px;width:auto"') +
                     '<span style="font-family:Sora,sans-serif;font-weight:400;font-size:13px;letter-spacing:0.03em;color:var(--text-muted);">Studio</span>';
             }
-            /* keypad topbar carries the same logo + muted-label cluster as
-               the dash editor header */
+            /* every workspace topbar carries the same logo + muted-label
+               cluster as the dash editor header */
             var kpb = document.getElementById('kpBrand');
             if (kpb && !kpb.firstChild) {
                 kpb.innerHTML =
                     RDM_LOGO_IMG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:19px;width:auto"') +
                     '<span>Keypad Configurator</span>';
             }
+            [['caBrand', 'CAN Bus Analyzer'], ['ioBrand', 'IO Expander'], ['ltBrand', 'GPS Lap Timer']].forEach(function (p) {
+                var el = document.getElementById(p[0]);
+                if (el && !el.firstChild) {
+                    el.innerHTML =
+                        RDM_LOGO_IMG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:19px;width:auto"') +
+                        '<span>' + p[1] + '</span>';
+                }
+            });
         }
 
         /* ============ keypad configurator (Phase K0) ============ */
@@ -1212,8 +1470,7 @@
         }
 
         window._kpOpen = function () {
-            var home = document.getElementById("suiteHome");
-            if (home) home.style.display = "none";
+            _wsCloseAll("kpWorkspace");
             kpBuildRail();
             kpLoadCfg();
             _kpLoadChannels();
@@ -1225,6 +1482,1158 @@
             if (kpSimTimer) { clearInterval(kpSimTimer); kpSimTimer = null; kp.live = false; }
             kpSaveCfg();
             var ws = document.getElementById("kpWorkspace");
+            if (ws) ws.style.display = "none";
+            window._suiteHomeShow();
+        };
+
+        /* ============ shared workspace plumbing ============ */
+        /* One workspace on screen at a time. Opening any workspace closes the
+           rest (their close fns stop their timers); the stray home-show a
+           close triggers is re-hidden straight after. */
+        var _wsList = [
+            { id: "kpWorkspace", close: function () { window._kpClose(); } },
+            { id: "caWorkspace", close: function () { window._caClose(); } },
+            { id: "ioWorkspace", close: function () { window._ioClose(); } },
+            { id: "ltWorkspace", close: function () { window._ltClose(); } }
+        ];
+        function _wsVisible() {
+            for (var i = 0; i < _wsList.length; i++) {
+                var el = document.getElementById(_wsList[i].id);
+                if (el && el.style.display === "flex") return _wsList[i];
+            }
+            return null;
+        }
+        function _wsCloseAll(except) {
+            _wsList.forEach(function (w) {
+                if (w.id === except) return;
+                var el = document.getElementById(w.id);
+                if (el && el.style.display === "flex") w.close();
+            });
+            var home = document.getElementById("suiteHome");
+            if (home) home.style.display = "none";
+        }
+
+        /* Full channel objects (incl. CAN decode) from the connected dash —
+           shared by the analyzer (frame decode overlay), IO (channel binding)
+           and lap timer. Null offline. */
+        var _wsChannels = null;
+        function _wsLoadChannels(done) {
+            try {
+                if (typeof RDM === "undefined" || RDM.mode === "local") { if (done) done(); return; }
+                fetch("/api/channels")
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (j) {
+                        if (j && Array.isArray(j.channels)) _wsChannels = j.channels;
+                        if (done) done();
+                    })
+                    .catch(function () { if (done) done(); });
+            } catch (e) { if (done) done(); }
+        }
+        function _wsFmtHex(id) { return "0x" + id.toString(16).toUpperCase(); }
+
+        /* Extract a raw signal from 8 data bytes per the channel decode
+           (bit_start/bit_length/endian/signed) — mirrors can_extract_bits. */
+        function _wsExtractBits(bytes, bitStart, bitLen, littleEndian, isSigned) {
+            var raw = 0;
+            if (littleEndian) {
+                for (var i = 0; i < bitLen; i++) {
+                    var bit = bitStart + i;
+                    if (bytes[bit >> 3] & (1 << (bit & 7))) raw += Math.pow(2, i);
+                }
+            } else {
+                for (var j = 0; j < bitLen; j++) {
+                    var b = bitStart + j;
+                    var byteIdx = b >> 3, bitIdx = 7 - (b & 7);
+                    raw = raw * 2 + ((bytes[byteIdx] >> bitIdx) & 1);
+                }
+            }
+            if (isSigned && bitLen < 53) {
+                var signBit = Math.pow(2, bitLen - 1);
+                if (raw >= signBit) raw -= signBit * 2;
+            }
+            return raw;
+        }
+
+        /* ============ CAN Bus Analyzer ============ */
+        var ca = {
+            paused: false, sel: null, watch: -1, sort: "id", demo: false,
+            rows: {},          /* id -> {id,ext,dlc,bytes[8],count,hz,age} */
+            prev: {},          /* id -> previous bytes[] for change flash */
+            lastCounts: {}, lastPollT: 0, fps: 0,
+            hist: [],          /* selected-id byte history ring [[t,bytes],..] */
+            decodeMap: null    /* can_id -> [channel] */
+        };
+        var _caTimer = null, _caDemoState = null;
+
+        function caBuildDecodeMap() {
+            ca.decodeMap = {};
+            (_wsChannels || []).forEach(function (c) {
+                var d = c.decode;
+                if (!d || !d.can_id) return;
+                (ca.decodeMap[d.can_id] = ca.decodeMap[d.can_id] || []).push(c);
+            });
+        }
+
+        function caDecodeVal(c, bytes) {
+            var d = c.decode;
+            var raw = _wsExtractBits(bytes, d.bit_start || 0, d.bit_length || 16, d.endian === 1, !!d.is_signed);
+            var v = raw * (d.scale !== undefined ? d.scale : 1) + (d.offset || 0);
+            var dec = c.decimals !== undefined ? c.decimals : (Math.abs(v) < 10 ? 1 : 0);
+            return v.toFixed(dec);
+        }
+
+        function caParseHex(hexStr) {
+            var out = [];
+            for (var i = 0; i + 1 < hexStr.length; i += 2) out.push(parseInt(hexStr.substr(i, 2), 16));
+            return out;
+        }
+
+        /* Demo traffic so the workspace demos without a dash on the bench. */
+        function caDemoTick() {
+            if (!_caDemoState) {
+                _caDemoState = { t: 0, ids: [
+                    { id: 0x520, gen: function (t) { var rpm = Math.round(3000 + 2600 * Math.sin(t / 2.2)); var tps = Math.round(50 + 48 * Math.sin(t / 2.2 + 0.4)); return [rpm & 255, rpm >> 8, tps, 0, Math.round(98 + 3 * Math.sin(t / 9)), 0, 0, 0]; }, hz: 50 },
+                    { id: 0x530, gen: function (t) { var clt = Math.round(860 + 12 * Math.sin(t / 13)); var bat = Math.round(1385 + 8 * Math.sin(t / 5)); return [bat & 255, bat >> 8, 0, 0, 25, 0, clt & 255, clt >> 8]; }, hz: 10 },
+                    { id: 0x522, gen: function (t) { var spd = Math.round(1638 * (0.5 + 0.5 * Math.sin(t / 3.1))); return [spd & 255, spd >> 8, 3, 0, 0, 0, 0, 0]; }, hz: 25 },
+                    { id: 0x100, gen: function (t) { var n = Math.round(t * 100) & 0xFFFF; return [n & 255, n >> 8, 0xAA, 0x55, 0, 0, 0, 1]; }, hz: 100 }
+                ] };
+            }
+            _caDemoState.t += 0.25;
+            _caDemoState.ids.forEach(function (s) {
+                var r = ca.rows[s.id] || { id: s.id, ext: false, dlc: 8, count: 0 };
+                r.bytes = s.gen(_caDemoState.t);
+                r.count += Math.round(s.hz * 0.25);
+                r.age = 0;
+                ca.rows[s.id] = r;
+            });
+            caComputeRates();
+            caRender();
+        }
+
+        function caComputeRates() {
+            var now = performance.now();
+            var dt = ca.lastPollT ? (now - ca.lastPollT) / 1000 : 0;
+            var totalD = 0;
+            Object.keys(ca.rows).forEach(function (k) {
+                var r = ca.rows[k];
+                var prev = ca.lastCounts[k];
+                if (dt > 0.05 && prev !== undefined && r.count >= prev) {
+                    var d = r.count - prev;
+                    totalD += d;
+                    /* EMA so the Hz readout is steady */
+                    var inst = d / dt;
+                    r.hz = r.hz === undefined ? inst : r.hz * 0.7 + inst * 0.3;
+                }
+                ca.lastCounts[k] = r.count;
+            });
+            if (dt > 0.05) ca.fps = Math.round(ca.fps * 0.7 + (totalD / dt) * 0.3);
+            ca.lastPollT = now;
+        }
+
+        function _caPoll() {
+            if (ca.paused) return;
+            var connected = typeof RDM !== "undefined" && RDM.mode !== "local" &&
+                            typeof _connectionOk !== "undefined" && _connectionOk;
+            var chip = document.getElementById("caChipBus");
+            if (!connected) {
+                ca.demo = true;
+                if (chip) chip.innerHTML = "no dash link &#8212; <b>demo traffic</b>";
+                caDemoTick();
+                return;
+            }
+            if (ca.demo) { ca.demo = false; ca.rows = {}; ca.prev = {}; ca.lastCounts = {}; _caDemoState = null; }
+            fetch("/api/can/monitor")
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (j) {
+                    if (!j || !Array.isArray(j.ids)) return;
+                    j.ids.forEach(function (e) {
+                        var r = ca.rows[e.id] || { id: e.id, count: 0 };
+                        r.ext = !!e.ext; r.dlc = e.dlc;
+                        r.bytes = caParseHex(e.data || "");
+                        while (r.bytes.length < 8) r.bytes.push(0);
+                        r.count = e.count; r.age = e.age_ms;
+                        ca.rows[e.id] = r;
+                    });
+                    if (chip) chip.innerHTML = "via RDM-7 &#183; <b>" + j.ids.length + "</b> / " + (j.capacity || 64) + " IDs";
+                    caComputeRates();
+                    caRender();
+                })
+                .catch(function () {});
+        }
+
+        function caSort(k) { ca.sort = k; caRender(); }
+        window.caSort = caSort;
+
+        function caRowName(r) {
+            var chans = ca.decodeMap ? ca.decodeMap[r.id] : null;
+            if (!chans || !chans.length) return "";
+            return chans.map(function (c) { return (c.label || c.id) + " " + caDecodeVal(c, r.bytes) + (c.units_display ? " " + c.units_display : ""); }).join(" · ");
+        }
+
+        function caRender() {
+            var tbody = document.getElementById("caRows");
+            if (!tbody) return;
+            var filter = (document.getElementById("caFilter") || { value: "" }).value.trim().toLowerCase();
+            var list = Object.keys(ca.rows).map(function (k) { return ca.rows[k]; });
+            if (filter) {
+                list = list.filter(function (r) {
+                    return r.id.toString(16).indexOf(filter.replace(/^0x/, "")) >= 0 ||
+                           caRowName(r).toLowerCase().indexOf(filter) >= 0;
+                });
+            }
+            list.sort(function (a, b) {
+                if (ca.sort === "hz") return (b.hz || 0) - (a.hz || 0);
+                if (ca.sort === "count") return b.count - a.count;
+                if (ca.sort === "name") return caRowName(b).length - caRowName(a).length;
+                return a.id - b.id;
+            });
+            /* keyed in-place update so the change-flash CSS transitions live */
+            var seen = {};
+            list.forEach(function (r, idx) {
+                var key = "car_" + r.id;
+                seen[key] = true;
+                var tr = document.getElementById(key);
+                if (!tr) {
+                    tr = document.createElement("tr");
+                    tr.id = key; tr.className = "row";
+                    tr.innerHTML = "<td></td><td class='ca-name'></td><td class='ca-dim'></td><td class='ca-dim'></td><td></td>";
+                    tr.addEventListener("click", function () { caSelect(r.id); });
+                    tbody.appendChild(tr);
+                }
+                if (tbody.children[idx] !== tr) tbody.insertBefore(tr, tbody.children[idx] || null);
+                tr.className = "row" + (ca.sel === r.id ? " sel" : "");
+                var tds = tr.children;
+                tds[0].innerHTML = "<span class='ca-id'>" + _wsFmtHex(r.id) + "</span>" + (r.ext ? "<span class='ca-ext'>EXT</span>" : "");
+                tds[1].textContent = caRowName(r);
+                tds[2].textContent = r.hz !== undefined ? (r.hz >= 10 ? Math.round(r.hz) : r.hz.toFixed(1)) + " Hz" : "—";
+                tds[3].textContent = r.count;
+                var prev = ca.prev[r.id] || [];
+                var html = "";
+                for (var b = 0; b < 8; b++) {
+                    var inDlc = b < r.dlc;
+                    var chg = inDlc && prev.length && r.bytes[b] !== prev[b];
+                    html += "<span class='ca-b" + (chg ? " chg" : "") + (!inDlc ? " mute" : "") + "'>" +
+                            (inDlc ? r.bytes[b].toString(16).toUpperCase().padStart(2, "0") : "··") + "</span>";
+                }
+                tds[4].innerHTML = html;
+                if (chgFadeQueue.indexOf(r.id) < 0 && prev.length) chgFadeQueue.push(r.id);
+                ca.prev[r.id] = r.bytes.slice();
+            });
+            /* drop rows for IDs that vanished (reset/demo swap) */
+            Array.prototype.slice.call(tbody.children).forEach(function (tr) {
+                if (!seen[tr.id]) tr.remove();
+            });
+            var si = document.getElementById("caStatIds"); if (si) si.textContent = list.length;
+            var sf = document.getElementById("caStatFps"); if (sf) sf.textContent = ca.fps;
+            /* schedule the accent flash to fade */
+            setTimeout(function () {
+                chgFadeQueue.splice(0).forEach(function (id) {
+                    var tr = document.getElementById("car_" + id);
+                    if (tr) tr.querySelectorAll(".ca-b.chg").forEach(function (el) { el.classList.remove("chg"); });
+                });
+            }, 130);
+            if (ca.sel !== null) { caPushHist(); caRenderInspector(false); }
+        }
+        var chgFadeQueue = [];
+
+        function caSelect(id) {
+            ca.sel = id; ca.watch = -1; ca.hist = [];
+            caRender(); caRenderInspector(true);
+        }
+
+        function caPushHist() {
+            var r = ca.rows[ca.sel];
+            if (!r) return;
+            ca.hist.push({ t: performance.now(), b: r.bytes.slice() });
+            if (ca.hist.length > 160) ca.hist.shift();
+        }
+
+        function caRenderInspector(full) {
+            var insp = document.getElementById("caInspector");
+            var r = ca.rows[ca.sel];
+            if (!insp || !r) return;
+            if (full || !document.getElementById("caBg0")) {
+                var chans = ca.decodeMap ? (ca.decodeMap[r.id] || []) : [];
+                var h = "<h2>" + _wsFmtHex(r.id) + (r.ext ? " <span class='ca-ext'>EXT 29-bit</span>" : "") + "</h2>" +
+                    "<div class='ws-sub'>dec " + r.id + " · dlc " + r.dlc + "</div>" +
+                    "<div class='ws-grp'><div class='ws-gt'>Bytes — click one to plot it</div><div class='ca-bytegrid'>";
+                for (var b = 0; b < 8; b++) h += "<div class='ca-bcell' id='caBg" + b + "' onclick='caWatch(" + b + ")'><div class='i'>B" + b + "</div><div class='h'>—</div><div class='d'>—</div></div>";
+                h += "</div><canvas class='ca-spark' id='caSpark' width='560' height='130'></canvas></div>";
+                h += "<div class='ws-grp'><div class='ws-gt'>Channel decodes on this ID</div><div id='caDecList'>" +
+                     (chans.length ? "" : "<div class='ws-none' style='padding:10px 4px;'>No channel decodes this ID.<br>Add one in the dash editor&#8217;s Channels tab.</div>") + "</div></div>" +
+                     "<div class='ws-note'><b>Tip:</b> watch a byte while you operate the car — throttle, switches, temperature. The byte that moves with it is your signal. Bind it to a channel and every widget can use it.</div>";
+                insp.innerHTML = h;
+            }
+            for (var i = 0; i < 8; i++) {
+                var cell = document.getElementById("caBg" + i);
+                if (!cell) continue;
+                cell.className = "ca-bcell" + (ca.watch === i ? " watch" : "");
+                var inDlc = i < r.dlc;
+                cell.children[1].textContent = inDlc ? "0x" + r.bytes[i].toString(16).toUpperCase().padStart(2, "0") : "—";
+                cell.children[2].textContent = inDlc ? r.bytes[i] + " · " + r.bytes[i].toString(2).padStart(8, "0") : "—";
+            }
+            var dl = document.getElementById("caDecList");
+            if (dl) {
+                var chans2 = ca.decodeMap ? (ca.decodeMap[r.id] || []) : [];
+                dl.innerHTML = chans2.map(function (c) {
+                    var d = c.decode;
+                    return "<div class='ca-dec'><span class='v'>" + caDecodeVal(c, r.bytes) + (c.units_display ? " " + c.units_display : "") + "</span>" +
+                           "<div class='n'>" + (c.label || c.id) + "</div>" +
+                           "<div class='m'>bits " + (d.bit_start || 0) + "&#8211;" + ((d.bit_start || 0) + (d.bit_length || 16) - 1) +
+                           " · ×" + (d.scale !== undefined ? parseFloat(d.scale.toPrecision(6)) : 1) +
+                           (d.offset ? " +" + parseFloat(d.offset.toPrecision(6)) : "") +
+                           " · " + (d.endian === 1 ? "intel" : "motorola") + "</div></div>";
+                }).join("");
+            }
+            caDrawSpark();
+        }
+
+        window.caWatch = function (b) { ca.watch = ca.watch === b ? -1 : b; caRenderInspector(false); };
+
+        function caDrawSpark() {
+            var cv = document.getElementById("caSpark");
+            if (!cv) return;
+            var ctx = cv.getContext("2d");
+            ctx.clearRect(0, 0, cv.width, cv.height);
+            if (ca.watch < 0 || ca.hist.length < 2) {
+                ctx.fillStyle = "#5A6068"; ctx.font = "16px 'JetBrains Mono', monospace";
+                ctx.fillText(ca.watch < 0 ? "click a byte above to plot it" : "collecting…", 14, cv.height / 2 + 5);
+                return;
+            }
+            var vals = ca.hist.map(function (s) { return s.b[ca.watch]; });
+            var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+            if (mx === mn) mx = mn + 1;
+            ctx.strokeStyle = "#2d8ceb"; ctx.lineWidth = 2; ctx.beginPath();
+            vals.forEach(function (v, i) {
+                var x = (i / (vals.length - 1)) * (cv.width - 8) + 4;
+                var y = cv.height - 8 - ((v - mn) / (mx - mn)) * (cv.height - 20);
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+            ctx.fillStyle = "#7C8590"; ctx.font = "11px 'JetBrains Mono', monospace";
+            ctx.fillText(mx, 4, 12); ctx.fillText(mn, 4, cv.height - 2);
+        }
+
+        window._caSetPaused = function (p) {
+            ca.paused = p;
+            var l = document.getElementById("caBtnLive"), pz = document.getElementById("caBtnPause");
+            if (l) l.className = p ? "" : "on";
+            if (pz) pz.className = p ? "on" : "";
+        };
+
+        window._caExportCsv = function () {
+            var lines = ["id,ext,dlc,rate_hz,count,data_hex,decodes"];
+            Object.keys(ca.rows).forEach(function (k) {
+                var r = ca.rows[k];
+                lines.push([_wsFmtHex(r.id), r.ext ? 1 : 0, r.dlc, r.hz ? r.hz.toFixed(1) : "",
+                            r.count, r.bytes.map(function (b) { return b.toString(16).toUpperCase().padStart(2, "0"); }).join(""),
+                            '"' + caRowName(r).replace(/"/g, "'") + '"'].join(","));
+            });
+            var a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
+            a.download = "can_monitor.csv";
+            a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        };
+
+        window._caOpen = function () {
+            _wsCloseAll("caWorkspace");
+            _wsLoadChannels(function () { caBuildDecodeMap(); });
+            var ws = document.getElementById("caWorkspace");
+            if (ws) ws.style.display = "flex";
+            if (!_caTimer) _caTimer = setInterval(_caPoll, 250);
+            _caPoll();
+        };
+        window._caClose = function () {
+            if (_caTimer) { clearInterval(_caTimer); _caTimer = null; }
+            var ws = document.getElementById("caWorkspace");
+            if (ws) ws.style.display = "none";
+            window._suiteHomeShow();
+        };
+
+        /* ============ RDM IO Expander ============ */
+        var IO_LS = "rdm7_io_v1";
+        var IO_GROUPS = [
+            { key: "ai", label: "Analog in · 0–5 V", n: 8, color: "#2d8ceb" },
+            { key: "tc", label: "Thermocouple · K", n: 4, color: "#FF9F0A" },
+            { key: "di", label: "Digital / freq", n: 4, color: "#A8E05F" },
+            { key: "pwm", label: "PWM out · 2 A low-side", n: 4, color: "#AF52DE" },
+            { key: "hs", label: "High-side out · 8 A", n: 2, color: "#FF2E23" }
+        ];
+        var io = { sel: null, live: false, cfg: {}, simT: 0, simVals: {}, outState: {} };
+        var _ioSimTimer = null;
+
+        function ioPinList() {
+            var out = [];
+            IO_GROUPS.forEach(function (g) {
+                for (var i = 1; i <= g.n; i++) out.push({ id: g.key + i, group: g });
+            });
+            return out;
+        }
+        function ioDefCfg(pin) {
+            var t = pin.group.key;
+            if (t === "ai")  return { name: "", mode: "0-5v", units: "", vLo: 0, vHi: 5, sLo: 0, sHi: 100, dec: 1, channel: "" };
+            if (t === "tc")  return { name: "", units: "°C", channel: "" };
+            if (t === "di")  return { name: "", mode: "switch_low", channel: "" };
+            if (t === "pwm") return { name: "", src: "", mode: "thresh", op: ">", thr: 90, hyst: 5, mapLo: 70, mapHi: 100, dutyLo: 30, dutyHi: 100, freq: 100 };
+            return { name: "", src: "", op: ">", thr: 90, hyst: 5, invert: false };
+        }
+        function ioCfg(id) {
+            if (!io.cfg[id]) {
+                var pin = ioPinList().filter(function (p) { return p.id === id; })[0];
+                io.cfg[id] = ioDefCfg(pin);
+            }
+            return io.cfg[id];
+        }
+        function ioLoad() {
+            try { io.cfg = JSON.parse(localStorage.getItem(IO_LS) || "{}").pins || {}; } catch (e) { io.cfg = {}; }
+        }
+        function ioSave() {
+            try { localStorage.setItem(IO_LS, JSON.stringify({ pins: io.cfg, v: 1 })); } catch (e) {}
+        }
+        window.ioSaveExplicit = function () { ioSave(); showToast("IO configuration saved on this PC", "success"); };
+
+        function ioPinLabel(id) {
+            var c = io.cfg[id];
+            return (c && c.name) ? c.name : "";
+        }
+
+        function ioBuildRail() {
+            var rail = document.getElementById("ioRail");
+            if (!rail) return;
+            rail.innerHTML = "";
+            IO_GROUPS.forEach(function (g) {
+                var t = document.createElement("div");
+                t.className = "ws-rail-title"; t.textContent = g.label;
+                rail.appendChild(t);
+                for (var i = 1; i <= g.n; i++) {
+                    (function (id) {
+                        var b = document.createElement("button");
+                        b.className = "ws-item" + (io.sel === id ? " on" : "");
+                        b.id = "ioItem_" + id;
+                        b.innerHTML = "<span class='st' id='ioSt_" + id + "'></span>" + id.toUpperCase() +
+                                      "<span class='tag'>" + (ioPinLabel(id) || "&#8212;") + "</span>";
+                        b.addEventListener("click", function () { ioSelect(id); });
+                        rail.appendChild(b);
+                    })(g.key + i);
+                }
+            });
+            var t2 = document.createElement("div");
+            t2.className = "ws-rail-title"; t2.textContent = "Broadcast";
+            rail.appendChild(t2);
+            var cb = document.createElement("button");
+            cb.className = "ws-item" + (io.sel === "_can" ? " on" : "");
+            cb.id = "ioItem__can";
+            cb.innerHTML = "<span class='st'></span>CAN &amp; DBC<span class='tag'>0x6C0</span>";
+            cb.addEventListener("click", function () { ioSelect("_can"); });
+            rail.appendChild(cb);
+        }
+
+        function ioSelect(id) {
+            io.sel = id;
+            document.querySelectorAll("#ioRail .ws-item").forEach(function (el) { el.classList.remove("on"); });
+            var it = document.getElementById("ioItem_" + id);
+            if (it) it.classList.add("on");
+            ioRenderStage(); ioRenderInspector();
+        }
+
+        /* Product face — top-down: alloy case, DTM12 connector, two pin rows. */
+        function ioRenderStage() {
+            var host = document.getElementById("ioStageSvg");
+            if (!host) return;
+            var pins = ioPinList();
+            var s = "<svg viewBox='0 0 660 330' xmlns='http://www.w3.org/2000/svg'>";
+            s += "<defs>" +
+                 "<linearGradient id='ioCase' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#2E3136'/><stop offset='0.14' stop-color='#202226'/><stop offset='0.8' stop-color='#141618'/><stop offset='1' stop-color='#0E1012'/></linearGradient>" +
+                 "<linearGradient id='ioRim' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#828A93' stop-opacity='0.45'/><stop offset='0.25' stop-color='#4A5057' stop-opacity='0.12'/><stop offset='1' stop-color='#000' stop-opacity='0.4'/></linearGradient>" +
+                 "<filter id='ioGlow' x='-80%' y='-80%' width='260%' height='260%'><feGaussianBlur stdDeviation='3'/></filter>" +
+                 "<radialGradient id='ioFloor' cx='0.5' cy='0.5' r='0.5'><stop offset='0' stop-color='#000' stop-opacity='0.45'/><stop offset='1' stop-color='#000' stop-opacity='0'/></radialGradient>" +
+                 "</defs>";
+            s += "<ellipse cx='330' cy='312' rx='250' ry='12' fill='url(#ioFloor)'/>";
+            s += "<rect x='70' y='30' width='520' height='268' rx='16' fill='#000' opacity='0.5' filter='url(#ioGlow)' transform='translate(0,4)'/>";
+            s += "<rect x='70' y='30' width='520' height='268' rx='16' fill='url(#ioCase)'/>";
+            s += "<rect x='71' y='31' width='518' height='266' rx='15.4' fill='none' stroke='url(#ioRim)' stroke-width='1.6'/>";
+            /* cooling ribs */
+            for (var rx = 100; rx <= 560; rx += 24) s += "<rect x='" + rx + "' y='42' width='10' height='58' rx='4' fill='#0F1113' opacity='0.55'/>";
+            /* mounting ears */
+            s += "<circle cx='84' cy='44' r='5.5' fill='#0A0C0E' stroke='#33383E' stroke-width='1'/><circle cx='576' cy='44' r='5.5' fill='#0A0C0E' stroke='#33383E' stroke-width='1'/>" +
+                 "<circle cx='84' cy='284' r='5.5' fill='#0A0C0E' stroke='#33383E' stroke-width='1'/><circle cx='576' cy='284' r='5.5' fill='#0A0C0E' stroke='#33383E' stroke-width='1'/>";
+            /* DTM connector, left */
+            s += "<rect x='40' y='120' width='34' height='88' rx='5' fill='#101214' stroke='#000' stroke-width='1.4'/>";
+            for (var cy = 134; cy <= 194; cy += 15) s += "<circle cx='57' cy='" + cy + "' r='3' fill='#33383E'/>";
+            s += "<rect x='36' y='150' width='8' height='28' rx='2' fill='#17191C' stroke='#000' stroke-width='1'/>";
+            /* wordmark */
+            s += "<text x='330' y='128' text-anchor='middle' font-family='Sora, sans-serif' font-weight='700' font-size='21' fill='#E8EDF2' letter-spacing='2'>RDM <tspan fill='#7C8590' font-weight='400'>IO-22</tspan></text>";
+            s += "<text x='330' y='146' text-anchor='middle' font-family='JetBrains Mono, monospace' font-size='8.5' fill='#5A6068' letter-spacing='1.5'>CAN I/O EXPANDER · 8AI · 4TC · 4DI · 4PWM · 2HS</text>";
+            /* pin rows: inputs on the upper row, outputs on the lower */
+            var inputs = pins.filter(function (p) { return ["ai", "tc", "di"].indexOf(p.group.key) >= 0; });
+            var outputs = pins.filter(function (p) { return ["pwm", "hs"].indexOf(p.group.key) >= 0; });
+            function pinRow(list, y) {
+                var w = 24, gap = 6.5;
+                var total = list.length * w + (list.length - 1) * gap;
+                var x0 = 330 - total / 2;
+                list.forEach(function (p, i) {
+                    var x = x0 + i * (w + gap);
+                    var col = p.group.color;
+                    var sel = io.sel === p.id;
+                    var on = io.live && io.outState[p.id];
+                    var isOut = ["pwm", "hs"].indexOf(p.group.key) >= 0;
+                    s += "<g class='io-pin" + (sel ? " sel" : "") + "' onclick='ioSelect(\"" + p.id + "\")'>";
+                    if (on) s += "<rect x='" + (x - 3) + "' y='" + (y - 3) + "' width='" + (w + 6) + "' height='30' rx='6' fill='" + col + "' opacity='0.55' filter='url(#ioGlow)'/>";
+                    s += "<rect class='io-pin-body' x='" + x + "' y='" + y + "' width='" + w + "' height='24' rx='4' fill='#0C0E10' stroke='" + (sel ? "#2d8ceb" : "#26292D") + "' stroke-width='1.2'/>";
+                    s += "<rect x='" + (x + 3) + "' y='" + (y + 3) + "' width='" + (w - 6) + "' height='5' rx='2' fill='" + col + "' opacity='" + (io.live && !isOut ? "0.9" : on ? "1" : "0.45") + "'/>";
+                    s += "<text x='" + (x + w / 2) + "' y='" + (y + 18.5) + "' text-anchor='middle' font-family='JetBrains Mono, monospace' font-size='7.5' fill='#7C8590'>" + p.id.toUpperCase() + "</text>";
+                    if (io.live && !isOut && io.simVals[p.id] !== undefined)
+                        s += "<text x='" + (x + w / 2) + "' y='" + (y + 36) + "' text-anchor='middle' font-family='JetBrains Mono, monospace' font-size='7.5' fill='#AEB6BF'>" + io.simVals[p.id] + "</text>";
+                    s += "</g>";
+                });
+            }
+            pinRow(inputs, 172);
+            pinRow(outputs, 232);
+            s += "<text x='108' y='188' text-anchor='end' font-family='JetBrains Mono, monospace' font-size='8' fill='#5A6068' letter-spacing='1'>IN</text>";
+            s += "<text x='108' y='248' text-anchor='end' font-family='JetBrains Mono, monospace' font-size='8' fill='#5A6068' letter-spacing='1'>OUT</text>";
+            /* status LED */
+            s += "<circle cx='560' cy='270' r='4' fill='" + (io.live ? "#6FBF73" : "#26292D") + "'" + (io.live ? " filter='url(#ioGlow)'" : "") + "/>";
+            s += "<text x='548' y='273.5' text-anchor='end' font-family='JetBrains Mono, monospace' font-size='7.5' fill='#5A6068'>BUS</text>";
+            s += "</svg>";
+            host.innerHTML = s;
+        }
+        window.ioSelect = ioSelect;
+
+        function ioOpt(v, t, cur) { return "<option value='" + v + "'" + (cur === v ? " selected" : "") + ">" + t + "</option>"; }
+
+        function ioChanOptions(cur) {
+            var opts = "<option value=''>— none —</option>";
+            (_wsChannels || []).forEach(function (c) { opts += ioOpt(c.id, c.label || c.id, cur); });
+            if (cur && (!(_wsChannels || []).some(function (c) { return c.id === cur; }))) opts += ioOpt(cur, cur, cur);
+            return opts;
+        }
+        function ioSrcOptions(cur) {
+            var opts = "<option value=''>— select source —</option><optgroup label='This unit&#8217;s inputs'>";
+            ioPinList().forEach(function (p) {
+                if (["ai", "tc", "di"].indexOf(p.group.key) < 0) return;
+                var nm = ioPinLabel(p.id);
+                opts += ioOpt(p.id, p.id.toUpperCase() + (nm ? " · " + nm : ""), cur);
+            });
+            opts += "</optgroup><optgroup label='Dash channels'>";
+            (_wsChannels || []).forEach(function (c) { opts += ioOpt("ch:" + c.id, c.label || c.id, cur); });
+            opts += "</optgroup>";
+            return opts;
+        }
+
+        function ioField(label, inner) { return "<div class='ws-field'><label>" + label + "</label>" + inner + "</div>"; }
+        function ioIn(id, val, ph) { return "<input type='text' id='" + id + "' value='" + String(val).replace(/'/g, "&#39;") + "' placeholder='" + (ph || "") + "' onchange='ioFld(this)'>"; }
+        function ioNum(id, val) { return "<input type='number' id='" + id + "' value='" + val + "' onchange='ioFld(this)'>"; }
+
+        window.ioFld = function (el) {
+            var c = ioCfg(io.sel);
+            var k = el.id.replace("ioF_", "");
+            var v = el.type === "number" ? parseFloat(el.value) : el.value;
+            if (el.type === "number" && isNaN(v)) return;
+            c[k] = v;
+            ioSave(); ioBuildRail(); ioRenderStage();
+        };
+        window.ioSeg = function (k, v) {
+            ioCfg(io.sel)[k] = v;
+            ioSave(); ioRenderInspector(); ioRenderStage();
+        };
+
+        function ioSegHtml(k, cur, opts) {
+            return "<div class='ws-seg'>" + opts.map(function (o) {
+                return "<button class='" + (cur === o[0] ? "on" : "") + "' onclick='ioSeg(\"" + k + "\",\"" + o[0] + "\")'>" + o[1] + "</button>";
+            }).join("") + "</div>";
+        }
+
+        function ioRenderInspector() {
+            var insp = document.getElementById("ioInspector");
+            if (!insp) return;
+            if (!io.sel) { insp.innerHTML = "<div class='ws-none'>Select a pin to configure it</div>"; return; }
+            if (io.sel === "_can") { ioRenderCanInspector(insp); return; }
+            var pin = ioPinList().filter(function (p) { return p.id === io.sel; })[0];
+            var c = ioCfg(io.sel);
+            var t = pin.group.key;
+            var h = "<h2>" + io.sel.toUpperCase() + " <span style='color:" + pin.group.color + "; font-size:10px;'>&#9679;</span></h2>" +
+                    "<div class='ws-sub'>" + pin.group.label + "</div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>Identity</div>" +
+                 ioField("Name", ioIn("ioF_name", c.name, t === "ai" ? "e.g. Fuel pressure" : "e.g. Fan 1"));
+            if (t === "ai" || t === "tc" || t === "di")
+                h += ioField("Publish as channel", "<select id='ioF_channel' onchange='ioFld(this)'>" + ioChanOptions(c.channel) + "</select>");
+            h += "</div>";
+
+            if (t === "ai") {
+                h += "<div class='ws-grp'><div class='ws-gt'>Input</div>" +
+                     ioField("Mode", ioSegHtml("mode", c.mode, [["0-5v", "0–5 V"], ["res", "Resistive"]])) +
+                     ioField("Units", ioIn("ioF_units", c.units, "kPa / °C / %")) +
+                     "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
+                     ioField(c.mode === "res" ? "Ω at low" : "V at low", ioNum("ioF_vLo", c.vLo)) +
+                     ioField(c.mode === "res" ? "Ω at high" : "V at high", ioNum("ioF_vHi", c.vHi)) +
+                     ioField("Reads as (low)", ioNum("ioF_sLo", c.sLo)) +
+                     ioField("Reads as (high)", ioNum("ioF_sHi", c.sHi)) + "</div>" +
+                     ioField("Decimals", ioNum("ioF_dec", c.dec)) +
+                     "</div>";
+            } else if (t === "tc") {
+                h += "<div class='ws-grp'><div class='ws-gt'>Thermocouple</div>" +
+                     ioField("Units", ioSegHtml("units", c.units, [["°C", "°C"], ["°F", "°F"]])) +
+                     "<div class='ws-note'>K-type, cold-junction compensated on-board. Reads &#8722;40 to +1,200 °C.</div></div>";
+            } else if (t === "di") {
+                var vr = io.sel === "di1" || io.sel === "di2";
+                h += "<div class='ws-grp'><div class='ws-gt'>Input</div>" +
+                     ioField("Mode", ioSegHtml("mode", c.mode, [["switch_low", "Sw &#8595;GND"], ["switch_high", "Sw &#8594;12V"], ["freq", "Frequency"]].concat(vr ? [["vr", "VR"]] : []))) +
+                     (vr ? "<div class='ws-note'>DI1/DI2 accept a VR (variable-reluctance) sensor &#8212; wheel-speed rings without a hall conversion.</div>" : "") +
+                     "</div>";
+            } else if (t === "pwm") {
+                h += "<div class='ws-grp'><div class='ws-gt'>Drive</div>" +
+                     ioField("Source", "<select id='ioF_src' onchange='ioFld(this)'>" + ioSrcOptions(c.src) + "</select>") +
+                     ioField("Behaviour", ioSegHtml("mode", c.mode, [["thresh", "On / off"], ["map", "PWM map"]]));
+                if (c.mode === "thresh") {
+                    h += "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
+                         ioField("Turns on " + c.op, ioNum("ioF_thr", c.thr)) +
+                         ioField("Hysteresis", ioNum("ioF_hyst", c.hyst)) + "</div>" +
+                         "<div class='ws-note'>e.g. fan on above 90&#8201;°C, off again under " + (c.thr - c.hyst) + "&#8201;°C &#8212; no relay chatter.</div>";
+                } else {
+                    h += "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
+                         ioField("Source at 0%", ioNum("ioF_mapLo", c.mapLo)) +
+                         ioField("Source at 100%", ioNum("ioF_mapHi", c.mapHi)) +
+                         ioField("Min duty %", ioNum("ioF_dutyLo", c.dutyLo)) +
+                         ioField("Max duty %", ioNum("ioF_dutyHi", c.dutyHi)) + "</div>" +
+                         ioField("PWM frequency (Hz)", ioNum("ioF_freq", c.freq));
+                }
+                h += "</div>";
+            } else if (t === "hs") {
+                h += "<div class='ws-grp'><div class='ws-gt'>Switch rule</div>" +
+                     ioField("Source", "<select id='ioF_src' onchange='ioFld(this)'>" + ioSrcOptions(c.src) + "</select>") +
+                     "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
+                     ioField("Turns on " + c.op, ioNum("ioF_thr", c.thr)) +
+                     ioField("Hysteresis", ioNum("ioF_hyst", c.hyst)) + "</div>" +
+                     "<div class='ws-note'>8&#8201;A high-side, short-circuit + thermal protected. Feeds pumps, fans, lights directly &#8212; no relay.</div></div>";
+            }
+            insp.innerHTML = h;
+        }
+
+        /* CAN broadcast + DBC export */
+        function ioFrameMap() {
+            var frames = [];
+            var base = 0x6C0;
+            frames.push({ id: base, name: "IO_AI_1_4", sigs: ["ai1", "ai2", "ai3", "ai4"].map(function (p, i) { return { pin: p, start: i * 16, len: 16 }; }) });
+            frames.push({ id: base + 1, name: "IO_AI_5_8", sigs: ["ai5", "ai6", "ai7", "ai8"].map(function (p, i) { return { pin: p, start: i * 16, len: 16 }; }) });
+            frames.push({ id: base + 2, name: "IO_TC_1_4", sigs: ["tc1", "tc2", "tc3", "tc4"].map(function (p, i) { return { pin: p, start: i * 16, len: 16 }; }) });
+            var s3 = [{ pin: "di_bits", start: 0, len: 8 }, { pin: "out_bits", start: 8, len: 8 },
+                      { pin: "pwm1", start: 16, len: 8 }, { pin: "pwm2", start: 24, len: 8 },
+                      { pin: "pwm3", start: 32, len: 8 }, { pin: "pwm4", start: 40, len: 8 }];
+            frames.push({ id: base + 3, name: "IO_STATE", sigs: s3 });
+            return frames;
+        }
+
+        function ioRenderCanInspector(insp) {
+            var frames = ioFrameMap();
+            var h = "<h2>CAN broadcast</h2><div class='ws-sub'>open protocol · DBC-portable</div>" +
+                "<div class='ws-grp'><div class='ws-gt'>Bus</div>" +
+                "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
+                ioField("Base ID (hex)", "<input type='text' value='6C0' disabled>") +
+                ioField("Rate", "<input type='text' value='50 Hz' disabled>") +
+                ioField("Bitrate", "<input type='text' value='500 kbit/s' disabled>") +
+                ioField("Frame type", "<input type='text' value='11-bit' disabled>") + "</div>" +
+                "<div class='ws-note'>Locked in this preview &#8212; configurable per unit once hardware ships. IDs auto-checked against everything else on your bus.</div></div>" +
+                "<div class='ws-grp'><div class='ws-gt'>Frame map</div>";
+            frames.forEach(function (f) {
+                h += "<div class='ca-dec'><div class='n'>" + _wsFmtHex(f.id) + " · " + f.name + "</div><div class='m'>" +
+                     f.sigs.map(function (sg) {
+                         var nm = ioPinLabel(sg.pin) || sg.pin.toUpperCase();
+                         return nm + " @" + sg.start + ":" + sg.len;
+                     }).join(" · ") + "</div></div>";
+            });
+            h += "</div><div class='ws-grp'><div class='ws-gt'>Take it anywhere</div>" +
+                 "<button class='ws-btn-line' onclick='ioExportDbc()'>Export .dbc</button>" +
+                 "<div class='ws-note'>Drop the DBC into MoTeC, Link, Haltech or SavvyCAN and every pin shows up named and scaled. Locked-down CAN is the thing we don&#8217;t do.</div></div>";
+            insp.innerHTML = h;
+        }
+
+        window.ioExportDbc = function () {
+            var lines = ['VERSION "RDM IO-22 broadcast v1"', "", "BU_: RDM_IO", ""];
+            ioFrameMap().forEach(function (f) {
+                lines.push("BO_ " + f.id + " " + f.name + ": 8 RDM_IO");
+                f.sigs.forEach(function (sg) {
+                    var pin = sg.pin;
+                    var c = io.cfg[pin] || {};
+                    var nm = (c.name || pin).replace(/[^A-Za-z0-9_]/g, "_");
+                    var factor = 1, offset = 0, unit = c.units || "";
+                    if (/^ai/.test(pin)) { factor = 0.01; }
+                    if (/^tc/.test(pin)) { factor = 0.1; offset = -40; unit = c.units || "C"; }
+                    lines.push(" SG_ " + nm + " : " + sg.start + "|" + sg.len + "@1+ (" + factor + "," + offset + ") [0|0] \"" + unit + "\" Vector__XXX");
+                });
+                lines.push("");
+            });
+            var a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/plain" }));
+            a.download = "rdm_io22.dbc";
+            a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+            showToast("DBC exported — import it into any CAN tool", "success");
+        };
+
+        /* live sim: sweep inputs, evaluate output rules */
+        function ioSimSrcVal(src) {
+            if (!src) return null;
+            if (src.indexOf("ch:") === 0) return 60 + 45 * Math.sin(io.simT / 6);   /* stand-in dash channel */
+            return io.simRaw[src] !== undefined ? io.simRaw[src] : null;
+        }
+        function _ioSimTick() {
+            io.simT += 0.2;
+            io.simRaw = {};
+            ioPinList().forEach(function (p, i) {
+                var c = ioCfg(p.id);
+                if (p.group.key === "ai") {
+                    var v = c.sLo + (c.sHi - c.sLo) * (0.5 + 0.5 * Math.sin(io.simT / 3 + i));
+                    io.simRaw[p.id] = v;
+                    io.simVals[p.id] = v.toFixed(c.dec !== undefined ? c.dec : 1);
+                } else if (p.group.key === "tc") {
+                    var tv = 80 + 60 * (0.5 + 0.5 * Math.sin(io.simT / 5 + i));
+                    io.simRaw[p.id] = tv;
+                    io.simVals[p.id] = Math.round(tv) + "°";
+                } else if (p.group.key === "di") {
+                    var on = Math.sin(io.simT / 4 + i * 2) > 0.6;
+                    io.simRaw[p.id] = on ? 1 : 0;
+                    io.simVals[p.id] = on ? "ON" : "off";
+                }
+            });
+            ["pwm1", "pwm2", "pwm3", "pwm4", "hs1", "hs2"].forEach(function (id) {
+                var c = ioCfg(id);
+                var sv = ioSimSrcVal(c.src);
+                var was = !!io.outState[id];
+                var on = false;
+                if (sv !== null) {
+                    if (c.mode === "map") on = true;
+                    else on = was ? sv > c.thr - c.hyst : sv > c.thr;
+                }
+                io.outState[id] = on;
+                var dot = document.getElementById("ioSt_" + id);
+                if (dot) dot.className = "st" + (on ? " on" : "");
+            });
+            ioRenderStage();
+        }
+        window._ioSetLive = function (live) {
+            io.live = live;
+            var d = document.getElementById("ioBtnDesign"), l = document.getElementById("ioBtnLive");
+            if (d) d.className = live ? "" : "on";
+            if (l) l.className = live ? "on" : "";
+            if (live && !_ioSimTimer) _ioSimTimer = setInterval(_ioSimTick, 200);
+            if (!live && _ioSimTimer) { clearInterval(_ioSimTimer); _ioSimTimer = null; io.outState = {}; io.simVals = {}; }
+            var hint = document.getElementById("ioHint");
+            if (hint) hint.textContent = live
+                ? "Simulated senders sweeping — outputs follow their rules. Watch the fan kick on past its threshold."
+                : "Click any pin to configure it — inputs become channels on the bus.";
+            ioRenderStage();
+        };
+
+        window._ioOpen = function () {
+            _wsCloseAll("ioWorkspace");
+            ioLoad();
+            _wsLoadChannels(function () { if (io.sel) ioRenderInspector(); });
+            ioBuildRail();
+            var ws = document.getElementById("ioWorkspace");
+            if (ws) ws.style.display = "flex";
+            ioRenderStage(); ioRenderInspector();
+        };
+        window._ioClose = function () {
+            if (_ioSimTimer) { clearInterval(_ioSimTimer); _ioSimTimer = null; io.live = false; }
+            ioSave();
+            var ws = document.getElementById("ioWorkspace");
+            if (ws) ws.style.display = "none";
+            window._suiteHomeShow();
+        };
+
+        /* ============ GPS Lap Timer ============ */
+        /* Track outlines are OUR OWN stylized drawings (approximate layouts,
+           not survey data, not derived from any vendor track database — that
+           stays true when the real curated DB ships). Start/finish follows
+           what the whole market converged on: pick a circuit and the gate
+           comes with it, or place the gate yourself; a drive-through "set at
+           the line" arms once the node is on the car. */
+        var LT_LS = "rdm7_laptimer_v1";
+        var LT_TRACKS = [
+            { id: "mallala", name: "Mallala", country: "SA · AUS", km: 2.6, dir: 1, center: [-34.9053, 138.5069],
+              pts: [[80,300],[80,150],[130,90],[230,70],[420,60],[520,90],[600,140],[640,220],[600,290],[500,320],[380,300],[300,330],[180,340]] },
+            { id: "bend_gt", name: "The Bend GT", country: "SA · AUS", km: 4.95, dir: 1, center: [-35.2833, 139.3167],
+              pts: [[70,240],[90,140],[160,80],[260,60],[350,90],[400,140],[470,110],[540,70],[620,100],[650,180],[610,240],[540,260],[560,310],[500,350],[400,330],[330,360],[240,350],[150,320],[100,300]] },
+            { id: "phillip", name: "Phillip Island", country: "VIC · AUS", km: 4.45, dir: -1, center: [-38.5019, 145.2358],
+              pts: [[90,320],[70,230],[110,150],[200,100],[330,80],[470,70],[590,90],[650,160],[620,230],[520,240],[430,210],[350,240],[380,300],[300,350],[180,360]] },
+            { id: "smp", name: "Sydney MSP Gardner", country: "NSW · AUS", km: 3.93, dir: 1, center: [-33.8039, 150.8703],
+              pts: [[100,300],[80,190],[130,110],[240,80],[380,90],[480,70],[590,110],[640,200],[590,280],[480,300],[420,260],[330,290],[250,340],[160,350]] },
+            { id: "winton", name: "Winton", country: "VIC · AUS", km: 3.0, dir: 1, center: [-36.5183, 146.0861],
+              pts: [[120,280],[100,180],[160,120],[260,100],[330,140],[400,110],[500,90],[590,130],[620,210],[560,270],[470,250],[400,290],[320,270],[240,320],[170,330]] }
+        ];
+        var lt = {
+            cfg: null, sim: false, drag: null, path: null,
+            simState: null, selTrack: null
+        };
+        var _ltSimTimer = null;
+
+        function ltDefaults() {
+            return {
+                active: "mallala",
+                tracks: {},   /* per-track: {gateT, gateW, s1, s2, sectorsOn, method} */
+                node: { rate: 25, baseId: "640", bitrate: 500 },
+                engine: { minLap: 20, ref: "best" }
+            };
+        }
+        function ltTrackCfg() {
+            var t = lt.cfg.tracks[lt.cfg.active];
+            if (!t) t = lt.cfg.tracks[lt.cfg.active] = { gateT: 0.02, gateW: 25, s1: 0.36, s2: 0.7, sectorsOn: true, method: "library" };
+            return t;
+        }
+        function ltLoad() {
+            try {
+                var s = JSON.parse(localStorage.getItem(LT_LS) || "null");
+                lt.cfg = s && s.active ? s : ltDefaults();
+            } catch (e) { lt.cfg = ltDefaults(); }
+        }
+        function ltSave() { try { localStorage.setItem(LT_LS, JSON.stringify(lt.cfg)); } catch (e) {} }
+        window.ltSaveExplicit = function () { ltSave(); showToast("Lap timer setup saved on this PC", "success"); };
+
+        function ltTrack() {
+            return LT_TRACKS.filter(function (t) { return t.id === lt.cfg.active; })[0] || LT_TRACKS[0];
+        }
+
+        /* Catmull-Rom → dense sampled closed loop with arc length. */
+        function ltBuildPath(track) {
+            var p = track.pts, n = p.length, SAMPLES_PER_SEG = 26;
+            var pts = [];
+            for (var i = 0; i < n; i++) {
+                var p0 = p[(i - 1 + n) % n], p1 = p[i], p2 = p[(i + 1) % n], p3 = p[(i + 2) % n];
+                for (var s = 0; s < SAMPLES_PER_SEG; s++) {
+                    var u = s / SAMPLES_PER_SEG, u2 = u * u, u3 = u2 * u;
+                    pts.push([
+                        0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * u + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * u2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * u3),
+                        0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * u + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * u2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * u3)
+                    ]);
+                }
+            }
+            var cum = [0];
+            for (var j = 1; j <= pts.length; j++) {
+                var a = pts[j - 1], b = pts[j % pts.length];
+                cum.push(cum[j - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+            }
+            var total = cum[pts.length];
+            return { pts: pts, cum: cum, total: total, mPerPx: (track.km * 1000) / total };
+        }
+        function ltPointAt(t) {
+            var P = lt.path;
+            t = ((t % 1) + 1) % 1;
+            var target = t * P.total, lo = 0, hi = P.pts.length;
+            while (lo < hi) { var mid = (lo + hi) >> 1; if (P.cum[mid] < target) lo = mid + 1; else hi = mid; }
+            var i = Math.max(1, lo), a = P.pts[i - 1], b = P.pts[i % P.pts.length];
+            var seg = P.cum[i] - P.cum[i - 1] || 1;
+            var f = (target - P.cum[i - 1]) / seg;
+            return {
+                x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f,
+                nx: -(b[1] - a[1]) / seg, ny: (b[0] - a[0]) / seg,
+                tx: (b[0] - a[0]) / seg, ty: (b[1] - a[1]) / seg
+            };
+        }
+        function ltNearestT(x, y) {
+            var P = lt.path, best = 0, bd = 1e12;
+            for (var i = 0; i < P.pts.length; i += 2) {
+                var d = (P.pts[i][0] - x) * (P.pts[i][0] - x) + (P.pts[i][1] - y) * (P.pts[i][1] - y);
+                if (d < bd) { bd = d; best = i; }
+            }
+            return P.cum[best] / P.total;
+        }
+        function ltGateLatLon() {
+            var track = ltTrack(), tc = ltTrackCfg(), g = ltPointAt(tc.gateT);
+            var mPerPx = lt.path.mPerPx;
+            var dLat = -(g.y - 215) * mPerPx / 111320;
+            var dLon = (g.x - 360) * mPerPx / (111320 * Math.cos(track.center[0] * Math.PI / 180));
+            return [(track.center[0] + dLat).toFixed(5), (track.center[1] + dLon).toFixed(5)];
+        }
+
+        function ltGateHtml(t, w, cls, label) {
+            var g = ltPointAt(t);
+            var halfPx = (w / 2) / lt.path.mPerPx;
+            var x1 = g.x + g.nx * halfPx, y1 = g.y + g.ny * halfPx;
+            var x2 = g.x - g.nx * halfPx, y2 = g.y - g.ny * halfPx;
+            var s = "";
+            if (cls === "sf") {
+                s += "<line x1='" + x1 + "' y1='" + y1 + "' x2='" + x2 + "' y2='" + y2 + "' stroke='#0A0C0E' stroke-width='9' stroke-linecap='round'/>";
+                s += "<line x1='" + x1 + "' y1='" + y1 + "' x2='" + x2 + "' y2='" + y2 + "' stroke='#F0F4F8' stroke-width='5.5' stroke-linecap='round' stroke-dasharray='4 4'/>";
+            } else {
+                s += "<line x1='" + x1 + "' y1='" + y1 + "' x2='" + x2 + "' y2='" + y2 + "' stroke='#FF9F0A' stroke-width='3.5' stroke-linecap='round' opacity='0.9'/>";
+            }
+            s += "<circle cx='" + g.x + "' cy='" + g.y + "' r='13' fill='transparent' style='cursor:grab' data-drag='" + cls + (label ? "_" + label : "") + "'/>";
+            if (label) s += "<text x='" + (g.x + g.nx * (halfPx + 13)) + "' y='" + (g.y + g.ny * (halfPx + 13) + 3.5) + "' text-anchor='middle' font-family='JetBrains Mono, monospace' font-size='9.5' font-weight='700' fill='" + (cls === "sf" ? "#F0F4F8" : "#FF9F0A") + "'>" + label + "</text>";
+            return s;
+        }
+
+        function ltRenderStage() {
+            var host = document.getElementById("ltStageSvg");
+            if (!host) return;
+            var track = ltTrack(), tc = ltTrackCfg();
+            if (!lt.path || lt.selTrack !== track.id) { lt.path = ltBuildPath(track); lt.selTrack = track.id; }
+            var P = lt.path;
+            var d = "M " + P.pts[0][0].toFixed(1) + " " + P.pts[0][1].toFixed(1);
+            for (var i = 1; i < P.pts.length; i++) d += " L " + P.pts[i][0].toFixed(1) + " " + P.pts[i][1].toFixed(1);
+            d += " Z";
+            var s = "<svg id='ltSvg' viewBox='0 0 720 430' xmlns='http://www.w3.org/2000/svg'>";
+            s += "<defs><filter id='ltGlow' x='-60%' y='-60%' width='220%' height='220%'><feGaussianBlur stdDeviation='2.4'/></filter></defs>";
+            /* asphalt + edges + centreline */
+            s += "<path d='" + d + "' fill='none' stroke='#0B0D0F' stroke-width='19' stroke-linejoin='round'/>";
+            s += "<path d='" + d + "' fill='none' stroke='#26292D' stroke-width='15' stroke-linejoin='round'/>";
+            s += "<path d='" + d + "' fill='none' stroke='#3A3F45' stroke-width='0.8' stroke-dasharray='7 9' opacity='0.6'/>";
+            /* direction chevrons */
+            for (var c = 0.12; c < 1; c += 0.25) {
+                var g = ltPointAt(track.dir === -1 ? 1 - c : c);
+                var dir = track.dir === -1 ? -1 : 1;
+                s += "<path d='M " + (g.x - g.tx * 5 * dir + g.nx * 4) + " " + (g.y - g.ty * 5 * dir + g.ny * 4) +
+                     " L " + (g.x + g.tx * 5 * dir) + " " + (g.y + g.ty * 5 * dir) +
+                     " L " + (g.x - g.tx * 5 * dir - g.nx * 4) + " " + (g.y - g.ty * 5 * dir - g.ny * 4) +
+                     "' fill='none' stroke='#4A5057' stroke-width='1.6' stroke-linecap='round'/>";
+            }
+            /* sectors then start/finish on top */
+            if (tc.sectorsOn) {
+                s += ltGateHtml(tc.s1, tc.gateW * 0.8, "sec", "S1");
+                s += ltGateHtml(tc.s2, tc.gateW * 0.8, "sec", "S2");
+            }
+            s += ltGateHtml(tc.gateT, tc.gateW, "sf", "");
+            /* sim car */
+            if (lt.sim && lt.simState) {
+                var cp = ltPointAt(lt.simState.t);
+                s += "<circle cx='" + cp.x + "' cy='" + cp.y + "' r='7' fill='#2d8ceb' opacity='0.5' filter='url(#ltGlow)'/>";
+                s += "<circle cx='" + cp.x + "' cy='" + cp.y + "' r='4' fill='#7CC0FF'/>";
+            }
+            /* track title */
+            s += "<text x='360' y='24' text-anchor='middle' font-family='Sora, sans-serif' font-weight='600' font-size='15' fill='#E8EDF2'>" + track.name + "</text>";
+            s += "<text x='360' y='40' text-anchor='middle' font-family='JetBrains Mono, monospace' font-size='9' fill='#5A6068'>" + track.country + " · " + track.km.toFixed(2) + " km · " + (track.dir === -1 ? "anticlockwise" : "clockwise") + " · layout approximate</text>";
+            s += "</svg>";
+            host.innerHTML = s;
+            /* drag wiring */
+            var svg = document.getElementById("ltSvg");
+            if (svg) {
+                svg.addEventListener("pointerdown", function (e) {
+                    var tgt = e.target.getAttribute && e.target.getAttribute("data-drag");
+                    if (!tgt) return;
+                    lt.drag = tgt.indexOf("sec_S1") === 0 ? "s1" : tgt.indexOf("sec_S2") === 0 ? "s2" : "gate";
+                    svg.setPointerCapture(e.pointerId);
+                    e.preventDefault();
+                });
+                svg.addEventListener("pointermove", function (e) {
+                    if (!lt.drag) return;
+                    var r = svg.getBoundingClientRect();
+                    var x = (e.clientX - r.left) * (720 / r.width);
+                    var y = (e.clientY - r.top) * (430 / r.height);
+                    var t = ltNearestT(x, y);
+                    var tc2 = ltTrackCfg();
+                    if (lt.drag === "gate") tc2.gateT = t;
+                    else if (lt.drag === "s1") tc2.s1 = t;
+                    else tc2.s2 = t;
+                    ltRenderStage(); ltRenderInspectorLatLon();
+                });
+                svg.addEventListener("pointerup", function () {
+                    if (lt.drag) { lt.drag = null; ltSave(); ltRenderInspector(); }
+                });
+            }
+        }
+
+        function ltBuildRail() {
+            var rail = document.getElementById("ltRail");
+            if (!rail) return;
+            rail.innerHTML = "<div class='ws-rail-title'>Track library</div>";
+            LT_TRACKS.forEach(function (t) {
+                var b = document.createElement("button");
+                b.className = "ws-item" + (lt.cfg.active === t.id ? " on" : "");
+                b.innerHTML = "<span class='st'></span>" + t.name + "<span class='tag'>" + t.km.toFixed(1) + " km</span>";
+                b.addEventListener("click", function () {
+                    lt.cfg.active = t.id;
+                    ltStopSim();
+                    ltSave(); ltBuildRail(); ltRenderStage(); ltRenderInspector();
+                });
+                rail.appendChild(b);
+            });
+            var note = document.createElement("div");
+            note.className = "ws-note";
+            note.style.margin = "10px 4px 0";
+            note.innerHTML = "<b>~100 circuits</b> ship with the node — our own coordinates, AU/NZ complete. Community submissions get reviewed, RaceChrono-style.";
+            rail.appendChild(note);
+        }
+
+        function ltSegHtml(k, cur, opts, fn) {
+            return "<div class='ws-seg'>" + opts.map(function (o) {
+                return "<button class='" + (String(cur) === String(o[0]) ? "on" : "") + "' onclick='" + fn + "(\"" + o[0] + "\")'>" + o[1] + "</button>";
+            }).join("") + "</div>";
+        }
+
+        function ltRenderInspectorLatLon() {
+            var el = document.getElementById("ltLatLon");
+            if (el) { var ll = ltGateLatLon(); el.value = ll[0] + ", " + ll[1]; }
+        }
+
+        function ltRenderInspector() {
+            var insp = document.getElementById("ltInspector");
+            if (!insp) return;
+            var tc = ltTrackCfg();
+            var ll = ltGateLatLon();
+            var connected = typeof RDM !== "undefined" && RDM.mode !== "local" &&
+                            typeof _connectionOk !== "undefined" && _connectionOk;
+            var h = "<h2>" + ltTrack().name + "</h2><div class='ws-sub'>lap engine runs on the dash · ±0.02 s</div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>Start / finish</div>" +
+                 "<div class='ws-field'><label>How the line is set</label>" +
+                 ltSegHtml("method", tc.method, [["library", "Library"], ["map", "On map"], ["drive", "At the line"]], "ltMethod") + "</div>";
+            if (tc.method === "drive") {
+                h += "<button class='ws-btn-line' " + (connected ? "" : "disabled") + " onclick='showToast(\"Armed — the next time the car crosses the line, it becomes start/finish.\", \"info\")'>" + (connected ? "Arm capture" : "Arm capture — needs the GPS node on the car") + "</button>" +
+                     "<div class='ws-note'>Park the app, drive across the line once. The node timestamps the crossing at 25 Hz and the gate sets itself.</div>";
+            } else {
+                h += "<div class='ws-field'><label>Gate position (drag it on the map)</label><input type='text' id='ltLatLon' value='" + ll[0] + ", " + ll[1] + "' " + (tc.method === "map" ? "" : "disabled") + " onchange='ltLatLonEdit(this)'></div>";
+            }
+            h += "<div class='ws-field'><label>Gate width</label><div class='ws-slider'><input type='range' min='10' max='50' step='5' value='" + tc.gateW + "' oninput='ltGateW(this.value)'><span class='val' id='ltGwVal'>" + tc.gateW + " m</span></div></div></div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>Sectors</div>" +
+                 "<div class='ws-field'>" + ltSegHtml("sectorsOn", tc.sectorsOn ? "1" : "0", [["1", "2 splits"], ["0", "Off"]], "ltSectors") + "</div>" +
+                 (tc.sectorsOn ? "<div class='ws-note'>Drag S1 / S2 along the track. Splits publish as the <b>sector</b> channel.</div>" : "") + "</div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>Predictive delta</div>" +
+                 "<div class='ws-field'><label>Reference lap</label>" +
+                 ltSegHtml("ref", lt.cfg.engine.ref, [["best", "Best lap"], ["rolling", "Rolling best"]], "ltRef") + "</div>" +
+                 "<div class='ws-note'>" + (lt.cfg.engine.ref === "rolling"
+                    ? "Qualifying style — the reference rebuilds from your best sectors as you improve."
+                    : "Delta runs against your best full lap this session.") + " Publishes <b>lap_delta</b> — bind it to any widget.</div></div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>Node</div>" +
+                 "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
+                 "<div class='ws-field'><label>GPS rate</label>" + ltSegHtml("rate", lt.cfg.node.rate, [["10", "10 Hz"], ["25", "25 Hz"]], "ltRate") + "</div>" +
+                 "<div class='ws-field'><label>Min lap time</label><input type='number' value='" + lt.cfg.engine.minLap + "' onchange='ltMinLap(this)'></div>" +
+                 "<div class='ws-field'><label>CAN base ID (hex)</label><input type='text' value='" + lt.cfg.node.baseId + "' onchange='ltBaseId(this)'></div>" +
+                 "<div class='ws-field'><label>Bitrate</label><select onchange='ltBitrate(this)'>" +
+                 [125, 250, 500, 1000].map(function (b) { return "<option value='" + b + "'" + (lt.cfg.node.bitrate === b ? " selected" : "") + ">" + b + " kbit/s</option>"; }).join("") +
+                 "</select></div></div>" +
+                 "<div class='ws-note'>Open protocol, DBC published. Channels on the dash: <b>gps_speed · lat_g · lon_g · lap_time · lap_delta · sector · best_lap</b>.</div></div>";
+            insp.innerHTML = h;
+        }
+        window.ltMethod = function (v) { ltTrackCfg().method = v; ltSave(); ltRenderInspector(); };
+        window.ltSectors = function (v) { ltTrackCfg().sectorsOn = v === "1"; ltSave(); ltRenderStage(); ltRenderInspector(); };
+        window.ltRef = function (v) { lt.cfg.engine.ref = v; ltSave(); ltRenderInspector(); };
+        window.ltRate = function (v) { lt.cfg.node.rate = parseInt(v, 10); ltSave(); ltRenderInspector(); };
+        window.ltGateW = function (v) {
+            ltTrackCfg().gateW = parseInt(v, 10);
+            var el = document.getElementById("ltGwVal");
+            if (el) el.textContent = v + " m";
+            ltSave(); ltRenderStage();
+        };
+        window.ltMinLap = function (el) { var v = parseInt(el.value, 10); if (v > 0) { lt.cfg.engine.minLap = v; ltSave(); } };
+        window.ltBaseId = function (el) { lt.cfg.node.baseId = el.value.replace(/[^0-9a-fA-F]/g, ""); ltSave(); };
+        window.ltBitrate = function (el) { lt.cfg.node.bitrate = parseInt(el.value, 10); ltSave(); };
+        window.ltLatLonEdit = function (el) { showToast("Gate pinned — on real hardware this snaps to the nearest point on your driven line.", "info"); };
+
+        /* ── lap simulation: curvature-limited speed profile + predictive delta ── */
+        function ltFmtTime(t) {
+            if (t === null || t === undefined) return "—";
+            var m = Math.floor(t / 60), s = t - m * 60;
+            return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
+        }
+        function ltBuildSpeedProfile() {
+            var P = lt.path, n = P.pts.length, mPerPx = P.mPerPx;
+            var v = new Array(n);
+            for (var i = 0; i < n; i++) {
+                var a = P.pts[(i - 4 + n) % n], b = P.pts[i], c = P.pts[(i + 4) % n];
+                var abx = b[0] - a[0], aby = b[1] - a[1], bcx = c[0] - b[0], bcy = c[1] - b[1];
+                var cross = abx * bcy - aby * bcx;
+                var lab = Math.hypot(abx, aby), lbc = Math.hypot(bcx, bcy);
+                var kappa = Math.abs(cross) / (lab * lbc * Math.hypot(b[0] - a[0] + bcx, b[1] - a[1] + bcy) / 2 + 0.001);
+                kappa /= mPerPx;   /* 1/px → 1/m */
+                var vmax = Math.sqrt(11 / Math.max(kappa, 0.0004));   /* ~1.1 g lateral */
+                v[i] = Math.min(Math.max(vmax, 12), 53);              /* 43–190 km/h window */
+            }
+            /* backward pass: braking limit, forward pass: traction limit */
+            for (var p = 0; p < 3; p++) {
+                for (var j = n - 1; j >= 0; j--) {
+                    var d1 = ((P.cum[j + 1] || P.total) - P.cum[j]) * mPerPx;
+                    v[j] = Math.min(v[j], Math.sqrt(v[(j + 1) % n] * v[(j + 1) % n] + 2 * 9.5 * d1));
+                }
+                for (var k = 0; k < n; k++) {
+                    var d2 = ((P.cum[k + 1] || P.total) - P.cum[k]) * mPerPx;
+                    v[(k + 1) % n] = Math.min(v[(k + 1) % n], Math.sqrt(v[k] * v[k] + 2 * 4.2 * d2));
+                }
+            }
+            return v;
+        }
+        function ltStartSim() {
+            var tc = ltTrackCfg();
+            lt.simState = {
+                t: tc.gateT, lapT: 0, lapN: 0, last: null, best: null,
+                bestProfile: null, curProfile: [], lastIdx: -1,
+                s1t: null, s2t: null, speeds: ltBuildSpeedProfile(), jitter: 1
+            };
+            var tb = document.getElementById("ltTimerbar");
+            if (tb) tb.classList.add("show");
+            if (!_ltSimTimer) _ltSimTimer = setInterval(_ltSimTick, 50);
+        }
+        function ltStopSim() {
+            if (_ltSimTimer) { clearInterval(_ltSimTimer); _ltSimTimer = null; }
+            lt.simState = null; lt.sim = false;
+            var tb = document.getElementById("ltTimerbar");
+            if (tb) tb.classList.remove("show");
+            var st = document.getElementById("ltBtnSetup"), si = document.getElementById("ltBtnSim");
+            if (st) st.className = "on";
+            if (si) si.className = "";
+        }
+        function _ltSimTick() {
+            var S = lt.simState, P = lt.path, tc = ltTrackCfg();
+            if (!S) return;
+            var idx = Math.floor((((S.t % 1) + 1) % 1) * P.pts.length) % P.pts.length;
+            /* lap-to-lap variation so delta has something to show */
+            var v = S.speeds[idx] * S.jitter;
+            var dPx = (v / P.mPerPx) * 0.05;
+            var newT = S.t + dPx / P.total;
+            S.lapT += 0.05;
+            /* profile sample for predictive delta (N=200 distance bins) */
+            var bin = Math.floor((((S.t - tc.gateT) % 1 + 1) % 1) * 200);
+            S.curProfile[bin] = S.lapT;
+            /* gate crossings */
+            function crossed(mark) {
+                var a = ((S.t - mark) % 1 + 1) % 1, b = ((newT - mark) % 1 + 1) % 1;
+                return a > 0.5 && b < 0.5 || (a < b - 0.5);
+            }
+            if (tc.sectorsOn) {
+                if (crossed(tc.s1) && S.lapT > 2) { S.s1t = S.lapT; var e1 = document.getElementById("ltTS1"); if (e1) e1.textContent = ltFmtTime(S.s1t); }
+                if (crossed(tc.s2) && S.lapT > 2) { S.s2t = S.lapT; var e2 = document.getElementById("ltTS2"); if (e2) e2.textContent = ltFmtTime(S.s2t); }
+            }
+            if (crossed(tc.gateT) && S.lapT > lt.cfg.engine.minLap * 0.3) {
+                S.last = S.lapT;
+                if (S.best === null || S.last < S.best) { S.best = S.last; S.bestProfile = S.curProfile.slice(); }
+                S.lapN++; S.lapT = 0; S.curProfile = []; S.s1t = null; S.s2t = null;
+                S.jitter = 0.965 + Math.random() * 0.06;   /* next lap ±3% */
+                var el = document.getElementById("ltTLast"); if (el) el.textContent = ltFmtTime(S.last);
+                var eb = document.getElementById("ltTBest"); if (eb) eb.textContent = ltFmtTime(S.best);
+                var en = document.getElementById("ltTN"); if (en) en.textContent = S.lapN;
+            }
+            S.t = newT;
+            var ec = document.getElementById("ltTCur"); if (ec) ec.textContent = ltFmtTime(S.lapT);
+            var ed = document.getElementById("ltTDelta");
+            if (ed) {
+                if (S.bestProfile && S.bestProfile[bin] !== undefined && S.lapT > 1) {
+                    var delta = S.lapT - S.bestProfile[bin];
+                    ed.textContent = (delta >= 0 ? "+" : "") + delta.toFixed(2);
+                    ed.className = "lt-delta " + (delta >= 0 ? "pos" : "neg");
+                } else { ed.textContent = "—"; ed.className = "lt-delta"; }
+            }
+            ltRenderStage();
+        }
+        window._ltSetSim = function (sim) {
+            lt.sim = sim;
+            var st = document.getElementById("ltBtnSetup"), si = document.getElementById("ltBtnSim");
+            if (st) st.className = sim ? "" : "on";
+            if (si) si.className = sim ? "on" : "";
+            var hint = document.getElementById("ltHint");
+            if (sim) { ltStartSim(); if (hint) hint.textContent = "Simulated lap running — the delta bar runs against your best lap, exactly like it will on the dash."; }
+            else { ltStopSim(); ltRenderStage(); if (hint) hint.textContent = "Drag the start/finish gate anywhere along the track. Sectors drag too."; }
+        };
+
+        window._ltOpen = function () {
+            _wsCloseAll("ltWorkspace");
+            ltLoad();
+            ltBuildRail();
+            var ws = document.getElementById("ltWorkspace");
+            if (ws) ws.style.display = "flex";
+            ltRenderStage(); ltRenderInspector();
+        };
+        window._ltClose = function () {
+            ltStopSim();
+            ltSave();
+            var ws = document.getElementById("ltWorkspace");
             if (ws) ws.style.display = "none";
             window._suiteHomeShow();
         };
@@ -1308,8 +2717,8 @@
             }
         }
         window._suiteHomeShow = function () {
-            var ws = document.getElementById("kpWorkspace");
-            if (ws && ws.style.display !== "none") { window._kpClose(); return; }
+            var open = _wsVisible();
+            if (open) { open.close(); return; }
             var home = document.getElementById("suiteHome");
             if (home) home.style.display = "flex";
             pollConn();
@@ -1326,9 +2735,9 @@
         };
         document.addEventListener("keydown", function (e) {
             if (e.key !== "Escape") return;
-            var ws = document.getElementById("kpWorkspace");
+            var open = _wsVisible();
             var home = document.getElementById("suiteHome");
-            if (ws && ws.style.display === "flex") { window._kpClose(); e.stopPropagation(); }
+            if (open) { open.close(); e.stopPropagation(); }
             else if (home && home.style.display === "flex") { window._suiteOpenDash(); e.stopPropagation(); }
         }, true);
 
@@ -1463,6 +2872,9 @@
                 scan:           () => call(window._scanForDevices),
                 home:           () => call(window._suiteHomeShow),
                 keypad:         () => call(window._kpOpen),
+                analyzer:       () => call(window._caOpen),
+                io_expander:    () => call(window._ioOpen),
+                laptimer:       () => call(window._ltOpen),
                 boot_fade:      () => { const s = document.getElementById('bootAnimSelect'); if (s) s.value = 'fade'; call(window.setBootAnim, 'fade'); },
                 boot_curtain:   () => { const s = document.getElementById('bootAnimSelect'); if (s) s.value = 'curtain'; call(window.setBootAnim, 'curtain'); },
                 boot_off:       () => { const s = document.getElementById('bootAnimSelect'); if (s) s.value = 'off'; call(window.setBootAnim, 'off'); },
