@@ -709,6 +709,10 @@
             text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
         }
         .ca-table th:hover { color: var(--text); }
+        .ca-table th.on { color: var(--text); }
+        .ca-table th.on::after { content: " \25BE"; color: var(--accent-hover); }
+        /* IDs that stopped transmitting (>3 s old) fade — dead data shouldn't look live */
+        .ca-table tr.stale td { opacity: 0.42; }
         .ca-table td { padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--text); white-space: nowrap; }
         .ca-table tr.row { cursor: pointer; }
         .ca-table tr.row:hover td { background: rgba(255,255,255,0.025); }
@@ -745,8 +749,12 @@
             aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
             background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
             font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #4A5058; cursor: crosshair;
-            transition: background 0.12s, color 0.12s, border-color 0.12s;
+            box-shadow: inset 0 0 0 1.5px rgba(255,159,10,0);
+            transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.7s;
         }
+        /* live activity: a bit that just toggled flashes amber then fades —
+           "what's moving?" is THE question when reversing a frame */
+        .ca-bit.hot { box-shadow: inset 0 0 0 1.5px rgba(255,159,10,0.9); transition: background 0.12s, color 0.12s, border-color 0.12s; }
         .ca-bit.one { color: var(--text); }
         .ca-bit.sel { border-color: var(--accent); background: rgba(45,140,235,0.16); color: var(--text); }
         .ca-bit.sel.one { background: var(--accent); color: #fff; }
@@ -796,6 +804,16 @@
         .cm-none { color: var(--text-muted); font-size: 11px; text-align: center; padding: 22px 8px; line-height: 1.5; }
         .cm-warn { font-size: 10.5px; color: var(--text-muted); background: rgba(255,159,10,0.08); border: 1px solid rgba(255,159,10,0.35); border-left: 3px solid #FF9F0A; border-radius: var(--radius-sm); padding: 8px 10px; line-height: 1.5; }
         .cm-warn b { color: #FFB84D; }
+        .cm-status { display: flex; align-items: center; gap: 14px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); }
+        .cm-status .rec { color: #e05d52; font-weight: 700; }
+        .cm-qual { font-size: 11px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; margin-bottom: 10px; line-height: 1.45; }
+        .cm-known { font-size: 9px; color: var(--text-muted); margin-left: 6px; }
+        .ca-send { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+        .ca-send select {
+            flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+            border-radius: var(--radius-md); padding: 5px 6px; font-size: 10.5px; font-family: 'Sora', sans-serif;
+        }
+        .ca-send select:focus { outline: none; border-color: var(--accent); }
         .cm-kv { display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
         .cm-kv span:first-child { color: var(--text-muted); }
         .cm-kv b { color: var(--text); font-weight: 600; }
@@ -1158,8 +1176,8 @@
                     </div>
                     <div class="ca-table"><table>
                         <thead><tr>
-                            <th onclick="caSort('id')">ID</th><th onclick="caSort('name')">Decodes</th>
-                            <th onclick="caSort('hz')">Rate</th><th onclick="caSort('count')">Count</th>
+                            <th id="caTh_id" onclick="caSort('id')">ID</th><th id="caTh_name" onclick="caSort('name')">Channels</th>
+                            <th id="caTh_hz" onclick="caSort('hz')">Rate</th><th id="caTh_count" onclick="caSort('count')">Count</th>
                             <th>B0&#8201;&#8201;B1&#8201;&#8201;B2&#8201;&#8201;B3&#8201;&#8201;B4&#8201;&#8201;B5&#8201;&#8201;B6&#8201;&#8201;B7</th>
                         </tr></thead>
                         <tbody id="caRows"></tbody>
@@ -1763,6 +1781,7 @@
                 obd: {},       /* live OBD2 values by signal name (from /api/signals/values) */
                 results: [],   /* ranked candidates */
                 sel: null,     /* selected candidate key */
+                adoptedKey: null, /* candidate whose decode was written to the dash */
                 lastRank: 0
             }
         };
@@ -1981,7 +2000,7 @@
                     tbody.appendChild(tr);
                 }
                 if (tbody.children[idx] !== tr) tbody.insertBefore(tr, tbody.children[idx] || null);
-                tr.className = "row" + (ca.sel === r.id ? " sel" : "");
+                tr.className = "row" + (ca.sel === r.id ? " sel" : "") + (r.age > 3000 ? " stale" : "");
                 var tds = tr.children;
                 tds[0].innerHTML = "<span class='ca-id'>" + _wsFmtHex(r.id) + "</span>" + (r.ext ? "<span class='ca-ext'>EXT</span>" : "");
                 tds[1].textContent = caRowName(r);
@@ -2005,6 +2024,10 @@
             });
             var si = document.getElementById("caStatIds"); if (si) si.textContent = list.length;
             var sf = document.getElementById("caStatFps"); if (sf) sf.textContent = ca.fps;
+            ["id", "name", "hz", "count"].forEach(function (k) {
+                var th = document.getElementById("caTh_" + k);
+                if (th) th.classList.toggle("on", ca.sort === k);
+            });
             /* schedule the accent flash to fade */
             setTimeout(function () {
                 chgFadeQueue.splice(0).forEach(function (id) {
@@ -2075,6 +2098,7 @@
                     h += "</div></div>";
                 }
                 h += "</div>" +
+                    "<div style='font-size:9px;color:var(--text-muted);margin-top:5px;'>amber = bit changed just now &#183; click a byte label for the whole byte</div>" +
                     "<div class='ca-probe-read'><span class='big' id='caProbeVal'>—</span><span class='sub' id='caProbeRaw'></span></div>" +
                     "<div class='ca-probe-fields'>" +
                         "<div class='ws-field'><label>Scale</label><input type='number' step='any' id='caScale' value='1' oninput='caProbeScale(this.value)'></div>" +
@@ -2083,8 +2107,17 @@
                     "<div style='display:flex;gap:6px;'>" +
                         "<button class='ws-btn-line ca-pinbtn' onclick='caPinTrace()'>+ Pin to graph</button>" +
                         "<button class='ws-btn-line ca-pinbtn' onclick='caProbeCopy()' title='copy decode JSON'>Copy decode</button>" +
-                    "</div>" +
-                    "<canvas class='ca-probe-canvas' id='caProbeCanvas' width='620' height='300'></canvas>" +
+                    "</div>";
+                /* Connected: write the decode straight onto a channel — the
+                   found-it → dash-shows-it loop with zero copy/paste. */
+                var chansAll = (_wsChannels || []).filter(function (c) { return c.source !== "math"; })
+                    .sort(function (a, b) { return (a.label || a.id).localeCompare(b.label || b.id); });
+                if (_caIsConnected() && chansAll.length) {
+                    h += "<div class='ca-send'><select id='caChanSel'>" +
+                         chansAll.map(function (c) { return "<option value='" + c.id + "'>" + (c.label || c.id) + "</option>"; }).join("") +
+                         "</select><button class='ws-btn-line ca-pinbtn' onclick='caProbeSend()'>Write decode &#8594; dash</button></div>";
+                }
+                h += "<canvas class='ca-probe-canvas' id='caProbeCanvas' width='620' height='300'></canvas>" +
                     "<div class='ca-traces' id='caTraces'></div>" +
                     "</div>" +
                     "<div class='ws-note'><b>Find a signal:</b> drag a run of bits, then operate the car — throttle, revs, temperature. When the plotted line tracks what you're doing, that's your field. Pin a few and compare, or jump to <b>Match&#160;OBD</b> to auto-find it from an OBD2 reading.</div>";
@@ -2099,7 +2132,17 @@
             var sg = document.getElementById("caSigned"); if (sg) sg.checked = p.signed;
             var bb = document.getElementById("caProbeBits");
             if (bb) bb.textContent = "bits " + p.start + "–" + (p.start + p.len - 1) + " · " + p.len + "b";
-            /* live bit cells */
+            /* live bit cells + per-bit activity heat (amber flash on toggle) */
+            var nowH = performance.now();
+            if (!ca._heat || ca._heatId !== r.id) { ca._heat = new Array(64).fill(0); ca._heatPrevB = null; ca._heatId = r.id; }
+            if (ca._heatPrevB) {
+                for (var hb = 0; hb < 8; hb++) {
+                    var xo = (r.bytes[hb] || 0) ^ (ca._heatPrevB[hb] || 0);
+                    if (!xo) continue;
+                    for (var hc = 0; hc < 8; hc++) if (xo & (1 << (7 - hc))) ca._heat[hb * 8 + hc] = nowH;
+                }
+            }
+            ca._heatPrevB = r.bytes.slice();
             var cells = caProbeCells();
             for (var b2 = 0; b2 < 8; b2++) for (var c2 = 0; c2 < 8; c2++) {
                 var el = document.getElementById("cb_" + b2 + "_" + c2);
@@ -2107,8 +2150,9 @@
                 var inDlc = b2 < r.dlc;
                 var bitVal = inDlc ? ((r.bytes[b2] >> (7 - c2)) & 1) : 0;
                 var sel = cells[b2 + "_" + c2];
+                var hot = inDlc && (nowH - ca._heat[b2 * 8 + c2]) < 1200 && ca._heat[b2 * 8 + c2] > 0;
                 el.textContent = inDlc ? bitVal : "·";
-                el.className = "ca-bit" + (!inDlc ? " mute" : "") + (bitVal ? " one" : "") + (sel ? " sel" : "");
+                el.className = "ca-bit" + (!inDlc ? " mute" : "") + (bitVal ? " one" : "") + (sel ? " sel" : "") + (hot ? " hot" : "");
             }
             /* decoded readout */
             var val = caProbeValue(r.bytes);
@@ -2220,6 +2264,25 @@
                 function () { showToast(txt, "info"); });
             else showToast(txt, "info");
         };
+        window.caProbeSend = function () {
+            var selEl = document.getElementById("caChanSel");
+            if (!selEl || ca.sel === null) return;
+            var chId = selEl.value, p = ca.probe;
+            var ch = (_wsChannels || []).filter(function (c) { return c.id === chId; })[0];
+            var label = ch ? (ch.label || ch.id) : chId;
+            fetch("/api/channels/update", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: chId, fields: { decode: {
+                    can_id: ca.sel, bit_start: p.start, bit_length: p.len,
+                    endian: p.le ? 1 : 0, is_signed: p.signed, scale: p.scale, offset: p.offset } } })
+            }).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+              .then(function () {
+                  showToast(label + " now decodes " + _wsFmtHex(ca.sel) + " bits " + p.start + "–" + (p.start + p.len - 1) + " — check the dash", "success");
+                  _wsChannels = null;
+                  _wsLoadChannels(function () { caBuildDecodeMap(); caRenderInspector(true); });
+              })
+              .catch(function (e) { showToast("Couldn't write to the dash (" + e + ")", "error"); });
+        };
 
         /* ============ OBD ↔ CAN match ============
          * Correlate every candidate CAN field against a slow OBD2 reading to
@@ -2289,7 +2352,7 @@
             var rf = refs.filter(function (x) { return x.name === name; })[0];
             if (!rf) return;
             ca.match.ref = rf;
-            ca.match.buf = []; ca.match.results = []; ca.match.sel = null;
+            ca.match.buf = []; ca.match.results = []; ca.match.sel = null; ca.match.adoptedKey = null;
             ca.match.recording = true;      /* auto-start — it "just works" */
             caMatchRenderRail(); caMatchRenderStage(); caMatchRenderInsp();
         };
@@ -2300,7 +2363,7 @@
             caMatchRenderRail();
         };
         window.caMatchClear = function () {
-            var m = ca.match; m.buf = []; m.results = []; m.sel = null;
+            var m = ca.match; m.buf = []; m.results = []; m.sel = null; m.adoptedKey = null;
             caMatchRenderRail(); caMatchRenderStage(); caMatchRenderInsp();
         };
 
@@ -2456,8 +2519,28 @@
             var st = document.getElementById("caMatchStage");
             if (!st) return;
             var m = ca.match;
-            var h = "<div class='cm-hint'>Correlate a slow <b>OBD2</b> reading against the raw bus to find the <b>fast native CAN</b> field carrying the same value — then adopt its decode and stop polling.</div>" +
-                    "<canvas class='cm-overlay' id='cmOverlay' width='1200' height='256'></canvas>";
+            var h = "<div class='cm-hint'>Correlate a slow <b>OBD2</b> reading against the raw bus to find the <b>fast native CAN</b> field carrying the same value — then adopt its decode and stop polling.</div>";
+            /* Recording status: is this capture actually usable? Sweep quality
+               tells the user WHY nothing is matching before they lose faith. */
+            if (m.ref) {
+                var secs = m.buf.length > 1 ? Math.round((m.buf[m.buf.length - 1].t - m.buf[0].t) / 1000) : 0;
+                var q = "&#8212;";
+                if (m.buf.length >= 5) {
+                    var rmn = Infinity, rmx = -Infinity;
+                    for (var qi = 0; qi < m.buf.length; qi++) { var rv = m.buf[qi].ref; if (rv < rmn) rmn = rv; if (rv > rmx) rmx = rv; }
+                    var range = rmx - rmn, mag = Math.max(Math.abs(rmx), Math.abs(rmn), 1);
+                    /* 0.15: safely above sensor jitter (fuel wobble ~5%), safely
+                       below any real sweep (revs/throttle/warm-up are 35%+). */
+                    q = range <= 0 ? "<span style='color:#e05d52'>flat — make it move (rev / drive / warm up)</span>"
+                      : range / mag < 0.15 ? "<span style='color:#FF9F0A'>barely moving — sweep it across its range</span>"
+                      : "<span style='color:#6FBF73'>good</span>";
+                }
+                h += "<div class='cm-status'>" +
+                     (m.recording ? "<span class='rec'>&#9679; REC</span>" : "<span>&#10074;&#10074; paused</span>") +
+                     "<span><b style='color:var(--text)'>" + m.buf.length + "</b> samples &#183; " + secs + "s</span>" +
+                     "<span>reference sweep: " + q + "</span></div>";
+            }
+            h += "<canvas class='cm-overlay' id='cmOverlay' width='1200' height='256'></canvas>";
             if (!m.ref) {
                 h += "<div class='cm-none'>Pick a reference signal on the left to begin.</div>";
             } else if (!m.results.length) {
@@ -2472,10 +2555,18 @@
                 h += "<table class='cm-rank'><thead><tr><th>#</th><th>CAN&#160;ID</th><th>Field</th><th>Correlation</th><th>Scale</th><th>Offset</th></tr></thead><tbody>";
                 m.results.forEach(function (o, i) {
                     var ra = Math.abs(o.r), cls = ra > 0.95 ? "" : (ra > 0.8 ? " mid" : " low");
+                    /* already decoded by a channel? say so — saves rediscovering known signals */
+                    var known = "";
+                    var kch = ca.decodeMap ? ca.decodeMap[o.id] : null;
+                    if (kch) for (var ki = 0; ki < kch.length; ki++) {
+                        var kd = kch[ki].decode;
+                        if (!(o.start + o.len <= (kd.bit_start || 0) || (kd.bit_start || 0) + (kd.bit_length || 16) <= o.start)) { known = kch[ki].label || kch[ki].id; break; }
+                    }
                     h += "<tr class='" + (m.sel === o.key ? "sel" : "") + "' onclick='caMatchSelect(\"" + o.key + "\")'>" +
-                         "<td>" + (i + 1) + "</td>" +
+                         "<td>" + (i + 1) + (m.adoptedKey === o.key ? " <span style='color:#6FBF73'>&#10003;</span>" : "") + "</td>" +
                          "<td><span class='cm-idlab'>" + _wsFmtHex(o.id) + "</span></td>" +
-                         "<td>" + o.start + "&#8211;" + (o.start + o.len - 1) + " · " + o.len + "b <span class='cm-badge'>" + (o.le ? "Intel" : "Motorola") + "</span></td>" +
+                         "<td>" + o.start + "&#8211;" + (o.start + o.len - 1) + " · " + o.len + "b <span class='cm-badge'>" + (o.le ? "Intel" : "Motorola") + "</span>" +
+                         (known ? "<span class='cm-known'>= " + known + "</span>" : "") + "</td>" +
                          "<td><span class='cm-rbar" + cls + "'><i style='width:" + (ra * 100).toFixed(0) + "%'></i></span> " + (o.r < 0 ? "−" : "") + ra.toFixed(3) + "</td>" +
                          "<td>" + parseFloat(o.scale.toPrecision(4)) + "</td>" +
                          "<td>" + parseFloat(o.offset.toPrecision(4)) + "</td></tr>";
@@ -2533,8 +2624,14 @@
             if (!cand || !m.ref) { insp.innerHTML = "<div class='cm-none'>Pick a candidate from the ranking to inspect and adopt it.</div>"; return; }
             var connected = typeof RDM !== "undefined" && RDM.mode !== "local" && typeof _connectionOk !== "undefined" && _connectionOk;
             var ra = Math.abs(cand.r);
+            /* plain-English verdict — r means nothing to most people */
+            var qual = ra >= 0.985 ? ["#6FBF73", "Excellent match", "this field tracks the OBD reading almost perfectly. Safe to adopt."]
+                     : ra >= 0.93 ? ["#A8E05F", "Strong match", "check the scatter below is a straight line, then adopt."]
+                     : ra >= 0.8  ? ["#FF9F0A", "Rough match", "related but noisy — record longer and sweep the reading wider before adopting."]
+                     :              ["#e05d52", "Weak match", "probably a coincidence. Keep recording, or isolate the reading."];
             var h = "<h2>" + m.ref.label + " &#8592; " + _wsFmtHex(cand.id) + "</h2>" +
                 "<div class='ws-sub'>fast native decode &#183; recovered from OBD2</div>" +
+                "<div class='cm-qual' style='border-left:3px solid " + qual[0] + "'><b style='color:" + qual[0] + "'>" + qual[1] + "</b> — " + qual[2] + "</div>" +
                 "<div class='ws-grp'><div class='ws-gt'>Recovered decode</div>" +
                 "<div class='cm-kv'><span>CAN ID</span><b>" + _wsFmtHex(cand.id) + "</b></div>" +
                 "<div class='cm-kv'><span>Bits</span><b>" + cand.start + "&#8211;" + (cand.start + cand.len - 1) + " (" + cand.len + "b)</b></div>" +
@@ -2546,11 +2643,15 @@
                 "<div class='cm-kv'><span>Lag / samples</span><b>" + cand.lag + " &#183; " + m.buf.length + "</b></div></div>" +
                 "<div class='ws-grp'><div class='ws-gt'>OBD2 vs CAN field</div>" +
                 "<canvas class='cm-scatter' id='cmScatter' width='560' height='340'></canvas></div>";
+            var adopted = m.adoptedKey === cand.key;
             if (connected && m.ref.chId) {
-                h += "<button class='ws-btn-line' style='margin-top:10px;border-color:var(--accent);color:var(--text);' onclick='caMatchAdopt()'>Adopt on dash &#8594; decode &#8220;" + m.ref.chId + "&#8221; from CAN</button>";
+                h += adopted
+                    ? "<button class='ws-btn-line' style='margin-top:10px;border-color:#6FBF73;color:#6FBF73;' disabled>&#10003; Adopted — " + m.ref.chId + " now reads from CAN</button>"
+                    : "<button class='ws-btn-line' style='margin-top:10px;border-color:var(--accent);color:var(--text);' onclick='caMatchAdopt()'>Adopt on dash &#8594; decode &#8220;" + m.ref.chId + "&#8221; from CAN</button>";
             } else {
                 h += "<button class='ws-btn-line' style='margin-top:10px;' onclick='caMatchAdopt()'>Copy decode JSON</button>";
             }
+            h += "<button class='ws-btn-line' style='margin-top:6px;' onclick='caMatchProbe()'>Inspect in probe &#8594; see the bits live</button>";
             h += "<div class='ws-note'><b>Adopt</b> writes this decode onto the <b>" + m.ref.chId + "</b> channel so it reads from fast CAN (" + (cand.le ? "Intel" : "Motorola") + ", &#215;" + parseFloat(cand.scale.toPrecision(4)) + ") &mdash; no more waiting on the OBD2 poll. Reversible from the dash Channels tab.</div>";
             insp.innerHTML = h;
             caMatchDrawScatter(cand);
@@ -2608,9 +2709,23 @@
             }).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
               .then(function () {
                   showToast(m.ref.label + " now decodes from " + _wsFmtHex(cand.id) + " — fast native CAN, OBD2 poll no longer needed", "success");
-                  _wsChannels = null; _wsLoadChannels(function () { caBuildDecodeMap(); });
+                  m.adoptedKey = cand.key;
+                  _wsChannels = null;
+                  _wsLoadChannels(function () { caBuildDecodeMap(); caMatchRenderStage(); caMatchRenderInsp(); });
               })
               .catch(function (e) { showToast("Couldn't write decode to the dash (" + e + ")", "error"); });
+        };
+
+        /* Bridge: jump from a Match candidate to the Monitor probe with the
+           field pre-loaded — eyeball the bits and the live trace yourself. */
+        window.caMatchProbe = function () {
+            var m = ca.match, cand = m.sel ? caMatchResult(m.sel) : null;
+            if (!cand) return;
+            window.caSetMode("monitor");
+            caSelect(cand.id);
+            ca.probe = { start: cand.start, len: cand.len, le: cand.le, signed: false,
+                         scale: parseFloat(cand.scale.toPrecision(6)), offset: parseFloat(cand.offset.toPrecision(6)) };
+            caRenderInspector(true);
         };
 
         window.caSetMode = function (mode) {
