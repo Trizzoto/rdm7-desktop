@@ -681,6 +681,8 @@
         .kp-fire .frame { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); }
         .kp-fire .frame i { font-style: normal; color: var(--text-muted); }
         .kp-fire .frame i.on { color: #6fbf73; font-weight: 700; }
+        .kp-statemsg { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--accent); font-weight: 600; opacity: 0; transition: opacity 0.2s; }
+        .kp-statemsg.show { opacity: 1; }
         .kp-busline { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); }
         .kp-busline .tx { color: var(--accent); font-weight: 700; }
         .kp-busline i { font-style: normal; }
@@ -1279,6 +1281,7 @@
                     <span class="kp-live-dot"></span>
                     <span>Simulated car running</span>
                     <span class="kp-ct" id="kpCtReadout">coolant_temp <b>84.0</b> &#176;C</span>
+                    <span class="kp-statemsg" id="kpStateMsg"></span>
                     <span class="kp-busline" id="kpBusLine"></span>
                     <span style="color:var(--text-muted); font-size:10.5px;">click keys to press them &#8212; LEDs bound to channels react on their own</span>
                 </div>
@@ -1501,7 +1504,7 @@
         var kp = {
             model: MODELS[0], keys: JSON.parse(JSON.stringify(DEFAULT_KEYS)),
             selected: 1, live: false, night: false, brightDay: 48, brightNight: 12,
-            keyOn: {}, keyDown: 0, coolant: 84.0, coolantDir: 1,
+            keyOn: {}, keyPos: {}, keyDown: 0, coolant: 84.0, coolantDir: 1,
             /* CAN identity — real Blink PKP protocol (docs/research/keypad-datasheets) */
             proto: "canopen", node: 0x15, sa: 0x21, baud: 125,
             startShow: 1, activeStart: true, periodMs: 0, hbMs: 0,   /* device config */
@@ -1771,8 +1774,9 @@
             if (!keyAssigned(k)) return false;
             if (kp.live) {
                 /* a tripped alert lights the key regardless of press; otherwise
-                 * the LED shows the button's own toggle state. */
+                 * the LED shows the button's own state. */
                 if (kpActiveAlert(i)) return true;
+                if (k.mode === "state3") return (kp.keyPos[i] || 0) > 0;   /* off / on / on */
                 return !!kp.keyOn[i];
             }
             return true;
@@ -1784,7 +1788,11 @@
         }
         function ledBehavior(i) {
             var k = kp.keys[i];
-            if (kp.live) { var a = kpActiveAlert(i); if (a) return a.behavior || "fast"; }
+            if (kp.live) {
+                var a = kpActiveAlert(i); if (a) return a.behavior || "fast";
+                /* 3-position: pos 1 solid, pos 2 blinks — reads as three states */
+                if (k.mode === "state3") return (kp.keyPos[i] || 0) >= 2 ? "slow" : "solid";
+            }
             return k.behavior;
         }
         function kpBrightness() { return (kp.night ? kp.brightNight : kp.brightDay) / 63; }
@@ -1877,6 +1885,14 @@
                         s += '<text x="' + cx + '" y="' + (cy + 5.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" fill="rgba(0,0,0,0.6)">' + k.label + "</text>";
                         s += '<text x="' + cx + '" y="' + (cy + 4.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" opacity="' + insOp.toFixed(2) + '" fill="' + insCol + '">' + k.label + "</text>";
                     }
+                    /* 3-position keys: a little 0/1/2 level gauge under the icon */
+                    if (kp.live && k.mode === "state3" && keyAssigned(k)) {
+                        var pos = kp.keyPos[i] || 0, pw = 8, pg = 4, py = cy + 22 + dy, px0 = cx - (2 * pw + pg) / 2;
+                        for (var pp = 0; pp < 2; pp++) {
+                            var lit = pos > pp;
+                            s += '<rect x="' + (px0 + pp * (pw + pg)) + '" y="' + py + '" width="' + pw + '" height="3.4" rx="1.7" fill="' + (lit ? col : "#3A4046") + '" opacity="' + (lit ? (0.55 + 0.45 * br) : 0.55) + '"/>';
+                        }
+                    }
                     if (!kp.live && kp.selected === i) {
                         s += '<rect x="' + (x - 2.5) + '" y="' + (y - 2.5) + '" width="' + (CELL + 5) + '" height="' + (CELL + 5) + '" rx="18" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="7 5"/>';
                     }
@@ -1929,10 +1945,31 @@
             kpRenderStage();
             setTimeout(function () {
                 kp.keyDown = 0;
-                if (k.mode !== "momentary") kp.keyOn[i] = !kp.keyOn[i];
-                else { kp.keyOn[i] = true; setTimeout(function () { kp.keyOn[i] = false; kpRenderStage(); }, 450); }
+                if (k.mode === "state3") {
+                    /* 3-position: each press steps 0 → 1 → 2 → 0. The button is
+                       physical-momentary so the bus bit pulses; the position
+                       (which drives the LED) is what latches. */
+                    kp.keyPos[i] = ((kp.keyPos[i] || 0) + 1) % 3;
+                    kpFlashState(i);
+                    kp.keyOn[i] = true; setTimeout(function () { kp.keyOn[i] = false; kpRenderStage(); }, 260);
+                } else if (k.mode === "momentary" || k.mode === "paired") {
+                    kp.keyOn[i] = true; setTimeout(function () { kp.keyOn[i] = false; kpRenderStage(); }, 450);
+                } else {   /* toggle */
+                    kp.keyOn[i] = !kp.keyOn[i];
+                }
                 kpRenderStage();
             }, 130);
+        }
+        /* brief readout so you can watch a 3-position key step through its states */
+        function kpFlashState(i) {
+            var el = document.getElementById("kpStateMsg");
+            if (!el) return;
+            var k = kp.keys[i], pos = kp.keyPos[i] || 0;
+            var names = ["OFF", "1", "2"];
+            el.textContent = (k.label || "KEY " + (i + 1)) + " → position " + names[pos] + " of 3";
+            el.classList.add("show");
+            clearTimeout(kp._stateMsgT);
+            kp._stateMsgT = setTimeout(function () { el.classList.remove("show"); }, 1600);
         }
         function kpSimTick() {
             kp.coolant += kp.coolantDir * (0.6 + Math.abs(Math.sin(kp.coolant)) * 0.8);
@@ -1963,7 +2000,7 @@
             if (hint) hint.textContent = on
                 ? "Simulated live mode. With keypad firmware on the dash, this mirrors the physical unit — real presses light up here."
                 : "Click any key to configure it.";
-            if (on) { kp.keyOn = {}; if (!kpSimTimer) kpSimTimer = setInterval(kpSimTick, 700); }
+            if (on) { kp.keyOn = {}; kp.keyPos = {}; if (!kpSimTimer) kpSimTimer = setInterval(kpSimTick, 700); }
             else if (kpSimTimer) { clearInterval(kpSimTimer); kpSimTimer = null; }
             kpRenderStage(); kpRenderInspector();
         };
@@ -2080,7 +2117,7 @@
             /* what-fires — the exact CAN frame that transmits when this key is pressed */
             var modeNote = k.mode === "momentary" ? "Momentary — high only while held." :
                 k.mode === "toggle" ? "Toggle — the bit latches on / off each press." :
-                k.mode === "state3" ? "3-position — cycles states each press." : "Paired ▲▼ — shares the frame with the next key.";
+                k.mode === "state3" ? "3-position — each press steps off → on → blink; the dash counts presses and drives the LED." : "Paired ▲▼ — shares the frame with the next key.";
             var fids = kpIds(), fireHtml, fireNote;
             if (kpIsJ()) {
                 var jb = [0x04, 0x1B, 0x01, i + 1, 0x01, kp.sa & 0xFF, 0xFF, 0xFF];
