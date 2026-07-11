@@ -587,7 +587,7 @@
         .kp-modes button.on { background: var(--accent); color: #fff; }
         .kp-topbar > .btn:last-child { height: 30px; box-sizing: border-box; }
         .kp-body { display: flex; flex: 1; min-height: 0; flex-wrap: nowrap; overflow: hidden; }
-        .kp-rail { width: 150px; flex-shrink: 0; min-height: 0; background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+        .kp-rail { width: 172px; flex-shrink: 0; min-height: 0; background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: 12px 10px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
         .kp-rail-title { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin: 0 4px 4px; font-weight: 600; }
         .kp-model {
             background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md);
@@ -652,11 +652,18 @@
         }
         .kp-note b { color: var(--text); }
         .kp-none { color: var(--text-muted); font-size: 11px; padding: 28px 8px; text-align: center; }
-        /* CAN setup (rail) + what-fires (inspector) + live bus trace */
-        .kp-bus-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
-        .kp-bus-chip { flex: 1 1 auto; background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); border-radius: var(--radius-sm); font-family: 'Sora', sans-serif; font-size: 9.5px; font-weight: 600; padding: 4px 6px; cursor: pointer; white-space: nowrap; }
-        .kp-bus-chip:hover { border-color: var(--accent); color: var(--text); }
-        .kp-bus-chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+        /* connection (rail) + what-fires (inspector) + live bus trace */
+        .kp-bus-card { display: block; width: 100%; box-sizing: border-box; text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 7px 9px; margin-bottom: 5px; cursor: pointer; box-shadow: var(--shadow-sm); }
+        .kp-bus-card:hover { border-color: var(--border-light); }
+        .kp-bus-card.on { border-color: var(--accent); background: var(--panel-elevated); }
+        .kp-bus-card b { display: block; font-family: 'Sora', sans-serif; font-size: 10.5px; font-weight: 600; color: var(--text); }
+        .kp-bus-card b i { font-style: normal; color: var(--accent); }
+        .kp-bus-card span { display: block; font-size: 9px; color: var(--text-muted); line-height: 1.4; margin-top: 1px; }
+        .kp-bus-custom { font-size: 9px; color: var(--text-muted); margin: 2px 2px 6px; font-style: italic; }
+        .kp-bus-primary { margin-top: 6px; border-color: var(--accent); color: var(--text); font-weight: 600; }
+        .kp-adv-toggle { display: block; width: 100%; background: none; border: none; text-align: left; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 8px 2px 4px; cursor: pointer; }
+        .kp-adv-toggle:hover { color: var(--text); }
+        .kp-adv { border-top: 1px solid var(--border); padding-top: 8px; }
         .kp-bus-row { display: flex; flex-direction: column; align-items: stretch; gap: 3px; margin-bottom: 7px; }
         .kp-bus-row label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
         .kp-bus-in { width: 100%; min-width: 0; box-sizing: border-box; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 4px 6px; font-size: 10.5px; font-family: 'JetBrains Mono', monospace; }
@@ -1497,6 +1504,7 @@
             /* CAN identity — real Blink PKP protocol (docs/research/keypad-datasheets) */
             proto: "canopen", node: 0x15, sa: 0x21, baud: 125,
             startShow: 1, activeStart: true, periodMs: 0, hbMs: 0,   /* device config */
+            blColor: "amber", blBright: 18,   /* icon backlight (all 9 colours valid here) */
             clip: null   /* copied key style (icon/mode/preset/follows/color/behavior) */
         };
         window.__kp = kp;   /* debug/support handle (mirrors window.__ca / __ltMap) */
@@ -1517,9 +1525,9 @@
         };
         function kpCol(id) { return KP_COL[id] || KP_COL.red; }
         var KP_PRESETS = [
-            { id: "factory", name: "Blink factory",  proto: "canopen", node: 0x15, baud: 125, note: "Factory default — CANopen node 0x15 @ 125k. Any ECU that reads a Blink keypad (Haltech, MoTeC, Link…) sees these frames." },
-            { id: "rdm500",  name: "RDM bus 500k",   proto: "canopen", node: 0x15, baud: 500, note: "CANopen node 0x15 @ 500k — shares one high-speed bus with the RDM-7 dash cluster." },
-            { id: "j1939",   name: "J1939",          proto: "j1939",   node: 0x15, baud: 250, note: "J1939 source address 0x21 @ 250k — proprietary-A frames + plug-and-play address claim for field replacement." }
+            { id: "factory", name: "Out of the box", blurb: "As it ships. Works with Haltech, MoTeC, Link…", proto: "canopen", node: 0x15, baud: 125, note: "Factory default — CANopen node 0x15 @ 125k. Any ECU that reads a Blink keypad (Haltech, MoTeC, Link…) sees these frames." },
+            { id: "rdm500",  name: "With RDM-7 dash", blurb: "Shares the dash’s high-speed bus.", proto: "canopen", node: 0x15, baud: 500, note: "CANopen node 0x15 @ 500k — shares one high-speed bus with the RDM-7 dash cluster." },
+            { id: "j1939",   name: "Truck / marine", blurb: "J1939 networks — auto address claim.", proto: "j1939", node: 0x15, baud: 250, note: "J1939 source address 0x21 @ 250k — proprietary-A frames + plug-and-play address claim for field replacement." }
         ];
         function kpHex(n) { return "0x" + n.toString(16).toUpperCase(); }
         function kpHex2(n) { return ("0" + (n & 0xFF).toString(16).toUpperCase()).slice(-2); }
@@ -1600,6 +1608,8 @@
                 j([0x04, 0x1B, 0x70, kp.sa & 0xFF, kp.sa & 0xFF], "Source addr + keypad id → " + kpHex(kp.sa));
                 j([0x04, 0x1B, 0x34, kp.startShow & 0xFF], "Startup LED show");
                 j([0x04, 0x1B, 0x7C, brDay], "Default LED brightness → " + Math.round(kp.brightDay / 63 * 100) + "%");
+                j([0x04, 0x1B, 0x7D, kpCol(kp.blColor).idx], "Default backlight colour → " + kp.blColor);
+                j([0x04, 0x1B, 0x7B, kp.blBright & 0x3F], "Default backlight brightness → " + Math.round(kp.blBright / 63 * 100) + "%");
                 j([0x04, 0x1B, 0x28, kp.periodMs > 0 ? 1 : 0], "Startup keys message");
                 if (kp.periodMs > 0) { j([0x04, 0x1B, 0x71, 0x01], "Periodic key-state on"); j([0x04, 0x1B, 0x77, Math.max(5, Math.min(0xFE, Math.round(kp.periodMs / 10)))], "Key period → " + kp.periodMs + "ms"); }
                 if (kp.hbMs > 0) j([0x04, 0x1B, 0x75, 0x01, Math.max(5, Math.min(0xFE, Math.round(kp.hbMs / 10)))], "Heartbeat → " + kp.hbMs + "ms");
@@ -1614,7 +1624,8 @@
             sdo1(0x2012, 0x00, kp.activeStart ? 1 : 0, "Active on startup → " + (kp.activeStart ? "yes" : "no"));
             sdo1(0x2014, 0x00, kp.startShow & 0xFF, "Startup LED show");
             sdo1(0x2003, 0x05, brDay, "Default LED brightness → " + Math.round(kp.brightDay / 63 * 100) + "%");
-            sdo1(0x2003, 0x06, Math.round(kp.brightNight / 63 * 0x3F), "Default backlight brightness");
+            sdo1(0x2003, 0x04, kpCol(kp.blColor).idx, "Default backlight colour → " + kp.blColor);
+            sdo1(0x2003, 0x06, kp.blBright & 0x3F, "Default backlight brightness → " + Math.round(kp.blBright / 63 * 100) + "%");
             sdo2(0x1800, 0x05, kp.periodMs & 0xFFFF, kp.periodMs > 0 ? ("Periodic key-state → " + kp.periodMs + "ms") : "Periodic key-state off");
             sdo2(0x1017, 0x00, kp.hbMs & 0xFFFF, kp.hbMs > 0 ? ("Heartbeat → " + kp.hbMs + "ms") : "Heartbeat off");
             /* initial LED look via the LED-ON PDO (0x200+node) — one frame, R/G/B bytes */
@@ -1634,7 +1645,7 @@
         }
         window.kpExportProvision = function () {
             _ltDownload("rdm_keypad_" + kp.model.id + "_" + kp.proto + "_setup.txt", kpProvisionText(), "text/plain");
-            if (typeof showToast === "function") showToast("Setup frames exported — " + kpProvisionFrames().length + " frames", "success");
+            if (typeof showToast === "function") showToast("Setup file saved — play it into the keypad from the dash or any CAN tool", "success");
         };
         window.kpCopyProvision = function () {
             var t = kpProvisionText();
@@ -1659,6 +1670,8 @@
                     if (typeof c.activeStart === "boolean") kp.activeStart = c.activeStart;
                     if (typeof c.periodMs === "number") kp.periodMs = c.periodMs;
                     if (typeof c.hbMs === "number") kp.hbMs = c.hbMs;
+                    if (c.blColor) kp.blColor = c.blColor;
+                    if (typeof c.blBright === "number") kp.blBright = c.blBright;
                 } else {
                     kp.keys = JSON.parse(JSON.stringify(DEFAULT_KEYS));
                     kp.proto = "canopen"; kp.node = 0x15; kp.sa = 0x21; kp.baud = 125;
@@ -1672,7 +1685,8 @@
                     keys: kp.keys.slice(0, kp.model.rows * kp.model.cols),
                     brightDay: kp.brightDay, brightNight: kp.brightNight,
                     proto: kp.proto, node: kp.node, sa: kp.sa, baud: kp.baud,
-                    startShow: kp.startShow, activeStart: kp.activeStart, periodMs: kp.periodMs, hbMs: kp.hbMs
+                    startShow: kp.startShow, activeStart: kp.activeStart, periodMs: kp.periodMs, hbMs: kp.hbMs,
+                    blColor: kp.blColor, blBright: kp.blBright
                 };
                 localStorage.setItem(KP_LS, JSON.stringify(all));
             } catch (e) { console.warn("keypad save failed:", e); }
@@ -1773,6 +1787,17 @@
             return k.behavior;
         }
         function kpBrightness() { return (kp.night ? kp.brightNight : kp.brightDay) / 63; }
+        /* icon backlight: legends take on the backlight colour as it comes up */
+        function _kpHexMix(a, b, f) {
+            function p(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
+            var A = p(a), B = p(b), o = "#";
+            for (var i = 0; i < 3; i++) o += ("0" + Math.round(A[i] + (B[i] - A[i]) * f).toString(16)).slice(-2);
+            return o;
+        }
+        function kpInsertColor() {
+            var f = Math.min(1, (kp.blBright / 63) * 1.15);
+            return f > 0 ? _kpHexMix("#F0F4F8", HEX[kp.blColor] || "#FF9F0A", f) : "#F0F4F8";
+        }
 
         function kpBuildSvg() {
             var m = kp.model;
@@ -1840,13 +1865,16 @@
                     s += '<circle cx="' + cx + '" cy="' + (cy + dy) + '" r="' + (CAP_R - 0.6) + '" fill="none" stroke="#000" stroke-width="1.4" opacity="0.55"/>';
                     s += '<path d="M ' + (cx - CAP_R + 5) + " " + (cy - 11 + dy) + " A " + (CAP_R - 4) + " " + (CAP_R - 4) + " 0 0 1 " + (cx + CAP_R - 5) + " " + (cy - 11 + dy) + '" stroke="#B9C2CB" stroke-width="1.3" opacity="' + (down ? 0.1 : 0.22) + '" fill="none" filter="url(#kpSoft2)"/>';
                     if (on) s += '<circle cx="' + cx + '" cy="' + (cy + dy) + '" r="' + (CAP_R - 1.2) + '" fill="none" stroke="' + col + '" stroke-width="1.6" opacity="' + (0.1 + 0.1 * br) + '"/>';
-                    var insOp = keyAssigned(k) ? (0.62 + 0.34 * br) : 0.16;
+                    /* backlight lights every legend — assigned or not */
+                    var blf = kp.blBright / 63;
+                    var insOp = Math.max(keyAssigned(k) ? (0.62 + 0.34 * br) : 0.16, blf * 0.8);
+                    var insCol = kpInsertColor();
                     if (!k.text && ICONS[k.icon]) {
                         s += '<g transform="translate(' + (cx - 18.4) + "," + (cy - 17.4 + dy) + ') scale(0.92)" style="color:rgba(0,0,0,0.6)">' + ICONS[k.icon] + "</g>";
-                        s += '<g transform="translate(' + (cx - 18.4) + "," + (cy - 18.4 + dy) + ') scale(0.92)" style="color:rgba(240,244,248,' + insOp.toFixed(2) + ')">' + ICONS[k.icon] + "</g>";
+                        s += '<g transform="translate(' + (cx - 18.4) + "," + (cy - 18.4 + dy) + ') scale(0.92)" opacity="' + insOp.toFixed(2) + '" style="color:' + insCol + '">' + ICONS[k.icon] + "</g>";
                     } else if (k.label) {
                         s += '<text x="' + cx + '" y="' + (cy + 5.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" fill="rgba(0,0,0,0.6)">' + k.label + "</text>";
-                        s += '<text x="' + cx + '" y="' + (cy + 4.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" fill="rgba(240,244,248,' + insOp.toFixed(2) + ')">' + k.label + "</text>";
+                        s += '<text x="' + cx + '" y="' + (cy + 4.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" opacity="' + insOp.toFixed(2) + '" fill="' + insCol + '">' + k.label + "</text>";
                     }
                     if (!kp.live && kp.selected === i) {
                         s += '<rect x="' + (x - 2.5) + '" y="' + (y - 2.5) + '" width="' + (CELL + 5) + '" height="' + (CELL + 5) + '" rx="18" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="7 5"/>';
@@ -2035,9 +2063,15 @@
                 }).join("") +
                 "</div></div></div>" +
                 _kpAlertsHtml(k, i) +
-                '<div class="kp-grp"><div class="kp-gt">Keypad — brightness</div>' +
-                '<div class="kp-field"><label>Day</label><div class="kp-slider"><input type="range" id="kpFDay" min="0" max="63" value="' + kp.brightDay + '"><span class="val" id="kpVDay">' + kp.brightDay + "</span></div></div>" +
-                '<div class="kp-field"><label>Night (follows dash night mode)</label><div class="kp-slider"><input type="range" id="kpFNight" min="0" max="63" value="' + kp.brightNight + '"><span class="val" id="kpVNight">' + kp.brightNight + "</span></div></div>" +
+                '<div class="kp-grp"><div class="kp-gt">Whole keypad — lighting</div>' +
+                '<div class="kp-field"><label>LED brightness — day</label><div class="kp-slider"><input type="range" id="kpFDay" min="0" max="63" value="' + kp.brightDay + '"><span class="val" id="kpVDay">' + kp.brightDay + "</span></div></div>" +
+                '<div class="kp-field"><label>LED brightness — night (dims with the dash)</label><div class="kp-slider"><input type="range" id="kpFNight" min="0" max="63" value="' + kp.brightNight + '"><span class="val" id="kpVNight">' + kp.brightNight + "</span></div></div>" +
+                '<div class="kp-field"><label>Icon backlight — lights the legends at night</label><div class="kp-swatches">' +
+                LED_COLORS.map(function (c) {
+                    return '<button class="kp-blsw' + (kp.blColor === c.id ? " on" : "") + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '"></button>';
+                }).join("") +
+                "</div></div>" +
+                '<div class="kp-field"><label>Backlight level</label><div class="kp-slider"><input type="range" id="kpFBl" min="0" max="63" value="' + kp.blBright + '"><span class="val" id="kpVBl">' + kp.blBright + "</span></div></div>" +
                 '<div class="kp-field"><label>Preview</label><div class="kp-seg" id="kpFDayNight">' +
                 '<button data-n="0"' + (!kp.night ? ' class="on"' : "") + ">Day</button>" +
                 '<button data-n="1"' + (kp.night ? ' class="on"' : "") + ">Night</button>" +
@@ -2083,6 +2117,10 @@
             });
             g("kpFDay").addEventListener("input", function (e) { kp.brightDay = +e.target.value; g("kpVDay").textContent = e.target.value; kpSaveCfg(); kpRenderStage(); });
             g("kpFNight").addEventListener("input", function (e) { kp.brightNight = +e.target.value; g("kpVNight").textContent = e.target.value; kpSaveCfg(); kpRenderStage(); });
+            box.querySelectorAll(".kp-blsw").forEach(function (b) {
+                b.addEventListener("click", function () { kp.blColor = b.getAttribute("data-c"); kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
+            });
+            g("kpFBl").addEventListener("input", function (e) { kp.blBright = +e.target.value; g("kpVBl").textContent = e.target.value; kpSaveCfg(); kpRenderStage(); });
             g("kpFDayNight").querySelectorAll("button").forEach(function (b) {
                 b.addEventListener("click", function () { kp.night = b.getAttribute("data-n") === "1"; kpRenderInspector(); kpRenderStage(); });
             });
@@ -2136,7 +2174,7 @@
                 rail.appendChild(b);
             });
             var busTitle = document.createElement("div");
-            busTitle.className = "kp-rail-title"; busTitle.style.marginTop = "16px"; busTitle.textContent = "CAN setup";
+            busTitle.className = "kp-rail-title"; busTitle.style.marginTop = "16px"; busTitle.textContent = "Connection";
             rail.appendChild(busTitle);
             var busBox = document.createElement("div");
             busBox.id = "kpBusBox";
@@ -2156,48 +2194,57 @@
             var box = document.getElementById("kpBusBox");
             if (!box) return;
             var ids = kpIds(), pm = _kpPresetMatch();
-            var h = "<div class='kp-bus-presets'>" +
-                KP_PRESETS.map(function (p) { return "<button class='kp-bus-chip" + (pm && pm.id === p.id ? " on" : "") + "' onclick=\"kpApplyPreset('" + p.id + "')\" title='" + p.note + "'>" + p.name + "</button>"; }).join("") +
-                "</div>";
-            /* protocol + address + baud */
-            h += "<div class='kp-bus-row'><label>Protocol</label><div class='kp-seg2'>" +
-                "<button class='" + (!kpIsJ() ? "on" : "") + "' onclick=\"kpSetProto('canopen')\">CANopen</button>" +
-                "<button class='" + (kpIsJ() ? "on" : "") + "' onclick=\"kpSetProto('j1939')\">J1939</button></div></div>";
-            if (kpIsJ()) {
-                h += "<div class='kp-bus-row'><label>Source addr</label><input class='kp-bus-in' id='kpFSa' value='" + kpHex2(kp.sa) + "'></div>";
-            } else {
-                h += "<div class='kp-bus-row'><label>Node ID</label><input class='kp-bus-in' id='kpFNode' value='" + kpHex2(kp.node) + "'></div>";
+            /* 1 · pick how it connects — three plain-english cards, done */
+            var h = KP_PRESETS.map(function (p) {
+                var on = pm && pm.id === p.id;
+                return "<button class='kp-bus-card" + (on ? " on" : "") + "' onclick=\"kpApplyPreset('" + p.id + "')\" title='" + p.note + "'>" +
+                    "<b>" + p.name + (on ? " <i>&#10003;</i>" : "") + "</b><span>" + p.blurb + "</span></button>";
+            }).join("");
+            if (!pm) h += "<div class='kp-bus-custom'>Custom setup &#8212; details under Advanced.</div>";
+            /* 2 · the one action */
+            h += "<button class='ws-btn-line kp-bus-primary' onclick='kpExportProvision()'>&#8681;&nbsp; Keypad setup file</button>" +
+                "<div class='kp-bus-note'>Pick how it connects, style your keys, save the file &#8212; the dash (or any CAN tool) plays it into the keypad. That&#8217;s it.</div>";
+            /* 3 · everything technical lives behind Advanced */
+            h += "<button class='kp-adv-toggle' onclick='kpToggleAdv()'>" + (kp._busAdv ? "&#9662;" : "&#9656;") + " Advanced</button>";
+            if (kp._busAdv) {
+                h += "<div class='kp-adv'>";
+                h += "<div class='kp-bus-row'><label>Protocol</label><div class='kp-seg2'>" +
+                    "<button class='" + (!kpIsJ() ? "on" : "") + "' onclick=\"kpSetProto('canopen')\">CANopen</button>" +
+                    "<button class='" + (kpIsJ() ? "on" : "") + "' onclick=\"kpSetProto('j1939')\">J1939</button></div></div>";
+                if (kpIsJ()) {
+                    h += "<div class='kp-bus-row'><label>Source addr</label><input class='kp-bus-in' id='kpFSa' value='" + kpHex2(kp.sa) + "'></div>";
+                } else {
+                    h += "<div class='kp-bus-row'><label>Node ID</label><input class='kp-bus-in' id='kpFNode' value='" + kpHex2(kp.node) + "'></div>";
+                }
+                h += "<div class='kp-bus-row'><label>Baud</label><select class='kp-bus-in' id='kpFBaud'>" +
+                    _kpBauds().map(function (b) { return opt(String(b), b + "k", String(kp.baud)); }).join("") + "</select></div>";
+                h += "<div class='kp-bus-id'>";
+                if (kpIsJ()) {
+                    h += "<span>keys</span><b>" + kpHex8(ids.keys) + "</b><span>cmd</span><b>" + kpHex8(ids.cmd) + "</b>";
+                } else {
+                    h += "<span>keys</span><b>" + kpHex(ids.keys) + "</b><span>LED</span><b>" + kpHex(ids.ledOn) + "</b>" +
+                         "<span>backlight</span><b>" + kpHex(ids.backlight) + "</b><span>SDO</span><b>" + kpHex(ids.sdo) + "</b>";
+                }
+                h += "</div>";
+                h += "<div class='kp-bus-row'><label>Startup LED</label><select class='kp-bus-in' id='kpFShow'>" +
+                    opt("0", "Off", String(kp.startShow)) + opt("1", "Full show", String(kp.startShow)) + opt("2", "Fast flash", String(kp.startShow)) + "</select></div>";
+                if (!kpIsJ()) h += "<label class='kp-bus-chkrow'><input type='checkbox' id='kpFActive'" + (kp.activeStart ? " checked" : "") + "> Active on startup (no host start needed)</label>";
+                h += "<div class='kp-bus-row'><label>Key broadcast</label><select class='kp-bus-in' id='kpFPeriod'>" +
+                    opt("0", "On press only", String(kp.periodMs)) + opt("50", "Every 50ms", String(kp.periodMs)) + opt("100", "Every 100ms", String(kp.periodMs)) + opt("500", "Every 500ms", String(kp.periodMs)) + "</select></div>";
+                h += "<div class='lt-expbtns' style='margin-top:6px'><button class='ws-btn-line' onclick='kpCopyProvision()'>Copy setup</button><button class='ws-btn-line' onclick='kpExportDbc()'>Export .dbc</button></div>" +
+                    "<div class='kp-bus-note'>The DBC names every button + LED for MoTeC / Haltech / Link / SavvyCAN.</div>";
+                h += "</div>";
             }
-            h += "<div class='kp-bus-row'><label>Baud</label><select class='kp-bus-in' id='kpFBaud'>" +
-                _kpBauds().map(function (b) { return opt(String(b), b + "k", String(kp.baud)); }).join("") + "</select></div>";
-            /* derived frame IDs */
-            h += "<div class='kp-bus-id'>";
-            if (kpIsJ()) {
-                h += "<span>keys</span><b>" + kpHex8(ids.keys) + "</b><span>cmd</span><b>" + kpHex8(ids.cmd) + "</b>";
-            } else {
-                h += "<span>keys</span><b>" + kpHex(ids.keys) + "</b><span>LED</span><b>" + kpHex(ids.ledOn) + "</b>" +
-                     "<span>backlight</span><b>" + kpHex(ids.backlight) + "</b><span>SDO</span><b>" + kpHex(ids.sdo) + "</b>";
-            }
-            h += "</div>";
-            /* device options */
-            h += "<div class='kp-bus-row'><label>Startup LED</label><select class='kp-bus-in' id='kpFShow'>" +
-                opt("0", "Off", String(kp.startShow)) + opt("1", "Full show", String(kp.startShow)) + opt("2", "Fast flash", String(kp.startShow)) + "</select></div>";
-            if (!kpIsJ()) h += "<label class='kp-bus-chkrow'><input type='checkbox' id='kpFActive'" + (kp.activeStart ? " checked" : "") + "> Active on startup (no host start needed)</label>";
-            h += "<div class='kp-bus-row'><label>Key broadcast</label><select class='kp-bus-in' id='kpFPeriod'>" +
-                opt("0", "On press only", String(kp.periodMs)) + opt("50", "Every 50ms", String(kp.periodMs)) + opt("100", "Every 100ms", String(kp.periodMs)) + opt("500", "Every 500ms", String(kp.periodMs)) + "</select></div>";
-            /* actions */
-            h += "<button class='ws-btn-line' onclick='kpExportProvision()' style='margin-top:6px'>Generate setup frames</button>" +
-                "<div class='lt-expbtns' style='margin-top:6px'><button class='ws-btn-line' onclick='kpCopyProvision()'>Copy setup</button><button class='ws-btn-line' onclick='kpExportDbc()'>Export .dbc</button></div>" +
-                "<div class='kp-bus-note'>Setup frames program a real PKP-2200 to this config (node/baud/LED/backlight) &#8212; replay them through the dash CAN gateway or SavvyCAN. The DBC names every button + LED for MoTeC / Haltech / Link.</div>";
             box.innerHTML = h;
             var g = function (id) { return document.getElementById(id); };
             if (g("kpFNode")) g("kpFNode").addEventListener("change", function (e) { var v = parseInt(e.target.value.replace(/^0x/i, ""), 16); if (v >= 1 && v <= 0x7F) kp.node = v; kpBusChanged(); });
             if (g("kpFSa")) g("kpFSa").addEventListener("change", function (e) { var v = parseInt(e.target.value.replace(/^0x/i, ""), 16); if (v >= 1 && v <= 0xFD) kp.sa = v; kpBusChanged(); });
-            g("kpFBaud").addEventListener("change", function (e) { kp.baud = +e.target.value; kpBusChanged(); });
-            g("kpFShow").addEventListener("change", function (e) { kp.startShow = +e.target.value; kpBusChanged(); });
+            if (g("kpFBaud")) g("kpFBaud").addEventListener("change", function (e) { kp.baud = +e.target.value; kpBusChanged(); });
+            if (g("kpFShow")) g("kpFShow").addEventListener("change", function (e) { kp.startShow = +e.target.value; kpBusChanged(); });
             if (g("kpFActive")) g("kpFActive").addEventListener("change", function (e) { kp.activeStart = e.target.checked; kpBusChanged(); });
-            g("kpFPeriod").addEventListener("change", function (e) { kp.periodMs = +e.target.value; kpBusChanged(); });
+            if (g("kpFPeriod")) g("kpFPeriod").addEventListener("change", function (e) { kp.periodMs = +e.target.value; kpBusChanged(); });
         }
+        window.kpToggleAdv = function () { kp._busAdv = !kp._busAdv; kpRenderBus(); };
         function kpBusChanged() { kpSaveCfg(); kpRenderBus(); kpUpdateChip(); kpRenderInspector(); kpRenderStage(); }
         window.kpSetProto = function (p) {
             kp.proto = p;
@@ -2209,7 +2256,7 @@
             if (!p) return;
             kp.proto = p.proto; kp.baud = p.baud; if (!kpIsJ()) kp.node = p.node;
             kpBusChanged();
-            if (typeof showToast === "function") showToast(p.name + " — " + kpIds().label + " @ " + kp.baud + "k", "success");
+            if (typeof showToast === "function") showToast(p.name + " — connection set. Style your keys, then save the setup file.", "success");
         };
 
         window._kpOpen = function () {
