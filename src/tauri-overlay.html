@@ -636,6 +636,9 @@
         .kp-swatches { display: flex; gap: 6px; flex-wrap: wrap; }
         .kp-sw { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); cursor: pointer; padding: 0; box-shadow: var(--shadow-inset); }
         .kp-sw.on { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--accent); }
+        .kp-sw-bl { width: 22px; height: 22px; border-radius: 50%; border: 1px dashed var(--border-light); padding: 0; opacity: 0.34; cursor: not-allowed; box-shadow: var(--shadow-inset); }
+        .kp-asw.kp-sw-bl { width: 18px; height: 18px; }
+        .kp-swnote { font-size: 9px; color: var(--text-muted); margin-top: 5px; line-height: 1.4; }
         .kp-seg { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
         .kp-seg button { flex: 1; background: none; border: none; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 10.5px; font-weight: 600; padding: 5px 0; cursor: pointer; }
         .kp-seg button.on { background: var(--accent); color: #fff; }
@@ -1470,10 +1473,10 @@
         };
         var DEFAULT_KEYS = [
             { label: "MAP ▲", text: false, icon: "up", mode: "paired", preset: "Map up", follows: "self", color: "green", behavior: "solid" },
-            { label: "PIT", text: false, icon: "turtle", mode: "toggle", preset: "Pit limiter", follows: "self", color: "amber", behavior: "slow" },
+            { label: "PIT", text: false, icon: "turtle", mode: "toggle", preset: "Pit limiter", follows: "self", color: "yellow", behavior: "slow" },
             { label: "MAP ▼", text: false, icon: "down", mode: "paired", preset: "Map down", follows: "self", color: "blue", behavior: "solid" },
-            { label: "MAIN", text: false, icon: "power", mode: "toggle", preset: "Ignition / main", follows: "self", color: "green", behavior: "solid", alerts: [{ chan: "coolant_temp", op: ">", val: 100, color: "red", behavior: "fast" }, { chan: "coolant_temp", op: ">", val: 92, color: "amber", behavior: "slow" }] },
-            { label: "FAN", text: false, icon: "fan", mode: "toggle", preset: "Fan override", follows: "coolant_temp", color: "green", behavior: "solid", alerts: [{ chan: "coolant_temp", op: ">", val: 100, color: "red", behavior: "fast" }, { chan: "coolant_temp", op: ">", val: 92, color: "amber", behavior: "slow" }] },
+            { label: "MAIN", text: false, icon: "power", mode: "toggle", preset: "Ignition / main", follows: "self", color: "green", behavior: "solid", alerts: [{ chan: "coolant_temp", op: ">", val: 100, color: "red", behavior: "fast" }, { chan: "coolant_temp", op: ">", val: 92, color: "yellow", behavior: "slow" }] },
+            { label: "FAN", text: false, icon: "fan", mode: "toggle", preset: "Fan override", follows: "coolant_temp", color: "green", behavior: "solid", alerts: [{ chan: "coolant_temp", op: ">", val: 100, color: "red", behavior: "fast" }, { chan: "coolant_temp", op: ">", val: 92, color: "yellow", behavior: "slow" }] },
             { label: "PUMP", text: false, icon: "pump", mode: "toggle", preset: "Fuel pump", follows: "self", color: "green", behavior: "solid" },
             { label: "LAUNCH", text: false, icon: "bolt", mode: "momentary", preset: "Launch arm", follows: "self", color: "red", behavior: "fast" },
             { label: "NIGHT", text: false, icon: "moon", mode: "toggle", preset: "Dash: night mode", follows: "self", color: "yellow", behavior: "solid" },
@@ -1481,7 +1484,7 @@
             { label: "ALS", text: true, icon: "blank", mode: "toggle", preset: "Anti-lag", follows: "self", color: "red", behavior: "slow" },
             { label: "WIPER", text: true, icon: "blank", mode: "state3", preset: "Wiper sequence", follows: "self", color: "cyan", behavior: "solid" },
             { label: "PAGE", text: false, icon: "page", mode: "momentary", preset: "Dash: next page", follows: "self", color: "cyan", behavior: "solid" },
-            { label: "LOG", text: true, icon: "blank", mode: "momentary", preset: "Log marker", follows: "self", color: "lime", behavior: "solid" },
+            { label: "LOG", text: true, icon: "blank", mode: "momentary", preset: "Log marker", follows: "self", color: "green", behavior: "solid" },
             { label: "", text: true, icon: "blank", mode: "momentary", preset: "— unassigned —", follows: "self", color: "red", behavior: "solid" },
             { label: "", text: true, icon: "blank", mode: "momentary", preset: "— unassigned —", follows: "self", color: "red", behavior: "solid" }
         ];
@@ -1950,6 +1953,7 @@
             var alerts = k.alerts || [];
             var rows = alerts.map(function (a, ai) {
                 var sw = LED_COLORS.map(function (c) {
+                    if (KP_COL[c.id] && KP_COL[c.id].bl) return '<button class="kp-asw kp-sw-bl" style="background:' + c.hex + '" title="' + c.id + ' — backlight only" disabled></button>';
                     return '<button class="kp-asw' + (a.color === c.id ? " on" : "") + '" style="background:' + c.hex + '" title="' + c.id + '" onclick="kpAlertColor(' + ki + ',' + ai + ",'" + c.id + "')\"></button>";
                 }).join("");
                 return '<div class="kp-alert">' +
@@ -2021,9 +2025,10 @@
                 "</select></div>" +
                 '<div class="kp-field"><label>Base color (normal)</label><div class="kp-swatches">' +
                 LED_COLORS.map(function (c) {
+                    if (KP_COL[c.id] && KP_COL[c.id].bl) return '<button class="kp-sw-bl" style="background:' + c.hex + '" title="' + c.id + ' — backlight only; indicator shows the nearest of the 7" disabled></button>';
                     return '<button class="kp-sw' + (k.color === c.id ? " on" : "") + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '" aria-label="' + c.id + '"></button>';
                 }).join("") +
-                "</div></div>" +
+                '</div><div class="kp-swnote">7 indicator colours (per-key R/G/B). Amber &amp; yellow-green are backlight-only.</div></div>' +
                 '<div class="kp-field"><label>Behavior</label><div class="kp-seg" id="kpFBeh">' +
                 ["solid", "slow", "fast"].map(function (b) {
                     return '<button data-b="' + b + '"' + (k.behavior === b ? ' class="on"' : "") + ">" + (b === "solid" ? "Solid" : b === "slow" ? "Slow blink" : "Fast blink") + "</button>";
