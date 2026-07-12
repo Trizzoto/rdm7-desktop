@@ -785,6 +785,7 @@
         .kp-flash { animation: kpFlash 1.1s ease; }
         @keyframes kpFlash { 0%, 100% { box-shadow: none; } 25%, 60% { box-shadow: 0 0 0 2px var(--accent); } }
         .kp-warnbanner { font-size: 9.5px; color: var(--text-muted); line-height: 1.5; background: rgba(224,162,78,0.10); border-left: 2px solid #E0A24E; border-radius: 4px; padding: 6px 8px; margin: 6px 0 8px; }
+        .kp-guide-warnbox { font-size: 11px; color: var(--text); line-height: 1.5; background: rgba(224,162,78,0.12); border-left: 3px solid #E0A24E; border-radius: 5px; padding: 9px 11px; margin: 10px 0; }
         .kp-ecu-for { font-size: 10px; color: var(--text-muted); margin-bottom: 8px; }
         .kp-ecu-for a { color: var(--accent); text-decoration: none; }
         .kp-ecu-for a:hover { text-decoration: underline; }
@@ -1810,6 +1811,24 @@
             if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t);
             if (typeof showToast === "function") showToast("Keypad setup file copied — paste it into SavvyCAN's Send Frames, or see the guide's “Program it” tab", "success");
         };
+        /* SavvyCAN-loadable frame CSV — its Send-Frames grid can Load this file
+           directly (the annotated .txt can't be imported, only hand-typed). Same
+           frames as the .txt; the protocol-switch STEP 0 (if J1939) is a
+           different-speed frame, so it stays in the .txt header as a manual step. */
+        function kpProvisionCsv() {
+            var rows = ["Time Stamp,ID,Extended,Dir,Bus,LEN,D1,D2,D3,D4,D5,D6,D7,D8"];
+            kpProvisionFrames().forEach(function (f) {
+                var d = f.data.slice(0, 8); while (d.length < 8) d.push(0);
+                var idHex = f.ext ? kpHex8(f.id) : kpHex(f.id).replace(/^0x/i, "");
+                rows.push("0," + idHex + "," + (f.ext ? "true" : "false") + ",Tx,0,8," + d.map(function (b) { return kpHex2(b); }).join(","));
+            });
+            return rows.join("\r\n");
+        }
+        window.kpExportProvisionCsv = function () {
+            _ltDownload("rdm_keypad_" + kp.model.id + "_" + kp.proto + "_" + kp.baud + "k_savvycan.csv", kpProvisionCsv(), "text/csv");
+            if (typeof showToast === "function") showToast("SavvyCAN CSV saved — Send Frames → Load this file, then send at the keypad's current speed", "success");
+        };
+        window._kpProvisionCsvPreview = function () { return kpProvisionCsv(); };   /* debug/support handle */
 
         function kpLoadCfg() {
             try {
@@ -2465,22 +2484,37 @@
                         "<b>Assign button " + keyNo + ".</b> It now appears as a Digital Input — in the DI setup pick its function and set it " + bmode + "."
                     ];
                 },
+                example: function (keyNo, N) {
+                    var n = N || 3;
+                    return "<b>Worked example — " + n + " boost maps on one button</b><br>" +
+                        "Say this key cycles <b>Low &#8594; Mid &#8594; High</b> boost. In PCLink:<br>" +
+                        "<ol class='kp-gex'>" +
+                        "<li><b>CAN Setup &#8594; CAN Keypad</b>: this button becomes a Digital Input. Set it as a <b>counter</b> with <b>" + n + "</b> positions (it wraps back to 0).</li>" +
+                        "<li>Point your <b>boost table switch</b> at that keypad value (0 / 1 / 2).</li>" +
+                        "<li>Map <b>0 &#8594; Low</b>, <b>1 &#8594; Mid</b>, <b>2 &#8594; High</b> boost target.</li>" +
+                        "<li>Set the <b>state colours</b> 0 green &middot; 1 yellow &middot; 2 red (the keypad drives them — design them here in RDM).</li>" +
+                        "</ol>" +
+                        "Each press steps Low&#8594;Mid&#8594;High and boost target follows. Tip: use the <b>Boost maps</b> preset in RDM to set this key up in one click.";
+                },
                 note: "Older G4+ ECUs need the keypad ordered with &#8220;motorsport firmware&#8221;. G4X is native."
             },
             haltech: {
                 name: "Haltech", chip: "Not plug-and-play for Blink", chipOk: false,
-                url: "https://support.haltech.com/portal/en/kb/articles/overview", urlName: "Haltech support knowledge base",
+                url: "https://support.haltech.com/portal/en/kb/haltech/technical-support", urlName: "Haltech knowledge base — search “CAN Inputs”",
                 bus: "CANopen (read as a CAN input)",
-                intro: "Straight up: Haltech&#8217;s one-click keypad feature is built for Haltech&#8217;s <b>own</b> keypad, so a Blink/RDM keypad won&#8217;t appear there automatically. Two honest ways to use it:",
+                intro: "Straight up: Haltech&#8217;s one-click keypad feature is built for Haltech&#8217;s <b>own</b> keypad, so a Blink/RDM keypad won&#8217;t appear there automatically. You read its CAN frame directly:",
                 steps: function (keyNo, mode, N, node, idHex, byteIdx, bit, mask) {
+                    var raw = kpIsJ()
+                        ? "<b>Read the CAN frame.</b> In Haltech&#8217;s software (<b>ESP</b> for Elite, <b>NSP</b> for Nexus) add a <b>CAN Input</b> for ID <b>" + idHex + "</b> (29-bit) and read <b>byte&nbsp;3 = key number (" + keyNo + ")</b>, <b>byte&nbsp;4 = 01 pressed / 00 released</b>."
+                        : "<b>Read the CAN frame.</b> In Haltech&#8217;s software (<b>ESP</b> for Elite, <b>NSP</b> for Nexus) add a <b>CAN Input</b> for ID <b>" + idHex + "</b>, and read <b>byte " + byteIdx + ", bit " + bit + "</b> (mask 0x" + kpHex2(mask) + ") for button " + keyNo + ".";
                     return [
-                        "<b>Easiest with RDM &mdash; dash bridge.</b> Put the keypad on the same CAN bus as the RDM-7 dash. The dash reads every press and (roadmap) can hand Haltech clean, ready-made inputs &mdash; no raw-CAN wrangling.",
-                        "<b>Advanced &mdash; raw CAN input.</b> In NSP add a <b>CAN Input</b> for ID <b>" + idHex + "</b>, and read <b>byte " + byteIdx + ", bit " + bit + "</b> (mask 0x" + kpHex2(mask) + ") for button " + keyNo + ".",
+                        raw,
                         (mode === "state3"
                             ? "<b>Make it a " + N + "-position switch.</b> Build a counter in Haltech logic that steps on each press and wraps after " + N + " &mdash; then map each count to your output."
                             : mode === "toggle"
                                 ? "<b>Make it toggle.</b> Feed that bit into a latch/flip-flop in Haltech logic so it flips on/off each press."
-                                : "<b>Momentary.</b> Use the bit directly &mdash; pressed = on.")
+                                : "<b>Momentary.</b> Use the bit directly &mdash; pressed = on."),
+                        "<b>Coming soon &mdash; RDM dash bridge.</b> A future dash update will read the keypad and hand Haltech clean, ready-made inputs, so you skip the raw-CAN step entirely."
                     ];
                 },
                 note: "Want true plug-and-play on Haltech? Haltech&#8217;s own keypad is simplest. The Blink/RDM keypad is happiest with Link, MaxxECU or the RDM-7 dash."
@@ -2492,10 +2526,11 @@
                 intro: "Out of the box the keypad already works (CANopen @ 125k, node 0x15) — if that&#8217;s what you picked, <b>skip this tab</b>. You only program it when you change the connection: 500k to share the RDM-7 dash bus, J1939, or a different node. One-time job; the keypad remembers.",
                 steps: function () {
                     return [
-                        "<b>Save the keypad setup file</b> (the &#8681; button in the left rail). It&#8217;s plain text — open it; every line is one CAN frame with a note saying what it does.",
-                        "<b>Connect a USB-CAN adapter</b> (PCAN, Kvaser, CANable&hellip; from ~$30) to the keypad&#8217;s CAN-H / CAN-L, and give the keypad 12&nbsp;V + ground.",
+                        "<b>Save the keypad setup file</b> (the &#8681; button in the left rail). It&#8217;s plain text — open it; every line is one CAN frame with a note saying what it does. The <b>SavvyCAN CSV</b> next to it loads straight into Send Frames.",
+                        "<b>Connect a USB-CAN adapter.</b> A CANable or CANtact is ~$30; PCAN or Kvaser cost more but are rock-solid. Wire it to the keypad&#8217;s <b>CAN-H (pin 2, white)</b> / <b>CAN-L (pin 1, blue)</b>, and give the keypad <b>+12&nbsp;V (pin 4, red)</b> and <b>ground (pin 3, black)</b> — Deutsch DT04-4P plug.",
+                        "<b>Terminate the bus.</b> Switch on your adapter&#8217;s built-in <b>120&nbsp;&#937;</b> termination, or wire one 120&nbsp;&#937; resistor across CAN-H / CAN-L. Skip this and the keypad won&#8217;t ACK — nothing sends. It&#8217;s the #1 &#8220;why won&#8217;t it work&#8221;.",
                         "<b>Open SavvyCAN</b> (free) and connect at the keypad&#8217;s <b>current</b> speed — a new keypad is CANopen @ <b>125k</b>. The file header spells out any protocol-switch step.",
-                        "<b>Send the frames top to bottom</b> (SavvyCAN &#8594; Send Frames: ID + 8 data bytes per line). All LEDs flashing = the keypad accepted a write.",
+                        "<b>Send the frames top to bottom</b> (SavvyCAN &#8594; Send Frames: load the CSV, or type ID + 8 data bytes per line). The keypad ACKs each write — watch the bus for no errors.",
                         "<b>Power-cycle the keypad.</b> Speed / node / protocol changes only apply after a reboot. Press a key and watch for the keys frame at the new speed — done, forever."
                     ];
                 },
@@ -2504,17 +2539,28 @@
         };
         function _kpWiringSvg(busLabel, rightLabel) {
             rightLabel = rightLabel || "YOUR ECU";
-            return "<svg class='kp-guide-wire' viewBox='0 0 300 76' xmlns='http://www.w3.org/2000/svg'>" +
-                "<rect x='6' y='20' width='84' height='40' rx='7' fill='var(--panel-elevated)' stroke='var(--border-light)'/>" +
-                "<text x='48' y='37' text-anchor='middle' font-size='9' fill='var(--text)' font-weight='700'>KEYPAD</text>" +
-                "<text x='48' y='50' text-anchor='middle' font-size='7.5' fill='var(--text-muted)'>PKP-SI</text>" +
-                "<rect x='210' y='20' width='84' height='40' rx='7' fill='var(--panel-elevated)' stroke='var(--border-light)'/>" +
-                "<text x='252' y='43' text-anchor='middle' font-size='9' fill='var(--text)' font-weight='700'>" + rightLabel + "</text>" +
-                "<line x1='90' y1='33' x2='210' y2='33' stroke='#FFD60A' stroke-width='2.4'/>" +
-                "<line x1='90' y1='47' x2='210' y2='47' stroke='#2EE04A' stroke-width='2.4'/>" +
-                "<text x='150' y='30' text-anchor='middle' font-size='7' fill='#FFD60A'>CAN-H</text>" +
-                "<text x='150' y='58' text-anchor='middle' font-size='7' fill='#2EE04A'>CAN-L</text>" +
-                "<text x='150' y='72' text-anchor='middle' font-size='7.5' fill='var(--text-muted)'>same bus &middot; " + busLabel + "</text>" +
+            /* Pinout is the REAL one from the Blink datasheet (Deutsch DT04-4P):
+               1 Blue CAN-L, 2 White CAN-H, 3 Black GND, 4 Red +12–24V. The two
+               120 Ω squiggles are the bus termination — missing them is the #1
+               "why won't it work" gotcha. */
+            return "<svg class='kp-guide-wire' viewBox='0 0 300 118' xmlns='http://www.w3.org/2000/svg'>" +
+                "<rect x='6' y='22' width='84' height='40' rx='7' fill='var(--panel-elevated)' stroke='var(--border-light)'/>" +
+                "<text x='48' y='39' text-anchor='middle' font-size='9' fill='var(--text)' font-weight='700'>KEYPAD</text>" +
+                "<text x='48' y='52' text-anchor='middle' font-size='7.5' fill='var(--text-muted)'>PKP-SI</text>" +
+                "<rect x='210' y='22' width='84' height='40' rx='7' fill='var(--panel-elevated)' stroke='var(--border-light)'/>" +
+                "<text x='252' y='45' text-anchor='middle' font-size='9' fill='var(--text)' font-weight='700'>" + rightLabel + "</text>" +
+                "<line x1='90' y1='35' x2='210' y2='35' stroke='#FFD60A' stroke-width='2.4'/>" +
+                "<line x1='90' y1='49' x2='210' y2='49' stroke='#2EE04A' stroke-width='2.4'/>" +
+                "<text x='150' y='32' text-anchor='middle' font-size='7' fill='#FFD60A'>CAN-H</text>" +
+                "<text x='150' y='60' text-anchor='middle' font-size='7' fill='#2EE04A'>CAN-L</text>" +
+                /* 120 Ω termination squiggles at each end of the bus */
+                "<path d='M104,35 l-4,3 l8,3 l-8,3 l4,3 L104,49' fill='none' stroke='var(--text-muted)' stroke-width='1.3'/>" +
+                "<path d='M196,35 l-4,3 l8,3 l-8,3 l4,3 L196,49' fill='none' stroke='var(--text-muted)' stroke-width='1.3'/>" +
+                "<text x='150' y='45' text-anchor='middle' font-size='6.5' fill='var(--text-muted)'>120 &#937; each end</text>" +
+                "<text x='150' y='74' text-anchor='middle' font-size='7.5' fill='var(--text-muted)'>same bus &middot; " + busLabel + "</text>" +
+                /* real connector pinout */
+                "<text x='150' y='95' text-anchor='middle' font-size='7.5' fill='var(--text)' font-weight='600'>Keypad plug &middot; Deutsch DT04-4P</text>" +
+                "<text x='150' y='107' text-anchor='middle' font-size='7' fill='var(--text-muted)'>1 CAN-L (blu) &middot; 2 CAN-H (wht) &middot; 3 GND (blk) &middot; 4 +12&#8211;24V (red)</text>" +
                 "</svg>";
         }
         /* Our own branded "mock screenshot" of an ECU config screen — an SVG that
@@ -2568,19 +2614,26 @@
                 return [
                     { label: "CAN Module", value: "CAN 2", type: "select", badge: 2 },
                     { label: "Mode", value: "User Defined", type: "select", badge: 2, hi: true },
-                    { label: "Bit Rate", value: "1 Mbit/s", type: "select" },
+                    { label: "Bit Rate", value: c.baud + " kbit/s", type: "select", hi: true },
                     { sep: true },
                     { label: "Channel 1 · Mode", value: "CAN Keypad 1", type: "select", badge: 4, hi: true },
                     { label: "CAN ID", value: c.canId + "  (" + kpHex(c.canId) + ")", type: "text", badge: 4, hi: true }
                 ];
             } },
-            haltech: { title: "NSP  •  CAN Inputs  (advanced path)", rows: function (c) {
-                return [
-                    { label: "Message ID", value: c.idHex, type: "text", badge: 2, hi: true },
-                    { label: "Start byte", value: String(c.byteIdx), type: "text", badge: 2 },
-                    { label: "Bit  (mask)", value: c.bit + "  (0x" + kpHex2(c.mask) + ")", type: "text", badge: 2 },
+            haltech: { title: "Haltech ESP / NSP  •  CAN Inputs", rows: function (c) {
+                if (c.isJ) return [
+                    { label: "Message ID", value: c.idHex + " (29-bit)", type: "text", badge: 1, hi: true },
+                    { label: "Key byte", value: "byte 3 = " + c.keyNo, type: "text", badge: 1 },
+                    { label: "State byte", value: "byte 4 = 01/00", type: "text", badge: 1, hi: true },
                     { sep: true },
-                    { label: "Button logic", value: c.mode === "state3" ? ("Counter · " + c.N + " steps") : (c.mode === "toggle" ? "Latch (toggle)" : "Direct"), type: "select", badge: 3 }
+                    { label: "Button logic", value: c.mode === "state3" ? ("Counter · " + c.N + " steps") : (c.mode === "toggle" ? "Latch (toggle)" : "Direct"), type: "select", badge: 2 }
+                ];
+                return [
+                    { label: "Message ID", value: c.idHex, type: "text", badge: 1, hi: true },
+                    { label: "Start byte", value: String(c.byteIdx), type: "text", badge: 1 },
+                    { label: "Bit  (mask)", value: c.bit + "  (0x" + kpHex2(c.mask) + ")", type: "text", badge: 1 },
+                    { sep: true },
+                    { label: "Button logic", value: c.mode === "state3" ? ("Counter · " + c.N + " steps") : (c.mode === "toggle" ? "Latch (toggle)" : "Direct"), type: "select", badge: 2 }
                 ];
             } }
         };
@@ -2592,17 +2645,23 @@
             var byteIdx = Math.floor((i || 0) / 8), bit = (i || 0) % 8, mask = 1 << bit;
             var idHex = kpIsJ() ? kpHex8(fids.keys) : kpHex(fids.keys);
             var colors = (k.mode === "state3") ? _kpPositions(k).map(function (p) { return p.color; }) : [k.color || "green"];
-            var ctx = { keyNo: keyNo, mode: k.mode, N: N, node: kp.node, canId: 384 + kp.node, idHex: idHex, byteIdx: byteIdx, bit: bit, mask: mask, colors: colors };
+            var ctx = { keyNo: keyNo, mode: k.mode, N: N, node: kp.node, canId: 384 + kp.node, idHex: idHex, byteIdx: byteIdx, bit: bit, mask: mask, colors: colors, baud: kp.baud, isJ: kpIsJ() };
             var steps = g.steps(keyNo, k.mode, N, kp.node, idHex, byteIdx, bit, mask);
             var stepsHtml = steps.map(function (s, si) { return "<li><span class='kp-gstep-n'>" + (si + 1) + "</span><span>" + s + "</span></li>"; }).join("");
             var mk = KP_MOCK[brandId];
             var mockHtml = mk ? ("<div class='kp-mock-label'>What you&#8217;ll see in " + g.name + " &mdash; RDM mock-up, your values filled in</div>" + _kpMockWindow(mk.title, mk.rows(ctx))) : "";
+            /* Link's CAN Keypad mode is CANopen-native — warn (don't renumber the
+               steps) when the keypad is currently set to J1939. */
+            var protoWarn = (brandId === "link" && kpIsJ())
+                ? "<div class='kp-guide-warnbox'>Your keypad is set to <b>J1939</b>, but Link&#8217;s CAN Keypad mode expects <b>CANopen</b>. Switch it back to CANopen (125k or 500k) under <b>Connection</b> and re-save the setup file before these steps.</div>"
+                : "";
             return "<div class='kp-guide-chip " + (g.chipOk ? "ok" : "warn") + "'>" + g.name + " &middot; " + g.chip + "</div>" +
                 _kpWiringSvg(g.bus, g.right) +
                 "<div class='kp-guide-intro'>" + g.intro + "</div>" +
+                protoWarn +
                 mockHtml +
                 "<ol class='kp-gsteps'>" + stepsHtml + "</ol>" +
-                (g.example ? "<details class='kp-ecu-adv kp-gex-wrap'><summary>&#128161; Worked example — 3 boost maps on one button</summary><div class='kp-gex-body'>" + g.example(keyNo, N || 3) + "</div></details>" : "") +
+                (g.example ? "<details class='kp-ecu-adv kp-gex-wrap'><summary>&#128161; Worked example — boost maps on one button</summary><div class='kp-gex-body'>" + g.example(keyNo, N || 3) + "</div></details>" : "") +
                 (g.note ? "<div class='kp-note'>" + g.note + "</div>" : "") +
                 "<div class='kp-guide-links'>" +
                 "<a href='" + g.url + "' target='_blank' rel='noopener' onclick=\"return _kpOpenUrl('" + g.url + "')\">&#128279; Official " + g.urlName + " &#8594;</a>" +
@@ -3016,9 +3075,11 @@
                     "<button class='ws-btn-line kp-bus-primary' onclick=\"kpFlowJump('ecu')\">Next: set up your ECU &#8594;</button>" +
                     "<details class='kp-bus-filefold'><summary>Changed something? Get the setup file</summary>" +
                     "<button class='ws-btn-line' style='margin-top:6px' onclick='kpExportProvision()'>&#8681;&nbsp; Save keypad setup file</button>" +
+                    "<button class='kp-bus-how' onclick='kpExportProvisionCsv()'>&#8681; SavvyCAN CSV (loads into Send Frames)</button>" +
                     "<button class='kp-bus-how' onclick=\"kpOpenEcuGuide('program')\">How do I send it? &#8594;</button></details>";
             } else {
                 h += "<button class='ws-btn-line kp-bus-primary' onclick='kpExportProvision()'>&#8681;&nbsp; Save keypad setup file</button>" +
+                    "<button class='kp-bus-how' onclick='kpExportProvisionCsv()'>&#8681; SavvyCAN CSV (loads into Send Frames)</button>" +
                     "<button class='kp-bus-how' onclick=\"kpOpenEcuGuide('program')\">How do I send it? &#8594;</button>" +
                     "<div class='kp-bus-note'>This isn&#8217;t the factory default, so program it once: save the file and send it with any USB-CAN tool. The keypad then remembers.</div>";
             }
@@ -3053,8 +3114,8 @@
                 if (!kpIsJ()) h += "<label class='kp-bus-chkrow'><input type='checkbox' id='kpFActive'" + (kp.activeStart ? " checked" : "") + "> Active on startup (no host start needed)</label>";
                 h += "<div class='kp-bus-row'><label>Key broadcast</label><select class='kp-bus-in' id='kpFPeriod'>" +
                     opt("0", "On press only", String(kp.periodMs)) + opt("50", "Every 50ms", String(kp.periodMs)) + opt("100", "Every 100ms", String(kp.periodMs)) + opt("500", "Every 500ms", String(kp.periodMs)) + "</select></div>";
-                h += "<div class='lt-expbtns' style='margin-top:6px'><button class='ws-btn-line' onclick='kpCopyProvision()'>Copy setup frames</button><button class='ws-btn-line' onclick='kpExportDbc()'>Export .dbc</button></div>" +
-                    "<div class='kp-bus-note'>The DBC names every button + LED for MoTeC / Haltech / Link / SavvyCAN.</div>";
+                h += "<div class='lt-expbtns' style='margin-top:6px'><button class='ws-btn-line' onclick='kpCopyProvision()'>Copy setup frames</button><button class='ws-btn-line' onclick='kpExportProvisionCsv()'>SavvyCAN CSV</button><button class='ws-btn-line' onclick='kpExportDbc()'>Export .dbc</button></div>" +
+                    "<div class='kp-bus-note'>The SavvyCAN CSV loads straight into Send Frames. The DBC names every button + LED for MoTeC / Haltech / Link / SavvyCAN.</div>";
                 h += "</div>";
             }
             box.innerHTML = h;
