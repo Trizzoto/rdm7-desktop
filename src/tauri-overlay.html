@@ -636,6 +636,10 @@
         .kp-keyacts button:disabled { color: var(--text-muted); cursor: not-allowed; border-color: var(--border); }
         .kp-grp { border-top: 1px solid var(--border); padding: 10px 0 2px; margin-top: 6px; }
         .kp-gt { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 8px; }
+        details.kp-whole > summary { cursor: pointer; list-style: revert; margin-bottom: 2px; }
+        details.kp-whole > summary:hover { color: var(--text); }
+        details.kp-whole[open] > summary { margin-bottom: 10px; }
+        .kp-whole-hint { color: var(--text-muted); font-weight: 400; text-transform: none; letter-spacing: 0; }
         .kp-field { margin-bottom: 9px; }
         .kp-field label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 3px; }
         .kp-field input[type=text], .kp-field select {
@@ -2550,14 +2554,45 @@
             try { if (navigator.clipboard) navigator.clipboard.writeText(txt); } catch (e) { }
             if (typeof showToast === "function") showToast("ECU setup copied to clipboard", "success");
         };
+        /* Function presets are real one-click templates: picking one styles the
+           whole key (icon/text, mode, LED colour + behaviour, and a starter label
+           if the key is still blank), so a user isn't hand-building every button.
+           state3 presets carry their cycle positions too. */
+        var KP_PRESET_TPL = {
+            "Pit limiter": { icon: "turtle", mode: "toggle", color: "yellow", behavior: "slow", label: "PIT" },
+            "Ignition / main": { icon: "power", mode: "toggle", color: "green", behavior: "solid", label: "MAIN" },
+            "Launch arm": { icon: "bolt", mode: "momentary", color: "red", behavior: "fast", label: "LAUNCH" },
+            "Anti-lag": { text: true, mode: "toggle", color: "red", behavior: "slow", label: "ALS" },
+            "Boost maps": { text: true, mode: "state3", color: "green", behavior: "solid", label: "BOOST", positions: [{ name: "LOW", color: "green", behavior: "solid" }, { name: "MID", color: "yellow", behavior: "solid" }, { name: "HIGH", color: "red", behavior: "solid" }] },
+            "Fan override": { icon: "fan", mode: "toggle", color: "green", behavior: "solid", label: "FAN" },
+            "Fuel pump": { icon: "pump", mode: "toggle", color: "green", behavior: "solid", label: "PUMP" },
+            "Headlights": { icon: "light", mode: "toggle", color: "white", behavior: "solid", label: "LIGHTS" },
+            "Map up": { icon: "up", mode: "paired", color: "green", behavior: "solid", label: "MAP ▲" },
+            "Map down": { icon: "down", mode: "paired", color: "blue", behavior: "solid", label: "MAP ▼" },
+            "Map switch": { icon: "page", mode: "momentary", color: "cyan", behavior: "solid", label: "MAP" },
+            "Wiper sequence": { text: true, mode: "state3", color: "cyan", behavior: "solid", label: "WIPER", positions: [{ name: "OFF", color: "off", behavior: "solid" }, { name: "INT", color: "cyan", behavior: "slow" }, { name: "LOW", color: "cyan", behavior: "solid" }, { name: "HIGH", color: "blue", behavior: "solid" }] },
+            "Log marker": { text: true, mode: "momentary", color: "green", behavior: "solid", label: "LOG" },
+            "Dash: next page": { icon: "page", mode: "momentary", color: "cyan", behavior: "solid", label: "PAGE" },
+            "Dash: night mode": { icon: "moon", mode: "toggle", color: "yellow", behavior: "solid", label: "NIGHT" }
+        };
+        function _kpApplyPresetTemplate(k) {
+            var t = KP_PRESET_TPL[k.preset]; if (!t) return false;
+            if (t.text) { k.text = true; k.icon = "blank"; } else if (t.icon) { k.text = false; k.icon = t.icon; }
+            if (t.mode) k.mode = t.mode;
+            if (t.color) k.color = t.color;
+            if (t.behavior) k.behavior = t.behavior;
+            if (t.positions) k.positions = JSON.parse(JSON.stringify(t.positions));
+            else if (k.mode !== "state3") delete k.positions;
+            if (!k.label && t.label) k.label = t.label;
+            return true;
+        }
         function kpRenderInspector() {
             var box = document.getElementById("kpInspector");
             if (!box) return;
             if (kp.live) { box.innerHTML = '<div class="kp-none">Live mode — configuration locked.<br><br>Switch to Design to edit.</div>'; return; }
             var i = kp.selected, k = kp.keys[i];
             if (i == null || !k) { box.innerHTML = '<div class="kp-none">Select a key to configure it</div>'; return; }
-            var chan = (k.label || "key" + (i + 1)).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") + "_sw";
-            var iconOpts = [["up", "▲ arrow"], ["down", "▼ arrow"], ["turtle", "turtle (limiter)"], ["power", "power"], ["fan", "fan"], ["pump", "fuel pump"], ["light", "headlight"], ["moon", "night"], ["bolt", "launch"], ["page", "page"], ["blank", "text label"]];
+            var iconOpts =[["up", "▲ arrow"], ["down", "▼ arrow"], ["turtle", "turtle (limiter)"], ["power", "power"], ["fan", "fan"], ["pump", "fuel pump"], ["light", "headlight"], ["moon", "night"], ["bolt", "launch"], ["page", "page"], ["blank", "text label"]];
             var html =
                 "<h2>Key " + (i + 1) + " — " + (k.label || "unassigned") + "</h2>" +
                 '<div class="kp-sub">' + kp.model.name + "-SI · " + kpIds().label + " · keys " + kpFmtId(kpIds().keys, kpIds().ext) + "</div>" +
@@ -2569,7 +2604,6 @@
                 '<div class="kp-field"><label>Icon insert</label><select id="kpFIcon">' +
                 iconOpts.map(function (o) { return opt(o[0], o[1], k.text ? "blank" : k.icon); }).join("") +
                 "</select></div>" +
-                '<div class="kp-field"><label>Channel</label><input type="text" id="kpFChan" value="' + chan + '"></div>' +
                 '<div class="kp-field"><label>Mode</label><select id="kpFMode">' +
                 opt("momentary", "Momentary", k.mode) + opt("toggle", "Toggle", k.mode) +
                 opt("state3", "3-position (cycle)", k.mode) + opt("paired", "Paired ▲▼ with next key", k.mode) +
@@ -2592,10 +2626,11 @@
                 ["solid", "slow", "fast"].map(function (b) {
                     return '<button data-b="' + b + '"' + (k.behavior === b ? ' class="on"' : "") + ">" + (b === "solid" ? "Solid" : b === "slow" ? "Slow blink" : "Fast blink") + "</button>";
                 }).join("") +
-                "</div></div></div>" +
+                "</div></div>" +
+                '<div class="kp-swnote">The ring shows this colour by default. Bind <b>Follows</b> to a channel (or add alerts below) to make it react live — the <b>dash</b> drives that; otherwise the keypad just holds the saved colour.</div></div>' +
                 (k.mode === "state3" ? _kpPositionsHtml(k) : "") +
                 _kpAlertsHtml(k, i) +
-                '<div class="kp-grp"><div class="kp-gt">Whole keypad — lighting</div>' +
+                '<details class="kp-grp kp-whole"><summary class="kp-gt">Whole-keypad lighting &amp; night <span class="kp-whole-hint">— applies to all keys</span></summary>' +
                 '<div class="kp-field"><label>LED brightness — day</label><div class="kp-slider"><input type="range" id="kpFDay" min="0" max="63" value="' + kp.brightDay + '"><span class="val" id="kpVDay">' + kp.brightDay + "</span></div></div>" +
                 '<div class="kp-field"><label>LED brightness — night (dims with the dash)</label><div class="kp-slider"><input type="range" id="kpFNight" min="0" max="63" value="' + kp.brightNight + '"><span class="val" id="kpVNight">' + kp.brightNight + "</span></div></div>" +
                 '<div class="kp-field"><label>Icon backlight — lights the legends at night</label><div class="kp-swatches">' +
@@ -2607,7 +2642,7 @@
                 '<div class="kp-field"><label>Preview</label><div class="kp-seg" id="kpFDayNight">' +
                 '<button data-n="0"' + (!kp.night ? ' class="on"' : "") + ">Day</button>" +
                 '<button data-n="1"' + (kp.night ? ' class="on"' : "") + ">Night</button>" +
-                "</div></div></div>";
+                "</div></div></details>";
             /* What your ECU needs — the exact frame + how to read this key */
             html += _kpEcuSetupHtml(k, i);
             if (k.follows !== "self") {
@@ -2624,22 +2659,14 @@
             g("kpFMode").addEventListener("change", function (e) { k.mode = e.target.value; if (k.mode === "state3") _kpPositions(k); kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
             g("kpFPreset").addEventListener("change", function (e) {
                 k.preset = e.target.value;
-                /* "Boost maps" is a one-click template: make the key a 3-position
-                   cycle (Low/Mid/High) so the user doesn't have to build it by
-                   hand. Only fills a blank label so a custom name is kept. */
-                if (k.preset === "Boost maps") {
-                    k.mode = "state3";
-                    k.positions = [
-                        { name: "LOW", color: "green", behavior: "solid" },
-                        { name: "MID", color: "yellow", behavior: "solid" },
-                        { name: "HIGH", color: "red", behavior: "solid" }
-                    ];
-                    if (!k.label) { k.label = "BOOST"; k.text = true; k.icon = "blank"; }
+                /* Every preset is a real template — style the whole key in one
+                   click. "— unassigned —" (no template) just clears the label hint. */
+                if (_kpApplyPresetTemplate(k)) {
                     kpSaveCfg(); kpRenderInspector(); kpRenderStage();
-                    if (typeof showToast === "function") showToast("Boost maps template applied — 3-position Low / Mid / High", "success");
-                    return;
+                    if (typeof showToast === "function") showToast('"' + k.preset + '" applied — key styled; tweak anything you like', "success");
+                } else {
+                    kpSaveCfg(); kpRenderStage();
                 }
-                kpSaveCfg(); kpRenderStage();
             });
             g("kpFFollows").addEventListener("change", function (e) { k.follows = e.target.value; kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
             box.querySelectorAll(".kp-sw").forEach(function (b) {
