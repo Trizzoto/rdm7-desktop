@@ -2030,8 +2030,8 @@
                         s += '<g transform="translate(' + (cx - 18.4) + "," + (cy - 17.4 + dy) + ') scale(0.92)" style="color:rgba(0,0,0,0.6)">' + ICONS[k.icon] + "</g>";
                         s += '<g transform="translate(' + (cx - 18.4) + "," + (cy - 18.4 + dy) + ') scale(0.92)" opacity="' + insOp.toFixed(2) + '" style="color:' + insCol + '">' + ICONS[k.icon] + "</g>";
                     } else if (k.label) {
-                        s += '<text x="' + cx + '" y="' + (cy + 5.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" fill="rgba(0,0,0,0.6)">' + k.label + "</text>";
-                        s += '<text x="' + cx + '" y="' + (cy + 4.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" opacity="' + insOp.toFixed(2) + '" fill="' + insCol + '">' + k.label + "</text>";
+                        s += '<text x="' + cx + '" y="' + (cy + 5.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" fill="rgba(0,0,0,0.6)">' + _kpEsc(k.label) + "</text>";
+                        s += '<text x="' + cx + '" y="' + (cy + 4.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" opacity="' + insOp.toFixed(2) + '" fill="' + insCol + '">' + _kpEsc(k.label) + "</text>";
                     }
                     /* cycle keys: a small level gauge (one pip per non-zero position) under the icon */
                     if (kp.live && k.mode === "state3" && keyAssigned(k)) {
@@ -2240,7 +2240,7 @@
                 var dot = dark ? "#3A4046" : (HEX[p.color] || "#3A4046");
                 return '<div class="kp-pos">' +
                     '<div class="kp-pos-h"><span class="kp-pos-n">' + pi + '</span>' +
-                    '<input class="kp-pos-name" data-pi="' + pi + '" type="text" maxlength="8" value="' + (p.name || "") + '" placeholder="name (e.g. LOW)">' +
+                    '<input class="kp-pos-name" data-pi="' + pi + '" type="text" maxlength="8" value="' + _kpEsc(p.name || "") + '" placeholder="name (e.g. LOW)">' +
                     '<span class="kp-pos-dot" style="background:' + dot + '"></span></div>' +
                     '<div class="kp-pos-row">' +
                     '<div class="kp-pos-col"><label>Ring colour</label><select class="kp-pos-color" data-pi="' + pi + '">' + _kpColorOpts(dark ? "off" : p.color) + "</select></div>" +
@@ -2661,13 +2661,14 @@
             if (i == null || !k) { box.innerHTML = '<div class="kp-none">Select a key to configure it</div>'; return; }
             var iconOpts =[["up", "▲ arrow"], ["down", "▼ arrow"], ["turtle", "turtle (limiter)"], ["power", "power"], ["fan", "fan"], ["pump", "fuel pump"], ["light", "headlight"], ["moon", "night"], ["bolt", "launch"], ["page", "page"], ["blank", "text label"]];
             var html =
-                "<h2>Key " + (i + 1) + " — " + (k.label || "unassigned") + "</h2>" +
+                "<h2>Key " + (i + 1) + " — " + _kpEsc(k.label || "unassigned") + "</h2>" +
                 '<div class="kp-sub">' + kp.model.name + "-SI · " + kpIds().label + " · keys " + kpFmtId(kpIds().keys, kpIds().ext) + "</div>" +
-                '<div class="kp-keyacts"><button onclick="kpCopyKey()" title="copy this key\'s LED colour, behaviour and mode">Copy style</button>' +
-                '<button onclick="kpPasteKey()"' + (kp.clip ? "" : " disabled") + ' title="paste the copied LED style onto this key">Paste</button>' +
-                '<button onclick="kpApplyAll()" title="give every key this LED style — icons &amp; labels kept">Apply to all</button></div>' +
+                '<div class="kp-keyacts"><button onclick="kpCopyKey()" title="copy this key\'s ring colour + blink">Copy look</button>' +
+                '<button onclick="kpPasteKey()"' + (kp.clip ? "" : " disabled") + ' title="paste the copied ring colour + blink onto this key">Paste</button>' +
+                '<button onclick="kpApplyAll()" title="give every key this ring colour + blink — icons, labels &amp; modes kept">Apply to all</button>' +
+                '<button onclick="kpClearKey()" title="reset this key to unassigned">Clear</button></div>' +
                 '<div class="kp-grp"><div class="kp-gt">Button</div>' +
-                '<div class="kp-field"><label>Label</label><input type="text" id="kpFLabel" value="' + k.label + '" maxlength="7"></div>' +
+                '<div class="kp-field"><label>Label</label><input type="text" id="kpFLabel" value="' + _kpEsc(k.label) + '" maxlength="7"></div>' +
                 '<div class="kp-field"><label>Icon insert</label><select id="kpFIcon">' +
                 iconOpts.map(function (o) { return opt(o[0], o[1], k.text ? "blank" : k.icon); }).join("") +
                 "</select></div>" +
@@ -2680,9 +2681,6 @@
                     .map(function (p) { return opt(p, p, k.preset); }).join("") +
                 "</select></div></div>" +
                 '<div class="kp-grp"><div class="kp-gt">LED ring</div>' +
-                '<div class="kp-field"><label>Follows</label><select id="kpFFollows">' +
-                _kpFollowsOptions(k.follows) +
-                "</select></div>" +
                 '<div class="kp-field"><label>Base color (normal)</label><div class="kp-swatches">' +
                 LED_COLORS.map(function (c) {
                     if (KP_COL[c.id] && KP_COL[c.id].bl) return '<button class="kp-sw-bl" style="background:' + c.hex + '" title="' + c.id + ' — backlight only; indicator shows the nearest of the 7" disabled></button>';
@@ -2694,7 +2692,7 @@
                     return '<button data-b="' + b + '"' + (k.behavior === b ? ' class="on"' : "") + ">" + (b === "solid" ? "Solid" : b === "slow" ? "Slow blink" : "Fast blink") + "</button>";
                 }).join("") +
                 "</div></div>" +
-                '<div class="kp-swnote">The ring shows this colour by default. Bind <b>Follows</b> to a channel (or add alerts below) to make it react live — the <b>dash</b> drives that; otherwise the keypad just holds the saved colour.</div></div>' +
+                '<div class="kp-swnote">This is the ring&#8217;s resting colour. Add an <b>alert</b> below to change it when a channel crosses a limit — the <b>dash</b> drives that live; on its own the keypad just holds this colour.</div></div>' +
                 (k.mode === "state3" ? _kpPositionsHtml(k) : "") +
                 _kpAlertsHtml(k, i) +
                 '<details class="kp-grp kp-whole"><summary class="kp-gt">Whole-keypad lighting &amp; night <span class="kp-whole-hint">— applies to all keys</span></summary>' +
@@ -2712,9 +2710,6 @@
                 "</div></div></details>";
             /* What your ECU needs — the exact frame + how to read this key */
             html += _kpEcuSetupHtml(k, i);
-            if (k.follows !== "self") {
-                html += '<div class="kp-note">LED bound to <b>' + k.follows + "</b> — it shows the car’s real state, not just the button (switch to Live to watch it react).</div>";
-            }
             box.innerHTML = html;
             var g = function (id) { return document.getElementById(id); };
             g("kpFLabel").addEventListener("input", function (e) { k.label = e.target.value.toUpperCase(); kpSaveCfg(); kpRenderStage(); });
@@ -2735,7 +2730,6 @@
                     kpSaveCfg(); kpRenderStage();
                 }
             });
-            g("kpFFollows").addEventListener("change", function (e) { k.follows = e.target.value; kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
             box.querySelectorAll(".kp-sw").forEach(function (b) {
                 b.addEventListener("click", function () { k.color = b.getAttribute("data-c"); kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
             });
@@ -2776,16 +2770,20 @@
         /* copy / paste / apply-all a key's LED look + mode (colour, behaviour,
            mode). NOT follows/icon/label/preset — each key keeps what it tracks
            and its own identity; only the colour/blink/mode transfers. */
-        function _kpStyle(k) { return { mode: k.mode, color: k.color, behavior: k.behavior }; }
+        /* Copy/paste/apply-all move ONLY the LED look (colour + blink). Mode is
+           button BEHAVIOUR (momentary / toggle / rotary / paired), not "style" —
+           including it made "Apply to all" silently wipe every key's mode with
+           no undo, the opposite of what the tooltip promised. */
+        function _kpStyle(k) { return { color: k.color, behavior: k.behavior }; }
         window.kpCopyKey = function () {
             var k = kp.keys[kp.selected]; if (!k) return;
             kp.clip = _kpStyle(k); kpRenderInspector();
-            if (typeof showToast === "function") showToast("Key style copied — paste it onto another key", "success");
+            if (typeof showToast === "function") showToast("Ring colour + blink copied — paste it onto another key", "success");
         };
         window.kpPasteKey = function () {
             var k = kp.keys[kp.selected]; if (!k || !kp.clip) return;
             Object.assign(k, kp.clip); kpSaveCfg(); kpRenderInspector(); kpRenderStage();
-            if (typeof showToast === "function") showToast("Style pasted onto key " + (kp.selected + 1), "success");
+            if (typeof showToast === "function") showToast("Ring colour + blink pasted onto key " + (kp.selected + 1), "success");
         };
         window.kpApplyAll = function () {
             var src = kp.keys[kp.selected]; if (!src) return;
@@ -2793,8 +2791,21 @@
             var n = kp.model.rows * kp.model.cols;
             for (var i = 0; i < n; i++) if (kp.keys[i]) Object.assign(kp.keys[i], kp.clip);
             kpSaveCfg(); kpRenderInspector(); kpRenderStage();
-            if (typeof showToast === "function") showToast("Applied this style to all " + n + " keys", "success");
+            if (typeof showToast === "function") showToast("Ring colour + blink applied to all " + n + " keys — modes kept", "success");
         };
+        /* Reset the selected key to unassigned factory state in one click —
+           blanking a key by hand meant clearing the label AND the preset, and the
+           AND-gated keyAssigned() logic was invisible. */
+        window.kpClearKey = function () {
+            var k = kp.keys[kp.selected]; if (!k) return;
+            k.label = ""; k.text = true; k.icon = "blank"; k.mode = "momentary";
+            k.preset = "— unassigned —"; k.color = "off"; k.behavior = "solid";
+            delete k.positions; delete k.alerts;
+            kpSaveCfg(); kpRenderInspector(); kpRenderStage();
+            if (typeof showToast === "function") showToast("Key " + (kp.selected + 1) + " cleared", "info");
+        };
+        /* escape user text before it lands in an HTML attribute / SVG <text> */
+        function _kpEsc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
 
         var kpRailBuilt = false;
         function kpBuildRail() {
