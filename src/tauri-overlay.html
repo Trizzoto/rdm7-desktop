@@ -771,6 +771,23 @@
         .kp-bus-id span { color: var(--text-muted); }
         .kp-bus-id b { color: var(--accent); font-weight: 600; margin-right: 4px; }
         .kp-bus-note { font-size: 10px; color: var(--text-muted); line-height: 1.5; margin: 8px 2px; }
+        /* Slice 5 — ECU-first flow, factory-aware CTA, honesty */
+        .kp-rail-note { font-size: 9.5px; color: var(--text-muted); line-height: 1.5; margin: 5px 2px 2px; }
+        .kp-rail-note a { color: var(--accent); text-decoration: none; }
+        .kp-rail-note a:hover { text-decoration: underline; }
+        .kp-reco { font-style: normal; color: var(--accent); font-weight: 600; font-size: 9px; }
+        .kp-bus-ok { font-size: 10.5px; color: #3FB668; font-weight: 600; line-height: 1.45; margin: 8px 2px 6px; }
+        .kp-bus-filefold { margin: 2px; }
+        .kp-bus-filefold > summary { cursor: pointer; font-size: 9.5px; color: var(--text-muted); padding: 3px 0; }
+        .kp-bus-filefold > summary:hover { color: var(--text); }
+        button.kp-step { cursor: pointer; }
+        button.kp-step:hover { border-color: var(--border-light); color: var(--text); }
+        .kp-flash { animation: kpFlash 1.1s ease; }
+        @keyframes kpFlash { 0%, 100% { box-shadow: none; } 25%, 60% { box-shadow: 0 0 0 2px var(--accent); } }
+        .kp-warnbanner { font-size: 9.5px; color: var(--text-muted); line-height: 1.5; background: rgba(224,162,78,0.10); border-left: 2px solid #E0A24E; border-radius: 4px; padding: 6px 8px; margin: 6px 0 8px; }
+        .kp-ecu-for { font-size: 10px; color: var(--text-muted); margin-bottom: 8px; }
+        .kp-ecu-for a { color: var(--accent); text-decoration: none; }
+        .kp-ecu-for a:hover { text-decoration: underline; }
         .kp-fire { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
         .kp-fire .lbl { font-size: 10.5px; color: var(--text-muted); }
         .kp-fire .frame { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); }
@@ -1362,7 +1379,7 @@
             <button class="btn btn-secondary" style="font-size:13px; padding:0 10px; height:30px; box-sizing:border-box;" onclick="_kpClose()" title="Home (Esc)">&#8962;</button>
             <span id="kpBrand" style="display:inline-flex; align-items:center; gap:10px;"></span>
             <span class="kp-chip" id="kpChipModel">PKP-2200-SI · CANopen · node 0x15</span>
-            <span class="kp-chip" id="kpChipLink">no device link — saves to this PC</span>
+            <span class="kp-chip" id="kpChipLink">Design &amp; export — live keypad sync coming soon</span>
             <div class="kp-modes" role="group" aria-label="Mode">
                 <button id="kpBtnDesign" class="on" onclick="_kpSetLive(false)">Design</button>
                 <button id="kpBtnLive" onclick="_kpSetLive(true)">Live (sim)</button>
@@ -1384,11 +1401,11 @@
                 <div class="kp-hint" id="kpHint">Click any key to configure it.</div>
                 <!-- the whole flow in one line — steps 4 & 5 are the two real actions -->
                 <div class="kp-steps" id="kpSteps">
-                    <span class="kp-step"><i>1</i> Pick your keypad</span>
-                    <span class="kp-step"><i>2</i> Pick how it connects</span>
-                    <span class="kp-step"><i>3</i> Style every key</span>
-                    <button class="kp-step act" onclick="kpExportProvision()" title="Save the CAN setup file that programs the keypad — only needed if you changed the connection"><i>4</i> Save the setup file</button>
-                    <button class="kp-step act" onclick="kpOpenEcuGuide()" title="Step-by-step guides: MaxxECU, Link, Haltech + how to program the keypad"><i>5</i> Set up your ECU</button>
+                    <button class="kp-step" onclick="kpFlowJump('model')" title="Choose your keypad model in the sidebar"><i>1</i> Pick your keypad</button>
+                    <button class="kp-step" onclick="kpFlowJump('ecu')" title="Tell us your ECU — it tailors the whole setup"><i>2</i> Pick your ECU</button>
+                    <button class="kp-step" onclick="kpFlowJump('conn')" title="Choose how the keypad connects in the sidebar"><i>3</i> Pick how it connects</button>
+                    <button class="kp-step" onclick="kpFlowJump('keys')" title="Click any key on the keypad to style it"><i>4</i> Style your keys</button>
+                    <button class="kp-step act" onclick="kpOpenEcuGuide()" title="Step-by-step: wire it up, program the keypad, set up MaxxECU / Link / Haltech"><i>5</i> Wire it up &amp; set up your ECU</button>
                 </div>
             </div>
             <div class="kp-insp" id="kpInspector"><div class="kp-none">Select a key to configure it</div></div>
@@ -1838,7 +1855,7 @@
         }
         window._kpSaveExplicit = function () {
             kpSaveCfg();
-            if (typeof showToast === "function") showToast("Keypad config saved on this PC — device sync arrives with the keypad firmware update", "success");
+            if (typeof showToast === "function") showToast("Saved on this PC. Sending straight to the keypad is coming in a future dash update.", "success");
         };
 
         /* LED "Follows" choices — populated from the connected dash's channel
@@ -2207,11 +2224,14 @@
                     opt("solid", "Solid", a.behavior) + opt("slow", "Slow", a.behavior) + opt("fast", "Fast", a.behavior) + "</select></div>" +
                     '<div class="kp-alert-sw">' + sw + "</div></div>";
             }).join("");
-            /* A sub-section INSIDE the Button light group — no own kp-grp. */
+            /* A sub-section INSIDE the Button light group — no own kp-grp. Be
+               honest: channel-reactive colour is driven by the RDM-7 dash, not
+               the keypad or the ECU — so it previews in the sim only. */
             return '<div class="kp-subhead">Change colour on a warning</div>' +
+                (alerts.length ? '<div class="kp-warnbanner">Preview only. These live colour changes are driven by the <b>RDM-7 dash</b> watching the car &mdash; not the keypad or your ECU. Without a dash the button holds its resting colour.</div>' : "") +
                 (alerts.length ? rows : '<div class="kp-note" style="margin-top:0">No warnings yet — the button just holds its resting colour. Add one to make it change when a channel crosses a limit.</div>') +
                 '<button class="ws-btn-line" style="margin-top:8px" onclick="kpAlertAdd(' + ki + ')">+ Add warning colour</button>' +
-                '<div class="kp-note">The dash watches the channel and drives the button light (LED PDO 0x2xx/0x3xx) when it trips. Stack several — first match wins, so put the most severe first. Switch to <b>Live (sim)</b> to watch them fire.</div>';
+                '<div class="kp-note">Stack several — first match wins, so put the most severe first. Switch to <b>Live (sim)</b> to watch them fire.</div>';
         }
         /* One "Button light" group: resting colour + blink for a plain key, then
            the warnings sub-section. A multi-position key gets its colours from
@@ -2363,9 +2383,9 @@
             }
             /* brand block, plain-English, leads the card */
             var brand = _kpBrand();
-            var brandSel = '<div class="kp-field"><label>Your ECU</label><select id="kpEcuBrand" onchange="kpSetEcuBrand(this.value)">' +
-                KP_ECU_BRANDS.map(function (b) { return '<option value="' + b.id + '"' + (kp.ecuBrand === b.id ? " selected" : "") + ">" + b.name + "</option>"; }).join("") +
-                "</select></div>";
+            /* ECU is chosen once in the rail ("My ECU"); here we just reflect it
+               so the per-key steps stay tailored without a second control. */
+            var brandSel = '<div class="kp-ecu-for">Tailored for <b>' + brand.name + '</b> &middot; <a href="#" onclick="kpFlowJump(\'ecu\');return false;">change in the sidebar</a></div>';
             var brandLine = _kpBrandLine(brand.id, keyNo, (k.mode === "state3" ? _kpPositions(k).length : 0), k.mode);
             var brandBlock = brandLine
                 ? ("<div class='kp-ecu-brand'><div class='kp-ecu-badge'>Easiest path &mdash; " + brand.name + "</div><div class='kp-ecu-brandtext'>" + brandLine + "</div>" +
@@ -2389,7 +2409,12 @@
                 "<button class='kp-ecu-copy' onclick='kpCopyEcuSetup()'>&#128203; Copy ECU setup</button>" +
                 "<div class='kp-note' style='margin-top:8px;'>Switch to <b>Live (sim)</b> and press keys to watch the frame build on the bus.</div></div>";
         }
-        window.kpSetEcuBrand = function (id) { kp.ecuBrand = id; kpSaveCfg(); kpRenderInspector(); };
+        window.kpSetEcuBrand = function (id) {
+            kp.ecuBrand = id; kpSaveCfg();
+            /* keep the rail picker + the connection recommendation + the per-key
+               "What your ECU needs" block all in sync from one source of truth */
+            kpRenderEcuPicker(); kpRenderBus(); kpRenderInspector();
+        };
 
         /* ── ECU setup guide modal (MaxxECU / Link / Haltech) ────────────────
            Step-by-step, plain-English, with the concrete values from the current
@@ -2845,10 +2870,24 @@
                     kpUpdateChip();
                     document.querySelectorAll(".kp-model").forEach(function (x) { x.className = "kp-model"; });
                     b.className = "kp-model on";
-                    kpRenderBus(); kpRenderLighting(); kpRenderStage(); kpRenderInspector();
+                    kpRenderEcuPicker(); kpRenderBus(); kpRenderLighting(); kpRenderStage(); kpRenderInspector();
                 });
                 rail.appendChild(b);
             });
+            /* each model keeps its own layout — say so, so switching models never
+               reads as data loss */
+            var mNote = document.createElement("div");
+            mNote.className = "kp-rail-note";
+            mNote.innerHTML = "Each model keeps its own layout &mdash; switching won&#8217;t lose your work. <a href='#' onclick='kpStartBlank(event)'>Start blank &#8594;</a>";
+            rail.appendChild(mNote);
+            /* ECU is the first real decision for a car person — promote it to the
+               rail, above Connection. Drives the recommended connection + guide. */
+            var ecuTitle = document.createElement("div");
+            ecuTitle.className = "kp-rail-title"; ecuTitle.style.marginTop = "16px"; ecuTitle.textContent = "My ECU";
+            rail.appendChild(ecuTitle);
+            var ecuBox = document.createElement("div");
+            ecuBox.id = "kpEcuBox";
+            rail.appendChild(ecuBox);
             var busTitle = document.createElement("div");
             busTitle.className = "kp-rail-title"; busTitle.style.marginTop = "16px"; busTitle.textContent = "Connection";
             rail.appendChild(busTitle);
@@ -2899,6 +2938,53 @@
             });
         }
 
+        /* "My ECU" rail picker — the first real decision. Bound to the same
+           global kp.ecuBrand the per-key "What your ECU needs" block reads, so
+           the whole flow tailors to the customer's ECU from one place. */
+        function _kpEcuRailHint(b) {
+            if (b.id === "generic") return "Not sure? Most ECUs read a Blink keypad straight out of the box.";
+            var reco = "Works on the <b>Out of the box</b> connection below.";
+            if (b.id === "haltech") return "Heads-up: a Blink/RDM keypad isn&#8217;t Haltech&#8217;s own keypad, so you read its CAN frame. " + reco;
+            return b.name.split(" ")[0] + " reads a Blink keypad over CAN. " + reco;
+        }
+        function kpRenderEcuPicker() {
+            var box = document.getElementById("kpEcuBox");
+            if (!box) return;
+            var b = _kpBrand();
+            box.innerHTML =
+                '<select class="kp-bus-in" id="kpRailEcu" onchange="kpSetEcuBrand(this.value)">' +
+                KP_ECU_BRANDS.map(function (e) { return '<option value="' + e.id + '"' + (kp.ecuBrand === e.id ? " selected" : "") + ">" + e.name + "</option>"; }).join("") +
+                "</select>" +
+                '<div class="kp-rail-note">' + _kpEcuRailHint(b) + "</div>" +
+                (b.guide ? '<button class="kp-bus-how" onclick="kpOpenEcuGuide()">Step-by-step for ' + b.name.split(" ")[0] + " &#8594;</button>" : "");
+        }
+        /* The connection preset we recommend for the declared ECU. Factory
+           "Out of the box" (CANopen 125k) is what every listed ECU reads today;
+           we recommend it rather than silently applying, so an explicit user
+           choice (dash 500k / J1939) is never overridden. */
+        function _kpRecoPreset() { return "factory"; }
+        /* Wipe every key on the current model back to blank — a clean start
+           instead of editing over the shipped race-ready example. */
+        window.kpStartBlank = function (ev) {
+            if (ev && ev.preventDefault) ev.preventDefault();
+            var n = kp.model.rows * kp.model.cols;
+            for (var i = 0; i < n; i++) {
+                kp.keys[i] = { label: "", text: true, icon: "blank", mode: "momentary", preset: "— unassigned —", color: "off", behavior: "solid" };
+            }
+            kp.selected = 0;
+            kpSaveCfg(); kpRenderStage(); kpRenderInspector();
+            if (typeof showToast === "function") showToast("All keys cleared — build your " + kp.model.name + " from scratch", "info");
+        };
+        /* Flow-strip jump: scroll the relevant section into view and flash it. */
+        window.kpFlowJump = function (sec) {
+            var map = { model: "#kpRail .kp-model", ecu: "#kpEcuBox", conn: "#kpBusBox", keys: "#kpStageSvg" };
+            var el = document.querySelector(map[sec] || "");
+            if (!el) return;
+            el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            el.classList.add("kp-flash");
+            setTimeout(function () { el.classList.remove("kp-flash"); }, 1100);
+        };
+
         function kpUpdateChip() {
             var chip = document.getElementById("kpChipModel");
             if (chip) chip.textContent = kp.model.name + "-SI · " + kpIds().label + " · " + kp.baud + "k";
@@ -2912,17 +2998,34 @@
             var box = document.getElementById("kpBusBox");
             if (!box) return;
             var ids = kpIds(), pm = _kpPresetMatch();
-            /* 1 · pick how it connects — three plain-english cards, done */
+            var reco = _kpRecoPreset(), ecu = _kpBrand();
+            /* 1 · pick how it connects — three plain-english cards, done. When an
+               ECU is declared, badge the card we recommend for it. */
             var h = KP_PRESETS.map(function (p) {
                 var on = pm && pm.id === p.id;
+                /* only nudge toward the safe default when the user is on a CUSTOM
+                   (unmatched) connection — never second-guess a deliberate valid
+                   preset like the dash 500k or J1939, which also work */
+                var isReco = ecu.id !== "generic" && p.id === reco && !pm;
                 return "<button class='kp-bus-card" + (on ? " on" : "") + "' onclick=\"kpApplyPreset('" + p.id + "')\" title='" + p.note + "'>" +
-                    "<b>" + p.name + (on ? " <i>&#10003;</i>" : "") + "</b><span>" + p.blurb + "</span></button>";
+                    "<b>" + p.name + (on ? " <i>&#10003;</i>" : (isReco ? " <i class='kp-reco'>&#9733; works with " + ecu.name.split(" ")[0] + "</i>" : "")) + "</b><span>" + p.blurb + "</span></button>";
             }).join("");
             if (!pm) h += "<div class='kp-bus-custom'>Custom setup &#8212; details under Advanced.</div>";
-            /* 2 · the one action */
-            h += "<button class='ws-btn-line kp-bus-primary' onclick='kpExportProvision()'>&#8681;&nbsp; Keypad setup file</button>" +
-                "<button class='kp-bus-how' onclick=\"kpOpenEcuGuide('program')\">How do I send it? &#8594;</button>" +
-                "<div class='kp-bus-note'>Pick how it connects, style your keys, save the file &#8212; send it once with any USB-CAN tool and the keypad remembers. Factory-default setups skip the file entirely.</div>";
+            /* 2 · the one action — factory-aware. The factory "Out of the box"
+               connection needs NO setup file, so don't shout one at the common
+               user; point them to the ECU step instead and fold the file away. */
+            var isFactory = pm && pm.id === "factory";
+            if (isFactory) {
+                h += "<div class='kp-bus-ok'>&#10003; Your keypad already works as it ships &mdash; no setup file needed.</div>" +
+                    "<button class='ws-btn-line kp-bus-primary' onclick=\"kpFlowJump('ecu')\">Next: set up your ECU &#8594;</button>" +
+                    "<details class='kp-bus-filefold'><summary>Changed something? Get the setup file</summary>" +
+                    "<button class='ws-btn-line' style='margin-top:6px' onclick='kpExportProvision()'>&#8681;&nbsp; Save keypad setup file</button>" +
+                    "<button class='kp-bus-how' onclick=\"kpOpenEcuGuide('program')\">How do I send it? &#8594;</button></details>";
+            } else {
+                h += "<button class='ws-btn-line kp-bus-primary' onclick='kpExportProvision()'>&#8681;&nbsp; Save keypad setup file</button>" +
+                    "<button class='kp-bus-how' onclick=\"kpOpenEcuGuide('program')\">How do I send it? &#8594;</button>" +
+                    "<div class='kp-bus-note'>This isn&#8217;t the factory default, so program it once: save the file and send it with any USB-CAN tool. The keypad then remembers.</div>";
+            }
             /* 3 · everything technical lives behind Advanced */
             h += "<button class='kp-adv-toggle' onclick='kpToggleAdv()'>" + (kp._busAdv ? "&#9662;" : "&#9656;") + " Advanced</button>";
             if (kp._busAdv) {
@@ -2983,7 +3086,12 @@
             if (p.node != null) kp.node = p.node;
             if (p.sa != null) kp.sa = p.sa;
             kpBusChanged();
-            if (typeof showToast === "function") showToast(p.name + " — connection set. Style your keys, then save the setup file.", "success");
+            if (typeof showToast === "function") {
+                var msg = p.id === "factory"
+                    ? p.name + " — your keypad already works this way out of the box. Next: set up your ECU."
+                    : p.name + " — connection set. Style your keys, then save the setup file to programme it once.";
+                showToast(msg, "success");
+            }
         };
 
         window._kpOpen = function () {
@@ -2993,7 +3101,7 @@
             _kpLoadChannels();
             var ws = document.getElementById("kpWorkspace");
             if (ws) ws.style.display = "flex";
-            kpRenderBus(); kpUpdateChip(); kpRenderLighting();
+            kpRenderEcuPicker(); kpRenderBus(); kpUpdateChip(); kpRenderLighting();
             kpRenderStage(); kpRenderInspector();
         };
         window._kpClose = function () {
