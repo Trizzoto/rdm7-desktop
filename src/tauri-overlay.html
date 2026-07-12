@@ -695,6 +695,36 @@
         .kp-ecu-adv > summary { cursor: pointer; font-size: 10.5px; color: var(--text-muted); font-weight: 600; padding: 5px 0; list-style: revert; }
         .kp-ecu-adv > summary:hover { color: var(--text); }
         .kp-ecu-adv[open] > summary { color: var(--text); margin-bottom: 4px; }
+        .kp-ecu-intro { font-size: 11.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 10px; }
+        .kp-ecu-intro b { color: var(--text); }
+        .kp-guide-btn { margin: 2px 0 10px; width: 100%; background: var(--accent); border: none; color: #fff; border-radius: var(--radius-md); padding: 9px 0; font-family: 'Sora', sans-serif; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+        .kp-guide-btn:hover { filter: brightness(1.08); }
+        /* ECU guide modal */
+        .kp-guide-modal { position: fixed; inset: 0; z-index: 16000; background: rgba(6,8,11,0.66); display: none; align-items: center; justify-content: center; padding: 20px; }
+        .kp-guide-modal.show { display: flex; }
+        .kp-guide-card { width: 560px; max-width: 96vw; max-height: 90vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border-light); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
+        .kp-guide-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+        .kp-guide-title { font-family: 'Sora', sans-serif; font-size: 15px; font-weight: 700; color: var(--text); }
+        .kp-guide-x { background: none; border: none; color: var(--text-muted); font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; }
+        .kp-guide-x:hover { color: var(--text); }
+        .kp-guide-tabs { display: flex; gap: 6px; padding: 12px 16px 0; }
+        .kp-guide-tabs button { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); border-radius: var(--radius-md) var(--radius-md) 0 0; padding: 8px 0; font-family: 'Sora', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .kp-guide-tabs button.on { background: var(--panel-elevated); color: var(--text); border-color: var(--border-light); border-bottom-color: transparent; }
+        .kp-guide-body { padding: 14px 18px 18px; overflow-y: auto; }
+        .kp-guide-chip { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; margin-bottom: 12px; }
+        .kp-guide-chip.ok { background: rgba(46,224,74,0.14); color: #52c46a; border: 1px solid rgba(46,224,74,0.4); }
+        .kp-guide-chip.warn { background: rgba(224,162,78,0.14); color: #e0a24e; border: 1px solid rgba(224,162,78,0.4); }
+        .kp-guide-wire { width: 100%; height: auto; margin-bottom: 12px; }
+        .kp-guide-intro { font-size: 12.5px; color: var(--text); line-height: 1.6; margin-bottom: 14px; }
+        .kp-guide-intro b { color: var(--text); }
+        .kp-gsteps { list-style: none; margin: 0; padding: 0; }
+        .kp-gsteps li { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; font-size: 12.5px; color: var(--text); line-height: 1.55; }
+        .kp-gsteps li b { color: var(--text); }
+        .kp-gstep-n { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+        .kp-guide-links { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+        .kp-guide-links a { color: var(--accent); font-size: 12px; text-decoration: none; font-weight: 600; }
+        .kp-guide-links a:hover { text-decoration: underline; }
+        .kp-guide-url { font-size: 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 5px; word-break: break-all; user-select: all; }
         /* connection (rail) + what-fires (inspector) + live bus trace */
         .kp-bus-card { display: block; width: 100%; box-sizing: border-box; text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 7px 9px; margin-bottom: 5px; cursor: pointer; box-shadow: var(--shadow-sm); }
         .kp-bus-card:hover { border-color: var(--border-light); }
@@ -2163,24 +2193,28 @@
            counts/latches for them), then the mode step, and fold the raw CAN
            frame/bit behind Advanced. */
         var KP_ECU_BRANDS = [
-            { id: "generic", name: "Any ECU / not sure", native: false },
-            { id: "haltech", name: "Haltech — Elite / Nexus", native: true },
-            { id: "link", name: "Link — G4X", native: true },
-            { id: "ecumaster", name: "Ecumaster — EMU / ADU", native: true },
-            { id: "emtron", name: "Emtron", native: true },
-            { id: "motec", name: "MoTeC — M1 / ECU", native: "partial" }
+            { id: "generic", name: "Any ECU / not sure", native: false, guide: false },
+            { id: "maxxecu", name: "MaxxECU", native: true, guide: true },
+            { id: "link", name: "Link — G4X", native: true, guide: true },
+            { id: "haltech", name: "Haltech — Elite / Nexus", native: false, guide: true },
+            { id: "ecumaster", name: "Ecumaster — EMU / ADU", native: true, guide: false },
+            { id: "emtron", name: "Emtron", native: true, guide: false },
+            { id: "motec", name: "MoTeC — M1 / ECU", native: "partial", guide: false }
         ];
         function _kpBrand() { return KP_ECU_BRANDS.filter(function (b) { return b.id === kp.ecuBrand; })[0] || KP_ECU_BRANDS[0]; }
-        /* Brand-specific "easiest path" line. Kept at values+concept level (the
-           exact menu names vary by software version — the CAN spec below is the
-           source of truth). */
+        /* Brand-specific "easiest path" line. Values+concept level — exact menu
+           names vary by software version; the CAN spec is the source of truth.
+           Accuracy notes (from vendor docs, 2026-07): MaxxECU + Link G4X natively
+           support Blink keypads (counting + LEDs); Haltech's one-click keypad is
+           for Haltech's OWN keypad, so a Blink keypad is not plug-and-play there. */
         function _kpBrandLine(brandId, keyNo, N, mode) {
             var pos = (mode === "state3");
             var act = pos ? ("a <b>" + N + "-position</b> switch") : (mode === "toggle" ? "a <b>latching / toggle</b> button" : "a <b>momentary</b> button");
             var counts = pos ? " It counts the presses for you — just map each position to an output." : (mode === "toggle" ? " It latches for you — no counter needed." : "");
             switch (brandId) {
-                case "haltech": return "Haltech Elite &amp; Nexus read a Blink-style CAN keypad natively. In NSP, add the keypad on the CAN bus, then set <b>button " + keyNo + "</b> as " + act + "." + counts;
-                case "link": return "Link G4X reads CAN keypads. In PCLink &#8594; CAN Setup, add the keypad device and assign <b>button " + keyNo + "</b> as " + act + "." + counts;
+                case "maxxecu": return "MaxxECU fully supports Blink keypads — in MTune it counts multi-position buttons <b>and</b> sets the LED colours itself. Set <b>button " + keyNo + "</b> to " + act + " under CAN Bus &#8594; CAN Keypad." + counts;
+                case "link": return "Link G4X natively supports Blink keypads. In PCLink &#8594; CAN Setup, add a <b>CAN Keypad</b>; each button becomes a Digital Input — set <b>button " + keyNo + "</b> as " + act + " in the DI setup." + counts;
+                case "haltech": return "Heads-up: Haltech&#8217;s one-click keypad feature is built for Haltech&#8217;s <b>own</b> keypad, so a Blink/RDM keypad won&#8217;t appear there automatically. Read its CAN frame as a <b>CAN Input</b> (advanced), or bridge it through the RDM-7 dash.";
                 case "ecumaster": return "Ecumaster (EMU Black / ADU) supports CAN keypads. Add it in the CAN section and map <b>button " + keyNo + "</b> as " + act + "." + counts;
                 case "emtron": return "Emtron reads CAN keypads in EMtune. Add the keypad and set <b>button " + keyNo + "</b> as " + act + "." + counts;
                 case "motec": return "MoTeC reads the raw CAN message. If your package includes a CAN-keypad resource, point it at this ID and key " + keyNo + "; otherwise receive the frame and " + (pos ? "count presses (wrapping every " + N + ") in a table." : (mode === "toggle" ? "latch it in a channel." : "read the bit directly."));
@@ -2236,14 +2270,153 @@
                 "<div class='kp-note' style='border-left-color:#E0A24E;margin-top:8px;'><b>Why counting / latching is needed:</b> " + truth + "</div>" +
                 "<div class='kp-ecu-recipe' style='margin-top:8px;'>Manual fallback: advance a counter on each <b>rising edge</b> of that bit and wrap after " + (k.mode === "state3" ? _kpPositions(k).length : "N") + ".</div>" +
                 "</details>";
+            var guideBtn = brand.guide
+                ? "<button class='kp-guide-btn' onclick='kpOpenEcuGuide()'>&#128269; Show me step-by-step for " + brand.name + " &#8594;</button>"
+                : "";
             return "<div class='kp-grp'><div class='kp-gt'>What your ECU needs</div>" +
-                brandSel + brandBlock +
+                "<div class='kp-ecu-intro'>Think of each button like a <b>doorbell</b> — it only tells your ECU &#8220;I&#8217;m being pressed right now&#8221;, then forgets. <b>Your ECU</b> decides what that does; <b>RDM</b> sets the light in the button.</div>" +
+                brandSel + brandBlock + guideBtn +
                 "<div class='kp-ecu'><div class='kp-ecu-recipe'>" + step + "</div></div>" +
                 advanced +
                 "<button class='kp-ecu-copy' onclick='kpCopyEcuSetup()'>&#128203; Copy ECU setup</button>" +
                 "<div class='kp-note' style='margin-top:8px;'>Switch to <b>Live (sim)</b> and press keys to watch the frame build on the bus.</div></div>";
         }
         window.kpSetEcuBrand = function (id) { kp.ecuBrand = id; kpSaveCfg(); kpRenderInspector(); };
+
+        /* ── ECU setup guide modal (MaxxECU / Link / Haltech) ────────────────
+           Step-by-step, plain-English, with the concrete values from the current
+           keypad config. We link the official vendor guide (real screenshots)
+           rather than embedding copyrighted images. Steps sourced from vendor
+           docs 2026-07: MaxxECU CAN Keypad help, Link CAN Keypad manual, Haltech. */
+        var KP_GUIDE = {
+            maxxecu: {
+                name: "MaxxECU", chip: "Native support", chipOk: true,
+                url: "https://www.maxxecu.com/webhelp/settings-can_keypad.html", urlName: "MaxxECU CAN Keypad help",
+                bus: "J1939 @ 500 kbit/s",
+                intro: "MaxxECU talks to Blink keypads directly — in MTune it counts multi-position buttons <b>and</b> drives the LED colours. You configure the keypad through MaxxECU.",
+                steps: function (keyNo, mode, N) {
+                    var btn = mode === "state3" ? ("<b>Multi-position (" + N + ")</b> — MaxxECU counts the presses for you") : (mode === "toggle" ? "<b>toggle</b>" : "<b>momentary</b>");
+                    return [
+                        "<b>Wire it.</b> Keypad CAN-H / CAN-L to a MaxxECU CAN bus (CAN1 or CAN2), plus 12&nbsp;V and ground.",
+                        "<b>Match speeds.</b> The keypad ships slow (CANopen 125k). In MTune &#8594; Settings &#8594; CAN&nbsp;Bus &#8594; CAN&nbsp;Keypad &#8594; <b>Keypad setup</b>, set Protocol = <b>J1939</b> and click <b>Write to keypad</b> — all LEDs flash = accepted.",
+                        "<b>Go fast.</b> Still on Keypad setup, set the keypad bitrate to <b>500 kbit/s</b> and Write. Then set MaxxECU&#8217;s CAN bitrate to 500k and restart (500k is MaxxECU&#8217;s default).",
+                        "<b>Button " + keyNo + ".</b> Under CAN Keypad, set <b>button steps</b> = " + btn + ", then choose its <b>Input function</b> (what it triggers).",
+                        "<b>Lights.</b> Set <b>button state colours</b> per position and optional <b>fault indication</b> (blink red). MaxxECU drives these — design them here in RDM for reference, or let the RDM-7 dash drive them instead."
+                    ];
+                }
+            },
+            link: {
+                name: "Link G4X", chip: "Native support", chipOk: true,
+                url: "https://linkecu.com/documentation/CAN%20Keypad%20Manual.pdf", urlName: "Link CAN Keypad manual (PDF)",
+                bus: "CANopen (match the keypad's bitrate)",
+                intro: "Link G4X supports Blink keypads out of the box (Link even sells one). Each button shows up as a <b>Digital Input</b> you assign like any switch.",
+                steps: function (keyNo, mode, N, node) {
+                    var canId = 384 + node;
+                    var bmode = mode === "state3" ? ("a rotary/counter for its " + N + " positions") : (mode === "toggle" ? "<b>Latching</b>" : "<b>Momentary</b>");
+                    return [
+                        "<b>Wire it.</b> Keypad CAN-H / CAN-L to the Link CAN bus, plus 12&nbsp;V and ground.",
+                        "<b>Open CAN Setup.</b> PCLink &#8594; ECU Controls &#8594; <b>CAN Setup</b>. Pick the CAN module, set Mode = <b>User Defined</b>, and set the Bit Rate to match the keypad.",
+                        "<b>Find the Node ID.</b> On the <b>CAN Devices</b> tab click <b>Find Devices</b>, select the keypad (default Node <b>21</b>).",
+                        "<b>Add the keypad.</b> On a spare CAN channel set Mode = <b>CAN Keypad 1</b> and CAN ID = <b>384 + " + node + " = " + canId + "</b> (" + kpHex(canId) + ").",
+                        "<b>Assign button " + keyNo + ".</b> It now appears as a Digital Input — in the DI setup pick its function and set it " + bmode + "."
+                    ];
+                },
+                note: "Older G4+ ECUs need the keypad ordered with &#8220;motorsport firmware&#8221;. G4X is native."
+            },
+            haltech: {
+                name: "Haltech", chip: "Not plug-and-play for Blink", chipOk: false,
+                url: "https://support.haltech.com/portal/en/kb/articles/overview", urlName: "Haltech support knowledge base",
+                bus: "CANopen (read as a CAN input)",
+                intro: "Straight up: Haltech&#8217;s one-click keypad feature is built for Haltech&#8217;s <b>own</b> keypad, so a Blink/RDM keypad won&#8217;t appear there automatically. Two honest ways to use it:",
+                steps: function (keyNo, mode, N, node, idHex, byteIdx, bit, mask) {
+                    return [
+                        "<b>Easiest with RDM &mdash; dash bridge.</b> Put the keypad on the same CAN bus as the RDM-7 dash. The dash reads every press and (roadmap) can hand Haltech clean, ready-made inputs &mdash; no raw-CAN wrangling.",
+                        "<b>Advanced &mdash; raw CAN input.</b> In NSP add a <b>CAN Input</b> for ID <b>" + idHex + "</b>, and read <b>byte " + byteIdx + ", bit " + bit + "</b> (mask 0x" + kpHex2(mask) + ") for button " + keyNo + ".",
+                        (mode === "state3"
+                            ? "<b>Make it a " + N + "-position switch.</b> Build a counter in Haltech logic that steps on each press and wraps after " + N + " &mdash; then map each count to your output."
+                            : mode === "toggle"
+                                ? "<b>Make it toggle.</b> Feed that bit into a latch/flip-flop in Haltech logic so it flips on/off each press."
+                                : "<b>Momentary.</b> Use the bit directly &mdash; pressed = on.")
+                    ];
+                },
+                note: "Want true plug-and-play on Haltech? Haltech&#8217;s own keypad is simplest. The Blink/RDM keypad is happiest with Link, MaxxECU or the RDM-7 dash."
+            }
+        };
+        function _kpWiringSvg(busLabel) {
+            return "<svg class='kp-guide-wire' viewBox='0 0 300 76' xmlns='http://www.w3.org/2000/svg'>" +
+                "<rect x='6' y='20' width='84' height='40' rx='7' fill='var(--panel-elevated)' stroke='var(--border-light)'/>" +
+                "<text x='48' y='37' text-anchor='middle' font-size='9' fill='var(--text)' font-weight='700'>KEYPAD</text>" +
+                "<text x='48' y='50' text-anchor='middle' font-size='7.5' fill='var(--text-muted)'>PKP-SI</text>" +
+                "<rect x='210' y='20' width='84' height='40' rx='7' fill='var(--panel-elevated)' stroke='var(--border-light)'/>" +
+                "<text x='252' y='43' text-anchor='middle' font-size='9' fill='var(--text)' font-weight='700'>YOUR ECU</text>" +
+                "<line x1='90' y1='33' x2='210' y2='33' stroke='#FFD60A' stroke-width='2.4'/>" +
+                "<line x1='90' y1='47' x2='210' y2='47' stroke='#2EE04A' stroke-width='2.4'/>" +
+                "<text x='150' y='30' text-anchor='middle' font-size='7' fill='#FFD60A'>CAN-H</text>" +
+                "<text x='150' y='58' text-anchor='middle' font-size='7' fill='#2EE04A'>CAN-L</text>" +
+                "<text x='150' y='72' text-anchor='middle' font-size='7.5' fill='var(--text-muted)'>same bus &middot; " + busLabel + "</text>" +
+                "</svg>";
+        }
+        function _kpGuideHtml(brandId) {
+            var g = KP_GUIDE[brandId]; if (!g) return "";
+            var i = kp.selected, k = kp.keys[i] || {}, keyNo = (i == null ? 0 : i) + 1;
+            var N = (k.mode === "state3") ? _kpPositions(k).length : 0;
+            var fids = kpIds();
+            var byteIdx = Math.floor((i || 0) / 8), bit = (i || 0) % 8, mask = 1 << bit;
+            var idHex = kpIsJ() ? kpHex8(fids.keys) : kpHex(fids.keys);
+            var steps = g.steps(keyNo, k.mode, N, kp.node, idHex, byteIdx, bit, mask);
+            var stepsHtml = steps.map(function (s, si) { return "<li><span class='kp-gstep-n'>" + (si + 1) + "</span><span>" + s + "</span></li>"; }).join("");
+            return "<div class='kp-guide-chip " + (g.chipOk ? "ok" : "warn") + "'>" + g.name + " &middot; " + g.chip + "</div>" +
+                _kpWiringSvg(g.bus) +
+                "<div class='kp-guide-intro'>" + g.intro + "</div>" +
+                "<ol class='kp-gsteps'>" + stepsHtml + "</ol>" +
+                (g.note ? "<div class='kp-note'>" + g.note + "</div>" : "") +
+                "<div class='kp-guide-links'>" +
+                "<a href='" + g.url + "' target='_blank' rel='noopener' onclick=\"return _kpOpenUrl('" + g.url + "')\">&#128279; Official " + g.urlName + " &mdash; real screenshots &#8594;</a>" +
+                "<div class='kp-guide-url'>" + g.url + "</div>" +
+                "</div>";
+        }
+        function _kpEnsureGuideModal() {
+            if (document.getElementById("kpEcuGuideModal")) return;
+            var m = document.createElement("div");
+            m.id = "kpEcuGuideModal"; m.className = "kp-guide-modal";
+            m.innerHTML = "<div class='kp-guide-card'>" +
+                "<div class='kp-guide-head'><div class='kp-guide-title'>Set up your keypad on your ECU</div>" +
+                "<button class='kp-guide-x' onclick='kpCloseEcuGuide()' aria-label='Close'>&times;</button></div>" +
+                "<div class='kp-guide-tabs' id='kpGuideTabs'></div>" +
+                "<div class='kp-guide-body' id='kpGuideBody'></div></div>";
+            m.addEventListener("click", function (e) { if (e.target === m) kpCloseEcuGuide(); });
+            document.body.appendChild(m);
+        }
+        window.kpOpenEcuGuide = function () {
+            _kpEnsureGuideModal();
+            var b = (_kpBrand().guide) ? _kpBrand().id : "maxxecu";
+            kpEcuGuideTab(b);
+            document.getElementById("kpEcuGuideModal").classList.add("show");
+        };
+        window.kpCloseEcuGuide = function () {
+            var m = document.getElementById("kpEcuGuideModal"); if (m) m.classList.remove("show");
+        };
+        window.kpEcuGuideTab = function (brandId) {
+            var tabs = document.getElementById("kpGuideTabs"), body = document.getElementById("kpGuideBody");
+            if (!tabs || !body) return;
+            tabs.innerHTML = Object.keys(KP_GUIDE).map(function (id) {
+                return "<button class='" + (id === brandId ? "on" : "") + "' onclick=\"kpEcuGuideTab('" + id + "')\">" + KP_GUIDE[id].name + "</button>";
+            }).join("");
+            body.innerHTML = _kpGuideHtml(brandId);
+        };
+        /* Open an external URL from the Tauri webview. Tries the opener plugin,
+           falls back to window.open, and always copies the URL so the user can
+           paste it if the webview blocks navigation. */
+        window._kpOpenUrl = function (url) {
+            try {
+                if (window.__TAURI__ && window.__TAURI__.opener && window.__TAURI__.opener.openUrl) { window.__TAURI__.opener.openUrl(url); }
+                else if (window.__TAURI__ && window.__TAURI__.shell && window.__TAURI__.shell.open) { window.__TAURI__.shell.open(url); }
+                else { window.open(url, "_blank"); }
+            } catch (e) { try { window.open(url, "_blank"); } catch (e2) { } }
+            try { if (navigator.clipboard) navigator.clipboard.writeText(url); } catch (e) { }
+            if (typeof showToast === "function") showToast("Opening the official guide — link also copied to your clipboard", "info");
+            return false;
+        };
         window.kpCopyEcuSetup = function () {
             var i = kp.selected, k = kp.keys[i]; if (!k) return;
             var fids = kpIds(), keyNo = i + 1, L = [];
