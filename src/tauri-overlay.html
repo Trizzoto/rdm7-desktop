@@ -1673,12 +1673,17 @@
                       sigs: [{ name: "KEY_NUMBER", start: 24, len: 8 }, { name: "KEY_STATE", start: 32, len: 8 }, { name: "KEYPAD_ID", start: 40, len: 8 }] }
                 ];
             }
+            /* On 12/15-key models the LED-ON frame packs each colour into TWO
+               bytes (keys 9-16 in the high byte), so R/G/B are 16 bits apart, not
+               8 — matching kpProvisionFrames. Using stride 8 collided R_KEY9 with
+               G_KEY1 and made the DBC disagree with the file the tool generates. */
+            var stride = n > 8 ? 16 : 8;
             return [
                 { id: ids.keys,  ext: false, name: "KP_BUTTONS", tx: true,
                   sigs: keys.map(function (k) { return { name: k.name, start: k.i, len: 1 }; }).concat([{ name: "TICK_TIMER", start: 32, len: 8 }]) },
                 { id: ids.ledOn, ext: false, name: "KP_LEDS", tx: false, sigs: keys.map(function (k) { return { name: k.name + "_R", start: k.i, len: 1 }; }) },
-                { id: ids.ledOn, ext: false, name: "KP_LEDS", tx: false, sigs: keys.map(function (k) { return { name: k.name + "_G", start: 8 + k.i, len: 1 }; }) },
-                { id: ids.ledOn, ext: false, name: "KP_LEDS", tx: false, sigs: keys.map(function (k) { return { name: k.name + "_B", start: 16 + k.i, len: 1 }; }) }
+                { id: ids.ledOn, ext: false, name: "KP_LEDS", tx: false, sigs: keys.map(function (k) { return { name: k.name + "_G", start: stride + k.i, len: 1 }; }) },
+                { id: ids.ledOn, ext: false, name: "KP_LEDS", tx: false, sigs: keys.map(function (k) { return { name: k.name + "_B", start: 2 * stride + k.i, len: 1 }; }) }
             ];
         }
         window.kpExportDbc = function () {
@@ -2084,16 +2089,22 @@
             if (!kp.live) { el.innerHTML = ""; return; }
             var n = kp.model.rows * kp.model.cols, kb = [0, 0, 0, 0, 0, 0, 0, 0], any = false, i;
             for (i = 0; i < n; i++) if (kp.keyOn[i]) { kb[Math.floor(i / 8)] |= (1 << (i % 8)); any = true; }
-            var ids = kpIds(), bytes, hot;
-            if (kpIsJ()) {           /* J1939 heartbeat-style frame carries the K-byte */
-                bytes = [0x04, 0x1B, 0xF9, 0x00, kb[0], 0x00, 0xFF, kp.sa & 0xFF]; hot = 4;
+            var ids = kpIds();
+            if (kpIsJ()) {
+                /* J1939 is event-driven per key: one key-contact frame carries the
+                   key NUMBER (byte3) + state (byte4). Same frame the ECU card and
+                   the DBC describe. Show the last key touched. */
+                var lastKey = kp._lastKey || 0;                              /* 1-based */
+                var held = (lastKey && kp.keyOn[lastKey - 1]) ? 1 : 0;
+                var bytes = [0x04, 0x1B, 0x01, lastKey, held, kp.sa & 0xFF, 0xFF, 0xFF];
                 el.innerHTML = "<span class='tx'>TX</span> " + kpHex8(ids.keys) + " [ " +
-                    bytes.map(function (b, bi) { return "<i" + (bi === hot && b ? " class='on'" : "") + ">" + kpHex2(b) + "</i>"; }).join(" ") + " ]";
-            } else {                 /* CANopen TPDO1: byte0/1 = key bits, byte4 = tick */
+                    bytes.map(function (b, bi) { return "<i" + (lastKey && (bi === 3 || bi === 4) ? " class='on'" : "") + ">" + kpHex2(b) + "</i>"; }).join(" ") + " ]";
+                if (!lastKey) el.innerHTML += " <span class='idle'>idle — press a key</span>";
+            } else {                 /* CANopen TPDO1: byte0 = keys 1-8, byte1 = keys 9-16, byte4 = 100ms tick */
                 el.innerHTML = "<span class='tx'>TX</span> " + kpHex(ids.keys) + " [ " +
                     kb.map(function (b) { return "<i" + (b ? " class='on'" : "") + ">" + kpHex2(b) + "</i>"; }).join(" ") + " ]";
+                if (!any) el.innerHTML += " <span class='idle'>idle — press a key</span>";
             }
-            if (!any) el.innerHTML += " <span class='idle'>idle — press a key</span>";
         }
 
         var kpSimTimer = null;
@@ -2101,6 +2112,7 @@
             var k = kp.keys[i];
             if (!keyAssigned(k)) return;
             kp.keyDown = i + 1;
+            kp._lastKey = i + 1;   /* for the J1939 single-key contact frame on the bus line */
             kpRenderStage();
             setTimeout(function () {
                 kp.keyDown = 0;
@@ -2302,7 +2314,7 @@
                 for (var bi = 0; bi < 8; bi++) { var bv = bi === byteIdx ? val : 0; cells += "<i" + (bi === byteIdx ? " class='on'" : "") + ">" + kpHex2(bv) + "</i>"; }
                 frameHtml = kpHex(fids.keys) + " [ " + cells + " ]";
                 spec = "CANopen &middot; " + kp.baud + "k &middot; ID <b>" + kpHex(fids.keys) + "</b> (11-bit) &middot; <b>byte " + byteIdx + ", bit " + bit + "</b> (mask <b>0x" + kpHex2(val) + "</b>) = 1 while pressed.";
-                truth = "Byte 0 of " + kpHex(fids.keys) + " is a live bitmap of the keys pressed right now (byte 4 = a 100&nbsp;ms tick). The keypad stores no toggle or position state.";
+                truth = "Byte " + byteIdx + " of " + kpHex(fids.keys) + " is a live bitmap of the keys pressed right now (byte 4 = a 100&nbsp;ms tick). The keypad stores no toggle or position state.";
             }
             /* plain-English "what this key should do" step */
             var step;
