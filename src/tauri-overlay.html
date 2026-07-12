@@ -715,6 +715,8 @@
         .kp-guide-chip.ok { background: rgba(46,224,74,0.14); color: #52c46a; border: 1px solid rgba(46,224,74,0.4); }
         .kp-guide-chip.warn { background: rgba(224,162,78,0.14); color: #e0a24e; border: 1px solid rgba(224,162,78,0.4); }
         .kp-guide-wire { width: 100%; height: auto; margin-bottom: 12px; }
+        .kp-mock-label { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin: 4px 0 6px; }
+        .kp-mock { width: 100%; height: auto; margin-bottom: 14px; border-radius: 9px; }
         .kp-guide-intro { font-size: 12.5px; color: var(--text); line-height: 1.6; margin-bottom: 14px; }
         .kp-guide-intro b { color: var(--text); }
         .kp-gsteps { list-style: none; margin: 0; padding: 0; }
@@ -2356,6 +2358,73 @@
                 "<text x='150' y='72' text-anchor='middle' font-size='7.5' fill='var(--text-muted)'>same bus &middot; " + busLabel + "</text>" +
                 "</svg>";
         }
+        /* Our own branded "mock screenshot" of an ECU config screen — an SVG that
+           looks like a software window with the real field names + the values
+           from the current config, and numbered badges matching the steps. Not a
+           copied vendor screenshot (no copyright / never goes stale). */
+        function _kpMockWindow(title, rows) {
+            var W = 500, titleH = 28, top = titleH + 8;
+            var bodyH = 0; rows.forEach(function (r) { bodyH += r.sep ? 12 : 32; });
+            var H = top + bodyH + 8;
+            var s = "<svg class='kp-mock' viewBox='0 0 " + W + " " + H + "' xmlns='http://www.w3.org/2000/svg'>";
+            s += "<rect x='0.5' y='0.5' width='" + (W - 1) + "' height='" + (H - 1) + "' rx='9' fill='var(--panel-elevated)' stroke='var(--border-light)'/>";
+            s += "<path d='M0 9 a9 9 0 0 1 9 -9 h" + (W - 18) + " a9 9 0 0 1 9 9 v" + (titleH - 9) + " h-" + W + " z' fill='var(--bg)'/>";
+            s += "<circle cx='16' cy='14' r='3.5' fill='#ff5f57'/><circle cx='28' cy='14' r='3.5' fill='#febc2e'/><circle cx='40' cy='14' r='3.5' fill='#28c840'/>";
+            s += "<text x='" + (W / 2) + "' y='18' text-anchor='middle' font-size='10.5' fill='var(--text-muted)' font-weight='600'>" + title + "</text>";
+            var y = top, ctrlX = 190, ctrlW = W - ctrlX - 16, ctrlH = 22;
+            rows.forEach(function (r) {
+                if (r.sep) { s += "<line x1='12' y1='" + (y + 5) + "' x2='" + (W - 12) + "' y2='" + (y + 5) + "' stroke='var(--border)' stroke-dasharray='3 3'/>"; y += 12; return; }
+                var cy = y + 16, ctrlY = y + 5;
+                if (r.label) s += "<text x='16' y='" + (cy + 3.5) + "' font-size='10.5' fill='var(--text-muted)'>" + r.label + "</text>";
+                if (r.type === "button") {
+                    var bw = Math.min(150, ctrlW);
+                    s += "<rect x='" + ctrlX + "' y='" + ctrlY + "' width='" + bw + "' height='" + ctrlH + "' rx='5' fill='var(--accent)'/>";
+                    s += "<text x='" + (ctrlX + bw / 2) + "' y='" + (cy + 3.5) + "' text-anchor='middle' font-size='10' fill='#fff' font-weight='700'>" + r.value + "</text>";
+                } else if (r.type === "colors") {
+                    var cx = ctrlX; (r.colors || []).slice(0, 6).forEach(function (c) { var hx = (c === "off" || !HEX[c]) ? "#3A4046" : HEX[c]; s += "<circle cx='" + (cx + 8) + "' cy='" + cy + "' r='7' fill='" + hx + "' stroke='var(--border)'/>"; cx += 20; });
+                } else {
+                    var stroke = r.hi ? "var(--accent)" : "var(--border)", sw = r.hi ? 2 : 1;
+                    s += "<rect x='" + ctrlX + "' y='" + ctrlY + "' width='" + ctrlW + "' height='" + ctrlH + "' rx='5' fill='var(--panel)' stroke='" + stroke + "' stroke-width='" + sw + "'/>";
+                    s += "<text x='" + (ctrlX + 9) + "' y='" + (cy + 3.5) + "' font-size='10' fill='var(--text)' font-family='JetBrains Mono, monospace'>" + r.value + "</text>";
+                    if (r.type === "select") s += "<text x='" + (ctrlX + ctrlW - 13) + "' y='" + (cy + 4) + "' font-size='9' fill='var(--text-muted)'>&#9662;</text>";
+                }
+                if (r.badge) { s += "<circle cx='" + (ctrlX - 13) + "' cy='" + cy + "' r='8' fill='var(--accent)'/><text x='" + (ctrlX - 13) + "' y='" + (cy + 3) + "' text-anchor='middle' font-size='9' fill='#fff' font-weight='700'>" + r.badge + "</text>"; }
+                y += 32;
+            });
+            return s + "</svg>";
+        }
+        var KP_MOCK = {
+            maxxecu: { title: "MTune  •  CAN Bus › CAN Keypad", rows: function (c) {
+                return [
+                    { label: "Protocol", value: "J1939", type: "select", badge: 2, hi: true },
+                    { label: "Bus baudrate", value: "500 kbit/s", type: "select", badge: 3, hi: true },
+                    { label: "", value: "Write to keypad", type: "button", badge: 2 },
+                    { sep: true },
+                    { label: "Button " + c.keyNo + " · steps", value: c.mode === "state3" ? ("Multi-position (" + c.N + ")") : (c.mode === "toggle" ? "Toggle" : "Momentary"), type: "select", badge: 4, hi: true },
+                    { label: "Input function", value: "Wiper", type: "select" },
+                    { label: "State colours", type: "colors", colors: c.colors, badge: 5 }
+                ];
+            } },
+            link: { title: "PCLink  •  ECU Controls › CAN Setup", rows: function (c) {
+                return [
+                    { label: "CAN Module", value: "CAN 2", type: "select", badge: 2 },
+                    { label: "Mode", value: "User Defined", type: "select", badge: 2, hi: true },
+                    { label: "Bit Rate", value: "1 Mbit/s", type: "select" },
+                    { sep: true },
+                    { label: "Channel 1 · Mode", value: "CAN Keypad 1", type: "select", badge: 4, hi: true },
+                    { label: "CAN ID", value: c.canId + "  (" + kpHex(c.canId) + ")", type: "text", badge: 4, hi: true }
+                ];
+            } },
+            haltech: { title: "NSP  •  CAN Inputs  (advanced path)", rows: function (c) {
+                return [
+                    { label: "Message ID", value: c.idHex, type: "text", badge: 2, hi: true },
+                    { label: "Start byte", value: String(c.byteIdx), type: "text", badge: 2 },
+                    { label: "Bit  (mask)", value: c.bit + "  (0x" + kpHex2(c.mask) + ")", type: "text", badge: 2 },
+                    { sep: true },
+                    { label: "Button logic", value: c.mode === "state3" ? ("Counter · " + c.N + " steps") : (c.mode === "toggle" ? "Latch (toggle)" : "Direct"), type: "select", badge: 3 }
+                ];
+            } }
+        };
         function _kpGuideHtml(brandId) {
             var g = KP_GUIDE[brandId]; if (!g) return "";
             var i = kp.selected, k = kp.keys[i] || {}, keyNo = (i == null ? 0 : i) + 1;
@@ -2363,11 +2432,16 @@
             var fids = kpIds();
             var byteIdx = Math.floor((i || 0) / 8), bit = (i || 0) % 8, mask = 1 << bit;
             var idHex = kpIsJ() ? kpHex8(fids.keys) : kpHex(fids.keys);
+            var colors = (k.mode === "state3") ? _kpPositions(k).map(function (p) { return p.color; }) : [k.color || "green"];
+            var ctx = { keyNo: keyNo, mode: k.mode, N: N, node: kp.node, canId: 384 + kp.node, idHex: idHex, byteIdx: byteIdx, bit: bit, mask: mask, colors: colors };
             var steps = g.steps(keyNo, k.mode, N, kp.node, idHex, byteIdx, bit, mask);
             var stepsHtml = steps.map(function (s, si) { return "<li><span class='kp-gstep-n'>" + (si + 1) + "</span><span>" + s + "</span></li>"; }).join("");
+            var mk = KP_MOCK[brandId];
+            var mockHtml = mk ? ("<div class='kp-mock-label'>What you&#8217;ll see in " + g.name + " &mdash; RDM mock-up, your values filled in</div>" + _kpMockWindow(mk.title, mk.rows(ctx))) : "";
             return "<div class='kp-guide-chip " + (g.chipOk ? "ok" : "warn") + "'>" + g.name + " &middot; " + g.chip + "</div>" +
                 _kpWiringSvg(g.bus) +
                 "<div class='kp-guide-intro'>" + g.intro + "</div>" +
+                mockHtml +
                 "<ol class='kp-gsteps'>" + stepsHtml + "</ol>" +
                 (g.note ? "<div class='kp-note'>" + g.note + "</div>" : "") +
                 "<div class='kp-guide-links'>" +
