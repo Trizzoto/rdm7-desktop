@@ -2336,14 +2336,18 @@
            counts/latches for them), then the mode step, and fold the raw CAN
            frame/bit behind Advanced. */
         var KP_ECU_BRANDS = [
-            { id: "generic", name: "Any ECU / not sure", native: false, guide: false },
+            { id: "generic", name: "Any ECU / not sure", native: false, guide: true },
             { id: "maxxecu", name: "MaxxECU", native: true, guide: true },
             { id: "link", name: "Link — G4X", native: true, guide: true },
             { id: "haltech", name: "Haltech — Elite / Nexus", native: false, guide: true },
-            { id: "ecumaster", name: "Ecumaster — EMU / ADU", native: true, guide: false },
-            { id: "emtron", name: "Emtron", native: true, guide: false },
-            { id: "motec", name: "MoTeC — M1 / ECU", native: "partial", guide: false }
+            { id: "ecumaster", name: "Ecumaster — EMU / ADU", native: true, guide: true },
+            { id: "emtron", name: "Emtron", native: true, guide: true },
+            { id: "motec", name: "MoTeC — M1 / ECU", native: "partial", guide: true }
         ];
+        /* which guide TAB a brand opens — MaxxECU/Link/Haltech have their own;
+           everything else lands on the universal "Any ECU (CAN)" tab (never
+           silently on MaxxECU). */
+        function _kpGuideTabFor(b) { return (b && KP_GUIDE[b.id]) ? b.id : "generic"; }
         function _kpBrand() { return KP_ECU_BRANDS.filter(function (b) { return b.id === kp.ecuBrand; })[0] || KP_ECU_BRANDS[0]; }
         /* Brand-specific "easiest path" line. Values+concept level — exact menu
            names vary by software version; the CAN spec is the source of truth.
@@ -2445,8 +2449,8 @@
                 steps: function (keyNo, mode, N) {
                     var btn = mode === "state3" ? ("<b>Multi-position (" + N + ")</b> — MaxxECU counts the presses for you") : (mode === "toggle" ? "<b>toggle</b>" : "<b>momentary</b>");
                     return [
-                        "<b>Wire it.</b> Keypad CAN-H / CAN-L to a MaxxECU CAN bus (CAN1 or CAN2), plus 12&nbsp;V and ground.",
-                        "<b>Match speeds.</b> The keypad ships slow (CANopen 125k). In MTune &#8594; Settings &#8594; CAN&nbsp;Bus &#8594; CAN&nbsp;Keypad &#8594; <b>Keypad setup</b>, set Protocol = <b>J1939</b> and click <b>Write to keypad</b> — all LEDs flash = accepted.",
+                        "<b>Wire it.</b> Keypad CAN-H / CAN-L to a MaxxECU CAN bus (CAN1 or CAN2), plus 12&nbsp;V and ground, 120&nbsp;&#937; at each end.",
+                        "<b>Match speeds.</b> The keypad ships slow (CANopen 125k). In MTune &#8594; Settings &#8594; CAN&nbsp;Bus &#8594; CAN&nbsp;Keypad &#8594; <b>Keypad setup</b>, set Protocol = <b>J1939</b> and click <b>Write to keypad</b>; MTune reports when the keypad accepts the write.",
                         "<b>Go fast.</b> Still on Keypad setup, set the keypad bitrate to <b>500 kbit/s</b> and Write. Then set MaxxECU&#8217;s CAN bitrate to 500k and restart (500k is MaxxECU&#8217;s default).",
                         "<b>Button " + keyNo + ".</b> Under CAN Keypad, set <b>button steps</b> = " + btn + ", then choose its <b>Input function</b> (what it triggers).",
                         "<b>Lights.</b> Set <b>button state colours</b> per position and optional <b>fault indication</b> (blink red). MaxxECU drives these — design them here in RDM for reference, or let the RDM-7 dash drive them instead."
@@ -2466,7 +2470,8 @@
                         "<li><b>State colours</b>: 0 green, 1 yellow, 2 red.</li>" +
                         "</ol>" +
                         "Press cycles Low→Mid→High, the ring goes green→yellow→red, and boost target follows. Tip: use the <b>Boost maps</b> function preset in RDM to set this key up in one click.";
-                }
+                },
+                note: "Menu names and exact values vary by MTune version — confirm the protocol and bitrate against MaxxECU&#8217;s own CAN Keypad help (linked below) if anything looks different."
             },
             link: {
                 name: "Link G4X", chip: "Native support", chipOk: true,
@@ -2518,6 +2523,27 @@
                     ];
                 },
                 note: "Want true plug-and-play on Haltech? Haltech&#8217;s own keypad is simplest. The Blink/RDM keypad is happiest with Link, MaxxECU or the RDM-7 dash."
+            },
+            generic: {
+                name: "Any ECU (CAN)", chip: "Read the raw CAN frame", chipOk: true,
+                url: "https://blinkmarine.com/blocks/configure-your-keypad/", urlName: "Blink keypad manuals",
+                bus: "CANopen @ 125k (factory)", right: "YOUR ECU",
+                intro: "Any ECU that can read a CAN message can use this keypad — you read its keys frame as a <b>CAN input</b>. These are the values for the button you have selected. Ecumaster (EMU / ADU), Emtron and MoTeC all follow this path.",
+                steps: function (keyNo, mode, N, node, idHex, byteIdx, bit, mask) {
+                    var raw = kpIsJ()
+                        ? "<b>Add a CAN input</b> for ID <b>" + idHex + "</b> (29-bit) and read <b>byte&nbsp;3 = key number (" + keyNo + ")</b>, <b>byte&nbsp;4 = 01 pressed / 00 released</b>."
+                        : "<b>Add a CAN input</b> for ID <b>" + idHex + "</b> and read <b>byte " + byteIdx + ", bit " + bit + "</b> (mask 0x" + kpHex2(mask) + ") for button " + keyNo + ".";
+                    return [
+                        "<b>Wire &amp; terminate.</b> Keypad CAN-H / CAN-L to your ECU&#8217;s CAN bus, +12&nbsp;V and ground, 120&nbsp;&#937; at each end (see the diagram above).",
+                        raw,
+                        (mode === "state3"
+                            ? "<b>" + N + "-position switch.</b> The keypad only reports the press, so count rising edges in your ECU and wrap after " + N + " &mdash; then map each count to an output."
+                            : mode === "toggle"
+                                ? "<b>Latching.</b> The keypad only pulses, so set your ECU input to <b>Toggle / Latching</b> and it flips on/off for you."
+                                : "<b>Momentary.</b> Read the bit directly &mdash; pressed = on.")
+                    ];
+                },
+                note: "If your ECU has a dedicated CAN-keypad resource (some Ecumaster / MoTeC packages do), point that at this same ID and key instead of a raw input. The keypad keeps no toggle or position memory — your ECU does the counting/latching."
             },
             program: {
                 name: "Program it", chip: "One-time — only if you changed the connection", chipOk: true,
@@ -2682,7 +2708,7 @@
         }
         window.kpOpenEcuGuide = function (tab) {
             _kpEnsureGuideModal();
-            var b = tab || ((_kpBrand().guide) ? _kpBrand().id : "maxxecu");
+            var b = tab || _kpGuideTabFor(_kpBrand());
             kpEcuGuideTab(b);
             document.getElementById("kpEcuGuideModal").classList.add("show");
         };
