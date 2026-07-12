@@ -737,6 +737,15 @@
         .kp-gex-body b { color: var(--text); }
         .kp-gex { margin: 8px 0; padding-left: 20px; }
         .kp-gex li { margin-bottom: 8px; }
+        /* the 5-step flow strip under the keypad render (Design mode only) */
+        .kp-steps { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 12px; }
+        .kp-step { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 10.5px; font-weight: 600; }
+        .kp-step i { font-style: normal; width: 15px; height: 15px; border-radius: 50%; background: var(--border-light); color: var(--text); font-size: 9px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+        button.kp-step.act { cursor: pointer; border-color: var(--accent); color: var(--text); }
+        button.kp-step.act:hover { background: var(--accent); color: #fff; }
+        button.kp-step.act i { background: var(--accent); color: #fff; }
+        .kp-bus-how { display: block; width: 100%; background: none; border: none; color: var(--accent); font-size: 10.5px; font-weight: 600; font-family: 'Sora', sans-serif; cursor: pointer; padding: 3px 0 7px; text-align: center; }
+        .kp-bus-how:hover { text-decoration: underline; }
         /* connection (rail) + what-fires (inspector) + live bus trace */
         .kp-bus-card { display: block; width: 100%; box-sizing: border-box; text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 7px 9px; margin-bottom: 5px; cursor: pointer; box-shadow: var(--shadow-sm); }
         .kp-bus-card:hover { border-color: var(--border-light); }
@@ -1372,6 +1381,14 @@
                 </div>
                 <div id="kpStageSvg"></div>
                 <div class="kp-hint" id="kpHint">Click any key to configure it.</div>
+                <!-- the whole flow in one line — steps 4 & 5 are the two real actions -->
+                <div class="kp-steps" id="kpSteps">
+                    <span class="kp-step"><i>1</i> Pick your keypad</span>
+                    <span class="kp-step"><i>2</i> Pick how it connects</span>
+                    <span class="kp-step"><i>3</i> Style every key</span>
+                    <button class="kp-step act" onclick="kpExportProvision()" title="Save the CAN setup file that programs the keypad — only needed if you changed the connection"><i>4</i> Save the setup file</button>
+                    <button class="kp-step act" onclick="kpOpenEcuGuide()" title="Step-by-step guides: MaxxECU, Link, Haltech + how to program the keypad"><i>5</i> Set up your ECU</button>
+                </div>
             </div>
             <div class="kp-insp" id="kpInspector"><div class="kp-none">Select a key to configure it</div></div>
         </div>
@@ -1718,24 +1735,54 @@
             sdo1(0x2003, 0x06, kp.blBright & 0x3F, "Default backlight brightness → " + Math.round(kp.blBright / 63 * 100) + "%");
             sdo2(0x1800, 0x05, kp.periodMs & 0xFFFF, kp.periodMs > 0 ? ("Periodic key-state → " + kp.periodMs + "ms") : "Periodic key-state off");
             sdo2(0x1017, 0x00, kp.hbMs & 0xFFFF, kp.hbMs > 0 ? ("Heartbeat → " + kp.hbMs + "ms") : "Heartbeat off");
-            /* initial LED look via the LED-ON PDO (0x200+node) — one frame, R/G/B bytes */
+            /* initial LED look via the LED-ON PDO (0x200+node). Up to 8 keys the
+               R/G/B bitmasks are one byte each; the 12/15-key models span two
+               bytes per colour (little-endian key bitmap). */
             var r = 0, g = 0, b = 0;
             for (i = 0; i < n; i++) { var k = kp.keys[i]; if (k && keyAssigned(k)) { var c = kpCol(k.color).rgb; if (c[0]) r |= (1 << i); if (c[1]) g |= (1 << i); if (c[2]) b |= (1 << i); } }
-            F.push({ id: 0x200 + node, ext: false, data: [r, g, b, 0, 0, 0, 0, 0], note: "Set indicator LEDs to the configured colours" });
+            var ledData = n > 8
+                ? [r & 0xFF, (r >> 8) & 0xFF, g & 0xFF, (g >> 8) & 0xFF, b & 0xFF, (b >> 8) & 0xFF, 0, 0]
+                : [r & 0xFF, g & 0xFF, b & 0xFF, 0, 0, 0, 0, 0];
+            F.push({ id: 0x200 + node, ext: false, data: ledData, note: "Set indicator LEDs to the configured colours" + (n > 8 ? " (12/15-key: two bytes per colour)" : "") });
             sdo1(0x2013, 0x00, node, "Node ID → " + kpHex(node) + " (do last — changes the address)");
             return F;
         }
         function kpProvisionText() {
-            var out = ["# RDM Studio — Blink " + kp.model.name + " provisioning", "# " + kpIds().label + " @ " + kp.baud + "k",
-                       "# Replay through the dash CAN gateway or SavvyCAN. id  dlc  data...  ; note", ""];
+            var out = [
+                "# RDM Studio — Blink " + kp.model.name + "-SI keypad setup",
+                "# Target: " + kpIds().label + " @ " + kp.baud + "k",
+                "#",
+                "# HOW TO SEND (walkthrough: Keypad guide -> Program it):",
+                "#  - Send at the keypad's CURRENT speed. A factory keypad talks CANopen @ 125k.",
+                "#  - Send every frame top to bottom. Format: id  dlc  data...  ; what it does",
+                "#  - Speed / node / protocol changes only take effect after a POWER-CYCLE.",
+                "#  - MaxxECU owners: skip this file — MTune's \"Write to keypad\" does it directly.",
+                ""];
+            if (kpIsJ()) {
+                out.push("# STEP 0 — a factory keypad speaks CANopen, so switch it to J1939 first.");
+                out.push("# Send this ONE frame at the keypad's current speed (factory 125k), then");
+                out.push("# power-cycle and reconnect at 250k before sending the rest:");
+                out.push("0x615  8  2B FF 20 01 01 00 00 00   ; protocol -> J1939 (factory node 0x15)");
+                out.push("");
+                out.push("# STEP 1 — now talking J1939, send the rest:");
+            } else {
+                out.push("# (Only if YOUR keypad currently runs J1939 — e.g. it came off a MaxxECU —");
+                out.push("#  first send 18EF2100 x 8: 04 1B 80 00 FF FF FF FF to switch it back to");
+                out.push("#  CANopen, then power-cycle before sending the frames below.)");
+                out.push("");
+            }
             kpProvisionFrames().forEach(function (f) {
                 out.push(kpFmtId(f.id, f.ext) + (f.ext ? " x" : "  ") + " 8  " + f.data.map(kpHex2).join(" ") + "   ; " + f.note);
             });
+            out.push("");
+            out.push("# Check it worked: power-cycle, then press any key — you should see the");
+            out.push("# keys frame " + kpFmtId(kpIds().keys, kpIds().ext) + " on the bus at " + kp.baud + "k.");
             return out.join("\n");
         }
+        window._kpProvisionPreview = function () { return kpProvisionText(); };   /* debug/support handle */
         window.kpExportProvision = function () {
-            _ltDownload("rdm_keypad_" + kp.model.id + "_" + kp.proto + "_setup.txt", kpProvisionText(), "text/plain");
-            if (typeof showToast === "function") showToast("Setup file saved — play it into the keypad from the dash or any CAN tool", "success");
+            _ltDownload("rdm_keypad_" + kp.model.id + "_" + kp.proto + "_" + kp.baud + "k_setup.txt", kpProvisionText(), "text/plain");
+            if (typeof showToast === "function") showToast("Setup file saved — the guide's “Program it” tab shows how to send it", "success");
         };
         window.kpCopyProvision = function () {
             var t = kpProvisionText();
@@ -2075,6 +2122,7 @@
         function kpFlashState(i) {
             var el = document.getElementById("kpStateMsg");
             if (!el) return;
+            var k = kp.keys[i] || {};
             var ps = _kpPositions(k), pos = (kp.keyPos[i] || 0) % ps.length;
             var nm = (ps[pos] && ps[pos].name) || ("position " + pos);
             el.textContent = (k.label || "KEY " + (i + 1)) + " → " + nm + "  (" + (pos + 1) + " of " + ps.length + ")";
@@ -2107,6 +2155,8 @@
             if (l) l.className = on ? "on" : "";
             var strip = document.getElementById("kpLiveStrip");
             if (strip) strip.className = "kp-live-strip" + (on ? " show" : "");
+            var steps = document.getElementById("kpSteps");
+            if (steps) steps.style.display = on ? "none" : "";
             var hint = document.getElementById("kpHint");
             if (hint) hint.textContent = on
                 ? "Simulated live mode. With keypad firmware on the dash, this mirrors the physical unit — real presses light up here."
@@ -2373,15 +2423,32 @@
                     ];
                 },
                 note: "Want true plug-and-play on Haltech? Haltech&#8217;s own keypad is simplest. The Blink/RDM keypad is happiest with Link, MaxxECU or the RDM-7 dash."
+            },
+            program: {
+                name: "Program it", chip: "One-time — only if you changed the connection", chipOk: true,
+                url: "https://blinkmarine.com/blocks/configure-your-keypad/", urlName: "Blink keypad configuration page",
+                bus: "at the keypad's CURRENT speed", right: "USB-CAN &middot; PC",
+                intro: "Out of the box the keypad already works (CANopen @ 125k, node 0x15) — if that&#8217;s what you picked, <b>skip this tab</b>. You only program it when you change the connection: 500k to share the RDM-7 dash bus, J1939, or a different node. One-time job; the keypad remembers.",
+                steps: function () {
+                    return [
+                        "<b>Save the setup file</b> (the &#8681; button in the left rail). It&#8217;s plain text — open it; every line is one CAN frame with a note saying what it does.",
+                        "<b>Connect a USB-CAN adapter</b> (PCAN, Kvaser, CANable&hellip; from ~$30) to the keypad&#8217;s CAN-H / CAN-L, and give the keypad 12&nbsp;V + ground.",
+                        "<b>Open SavvyCAN</b> (free) and connect at the keypad&#8217;s <b>current</b> speed — a new keypad is CANopen @ <b>125k</b>. The file header spells out any protocol-switch step.",
+                        "<b>Send the frames top to bottom</b> (SavvyCAN &#8594; Send Frames: ID + 8 data bytes per line). All LEDs flashing = the keypad accepted a write.",
+                        "<b>Power-cycle the keypad.</b> Speed / node / protocol changes only apply after a reboot. Press a key and watch for the keys frame at the new speed — done, forever."
+                    ];
+                },
+                note: "Shortcuts: <b>MaxxECU</b> programs the keypad itself (MTune &#8594; Write to keypad) — no file needed. <b>Blink&#8217;s own configurator</b> (Windows + PCAN) can also set protocol / node / speed. And a coming keypad update will let the <b>RDM-7 dash</b> send this file straight from the app."
             }
         };
-        function _kpWiringSvg(busLabel) {
+        function _kpWiringSvg(busLabel, rightLabel) {
+            rightLabel = rightLabel || "YOUR ECU";
             return "<svg class='kp-guide-wire' viewBox='0 0 300 76' xmlns='http://www.w3.org/2000/svg'>" +
                 "<rect x='6' y='20' width='84' height='40' rx='7' fill='var(--panel-elevated)' stroke='var(--border-light)'/>" +
                 "<text x='48' y='37' text-anchor='middle' font-size='9' fill='var(--text)' font-weight='700'>KEYPAD</text>" +
                 "<text x='48' y='50' text-anchor='middle' font-size='7.5' fill='var(--text-muted)'>PKP-SI</text>" +
                 "<rect x='210' y='20' width='84' height='40' rx='7' fill='var(--panel-elevated)' stroke='var(--border-light)'/>" +
-                "<text x='252' y='43' text-anchor='middle' font-size='9' fill='var(--text)' font-weight='700'>YOUR ECU</text>" +
+                "<text x='252' y='43' text-anchor='middle' font-size='9' fill='var(--text)' font-weight='700'>" + rightLabel + "</text>" +
                 "<line x1='90' y1='33' x2='210' y2='33' stroke='#FFD60A' stroke-width='2.4'/>" +
                 "<line x1='90' y1='47' x2='210' y2='47' stroke='#2EE04A' stroke-width='2.4'/>" +
                 "<text x='150' y='30' text-anchor='middle' font-size='7' fill='#FFD60A'>CAN-H</text>" +
@@ -2470,14 +2537,14 @@
             var mk = KP_MOCK[brandId];
             var mockHtml = mk ? ("<div class='kp-mock-label'>What you&#8217;ll see in " + g.name + " &mdash; RDM mock-up, your values filled in</div>" + _kpMockWindow(mk.title, mk.rows(ctx))) : "";
             return "<div class='kp-guide-chip " + (g.chipOk ? "ok" : "warn") + "'>" + g.name + " &middot; " + g.chip + "</div>" +
-                _kpWiringSvg(g.bus) +
+                _kpWiringSvg(g.bus, g.right) +
                 "<div class='kp-guide-intro'>" + g.intro + "</div>" +
                 mockHtml +
                 "<ol class='kp-gsteps'>" + stepsHtml + "</ol>" +
                 (g.example ? "<details class='kp-ecu-adv kp-gex-wrap'><summary>&#128161; Worked example — 3 boost maps on one button</summary><div class='kp-gex-body'>" + g.example(keyNo, N || 3) + "</div></details>" : "") +
                 (g.note ? "<div class='kp-note'>" + g.note + "</div>" : "") +
                 "<div class='kp-guide-links'>" +
-                "<a href='" + g.url + "' target='_blank' rel='noopener' onclick=\"return _kpOpenUrl('" + g.url + "')\">&#128279; Official " + g.urlName + " &mdash; real screenshots &#8594;</a>" +
+                "<a href='" + g.url + "' target='_blank' rel='noopener' onclick=\"return _kpOpenUrl('" + g.url + "')\">&#128279; Official " + g.urlName + " &#8594;</a>" +
                 "<div class='kp-guide-url'>" + g.url + "</div>" +
                 "</div>";
         }
@@ -2486,16 +2553,16 @@
             var m = document.createElement("div");
             m.id = "kpEcuGuideModal"; m.className = "kp-guide-modal";
             m.innerHTML = "<div class='kp-guide-card'>" +
-                "<div class='kp-guide-head'><div class='kp-guide-title'>Set up your keypad on your ECU</div>" +
+                "<div class='kp-guide-head'><div class='kp-guide-title'>Keypad setup guide</div>" +
                 "<button class='kp-guide-x' onclick='kpCloseEcuGuide()' aria-label='Close'>&times;</button></div>" +
                 "<div class='kp-guide-tabs' id='kpGuideTabs'></div>" +
                 "<div class='kp-guide-body' id='kpGuideBody'></div></div>";
             m.addEventListener("click", function (e) { if (e.target === m) kpCloseEcuGuide(); });
             document.body.appendChild(m);
         }
-        window.kpOpenEcuGuide = function () {
+        window.kpOpenEcuGuide = function (tab) {
             _kpEnsureGuideModal();
-            var b = (_kpBrand().guide) ? _kpBrand().id : "maxxecu";
+            var b = tab || ((_kpBrand().guide) ? _kpBrand().id : "maxxecu");
             kpEcuGuideTab(b);
             document.getElementById("kpEcuGuideModal").classList.add("show");
         };
@@ -2783,7 +2850,8 @@
             if (!pm) h += "<div class='kp-bus-custom'>Custom setup &#8212; details under Advanced.</div>";
             /* 2 · the one action */
             h += "<button class='ws-btn-line kp-bus-primary' onclick='kpExportProvision()'>&#8681;&nbsp; Keypad setup file</button>" +
-                "<div class='kp-bus-note'>Pick how it connects, style your keys, save the file &#8212; the dash (or any CAN tool) plays it into the keypad. That&#8217;s it.</div>";
+                "<button class='kp-bus-how' onclick=\"kpOpenEcuGuide('program')\">How do I send it? &#8594;</button>" +
+                "<div class='kp-bus-note'>Pick how it connects, style your keys, save the file &#8212; send it once with any USB-CAN tool and the keypad remembers. Factory-default setups skip the file entirely.</div>";
             /* 3 · everything technical lives behind Advanced */
             h += "<button class='kp-adv-toggle' onclick='kpToggleAdv()'>" + (kp._busAdv ? "&#9662;" : "&#9656;") + " Advanced</button>";
             if (kp._busAdv) {
