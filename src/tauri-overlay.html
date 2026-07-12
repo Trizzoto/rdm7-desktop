@@ -685,6 +685,16 @@
         .kp-ecutab th { color: var(--text-muted); font-weight: 600; }
         .kp-ecu-copy { margin-top: 9px; width: 100%; background: var(--panel-elevated); border: 1px solid var(--border-light); color: var(--text); border-radius: var(--radius-md); padding: 7px 0; font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer; }
         .kp-ecu-copy:hover { border-color: var(--accent); }
+        /* brand-tailored "easiest path" block */
+        .kp-ecu-brand { background: var(--bg); border: 1px solid var(--accent); border-radius: var(--radius-md); padding: 9px 10px; margin-bottom: 9px; }
+        .kp-ecu-badge { font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 5px; }
+        .kp-ecu-brandtext { font-size: 11.5px; color: var(--text); line-height: 1.55; }
+        .kp-ecu-brandtext b { color: var(--text); }
+        .kp-ecu-caveat { font-size: 9.5px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
+        .kp-ecu-adv { margin-top: 9px; }
+        .kp-ecu-adv > summary { cursor: pointer; font-size: 10.5px; color: var(--text-muted); font-weight: 600; padding: 5px 0; list-style: revert; }
+        .kp-ecu-adv > summary:hover { color: var(--text); }
+        .kp-ecu-adv[open] > summary { color: var(--text); margin-bottom: 4px; }
         /* connection (rail) + what-fires (inspector) + live bus trace */
         .kp-bus-card { display: block; width: 100%; box-sizing: border-box; text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 7px 9px; margin-bottom: 5px; cursor: pointer; box-shadow: var(--shadow-sm); }
         .kp-bus-card:hover { border-color: var(--border-light); }
@@ -1542,6 +1552,7 @@
             proto: "canopen", node: 0x15, sa: 0x21, baud: 125,
             startShow: 1, activeStart: true, periodMs: 0, hbMs: 0,   /* device config */
             blColor: "amber", blBright: 18,   /* icon backlight (all 9 colours valid here) */
+            ecuBrand: "generic",   /* tailors the "What your ECU needs" setup steps */
             clip: null   /* copied key style (icon/mode/preset/follows/color/behavior) */
         };
         window.__kp = kp;   /* debug/support handle (mirrors window.__ca / __ltMap) */
@@ -1709,6 +1720,7 @@
                     if (typeof c.hbMs === "number") kp.hbMs = c.hbMs;
                     if (c.blColor) kp.blColor = c.blColor;
                     if (typeof c.blBright === "number") kp.blBright = c.blBright;
+                    if (c.ecuBrand) kp.ecuBrand = c.ecuBrand;
                 } else {
                     kp.keys = JSON.parse(JSON.stringify(DEFAULT_KEYS));
                     kp.proto = "canopen"; kp.node = 0x15; kp.sa = 0x21; kp.baud = 125;
@@ -1723,7 +1735,7 @@
                     brightDay: kp.brightDay, brightNight: kp.brightNight,
                     proto: kp.proto, node: kp.node, sa: kp.sa, baud: kp.baud,
                     startShow: kp.startShow, activeStart: kp.activeStart, periodMs: kp.periodMs, hbMs: kp.hbMs,
-                    blColor: kp.blColor, blBright: kp.blBright
+                    blColor: kp.blColor, blBright: kp.blBright, ecuBrand: kp.ecuBrand
                 };
                 localStorage.setItem(KP_LS, JSON.stringify(all));
             } catch (e) { console.warn("keypad save failed:", e); }
@@ -2144,54 +2156,102 @@
                 '<div class="kp-note">Each press steps to the next position; the ring shows that position&#8217;s colour &amp; blink (pick <b>Off</b> for a dark idle). See <b>What your ECU needs</b> below for exactly how to read this switch, then switch to <b>Live (sim)</b> and tap the key to cycle.</div>' +
                 "</div>";
         }
-        /* The fool-proof ECU recipe. The PKP keypad is a live button reporter —
-           byte0 of the keys frame is just "which keys are pressed right now"; it
-           has NO internal toggle or position memory. So this spells out the exact
-           frame + how the reader (ECU or gateway) must derive toggle / position. */
+        /* Fool-proof ECU setup, plain-English first. The PKP keypad is a live
+           button reporter — byte0 of the keys frame is just "which keys are
+           pressed right now"; it has NO internal toggle/position memory. We lead
+           with the customer's ECU brand (many have a native keypad input that
+           counts/latches for them), then the mode step, and fold the raw CAN
+           frame/bit behind Advanced. */
+        var KP_ECU_BRANDS = [
+            { id: "generic", name: "Any ECU / not sure", native: false },
+            { id: "haltech", name: "Haltech — Elite / Nexus", native: true },
+            { id: "link", name: "Link — G4X", native: true },
+            { id: "ecumaster", name: "Ecumaster — EMU / ADU", native: true },
+            { id: "emtron", name: "Emtron", native: true },
+            { id: "motec", name: "MoTeC — M1 / ECU", native: "partial" }
+        ];
+        function _kpBrand() { return KP_ECU_BRANDS.filter(function (b) { return b.id === kp.ecuBrand; })[0] || KP_ECU_BRANDS[0]; }
+        /* Brand-specific "easiest path" line. Kept at values+concept level (the
+           exact menu names vary by software version — the CAN spec below is the
+           source of truth). */
+        function _kpBrandLine(brandId, keyNo, N, mode) {
+            var pos = (mode === "state3");
+            var act = pos ? ("a <b>" + N + "-position</b> switch") : (mode === "toggle" ? "a <b>latching / toggle</b> button" : "a <b>momentary</b> button");
+            var counts = pos ? " It counts the presses for you — just map each position to an output." : (mode === "toggle" ? " It latches for you — no counter needed." : "");
+            switch (brandId) {
+                case "haltech": return "Haltech Elite &amp; Nexus read a Blink-style CAN keypad natively. In NSP, add the keypad on the CAN bus, then set <b>button " + keyNo + "</b> as " + act + "." + counts;
+                case "link": return "Link G4X reads CAN keypads. In PCLink &#8594; CAN Setup, add the keypad device and assign <b>button " + keyNo + "</b> as " + act + "." + counts;
+                case "ecumaster": return "Ecumaster (EMU Black / ADU) supports CAN keypads. Add it in the CAN section and map <b>button " + keyNo + "</b> as " + act + "." + counts;
+                case "emtron": return "Emtron reads CAN keypads in EMtune. Add the keypad and set <b>button " + keyNo + "</b> as " + act + "." + counts;
+                case "motec": return "MoTeC reads the raw CAN message. If your package includes a CAN-keypad resource, point it at this ID and key " + keyNo + "; otherwise receive the frame and " + (pos ? "count presses (wrapping every " + N + ") in a table." : (mode === "toggle" ? "latch it in a channel." : "read the bit directly."));
+                default: return null;
+            }
+        }
         function _kpEcuSetupHtml(k, i) {
-            var fids = kpIds(), keyNo = i + 1, frameHtml, spec, truth, recipe;
+            var fids = kpIds(), keyNo = i + 1, frameHtml, spec, truth, byteIdx, bit, val;
             if (kpIsJ()) {
                 var jb = [0x04, 0x1B, 0x01, keyNo, 0x01, kp.sa & 0xFF, 0xFF, 0xFF];
                 frameHtml = kpHex8(fids.keys) + " [ " + jb.map(function (b, bi) { return "<i" + (bi === 3 || bi === 4 ? " class='on'" : "") + ">" + kpHex2(b) + "</i>"; }).join(" ") + " ]";
                 spec = "J1939 &middot; " + kp.baud + "k &middot; ID <b>" + kpHex8(fids.keys) + "</b> (29-bit) &middot; key-contact frame: <b>byte&nbsp;3 = " + keyNo + "</b>, <b>byte&nbsp;4 = 01</b> when pressed.";
                 truth = "The keypad sends this frame on every press and release (byte&nbsp;4 = 01 held, 00 released). It stores no toggle or position state.";
             } else {
-                var byteIdx = Math.floor(i / 8), bit = i % 8, val = 1 << bit, cells = "";
+                byteIdx = Math.floor(i / 8); bit = i % 8; val = 1 << bit; var cells = "";
                 for (var bi = 0; bi < 8; bi++) { var bv = bi === byteIdx ? val : 0; cells += "<i" + (bi === byteIdx ? " class='on'" : "") + ">" + kpHex2(bv) + "</i>"; }
                 frameHtml = kpHex(fids.keys) + " [ " + cells + " ]";
                 spec = "CANopen &middot; " + kp.baud + "k &middot; ID <b>" + kpHex(fids.keys) + "</b> (11-bit) &middot; <b>byte " + byteIdx + ", bit " + bit + "</b> (mask <b>0x" + kpHex2(val) + "</b>) = 1 while pressed.";
                 truth = "Byte 0 of " + kpHex(fids.keys) + " is a live bitmap of the keys pressed right now (byte 4 = a 100&nbsp;ms tick). The keypad stores no toggle or position state.";
             }
+            /* plain-English "what this key should do" step */
+            var step;
             if (k.mode === "momentary") {
-                recipe = "Add a CAN <b>digital input</b> on that ID + bit: 1 = pressed, 0 = released. That&#8217;s it.";
+                step = "This is a <b>momentary</b> button — set your ECU input to read it directly: pressed = on, released = off.";
             } else if (k.mode === "toggle") {
-                recipe = "The keypad only pulses the bit &mdash; it does <b>not</b> latch. Set this input to <b>Toggle / Latching</b> in your ECU (flips each press), or use its CAN-keypad &#8220;latching button&#8221; mode. Don&#8217;t read the raw bit as on/off.";
+                step = "This is a <b>toggle</b> button. The keypad only pulses on each press, so set the ECU input to <b>Toggle / Latching</b> so it flips on / off for you — don&#8217;t read the raw bit as on/off.";
             } else if (k.mode === "state3") {
                 var ps = _kpPositions(k);
                 var list = ps.map(function (p, pi) {
                     var look = (p.color === "off" || p.behavior === "off") ? "dark" : (p.color + " &middot; " + (p.behavior === "slow" ? "slow blink" : p.behavior === "fast" ? "fast blink" : "solid"));
                     return "<tr><td>" + pi + "</td><td>" + (p.name || ("pos " + pi)) + "</td><td>" + look + "</td></tr>";
                 }).join("");
-                recipe = "The position is the <b>press count, wrapping every " + ps.length + "</b>. Two fool-proof ways:<br><br>" +
-                    "<b>1 &middot; ECU keypad mode (easiest)</b> &mdash; Haltech, MoTeC &amp; Link CAN-keypad inputs have a built-in multi-position button. Point it at this ID, <b>key " + keyNo + "</b>, and set <b>" + ps.length + " positions</b> &mdash; it counts for you.<br><br>" +
-                    "<b>2 &middot; Manual counter</b> &mdash; if your ECU only exposes raw bits, add a counter/table that steps on each <b>rising edge</b> of the bit above and wraps after " + ps.length + ":" +
-                    "<table class='kp-ecutab'><tr><th>#</th><th>Name</th><th>Ring shows</th></tr>" + list + "</table>" +
-                    "Map each state number to your output (e.g. wiper off / int / low / high).";
+                step = "This is a <b>" + ps.length + "-position</b> switch — each press steps to the next position and wraps. Your ECU derives the position by counting presses:" +
+                    "<table class='kp-ecutab'><tr><th>#</th><th>Position</th><th>Ring shows</th></tr>" + list + "</table>" +
+                    "Map each position number to your output (e.g. wiper off / int / low / high).";
             } else {
-                recipe = "Paired &#9650;&#9660; &mdash; this key shares the frame with key " + (keyNo + 1) + "; read both bits as up / down.";
+                step = "Paired &#9650;&#9660; — this key shares the frame with key " + (keyNo + 1) + "; read both bits as up / down.";
             }
+            /* brand block, plain-English, leads the card */
+            var brand = _kpBrand();
+            var brandSel = '<div class="kp-field"><label>Your ECU</label><select id="kpEcuBrand" onchange="kpSetEcuBrand(this.value)">' +
+                KP_ECU_BRANDS.map(function (b) { return '<option value="' + b.id + '"' + (kp.ecuBrand === b.id ? " selected" : "") + ">" + b.name + "</option>"; }).join("") +
+                "</select></div>";
+            var brandLine = _kpBrandLine(brand.id, keyNo, (k.mode === "state3" ? _kpPositions(k).length : 0), k.mode);
+            var brandBlock = brandLine
+                ? ("<div class='kp-ecu-brand'><div class='kp-ecu-badge'>Easiest path &mdash; " + brand.name + "</div><div class='kp-ecu-brandtext'>" + brandLine + "</div>" +
+                    "<div class='kp-ecu-caveat'>Enter the CAN values below. Exact menu names vary by software version.</div></div>")
+                : "";
+            /* Advanced fold: the raw CAN + the stateless-keypad truth */
+            var advanced = "<details class='kp-ecu-adv'><summary>Advanced &mdash; raw CAN details</summary>" +
+                "<div class='kp-fire' style='margin-top:8px;'><span class='lbl'>Sends &#8594;</span><span class='frame'>" + frameHtml + "</span></div>" +
+                "<div class='kp-ecu-spec' style='border:none;margin:8px 0 0;padding:0;'>" + spec + "</div>" +
+                "<div class='kp-note' style='border-left-color:#E0A24E;margin-top:8px;'><b>Why counting / latching is needed:</b> " + truth + "</div>" +
+                "<div class='kp-ecu-recipe' style='margin-top:8px;'>Manual fallback: advance a counter on each <b>rising edge</b> of that bit and wrap after " + (k.mode === "state3" ? _kpPositions(k).length : "N") + ".</div>" +
+                "</details>";
             return "<div class='kp-grp'><div class='kp-gt'>What your ECU needs</div>" +
-                "<div class='kp-fire'><span class='lbl'>Sends &#8594;</span><span class='frame'>" + frameHtml + "</span></div>" +
-                "<div class='kp-note' style='border-left-color:#E0A24E;'><b>How the keypad behaves:</b> " + truth + "</div>" +
-                "<div class='kp-ecu'><div class='kp-ecu-spec'>" + spec + "</div><div class='kp-ecu-recipe'>" + recipe + "</div></div>" +
+                brandSel + brandBlock +
+                "<div class='kp-ecu'><div class='kp-ecu-recipe'>" + step + "</div></div>" +
+                advanced +
                 "<button class='kp-ecu-copy' onclick='kpCopyEcuSetup()'>&#128203; Copy ECU setup</button>" +
                 "<div class='kp-note' style='margin-top:8px;'>Switch to <b>Live (sim)</b> and press keys to watch the frame build on the bus.</div></div>";
         }
+        window.kpSetEcuBrand = function (id) { kp.ecuBrand = id; kpSaveCfg(); kpRenderInspector(); };
         window.kpCopyEcuSetup = function () {
             var i = kp.selected, k = kp.keys[i]; if (!k) return;
             var fids = kpIds(), keyNo = i + 1, L = [];
             L.push("RDM Keypad — ECU setup for key " + keyNo + " (" + (k.label || "unassigned") + ")");
+            L.push("ECU: " + _kpBrand().name);
             L.push("Keypad: " + kp.model.name + "-SI, " + (kpIsJ() ? "J1939" : "CANopen") + " @ " + kp.baud + "k" + (kpIsJ() ? "" : ", node " + kpHex(kp.node)));
+            var _bl = _kpBrandLine(_kpBrand().id, keyNo, (k.mode === "state3" ? _kpPositions(k).length : 0), k.mode);
+            if (_bl) L.push("Easiest path: " + _bl.replace(/<[^>]+>/g, ""));
             if (kpIsJ()) {
                 L.push("Frame: " + kpHex8(fids.keys) + " (29-bit) — byte 3 = key " + keyNo + ", byte 4 = 01 pressed / 00 released");
             } else {
