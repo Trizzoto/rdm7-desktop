@@ -5748,6 +5748,143 @@
             });
         };
 
+        /* ── Meter needle → crisp rotating image ────────────────────────────
+           A drawn needle (line or shaped tip) re-rasterises its polygon at the
+           live angle every frame, so LVGL's integer rounding makes it look like
+           it changes width as it sweeps. Baking it to an image once and letting
+           the firmware's image-needle path (lv_meter_add_needle_img) rotate it
+           gives an identical, rigid width at every angle. Convention (from
+           lv_meter.c): the image points EAST (+x), the pivot pixel sits at the
+           meter centre, LVGL rotates by the scale angle. */
+        function _ndlSelWidget() {
+            if (typeof currentLayout === 'undefined' || typeof selectedIndex === 'undefined') return null;
+            if (selectedIndex < 0 || !currentLayout || !currentLayout.widgets) return null;
+            return currentLayout.widgets[selectedIndex] || null;
+        }
+        function _ndlEligible(w) {
+            if (!w || w.type !== 'meter') return false;
+            var c = w.config || {};
+            return c.show_needle !== false && !(c.needle_image_name && c.needle_image_name !== '');
+        }
+        /* tip polygon in needle space: x = fraction-of-length (0=base..1=tip),
+           y = perpendicular half-offset. Mirrors widget_meter.c styles 2-5. */
+        function _ndlTipPts(style, L, width) {
+            var half = width / 2, P = function (f, y) { return { x: f * L, y: y }; };
+            if (style === 2) { var h = half + 1; return [P(0, h), P(0.90, h), P(1, 0), P(0.90, -h), P(0, -h)]; } /* Lance */
+            if (style === 3) { var h3 = half + 2; return [P(0, h3), P(1, 0), P(0, -h3)]; }                       /* Dagger */
+            if (style === 4) { var h4 = half + 2; return [P(0, h4), P(0.97, 1), P(0.97, -1), P(0, -h4)]; }        /* Spade */
+            if (style === 5) { var h5 = half + 3; return [P(0, 0), P(0.50, h5), P(1, 0), P(0.50, -h5)]; }         /* Diamond */
+            return null;   /* 0 flat / 1 rounded → drawn as a capped line */
+        }
+        function _ndlName(w, idx) {
+            return 'ndl_' + String((w && w.id) || ('m' + idx)).replace(/[^a-zA-Z0-9_]/g, '').slice(0, 22);
+        }
+        /* Render an east-pointing needle exactly as widget_meter.c draws it, so
+           the baked image is pixel-identical to the live drawn needle — just
+           rigid as it rotates. Returns {cvs,cw,ch,pivotX,pivotY} or null. */
+        function _renderNeedleCanvas(w) {
+            if (!_ndlEligible(w)) return null;
+            var c = w.config || {};
+            var R = Math.min(w.w, w.h) / 2;
+            var rmod = (c.needle_r_mod != null) ? c.needle_r_mod : -10;
+            var L = Math.max(6, R + rmod);
+            var width = Math.max(1, c.needle_width || 4);
+            var rear = c.needle_rear_length || 0;
+            var style = c.needle_tip_style || 0;
+            var half = width / 2;
+            var maxHalf = half + (style === 5 ? 3 : (style === 3 || style === 4) ? 2 : style === 2 ? 1 : 0) + 1;
+            var M = Math.ceil(maxHalf) + 4;
+            var cw = Math.ceil(rear + L + 2 * M);
+            var ch = Math.ceil(2 * (maxHalf + M));
+            var pivotX = M + rear, pivotY = ch / 2;
+            var col = (typeof _pvColor === 'function') ? _pvColor(c.needle_color, '#FFFFFF') : '#FFFFFF';
+            var cvs = document.createElement('canvas'); cvs.width = cw; cvs.height = ch;
+            var ctx = cvs.getContext('2d');
+            ctx.clearRect(0, 0, cw, ch);
+            ctx.fillStyle = col; ctx.strokeStyle = col;
+            var tip = _ndlTipPts(style, L, width);
+            if (tip) {
+                /* Polygon tips (styles 2-5): firmware draws the rear as its own
+                   needle_width line, then the shaped front polygon. */
+                if (rear > 0) {
+                    ctx.lineWidth = width; ctx.lineCap = 'butt';
+                    ctx.beginPath(); ctx.moveTo(pivotX - rear, pivotY); ctx.lineTo(pivotX, pivotY); ctx.stroke();
+                }
+                ctx.beginPath();
+                tip.forEach(function (p, i) { var x = pivotX + p.x, y = pivotY - p.y; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+                ctx.closePath(); ctx.fill();
+            } else {
+                /* Straight needle (styles 0/1): firmware extends the SAME line
+                   backwards through the pivot, so the rear is exactly the body
+                   width with a matching cap — one continuous stroke, no seam and
+                   no fat/thin counterweight. */
+                ctx.lineWidth = width; ctx.lineCap = (style === 1) ? 'round' : 'butt';
+                ctx.beginPath(); ctx.moveTo(pivotX - rear, pivotY); ctx.lineTo(pivotX + L, pivotY); ctx.stroke();
+            }
+            return { cvs: cvs, cw: cw, ch: ch, pivotX: Math.round(pivotX), pivotY: Math.round(pivotY) };
+        }
+        async function _uploadNeedleImage(name, geo) {
+            if (typeof convertImageToRDMIMG !== 'function') throw new Error('image encoder unavailable');
+            var buf = convertImageToRDMIMG(geo.cvs, geo.cw, geo.ch);
+            var resp = await fetch('/api/image/upload?name=' + encodeURIComponent(name), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: buf });
+            if (!resp.ok) throw new Error(await resp.text());
+        }
+        /* Manual escape hatch (console): bake the selected meter's needle and
+           switch it to the image path in the editor too. Auto-bake below is the
+           normal path — this stays for power users / debugging. */
+        window._bakeNeedle = async function () {
+            var w = _ndlSelWidget();
+            if (!_ndlEligible(w)) { if (typeof showToast === 'function') showToast('Select a meter with a drawn needle first', 'info'); return; }
+            var geo = _renderNeedleCanvas(w);
+            if (!geo) return;
+            var name = _ndlName(w, selectedIndex);
+            try {
+                await _uploadNeedleImage(name, geo);
+                updateWidgetConfigField('needle_image_name', name, false);
+                updateWidgetConfigField('needle_pivot_x', geo.pivotX, true);
+                updateWidgetConfigField('needle_pivot_y', geo.pivotY, true);
+                if (typeof _refreshImageList === 'function') _refreshImageList();
+                if (typeof updateInspector === 'function') updateInspector();
+                if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+                if (typeof showToast === 'function') showToast('Needle baked to a crisp rotating image', 'success');
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Bake failed: ' + (e && e.message || e), 'error');
+            }
+        };
+        /* Auto-bake: called by saveActiveLayout on a deliberate (non-silent)
+           Save. Silently bakes every drawn meter needle to a crisp rotating
+           image and points the OUTGOING payload at it — WITHOUT mutating
+           currentLayout, so the editor keeps the fully-editable drawn needle
+           while the dash always gets the rigid, wobble-free image. The drawn
+           needle fields remain in the saved JSON, so clearing the baked image
+           reverts to the editable needle. payload.widgets is currentLayout's
+           widgets minus hidden ones, in the same order — pair them by index. */
+        async function _autoBakeNeedlesForPayload(payload) {
+            if (!payload || !Array.isArray(payload.widgets)) return;
+            var src = (currentLayout.widgets || []).filter(function (w) { return !w.hidden; });
+            var n = 0;
+            for (var i = 0; i < payload.widgets.length; i++) {
+                var pw = payload.widgets[i], sw = src[i];
+                if (!pw || pw.type !== 'meter' || !sw || sw.type !== 'meter') continue;
+                var pc = pw.config || (pw.config = {});
+                if (pc.show_needle === false) continue;
+                if (pc.needle_image_name && pc.needle_image_name !== '') continue; /* real image already set */
+                var geo = _renderNeedleCanvas(sw);
+                if (!geo) continue;
+                var name = _ndlName(sw, i);
+                try {
+                    await _uploadNeedleImage(name, geo);
+                    pc.needle_image_name = name;
+                    pc.needle_pivot_x = geo.pivotX;
+                    pc.needle_pivot_y = geo.pivotY;
+                    n++;
+                } catch (e) { /* bake failed — leave the drawn needle in the payload */ }
+            }
+            if (n && typeof showToast === 'function') {
+                showToast(n === 1 ? 'Needle baked crisp for the dash' : (n + ' needles baked crisp for the dash'), 'success');
+            }
+        }
+
         function _onConnectionModeChange(mode) {
             _stopWifiRecovery();
             if (mode === 'local') {
@@ -6856,6 +6993,22 @@
             } catch (e) { /* transient — the health check owns disconnect handling */ }
             finally { _wasmLiveBusy = false; }
         }
+##[ end ]##
+
+#! Auto-bake custom meter needles to crisp rotating images at the moment the
+#! user does a deliberate Save (never on the ~1 s silent auto-save, which would
+#! gate the drawn-needle fields off mid-edit). _autoBakeNeedlesForPayload injects
+#! the baked image into the OUTGOING payload only, leaving currentLayout's
+#! editable drawn needle untouched. This 2-line anchor is unique to
+#! saveActiveLayout (the only buildFirmwarePayload() preceded by the silent flag).
+##[ block hook-autobake-needles ]##
+##[ anchor ]##
+            const silent = opts && opts.silent;
+            const payload = buildFirmwarePayload();
+##[ insert-after ]##
+            if (!silent && typeof _autoBakeNeedlesForPayload === 'function') {
+                try { await _autoBakeNeedlesForPayload(payload); } catch (e) { /* non-fatal — save the drawn needle */ }
+            }
 ##[ end ]##
 
 ##[ block hook-trigger-preview ]##
