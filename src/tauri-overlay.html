@@ -366,6 +366,16 @@
         .dt-fab .dot { width: 8px; height: 8px; border-radius: 50%; background: #6FBF73; }
         .dt-fab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
         .dt-fab.on .dot { background: #fff; }
+        /* Auto-save status pill + Revert (the Save button = "restore point") */
+        .save-state {
+            display: inline-flex; align-items: center; gap: 5px; height: 100%;
+            padding: 0 8px; font-size: 10.5px; font-family: 'JetBrains Mono', monospace;
+            color: #6FBF73; white-space: nowrap; user-select: none;
+        }
+        .save-state.dirty { color: #E0A24E; }
+        .save-state .sdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+        #revertBtn:disabled { opacity: .38; cursor: default; }
+        header #applyBtn.save-hot { box-shadow: 0 0 0 1px var(--accent) inset; }
         .dt-panel {
             position: fixed; left: 14px; bottom: 56px; z-index: 14500; width: 296px; max-height: 62vh;
             background: var(--panel); border: 1px solid var(--border-light); border-radius: var(--radius-lg);
@@ -5885,6 +5895,103 @@
             }
         }
 
+        /* ── Save restore-point / Revert ─────────────────────────────────────
+           Edits already go to the dash live and auto-persist to flash (there is
+           NOTHING to "apply" by hand). So the Save button is repurposed as a
+           checkpoint: it stamps the current layout as a restore point, and
+           Revert rolls the editor + dash back to that point. The restore point
+           is a web-format snapshot of currentLayout — the same shape the load
+           path stashes in history[0] — so reverting is just a re-load + push. */
+        var _restorePoint = null;   /* JSON string of currentLayout at last save/load */
+        var _rpName = null;         /* layout name that snapshot belongs to */
+        function _rpSnapshot() {
+            try { return (typeof currentLayout !== 'undefined' && currentLayout) ? JSON.stringify(currentLayout) : null; }
+            catch (e) { return null; }
+        }
+        function _captureRestorePoint() {
+            if (typeof currentLayout === 'undefined' || !currentLayout) return;
+            _rpName = currentLayout.name || '';
+            _restorePoint = _rpSnapshot();
+            _updateSaveUI();
+        }
+        function _isDirty() {
+            if (typeof currentLayout === 'undefined' || !currentLayout || !Array.isArray(currentLayout.widgets)) return false;
+            if (_restorePoint === null) return false;
+            /* A different layout name means a fresh layout was loaded/switched —
+               rebaseline to it (it starts clean) instead of reporting dirty. */
+            if ((currentLayout.name || '') !== _rpName) { _captureRestorePoint(); return false; }
+            return _restorePoint !== _rpSnapshot();
+        }
+        function _updateSaveUI() {
+            var pill = document.getElementById('saveStatePill');
+            var rb = document.getElementById('revertBtn');
+            var sb = document.getElementById('applyBtn');
+            if (!pill && !rb && !sb) return;
+            var dirty = _isDirty();
+            if (rb) rb.disabled = !dirty;
+            if (pill) {
+                pill.className = 'save-state' + (dirty ? ' dirty' : '');
+                pill.innerHTML = '<span class="sdot"></span>' + (dirty ? 'Edited' : 'Saved');
+                pill.title = dirty
+                    ? "Your changes are live on the dash and auto-saved. Click Save to set a restore point, or Revert to undo back to your last one."
+                    : "All changes are live on the dash and saved automatically. 'Save' marks a restore point you can roll back to.";
+            }
+            if (sb) { sb.classList.toggle('save-hot', dirty); }
+        }
+        window._saveRestorePoint = async function () {
+            var sb = document.getElementById('applyBtn');
+            if (sb) sb.disabled = true;
+            try {
+                if (typeof saveActiveLayout === 'function') await saveActiveLayout();   /* apply=1 full commit + persist */
+                _captureRestorePoint();
+                if (typeof showToast === 'function') showToast('Saved — restore point set', 'success');
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Save failed: ' + (e && e.message || e), 'error');
+            } finally {
+                if (sb) sb.disabled = false;
+                _updateSaveUI();
+            }
+        };
+        window._revertToRestorePoint = async function () {
+            if (_restorePoint === null || !_isDirty()) return;
+            if (!confirm('Discard every change since your last Save and restore that version to the dash?')) return;
+            var snap = _restorePoint;
+            try {
+                currentLayout = JSON.parse(snap);
+                if (!currentLayout.signals) currentLayout.signals = [];
+                if (typeof selectedIndex !== 'undefined') selectedIndex = -1;
+                if (typeof selectedIndices !== 'undefined') selectedIndices = new Set();
+                if (typeof history !== 'undefined' && typeof historyIndex !== 'undefined') { history = [snap]; historyIndex = 0; }
+                if (typeof renderEditor === 'function') renderEditor();
+                if (typeof renderSignals === 'function') renderSignals();
+                if (typeof updateInspector === 'function') updateInspector();
+                /* Persist the reverted layout (apply=0, no prompts) then rebuild
+                   the dash screen from it so the device visibly rolls back too. */
+                if (typeof saveActiveLayout === 'function') await saveActiveLayout({ silent: true });
+                if (typeof triggerPreview === 'function') triggerPreview();
+                else if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+                _captureRestorePoint();
+                if (typeof showToast === 'function') showToast('Reverted to your last save', 'success');
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Revert failed: ' + (e && e.message || e), 'error');
+            }
+        };
+        /* Capture the first restore point once a layout has actually loaded,
+           then keep the pill/Revert state fresh on a light poll. The name-change
+           rebaseline in _isDirty() handles later loads/switches automatically. */
+        (function _rpInit() {
+            var tries = 0;
+            var boot = setInterval(function () {
+                tries++;
+                if (typeof currentLayout !== 'undefined' && currentLayout &&
+                    Array.isArray(currentLayout.widgets) && currentLayout.widgets.length > 0) {
+                    _captureRestorePoint();
+                    clearInterval(boot);
+                } else if (tries > 60) { clearInterval(boot); }   /* give up after ~30s */
+            }, 500);
+            setInterval(_updateSaveUI, 700);
+        })();
+
         function _onConnectionModeChange(mode) {
             _stopWifiRecovery();
             if (mode === 'local') {
@@ -7009,6 +7116,19 @@
             if (!silent && typeof _autoBakeNeedlesForPayload === 'function') {
                 try { await _autoBakeNeedlesForPayload(payload); } catch (e) { /* non-fatal — save the drawn needle */ }
             }
+##[ end ]##
+
+#! Reframe the lone "Save/Apply" button as an auto-save status pill + a
+#! Save-restore-point button + a Revert-to-last-save button. Edits already go
+#! to the dash live and auto-persist (livePreviewToggle + _scheduleAutoSave),
+#! so "Save" now means "mark a restore point" and "Revert" rolls back to it.
+##[ block save-revert-header ]##
+##[ anchor ]##
+            <button class="btn" id="applyBtn" onclick="saveActiveLayout()">Save/Apply</button>
+##[ replace-with ]##
+            <span id="saveStatePill" class="save-state" title="Your changes go to the dash instantly and are saved automatically. 'Save' just marks a restore point you can roll back to."><span class="sdot"></span>Saved</span>
+            <button class="btn btn-secondary" id="revertBtn" onclick="_revertToRestorePoint()" title="Undo every change since your last Save and restore that version to the dash." disabled>&#8634; Revert</button>
+            <button class="btn" id="applyBtn" onclick="_saveRestorePoint()" title="Your changes are already live and auto-saved. Save marks this whole setup as a restore point you can revert to.">Save</button>
 ##[ end ]##
 
 ##[ block hook-trigger-preview ]##
