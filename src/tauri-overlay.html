@@ -636,6 +636,7 @@
         .kp-keyacts button:disabled { color: var(--text-muted); cursor: not-allowed; border-color: var(--border); }
         .kp-grp { border-top: 1px solid var(--border); padding: 10px 0 2px; margin-top: 6px; }
         .kp-gt { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 8px; }
+        .kp-subhead { font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin: 12px 0 6px; padding-top: 9px; border-top: 1px dashed var(--border); }
         details.kp-whole > summary { cursor: pointer; list-style: revert; margin-bottom: 2px; }
         details.kp-whole > summary:hover { color: var(--text); }
         details.kp-whole[open] > summary { margin-bottom: 10px; }
@@ -2206,10 +2207,36 @@
                     opt("solid", "Solid", a.behavior) + opt("slow", "Slow", a.behavior) + opt("fast", "Fast", a.behavior) + "</select></div>" +
                     '<div class="kp-alert-sw">' + sw + "</div></div>";
             }).join("");
-            return '<div class="kp-grp"><div class="kp-gt">LED alerts</div>' +
-                (alerts.length ? rows : '<div class="kp-note" style="margin-top:0">No alerts. The LED shows the base colour above. Add a condition to override it when a channel crosses a threshold.</div>') +
-                '<button class="ws-btn-line" style="margin-top:8px" onclick="kpAlertAdd(' + ki + ')">+ Add alert</button>' +
-                '<div class="kp-note">The dash watches the channel and sends this colour/blink to the key (LED PDO 0x2xx/0x3xx) when it trips. Stack several — checked top-down, first match wins, so put the most severe first. Switch to <b>Live (sim)</b> to watch them fire.</div></div>';
+            /* A sub-section INSIDE the Button light group — no own kp-grp. */
+            return '<div class="kp-subhead">Change colour on a warning</div>' +
+                (alerts.length ? rows : '<div class="kp-note" style="margin-top:0">No warnings yet — the button just holds its resting colour. Add one to make it change when a channel crosses a limit.</div>') +
+                '<button class="ws-btn-line" style="margin-top:8px" onclick="kpAlertAdd(' + ki + ')">+ Add warning colour</button>' +
+                '<div class="kp-note">The dash watches the channel and drives the button light (LED PDO 0x2xx/0x3xx) when it trips. Stack several — first match wins, so put the most severe first. Switch to <b>Live (sim)</b> to watch them fire.</div>';
+        }
+        /* One "Button light" group: resting colour + blink for a plain key, then
+           the warnings sub-section. A multi-position key gets its colours from
+           the Cycle positions group above, so it only shows the warnings here. */
+        function _kpLightGroupHtml(k, i) {
+            var h = '<div class="kp-grp"><div class="kp-gt">Button light</div>';
+            if (k.mode !== "state3") {
+                h += '<div class="kp-field"><label>Resting colour</label><div class="kp-swatches">' +
+                    LED_COLORS.map(function (c) {
+                        if (KP_COL[c.id] && KP_COL[c.id].bl) return '<button class="kp-sw-bl" style="background:' + c.hex + '" title="' + c.id + ' — backlight only; indicator shows the nearest of the 7" disabled></button>';
+                        return '<button class="kp-sw' + (k.color === c.id ? " on" : "") + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '" aria-label="' + c.id + '"></button>';
+                    }).join("") +
+                    '</div><div class="kp-swnote">7 indicator colours (per-key R/G/B). Amber &amp; yellow-green are backlight-only.</div></div>' +
+                    '<div class="kp-field"><label>Blink</label><div class="kp-seg" id="kpFBeh">' +
+                    ["solid", "slow", "fast"].map(function (b) {
+                        return '<button data-b="' + b + '"' + (k.behavior === b ? ' class="on"' : "") + ">" + (b === "solid" ? "Solid" : b === "slow" ? "Slow blink" : "Fast blink") + "</button>";
+                    }).join("") +
+                    "</div></div>" +
+                    '<div class="kp-swnote">The colour this button rests at. Add a warning below to override it when a channel crosses a limit — the <b>dash</b> drives that live.</div>';
+            } else {
+                h += '<div class="kp-swnote">This button cycles — each position&#8217;s colour is set under <b>Cycle positions</b> above.</div>';
+            }
+            h += _kpAlertsHtml(k, i);
+            h += "</div>";
+            return h;
         }
         function _kpKey() { return kp.keys[kp.selected]; }
         window.kpAlertAdd = function (ki) {
@@ -2673,54 +2700,36 @@
             var i = kp.selected, k = kp.keys[i];
             if (i == null || !k) { box.innerHTML = '<div class="kp-none">Select a key to configure it</div>'; return; }
             var iconOpts =[["up", "▲ arrow"], ["down", "▼ arrow"], ["turtle", "turtle (limiter)"], ["power", "power"], ["fan", "fan"], ["pump", "fuel pump"], ["light", "headlight"], ["moon", "night"], ["bolt", "launch"], ["page", "page"], ["blank", "text label"]];
+            var N = kp.model.rows * kp.model.cols;
+            var presetList = ["— unassigned —", "Pit limiter", "Ignition / main", "Launch arm", "Anti-lag", "Boost maps", "Fan override", "Fuel pump", "Headlights", "Map up", "Map down", "Map switch", "Wiper sequence", "Log marker", "Dash: next page", "Dash: night mode"];
             var html =
                 "<h2>Key " + (i + 1) + " — " + _kpEsc(k.label || "unassigned") + "</h2>" +
-                '<div class="kp-sub">' + kp.model.name + "-SI · " + kpIds().label + " · keys " + kpFmtId(kpIds().keys, kpIds().ext) + "</div>" +
-                '<div class="kp-keyacts"><button onclick="kpCopyKey()" title="copy this key\'s ring colour + blink">Copy look</button>' +
-                '<button onclick="kpPasteKey()"' + (kp.clip ? "" : " disabled") + ' title="paste the copied ring colour + blink onto this key">Paste</button>' +
-                '<button onclick="kpApplyAll()" title="give every key this ring colour + blink — icons, labels &amp; modes kept">Apply to all</button>' +
+                '<div class="kp-sub">Key ' + (i + 1) + " of " + N + " &middot; " + kp.model.name + "-SI</div>" +
+                '<div class="kp-keyacts"><button onclick="kpCopyKey()" title="copy this key\'s colour + blink">Copy look</button>' +
+                '<button onclick="kpPasteKey()"' + (kp.clip ? "" : " disabled") + ' title="paste the copied colour + blink onto this key">Paste</button>' +
+                '<button onclick="kpApplyAll()" title="give every key this colour + blink — icons, labels &amp; behaviour kept">Apply to all</button>' +
                 '<button onclick="kpClearKey()" title="reset this key to unassigned">Clear</button></div>' +
+                /* Lead with the plain-English question — a preset styles the whole
+                   key in one click; everything below is for tweaking. */
                 '<div class="kp-grp"><div class="kp-gt">Button</div>' +
-                '<div class="kp-field"><label>Label</label><input type="text" id="kpFLabel" value="' + _kpEsc(k.label) + '" maxlength="7"></div>' +
-                '<div class="kp-field"><label>Icon insert</label><select id="kpFIcon">' +
+                '<div class="kp-field"><label>What does this button do?</label><select id="kpFPreset">' +
+                presetList.map(function (p) { return opt(p, p === "— unassigned —" ? "— none yet, pick one —" : p, k.preset); }).join("") +
+                "</select></div>" +
+                '<div class="kp-field"><label>Label on the cap</label><input type="text" id="kpFLabel" value="' + _kpEsc(k.label) + '" maxlength="7"></div>' +
+                '<div class="kp-field"><label>Button face</label><select id="kpFIcon">' +
                 iconOpts.map(function (o) { return opt(o[0], o[1], k.text ? "blank" : k.icon); }).join("") +
                 "</select></div>" +
-                '<div class="kp-field"><label>Mode</label><select id="kpFMode">' +
-                opt("momentary", "Momentary", k.mode) + opt("toggle", "Toggle", k.mode) +
-                opt("state3", "3-position (cycle)", k.mode) + opt("paired", "Paired ▲▼ with next key", k.mode) +
-                "</select></div>" +
-                '<div class="kp-field"><label>Function preset</label><select id="kpFPreset">' +
-                ["— unassigned —", "Pit limiter", "Ignition / main", "Launch arm", "Anti-lag", "Boost maps", "Fan override", "Fuel pump", "Headlights", "Map up", "Map down", "Map switch", "Wiper sequence", "Log marker", "Dash: next page", "Dash: night mode"]
-                    .map(function (p) { return opt(p, p, k.preset); }).join("") +
+                '<div class="kp-field"><label>How it works</label><select id="kpFMode">' +
+                opt("momentary", "Momentary — on only while held", k.mode) +
+                opt("toggle", "Latching — press on, press off", k.mode) +
+                opt("state3", "Multi-position — steps each press", k.mode) +
+                opt("paired", "Up / down — pairs with next key", k.mode) +
                 "</select></div></div>" +
-                '<div class="kp-grp"><div class="kp-gt">LED ring</div>' +
-                '<div class="kp-field"><label>Base color (normal)</label><div class="kp-swatches">' +
-                LED_COLORS.map(function (c) {
-                    if (KP_COL[c.id] && KP_COL[c.id].bl) return '<button class="kp-sw-bl" style="background:' + c.hex + '" title="' + c.id + ' — backlight only; indicator shows the nearest of the 7" disabled></button>';
-                    return '<button class="kp-sw' + (k.color === c.id ? " on" : "") + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '" aria-label="' + c.id + '"></button>';
-                }).join("") +
-                '</div><div class="kp-swnote">7 indicator colours (per-key R/G/B). Amber &amp; yellow-green are backlight-only.</div></div>' +
-                '<div class="kp-field"><label>Behavior</label><div class="kp-seg" id="kpFBeh">' +
-                ["solid", "slow", "fast"].map(function (b) {
-                    return '<button data-b="' + b + '"' + (k.behavior === b ? ' class="on"' : "") + ">" + (b === "solid" ? "Solid" : b === "slow" ? "Slow blink" : "Fast blink") + "</button>";
-                }).join("") +
-                "</div></div>" +
-                '<div class="kp-swnote">This is the ring&#8217;s resting colour. Add an <b>alert</b> below to change it when a channel crosses a limit — the <b>dash</b> drives that live; on its own the keypad just holds this colour.</div></div>' +
+                /* Cycle positions (multi-position keys carry their own per-step
+                   colours) sit above the light group they drive. */
                 (k.mode === "state3" ? _kpPositionsHtml(k) : "") +
-                _kpAlertsHtml(k, i) +
-                '<details class="kp-grp kp-whole"><summary class="kp-gt">Whole-keypad lighting &amp; night <span class="kp-whole-hint">— applies to all keys</span></summary>' +
-                '<div class="kp-field"><label>LED brightness — day</label><div class="kp-slider"><input type="range" id="kpFDay" min="0" max="63" value="' + kp.brightDay + '"><span class="val" id="kpVDay">' + kp.brightDay + "</span></div></div>" +
-                '<div class="kp-field"><label>LED brightness — night (dims with the dash)</label><div class="kp-slider"><input type="range" id="kpFNight" min="0" max="63" value="' + kp.brightNight + '"><span class="val" id="kpVNight">' + kp.brightNight + "</span></div></div>" +
-                '<div class="kp-field"><label>Icon backlight — lights the legends at night</label><div class="kp-swatches">' +
-                LED_COLORS.map(function (c) {
-                    return '<button class="kp-blsw' + (kp.blColor === c.id ? " on" : "") + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '"></button>';
-                }).join("") +
-                "</div></div>" +
-                '<div class="kp-field"><label>Backlight level</label><div class="kp-slider"><input type="range" id="kpFBl" min="0" max="63" value="' + kp.blBright + '"><span class="val" id="kpVBl">' + kp.blBright + "</span></div></div>" +
-                '<div class="kp-field"><label>Preview</label><div class="kp-seg" id="kpFDayNight">' +
-                '<button data-n="0"' + (!kp.night ? ' class="on"' : "") + ">Day</button>" +
-                '<button data-n="1"' + (kp.night ? ' class="on"' : "") + ">Night</button>" +
-                "</div></div></details>";
+                /* One "Button light" group: resting colour + blink + warnings. */
+                _kpLightGroupHtml(k, i);
             /* What your ECU needs — the exact frame + how to read this key */
             html += _kpEcuSetupHtml(k, i);
             box.innerHTML = html;
@@ -2743,20 +2752,16 @@
                     kpSaveCfg(); kpRenderStage();
                 }
             });
+            /* Resting colour + blink live in the Button light group and only
+               render for non-cycle keys (multi-position keys carry per-step
+               colours instead), so guard both bindings. Whole-keypad lighting
+               moved to the rail — its handlers are wired in kpRenderLighting(). */
             box.querySelectorAll(".kp-sw").forEach(function (b) {
                 b.addEventListener("click", function () { k.color = b.getAttribute("data-c"); kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
             });
-            g("kpFBeh").querySelectorAll("button").forEach(function (b) {
+            var behBox = g("kpFBeh");
+            if (behBox) behBox.querySelectorAll("button").forEach(function (b) {
                 b.addEventListener("click", function () { k.behavior = b.getAttribute("data-b"); kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
-            });
-            g("kpFDay").addEventListener("input", function (e) { kp.brightDay = +e.target.value; g("kpVDay").textContent = e.target.value; kpSaveCfg(); kpRenderStage(); });
-            g("kpFNight").addEventListener("input", function (e) { kp.brightNight = +e.target.value; g("kpVNight").textContent = e.target.value; kpSaveCfg(); kpRenderStage(); });
-            box.querySelectorAll(".kp-blsw").forEach(function (b) {
-                b.addEventListener("click", function () { kp.blColor = b.getAttribute("data-c"); kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
-            });
-            g("kpFBl").addEventListener("input", function (e) { kp.blBright = +e.target.value; g("kpVBl").textContent = e.target.value; kpSaveCfg(); kpRenderStage(); });
-            g("kpFDayNight").querySelectorAll("button").forEach(function (b) {
-                b.addEventListener("click", function () { kp.night = b.getAttribute("data-n") === "1"; kpRenderInspector(); kpRenderStage(); });
             });
             /* 3-position cycle editor bindings (dropdowns) */
             if (k.mode === "state3") {
@@ -2840,7 +2845,7 @@
                     kpUpdateChip();
                     document.querySelectorAll(".kp-model").forEach(function (x) { x.className = "kp-model"; });
                     b.className = "kp-model on";
-                    kpRenderBus(); kpRenderStage(); kpRenderInspector();
+                    kpRenderBus(); kpRenderLighting(); kpRenderStage(); kpRenderInspector();
                 });
                 rail.appendChild(b);
             });
@@ -2850,6 +2855,48 @@
             var busBox = document.createElement("div");
             busBox.id = "kpBusBox";
             rail.appendChild(busBox);
+            var lightTitle = document.createElement("div");
+            lightTitle.className = "kp-rail-title"; lightTitle.style.marginTop = "16px"; lightTitle.textContent = "Lighting";
+            rail.appendChild(lightTitle);
+            var lightBox = document.createElement("div");
+            lightBox.id = "kpLightBox";
+            rail.appendChild(lightBox);
+        }
+
+        /* Whole-keypad lighting lives in the rail (the "whole keypad" column,
+           alongside Model + Connection) — it is NOT per-key, so it must not sit
+           inside the per-key inspector where it re-renders on every key select
+           and reads as a per-button setting. */
+        function kpRenderLighting() {
+            var box = document.getElementById("kpLightBox");
+            if (!box) return;
+            box.innerHTML =
+                '<details class="kp-whole"' + (kp._lightOpen ? " open" : "") + '>' +
+                '<summary class="kp-gt">Brightness &amp; backlight <span class="kp-whole-hint">— whole keypad</span></summary>' +
+                '<div class="kp-field"><label>Button LEDs — day</label><div class="kp-slider"><input type="range" id="kpFDay" min="0" max="63" value="' + kp.brightDay + '"><span class="val" id="kpVDay">' + kp.brightDay + "</span></div></div>" +
+                '<div class="kp-field"><label>Button LEDs — night (dims with the dash)</label><div class="kp-slider"><input type="range" id="kpFNight" min="0" max="63" value="' + kp.brightNight + '"><span class="val" id="kpVNight">' + kp.brightNight + "</span></div></div>" +
+                '<div class="kp-field"><label>Legend backlight colour</label><div class="kp-swatches">' +
+                LED_COLORS.map(function (c) {
+                    return '<button class="kp-blsw' + (kp.blColor === c.id ? " on" : "") + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '"></button>';
+                }).join("") +
+                '</div><div class="kp-swnote">Lights the printed legends at night.</div></div>' +
+                '<div class="kp-field"><label>Backlight level</label><div class="kp-slider"><input type="range" id="kpFBl" min="0" max="63" value="' + kp.blBright + '"><span class="val" id="kpVBl">' + kp.blBright + "</span></div></div>" +
+                '<div class="kp-field"><label>Preview</label><div class="kp-seg" id="kpFDayNight">' +
+                '<button data-n="0"' + (!kp.night ? ' class="on"' : "") + ">Day</button>" +
+                '<button data-n="1"' + (kp.night ? ' class="on"' : "") + ">Night</button>" +
+                "</div></div></details>";
+            var g = function (id) { return document.getElementById(id); };
+            var det = box.querySelector("details");
+            if (det) det.addEventListener("toggle", function () { kp._lightOpen = det.open; });
+            g("kpFDay").addEventListener("input", function (e) { kp.brightDay = +e.target.value; g("kpVDay").textContent = e.target.value; kpSaveCfg(); kpRenderStage(); });
+            g("kpFNight").addEventListener("input", function (e) { kp.brightNight = +e.target.value; g("kpVNight").textContent = e.target.value; kpSaveCfg(); kpRenderStage(); });
+            box.querySelectorAll(".kp-blsw").forEach(function (b) {
+                b.addEventListener("click", function () { kp.blColor = b.getAttribute("data-c"); kpSaveCfg(); kpRenderLighting(); kpRenderStage(); });
+            });
+            g("kpFBl").addEventListener("input", function (e) { kp.blBright = +e.target.value; g("kpVBl").textContent = e.target.value; kpSaveCfg(); kpRenderStage(); });
+            g("kpFDayNight").querySelectorAll("button").forEach(function (b) {
+                b.addEventListener("click", function () { kp.night = b.getAttribute("data-n") === "1"; kpRenderLighting(); kpRenderStage(); });
+            });
         }
 
         function kpUpdateChip() {
@@ -2946,7 +2993,7 @@
             _kpLoadChannels();
             var ws = document.getElementById("kpWorkspace");
             if (ws) ws.style.display = "flex";
-            kpRenderBus(); kpUpdateChip();
+            kpRenderBus(); kpUpdateChip(); kpRenderLighting();
             kpRenderStage(); kpRenderInspector();
         };
         window._kpClose = function () {
