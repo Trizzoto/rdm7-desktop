@@ -1378,7 +1378,7 @@
         <div class="kp-topbar">
             <button class="btn btn-secondary" style="font-size:13px; padding:0 10px; height:30px; box-sizing:border-box;" onclick="_kpClose()" title="Home (Esc)">&#8962;</button>
             <span id="kpBrand" style="display:inline-flex; align-items:center; gap:10px;"></span>
-            <span class="kp-chip" id="kpChipModel">PKP-2200-SI · CANopen · node 0x15</span>
+            <span class="kp-chip" id="kpChipModel">PKP-2200-SI · CANopen · node 0x15 · 125k</span>
             <span class="kp-chip" id="kpChipLink">Design &amp; export — live keypad sync coming soon</span>
             <div class="kp-modes" role="group" aria-label="Mode">
                 <button id="kpBtnDesign" class="on" onclick="_kpSetLive(false)">Design</button>
@@ -1392,13 +1392,13 @@
                 <div class="kp-live-strip" id="kpLiveStrip">
                     <span class="kp-live-dot"></span>
                     <span>Simulated car running</span>
-                    <span class="kp-ct" id="kpCtReadout">coolant_temp <b>84.0</b> &#176;C</span>
+                    <span class="kp-ct" id="kpCtReadout">Coolant <b>84.0</b> &#176;C</span>
                     <span class="kp-statemsg" id="kpStateMsg"></span>
                     <span class="kp-busline" id="kpBusLine"></span>
-                    <span style="color:var(--text-muted); font-size:10.5px;">click keys to press them &#8212; LEDs bound to channels react on their own</span>
+                    <span style="color:var(--text-muted); font-size:10.5px;">Click a key to press it &#8212; the rings react on their own because the dash is watching the car (the keypad never lights itself).</span>
                 </div>
                 <div id="kpStageSvg"></div>
-                <div class="kp-hint" id="kpHint">Click any key to configure it.</div>
+                <div class="kp-hint" id="kpHint">Click a key to configure it.</div>
                 <!-- the whole flow in one line — steps 4 & 5 are the two real actions -->
                 <div class="kp-steps" id="kpSteps">
                     <button class="kp-step" onclick="kpFlowJump('model')" title="Choose your keypad model in the sidebar"><i>1</i> Pick your keypad</button>
@@ -1408,7 +1408,7 @@
                     <button class="kp-step act" onclick="kpOpenEcuGuide()" title="Step-by-step: wire it up, program the keypad, set up MaxxECU / Link / Haltech"><i>5</i> Wire it up &amp; set up your ECU</button>
                 </div>
             </div>
-            <div class="kp-insp" id="kpInspector"><div class="kp-none">Select a key to configure it</div></div>
+            <div class="kp-insp" id="kpInspector"><div class="kp-none">Click a key to configure it</div></div>
         </div>
     </div>
 
@@ -1803,12 +1803,12 @@
         window._kpProvisionPreview = function () { return kpProvisionText(); };   /* debug/support handle */
         window.kpExportProvision = function () {
             _ltDownload("rdm_keypad_" + kp.model.id + "_" + kp.proto + "_" + kp.baud + "k_setup.txt", kpProvisionText(), "text/plain");
-            if (typeof showToast === "function") showToast("Setup file saved — the guide's “Program it” tab shows how to send it", "success");
+            if (typeof showToast === "function") showToast("Keypad setup file saved — the guide's “Program it” tab shows how to send it", "success");
         };
         window.kpCopyProvision = function () {
             var t = kpProvisionText();
             if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t);
-            if (typeof showToast === "function") showToast("Setup frames copied to clipboard", "success");
+            if (typeof showToast === "function") showToast("Keypad setup file copied — paste it into SavvyCAN's Send Frames, or see the guide's “Program it” tab", "success");
         };
 
         function kpLoadCfg() {
@@ -1880,19 +1880,6 @@
                     .catch(function (e) { window._kpChanDebug = "err " + e; });
             } catch (e) { window._kpChanDebug = "throw " + e; }
         }
-        function _kpFollowsOptions(cur) {
-            var opts = [["self", "This button’s state"]];
-            if (_kpChanList && _kpChanList.length) {
-                _kpChanList.forEach(function (c) { opts.push([c.v, c.t]); });
-            } else {
-                opts.push(["coolant_temp", "coolant_temp › high warn"],
-                          ["oil_press", "oil_press ‹ low warn"],
-                          ["fan_output", "fan_output (RDM IO)"]);
-            }
-            if (cur && !opts.some(function (o) { return o[0] === cur; })) opts.push([cur, cur]);
-            return opts.map(function (o) { return opt(o[0], o[1], cur); }).join("");
-        }
-
         var CELL = 104, SEAM = 7, PAD = 20, CAP_R = 27, RING_R = 36, WELL_R = 42, MARGIN = 44;
         function keyAssigned(k) { return k.label !== "" || k.preset.indexOf("unassigned") === -1; }
         /* LED alerts — the dash watches a channel and, when a condition trips,
@@ -2170,7 +2157,7 @@
             var el = document.getElementById("kpCtReadout");
             if (el) {
                 el.className = "kp-ct" + (hot ? " hot" : "");
-                el.innerHTML = 'coolant_temp <b>' + kp.coolant.toFixed(1) + "</b> &#176;C" + (hot ? " &#8212; HIGH" : "");
+                el.innerHTML = 'Coolant <b>' + kp.coolant.toFixed(1) + "</b> &#176;C" + (hot ? " &#8212; HIGH" : "");
             }
             /* Re-render only when the set of tripped alerts changes (or the
              * coolant alarm flips) — re-drawing every tick would restart the CSS
@@ -2190,8 +2177,8 @@
             if (steps) steps.style.display = on ? "none" : "";
             var hint = document.getElementById("kpHint");
             if (hint) hint.textContent = on
-                ? "Simulated live mode. With keypad firmware on the dash, this mirrors the physical unit — real presses light up here."
-                : "Click any key to configure it.";
+                ? "Simulated for now. When the dash adds keypad support, presses on the real keypad will light up here too."
+                : "Click a key to configure it.";
             if (on) { kp.keyOn = {}; kp.keyPos = {}; if (!kpSimTimer) kpSimTimer = setInterval(kpSimTick, 700); }
             else if (kpSimTimer) { clearInterval(kpSimTimer); kpSimTimer = null; }
             kpRenderStage(); kpRenderInspector();
@@ -2200,12 +2187,21 @@
         function opt(v, label, cur) { return '<option value="' + v + '"' + (v === cur ? " selected" : "") + ">" + label + "</option>"; }
 
         /* ── LED alerts UI ── */
+        /* Turn a machine channel id into a plain label ("coolant_temp" →
+           "Coolant") — the id stays the option VALUE so nothing downstream
+           breaks; only the shown text is humanized. */
+        var _KP_CHAN_NAMES = { coolant_temp: "Coolant", oil_press: "Oil pressure", oil_temp: "Oil temp", rpm: "RPM", boost: "Boost", fuel_level: "Fuel level", battery: "Battery", afr: "AFR", speed: "Speed", egt: "EGT", tps: "Throttle", map_kpa: "MAP", iat: "Intake temp", gear: "Gear" };
+        function _kpHumanChan(id) {
+            if (!id) return id;
+            if (_KP_CHAN_NAMES[id]) return _KP_CHAN_NAMES[id];
+            return String(id).replace(/_/g, " ").replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+        }
         function _kpAlertChanOptions(cur) {
             var opts = [];
             if (_kpChanList && _kpChanList.length) opts = _kpChanList.map(function (c) { return [c.v, c.t]; });
-            else opts = [["coolant_temp", "coolant_temp"], ["oil_press", "oil_press"], ["oil_temp", "oil_temp"], ["rpm", "rpm"], ["boost", "boost"], ["fuel_level", "fuel_level"], ["battery", "battery"], ["afr", "afr"]];
+            else opts = ["coolant_temp", "oil_press", "oil_temp", "rpm", "boost", "fuel_level", "battery", "afr"].map(function (id) { return [id, id]; });
             if (cur && !opts.some(function (o) { return o[0] === cur; })) opts.unshift([cur, cur]);
-            return opts.map(function (o) { return opt(o[0], o[1], cur); }).join("");
+            return opts.map(function (o) { return opt(o[0], _kpHumanChan(o[1]), cur); }).join("");
         }
         function _kpAlertsHtml(k, ki) {
             var alerts = k.alerts || [];
@@ -2244,7 +2240,7 @@
                         if (KP_COL[c.id] && KP_COL[c.id].bl) return '<button class="kp-sw-bl" style="background:' + c.hex + '" title="' + c.id + ' — backlight only; indicator shows the nearest of the 7" disabled></button>';
                         return '<button class="kp-sw' + (k.color === c.id ? " on" : "") + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '" aria-label="' + c.id + '"></button>';
                     }).join("") +
-                    '</div><div class="kp-swnote">7 indicator colours (per-key R/G/B). Amber &amp; yellow-green are backlight-only.</div></div>' +
+                    '</div><div class="kp-swnote">7 indicator colours (per-key R/G/B). Amber &amp; lime are backlight-only.</div></div>' +
                     '<div class="kp-field"><label>Blink</label><div class="kp-seg" id="kpFBeh">' +
                     ["solid", "slow", "fast"].map(function (b) {
                         return '<button data-b="' + b + '"' + (k.behavior === b ? ' class="on"' : "") + ">" + (b === "solid" ? "Solid" : b === "slow" ? "Slow blink" : "Fast blink") + "</button>";
@@ -2496,7 +2492,7 @@
                 intro: "Out of the box the keypad already works (CANopen @ 125k, node 0x15) — if that&#8217;s what you picked, <b>skip this tab</b>. You only program it when you change the connection: 500k to share the RDM-7 dash bus, J1939, or a different node. One-time job; the keypad remembers.",
                 steps: function () {
                     return [
-                        "<b>Save the setup file</b> (the &#8681; button in the left rail). It&#8217;s plain text — open it; every line is one CAN frame with a note saying what it does.",
+                        "<b>Save the keypad setup file</b> (the &#8681; button in the left rail). It&#8217;s plain text — open it; every line is one CAN frame with a note saying what it does.",
                         "<b>Connect a USB-CAN adapter</b> (PCAN, Kvaser, CANable&hellip; from ~$30) to the keypad&#8217;s CAN-H / CAN-L, and give the keypad 12&nbsp;V + ground.",
                         "<b>Open SavvyCAN</b> (free) and connect at the keypad&#8217;s <b>current</b> speed — a new keypad is CANopen @ <b>125k</b>. The file header spells out any protocol-switch step.",
                         "<b>Send the frames top to bottom</b> (SavvyCAN &#8594; Send Frames: ID + 8 data bytes per line). All LEDs flashing = the keypad accepted a write.",
@@ -2723,7 +2719,7 @@
             if (!box) return;
             if (kp.live) { box.innerHTML = '<div class="kp-none">Live mode — configuration locked.<br><br>Switch to Design to edit.</div>'; return; }
             var i = kp.selected, k = kp.keys[i];
-            if (i == null || !k) { box.innerHTML = '<div class="kp-none">Select a key to configure it</div>'; return; }
+            if (i == null || !k) { box.innerHTML = '<div class="kp-none">Click a key to configure it</div>'; return; }
             var iconOpts =[["up", "▲ arrow"], ["down", "▼ arrow"], ["turtle", "turtle (limiter)"], ["power", "power"], ["fan", "fan"], ["pump", "fuel pump"], ["light", "headlight"], ["moon", "night"], ["bolt", "launch"], ["page", "page"], ["blank", "text label"]];
             var N = kp.model.rows * kp.model.cols;
             var presetList = ["— unassigned —", "Pit limiter", "Ignition / main", "Launch arm", "Anti-lag", "Boost maps", "Fan override", "Fuel pump", "Headlights", "Map up", "Map down", "Map switch", "Wiper sequence", "Log marker", "Dash: next page", "Dash: night mode"];
@@ -2772,7 +2768,7 @@
                    click. "— unassigned —" (no template) just clears the label hint. */
                 if (_kpApplyPresetTemplate(k)) {
                     kpSaveCfg(); kpRenderInspector(); kpRenderStage();
-                    if (typeof showToast === "function") showToast('"' + k.preset + '" applied — key styled; tweak anything you like', "success");
+                    if (typeof showToast === "function") showToast('"' + k.preset + '" applied — icon, mode and light all set. Tweak anything you like.', "success");
                 } else {
                     kpSaveCfg(); kpRenderStage();
                 }
@@ -3057,7 +3053,7 @@
                 if (!kpIsJ()) h += "<label class='kp-bus-chkrow'><input type='checkbox' id='kpFActive'" + (kp.activeStart ? " checked" : "") + "> Active on startup (no host start needed)</label>";
                 h += "<div class='kp-bus-row'><label>Key broadcast</label><select class='kp-bus-in' id='kpFPeriod'>" +
                     opt("0", "On press only", String(kp.periodMs)) + opt("50", "Every 50ms", String(kp.periodMs)) + opt("100", "Every 100ms", String(kp.periodMs)) + opt("500", "Every 500ms", String(kp.periodMs)) + "</select></div>";
-                h += "<div class='lt-expbtns' style='margin-top:6px'><button class='ws-btn-line' onclick='kpCopyProvision()'>Copy setup</button><button class='ws-btn-line' onclick='kpExportDbc()'>Export .dbc</button></div>" +
+                h += "<div class='lt-expbtns' style='margin-top:6px'><button class='ws-btn-line' onclick='kpCopyProvision()'>Copy setup frames</button><button class='ws-btn-line' onclick='kpExportDbc()'>Export .dbc</button></div>" +
                     "<div class='kp-bus-note'>The DBC names every button + LED for MoTeC / Haltech / Link / SavvyCAN.</div>";
                 h += "</div>";
             }
