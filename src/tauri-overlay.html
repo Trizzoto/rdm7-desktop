@@ -798,9 +798,34 @@
         .kp-statemsg.show { opacity: 1; }
         .kp-busline { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); }
         .kp-busline .tx { color: var(--accent); font-weight: 700; }
+        .kp-busline .rx { color: #8a7fd6; font-weight: 700; }
         .kp-busline i { font-style: normal; }
         .kp-busline i.on { color: #6fbf73; font-weight: 700; }
+        .kp-busline i.tick { color: #c8a24e; }
         .kp-busline .idle { opacity: 0.7; }
+        .kp-busline .cause { color: var(--text); opacity: 0.85; }
+        .kp-rxline { opacity: 0.92; }
+        /* Slice 8 — live telemetry chips + flow progress + keys map */
+        .kp-chanchips { display: inline-flex; flex-wrap: wrap; gap: 5px; }
+        .kp-cchip { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+        .kp-cchip b { color: var(--text); font-weight: 600; }
+        .kp-cchip.hot { border-color: #e05d52; color: #e05d52; }
+        .kp-cchip.hot b { color: #e05d52; }
+        .kp-step.done { border-color: #3FB668; color: var(--text); }
+        .kp-step.done i { background: #3FB668; color: #fff; }
+        .kp-assignstat { display: inline-flex; align-items: center; font-family: 'Sora', sans-serif; font-size: 10px; color: var(--text-muted); padding: 0 4px; }
+        .kp-km summary { font-size: 9.5px; }
+        .kp-km-row { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
+        .kp-km-byte { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted); width: 30px; flex: 0 0 auto; }
+        .kp-km-cells { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; flex: 1; }
+        .kp-km-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 3px 1px; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; min-width: 0; }
+        .kp-km-cell .b { font-family: 'JetBrains Mono', monospace; font-size: 7px; color: var(--text-muted); }
+        .kp-km-cell .l { font-size: 8px; font-weight: 600; color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kp-km-cell.un { opacity: 0.45; cursor: default; }
+        .kp-km-cell.un .l { color: var(--text-muted); font-weight: 400; }
+        .kp-km-cell.pair { border-color: var(--accent); }
+        .kp-km-cell.sel { border-color: var(--accent); background: var(--panel-elevated); }
+        .kp-km-cell.empty { background: none; border: 1px dashed var(--border); opacity: 0.3; cursor: default; }
         /* LED alerts (inspector) */
         .kp-alert { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px; margin-bottom: 7px; }
         .kp-alert-top { display: flex; gap: 5px; align-items: center; margin-bottom: 5px; }
@@ -1393,20 +1418,22 @@
                 <div class="kp-live-strip" id="kpLiveStrip">
                     <span class="kp-live-dot"></span>
                     <span>Simulated car running</span>
-                    <span class="kp-ct" id="kpCtReadout">Coolant <b>84.0</b> &#176;C</span>
+                    <span class="kp-chanchips" id="kpChanChips"></span>
                     <span class="kp-statemsg" id="kpStateMsg"></span>
                     <span class="kp-busline" id="kpBusLine"></span>
+                    <span class="kp-busline kp-rxline" id="kpRxLine"></span>
                     <span style="color:var(--text-muted); font-size:10.5px;">Click a key to press it &#8212; the rings react on their own because the dash is watching the car (the keypad never lights itself).</span>
                 </div>
                 <div id="kpStageSvg"></div>
                 <div class="kp-hint" id="kpHint">Click a key to configure it.</div>
                 <!-- the whole flow in one line — steps 4 & 5 are the two real actions -->
                 <div class="kp-steps" id="kpSteps">
-                    <button class="kp-step" onclick="kpFlowJump('model')" title="Choose your keypad model in the sidebar"><i>1</i> Pick your keypad</button>
-                    <button class="kp-step" onclick="kpFlowJump('ecu')" title="Tell us your ECU — it tailors the whole setup"><i>2</i> Pick your ECU</button>
-                    <button class="kp-step" onclick="kpFlowJump('conn')" title="Choose how the keypad connects in the sidebar"><i>3</i> Pick how it connects</button>
-                    <button class="kp-step" onclick="kpFlowJump('keys')" title="Click any key on the keypad to style it"><i>4</i> Style your keys</button>
-                    <button class="kp-step act" onclick="kpOpenEcuGuide()" title="Step-by-step: wire it up, program the keypad, set up MaxxECU / Link / Haltech"><i>5</i> Wire it up &amp; set up your ECU</button>
+                    <button class="kp-step" data-step="1" onclick="kpFlowJump('model')" title="Choose your keypad model in the sidebar"><i>1</i> Pick your keypad</button>
+                    <button class="kp-step" data-step="2" onclick="kpFlowJump('ecu')" title="Tell us your ECU — it tailors the whole setup"><i>2</i> Pick your ECU</button>
+                    <button class="kp-step" data-step="3" onclick="kpFlowJump('conn')" title="Choose how the keypad connects in the sidebar"><i>3</i> Pick how it connects</button>
+                    <button class="kp-step" data-step="4" onclick="kpFlowJump('keys')" title="Click any key on the keypad to style it"><i>4</i> Style your keys</button>
+                    <button class="kp-step act" data-step="5" onclick="kpOpenEcuGuide()" title="Step-by-step: wire it up, program the keypad, set up MaxxECU / Link / Haltech"><i>5</i> Wire it up &amp; set up your ECU</button>
+                    <span class="kp-assignstat" id="kpAssignStat"></span>
                 </div>
             </div>
             <div class="kp-insp" id="kpInspector"><div class="kp-none">Click a key to configure it</div></div>
@@ -1804,6 +1831,7 @@
         window._kpProvisionPreview = function () { return kpProvisionText(); };   /* debug/support handle */
         window.kpExportProvision = function () {
             _ltDownload("rdm_keypad_" + kp.model.id + "_" + kp.proto + "_" + kp.baud + "k_setup.txt", kpProvisionText(), "text/plain");
+            kp._exported = true; kpUpdateFlowProgress();
             if (typeof showToast === "function") showToast("Keypad setup file saved — the guide's “Program it” tab shows how to send it", "success");
         };
         window.kpCopyProvision = function () {
@@ -1826,6 +1854,7 @@
         }
         window.kpExportProvisionCsv = function () {
             _ltDownload("rdm_keypad_" + kp.model.id + "_" + kp.proto + "_" + kp.baud + "k_savvycan.csv", kpProvisionCsv(), "text/csv");
+            kp._exported = true; kpUpdateFlowProgress();
             if (typeof showToast === "function") showToast("SavvyCAN CSV saved — Send Frames → Load this file, then send at the keypad's current speed", "success");
         };
         window._kpProvisionCsvPreview = function () { return kpProvisionCsv(); };   /* debug/support handle */
@@ -1923,15 +1952,85 @@
             for (var i = 0; i < (chan || "").length; i++) h += chan.charCodeAt(i);
             return mid + amp * Math.sin((kp.simPhase || 0) / 5 + h);
         }
+        function _kpAlertHit(a) {
+            if (!a || !a.chan) return false;
+            var v = kpSimVal(a.chan);
+            return a.op === "<" ? v < a.val : a.op === "=" ? Math.abs(v - a.val) < (Math.abs(a.val) * 0.02 + 0.5) : v > a.val;
+        }
         function kpActiveAlert(i) {
             var k = kp.keys[i]; if (!k || !k.alerts || !k.alerts.length) return null;
-            for (var j = 0; j < k.alerts.length; j++) {
-                var a = k.alerts[j]; if (!a || !a.chan) continue;
-                var v = kpSimVal(a.chan);
-                var hit = a.op === "<" ? v < a.val : a.op === "=" ? Math.abs(v - a.val) < (Math.abs(a.val) * 0.02 + 0.5) : v > a.val;
-                if (hit) return a;
-            }
+            for (var j = 0; j < k.alerts.length; j++) { if (_kpAlertHit(k.alerts[j])) return k.alerts[j]; }
             return null;
+        }
+        /* Live per-channel telemetry chips: one per DISTINCT channel any key's
+           alert watches (coolant always shown as the running-car anchor), each
+           flipping 'hot' when its own threshold trips — so a user sees the exact
+           reading that changed a ring. */
+        function _kpChanUnit(chan) {
+            var c = (chan || "").toLowerCase();
+            if (/coolant|water|clt|_temp|iat|egt|oil_t/.test(c)) return "°C";
+            if (/oil_p|oilpress|fuel_p|boost|^map$|_map/.test(c)) return "psi";
+            if (/rpm/.test(c)) return "rpm";
+            if (/fuel_l|level|^fuel$/.test(c)) return "%";
+            if (/volt|batt/.test(c)) return "V";
+            if (/afr/.test(c)) return "AFR";
+            if (/speed|vss/.test(c)) return "km/h";
+            return "";
+        }
+        function _kpFmtChanVal(chan, v) { return /rpm|speed|vss/.test((chan || "").toLowerCase()) ? String(Math.round(v)) : v.toFixed(1); }
+        function _kpChanTripped(chan) {
+            var n = kp.model.rows * kp.model.cols;
+            for (var i = 0; i < n; i++) {
+                var k = kp.keys[i]; if (!k || !k.alerts) continue;
+                for (var j = 0; j < k.alerts.length; j++) { if (k.alerts[j] && k.alerts[j].chan === chan && _kpAlertHit(k.alerts[j])) return true; }
+            }
+            return false;
+        }
+        function _kpAlertChans() {
+            var seen = { coolant_temp: 1 }, order = ["coolant_temp"], n = kp.model.rows * kp.model.cols;
+            for (var i = 0; i < n; i++) {
+                var k = kp.keys[i]; if (!k || !k.alerts) continue;
+                k.alerts.forEach(function (a) { if (a && a.chan && !seen[a.chan]) { seen[a.chan] = 1; order.push(a.chan); } });
+            }
+            return order;
+        }
+        function kpRenderChanChips() {
+            var box = document.getElementById("kpChanChips");
+            if (!box) return;
+            if (!kp.live) { box.innerHTML = ""; return; }
+            box.innerHTML = _kpAlertChans().map(function (c) {
+                var v = kpSimVal(c), hot = _kpChanTripped(c), u = _kpChanUnit(c);
+                return "<span class='kp-cchip" + (hot ? " hot" : "") + "'>" + _kpHumanChan(c) + " <b>" + _kpFmtChanVal(c, v) + "</b>" + (u ? " " + u : "") + (hot ? " &#9650;" : "") + "</span>";
+            }).join("");
+        }
+        /* The colour id a key's ring is currently showing (alert override →
+           cycle position → resting), so the RX LED-drive frame matches the pixels. */
+        function _kpLitColorId(i) {
+            var k = kp.keys[i];
+            if (kp.live) {
+                var a = kpActiveAlert(i); if (a) return a.color;
+                if (k.mode === "state3") { var p = _kpCurPos(k, i); return (p && p.color) || k.color; }
+            }
+            return k.color;
+        }
+        /* RX · LED drive: the 0x200+node R/G/B bitmap frame a host (the RDM-7
+           dash) sends to set the ring colours — evidence for "RDM sets the light
+           in the button". CANopen only; J1939 LED drive is proprietary. */
+        function kpRenderRxLine() {
+            var el = document.getElementById("kpRxLine");
+            if (!el) return;
+            if (!kp.live || kpIsJ()) { el.innerHTML = ""; return; }
+            var n = Math.min(kp.model.rows * kp.model.cols, 8), R = 0, G = 0, B = 0, any = false;
+            for (var i = 0; i < n; i++) {
+                if (!ledActive(i)) continue;
+                var rgb = kpCol(_kpLitColorId(i)).rgb;
+                if (rgb[0]) R |= (1 << i); if (rgb[1]) G |= (1 << i); if (rgb[2]) B |= (1 << i);
+                any = true;
+            }
+            var bytes = [R, G, B, 0, 0, 0, 0, 0], ids = kpIds();
+            el.innerHTML = "<span class='rx'>RX</span> " + kpHex(ids.ledOn) + " [ " +
+                bytes.map(function (b) { return "<i" + (b ? " class='on'" : "") + ">" + kpHex2(b) + "</i>"; }).join(" ") +
+                " ] <span class='idle'>LED drive &#8592; dash</span>";
         }
         /* A 3-position (cycle) key carries its own list of positions, each with
            a name + LED colour + behaviour. Seed a sensible default (off / on /
@@ -2103,6 +2202,8 @@
                 });
             });
             kpUpdateBusLine();
+            kpRenderRxLine();
+            kpRenderChanChips();
         }
 
         /* live "what's on the bus" — the real key frame assembled from every key
@@ -2111,23 +2212,34 @@
             var el = document.getElementById("kpBusLine");
             if (!el) return;
             if (!kp.live) { el.innerHTML = ""; return; }
-            var n = kp.model.rows * kp.model.cols, kb = [0, 0, 0, 0, 0, 0, 0, 0], any = false, i;
-            for (i = 0; i < n; i++) if (kp.keyOn[i]) { kb[Math.floor(i / 8)] |= (1 << (i % 8)); any = true; }
-            var ids = kpIds();
+            var n = kp.model.rows * kp.model.cols, kb = [0, 0, 0, 0, 0, 0, 0, 0], any = false, i, held = [];
+            for (i = 0; i < n; i++) if (kp.keyOn[i]) { kb[Math.floor(i / 8)] |= (1 << (i % 8)); any = true; held.push(i); }
+            var ids = kpIds(), auto = kp.periodMs > 0;
+            /* plain-English cause→effect for the held keys */
+            function causeText() {
+                if (!held.length) return "";
+                return " <span class='cause'>" + held.map(function (i) {
+                    var k = kp.keys[i], nm = (k && k.label) || ("KEY " + (i + 1)), by = Math.floor(i / 8), bt = i % 8;
+                    return _kpEsc(nm) + " &#8594; byte" + by + " bit" + bt + " (0x" + kpHex2(1 << bt) + ")";
+                }).join(", ") + "</span>";
+            }
             if (kpIsJ()) {
                 /* J1939 is event-driven per key: one key-contact frame carries the
                    key NUMBER (byte3) + state (byte4). Same frame the ECU card and
                    the DBC describe. Show the last key touched. */
                 var lastKey = kp._lastKey || 0;                              /* 1-based */
-                var held = (lastKey && kp.keyOn[lastKey - 1]) ? 1 : 0;
-                var bytes = [0x04, 0x1B, 0x01, lastKey, held, kp.sa & 0xFF, 0xFF, 0xFF];
+                var jheld = (lastKey && kp.keyOn[lastKey - 1]) ? 1 : 0;
+                var bytes = [0x04, 0x1B, 0x01, lastKey, jheld, kp.sa & 0xFF, 0xFF, 0xFF];
                 el.innerHTML = "<span class='tx'>TX</span> " + kpHex8(ids.keys) + " [ " +
                     bytes.map(function (b, bi) { return "<i" + (lastKey && (bi === 3 || bi === 4) ? " class='on'" : "") + ">" + kpHex2(b) + "</i>"; }).join(" ") + " ]";
-                if (!lastKey) el.innerHTML += " <span class='idle'>idle — press a key</span>";
+                if (lastKey) el.innerHTML += " <span class='cause'>" + _kpEsc((kp.keys[lastKey - 1] && kp.keys[lastKey - 1].label) || ("KEY " + lastKey)) + " &#8594; byte3=" + lastKey + ", byte4=" + jheld + "</span>";
+                else el.innerHTML += " <span class='idle'>idle — press a key</span>";
             } else {                 /* CANopen TPDO1: byte0 = keys 1-8, byte1 = keys 9-16, byte4 = 100ms tick */
+                if (auto) kb[4] = (kp._tick || 0) & 0xFF;   /* rolling 100ms tick so the frame visibly lives */
                 el.innerHTML = "<span class='tx'>TX</span> " + kpHex(ids.keys) + " [ " +
-                    kb.map(function (b) { return "<i" + (b ? " class='on'" : "") + ">" + kpHex2(b) + "</i>"; }).join(" ") + " ]";
-                if (!any) el.innerHTML += " <span class='idle'>idle — press a key</span>";
+                    kb.map(function (b, bi) { return "<i" + (b && bi !== 4 ? " class='on'" : (bi === 4 && auto ? " class='tick'" : "")) + ">" + kpHex2(b) + "</i>"; }).join(" ") + " ]";
+                if (any) el.innerHTML += causeText();
+                else el.innerHTML += auto ? " <span class='idle'>auto every " + kp.periodMs + " ms &middot; byte4 = 100 ms tick</span>" : " <span class='idle'>idle — press a key (event-driven)</span>";
             }
         }
 
@@ -2146,38 +2258,51 @@
                        feedback — no extra keyOn flash needed, which also avoids a
                        third full-SVG rebuild per press. */
                     kp.keyPos[i] = ((kp.keyPos[i] || 0) + 1) % _kpPositions(k).length;
-                    kpFlashState(i);
                 } else if (k.mode === "momentary" || k.mode === "paired") {
                     kp.keyOn[i] = true; setTimeout(function () { kp.keyOn[i] = false; kpRenderStage(); }, 450);
                 } else {   /* toggle */
                     kp.keyOn[i] = !kp.keyOn[i];
                 }
+                kpFlashState(i);
                 kpRenderStage();
             }, 130);
         }
-        /* brief readout so you can watch a 3-position key step through its states */
+        /* Brief readout after a press, framed as the DOWNSTREAM result so the
+           stateless-keypad model stays honest: the keypad only reports the
+           press; the ECU (or dash) is what latches / counts. */
         function kpFlashState(i) {
             var el = document.getElementById("kpStateMsg");
             if (!el) return;
             var k = kp.keys[i] || {};
-            var ps = _kpPositions(k), pos = (kp.keyPos[i] || 0) % ps.length;
-            var nm = (ps[pos] && ps[pos].name) || ("position " + pos);
-            el.textContent = (k.label || "KEY " + (i + 1)) + " → " + nm + "  (" + (pos + 1) + " of " + ps.length + ")";
+            var name = k.label || ("KEY " + (i + 1)), msg;
+            if (k.mode === "state3") {
+                var ps = _kpPositions(k), pos = (kp.keyPos[i] || 0) % ps.length;
+                var nm = (ps[pos] && ps[pos].name) || ("position " + pos);
+                msg = name + " → " + nm + " (" + (pos + 1) + " of " + ps.length + ") — your ECU counts the presses";
+            } else if (k.mode === "toggle") {
+                msg = "ECU would latch: " + name + " " + (kp.keyOn[i] ? "ON" : "OFF");
+            } else if (k.mode === "paired") {
+                msg = name + " — up/down pair (shares the frame with key " + (i + 2) + ")";
+            } else {
+                msg = name + " — momentary pulse (on only while held)";
+            }
+            el.textContent = msg;
             el.classList.add("show");
             clearTimeout(kp._stateMsgT);
-            kp._stateMsgT = setTimeout(function () { el.classList.remove("show"); }, 1600);
+            kp._stateMsgT = setTimeout(function () { el.classList.remove("show"); }, 1900);
         }
         function kpSimTick() {
             kp.coolant += kp.coolantDir * (0.6 + Math.abs(Math.sin(kp.coolant)) * 0.8);
             if (kp.coolant > 103) kp.coolantDir = -1;
             if (kp.coolant < 82) kp.coolantDir = 1;
             kp.simPhase = (kp.simPhase || 0) + 1;
+            kp._tick = ((kp._tick || 0) + 7) & 0xFF;   /* ~700ms/tick → +7 100ms units, so byte4 visibly rolls */
             var hot = kp.coolant > 95;
-            var el = document.getElementById("kpCtReadout");
-            if (el) {
-                el.className = "kp-ct" + (hot ? " hot" : "");
-                el.innerHTML = 'Coolant <b>' + kp.coolant.toFixed(1) + "</b> &#176;C" + (hot ? " &#8212; HIGH" : "");
-            }
+            /* live per-channel telemetry chips (coolant + every alert channel) */
+            kpRenderChanChips();
+            /* when the keypad auto-broadcasts, keep the TX frame + tick rolling
+               even while idle so the bus reads as alive (not a dead all-zero) */
+            if (kp.periodMs > 0) { kpUpdateBusLine(); kpRenderRxLine(); }
             /* Re-render only when the set of tripped alerts changes (or the
              * coolant alarm flips) — re-drawing every tick would restart the CSS
              * blink animations mid-cycle. */
@@ -2432,7 +2557,7 @@
             kp.ecuBrand = id; kpSaveCfg();
             /* keep the rail picker + the connection recommendation + the per-key
                "What your ECU needs" block all in sync from one source of truth */
-            kpRenderEcuPicker(); kpRenderBus(); kpRenderInspector();
+            kpRenderEcuPicker(); kpRenderBus(); kpRenderInspector(); kpUpdateFlowProgress();
         };
 
         /* ── ECU setup guide modal (MaxxECU / Link / Haltech) ────────────────
@@ -2802,6 +2927,7 @@
         function kpRenderInspector() {
             var box = document.getElementById("kpInspector");
             if (!box) return;
+            kpUpdateFlowProgress();
             if (kp.live) { box.innerHTML = '<div class="kp-none">Live mode — configuration locked.<br><br>Switch to Design to edit.</div>'; return; }
             var i = kp.selected, k = kp.keys[i];
             if (i == null || !k) { box.innerHTML = '<div class="kp-none">Click a key to configure it</div>'; return; }
@@ -2828,7 +2954,7 @@
                 '<div class="kp-field"><label>How it works</label><select id="kpFMode">' +
                 opt("momentary", "Momentary — on only while held", k.mode) +
                 opt("toggle", "Latching — press on, press off", k.mode) +
-                opt("state3", "Multi-position — steps each press", k.mode) +
+                opt("state3", "Multi-position (cycle) — steps each press", k.mode) +
                 opt("paired", "Up / down — pairs with next key", k.mode) +
                 "</select></div></div>" +
                 /* Cycle positions (multi-position keys carry their own per-step
@@ -3065,6 +3191,22 @@
             el.classList.add("kp-flash");
             setTimeout(function () { el.classList.remove("kp-flash"); }, 1100);
         };
+        /* Flow-strip progress + orienting stat: tick each step as its condition is
+           met, and show how many keys are actually assigned (vs the model total). */
+        function kpUpdateFlowProgress() {
+            var steps = document.getElementById("kpSteps");
+            if (!steps) return;
+            var n = kp.model.rows * kp.model.cols, assigned = 0, i;
+            for (i = 0; i < n; i++) if (kp.keys[i] && keyAssigned(kp.keys[i])) assigned++;
+            var done = { 1: true, 2: !!(kp.ecuBrand && kp.ecuBrand !== "generic"), 3: !!_kpPresetMatch(), 4: assigned > 0, 5: !!kp._exported };
+            steps.querySelectorAll(".kp-step").forEach(function (b) {
+                var s = +b.getAttribute("data-step"), isDone = !!done[s], glyph = b.querySelector("i");
+                b.classList.toggle("done", isDone);
+                if (glyph) glyph.innerHTML = isDone ? "&#10003;" : s;
+            });
+            var stat = document.getElementById("kpAssignStat");
+            if (stat) stat.textContent = assigned + " of " + n + " keys assigned";
+        }
 
         function kpUpdateChip() {
             var chip = document.getElementById("kpChipModel");
@@ -3074,6 +3216,32 @@
         function _kpPresetMatch() {
             for (var i = 0; i < KP_PRESETS.length; i++) { var p = KP_PRESETS[i]; if (p.proto === kp.proto && p.baud === kp.baud && (kpIsJ() || p.node === kp.node)) return p; }
             return null;
+        }
+        /* Compact keys-frame map (SavvyCAN-style bit allocation): each key sets
+           one bit of the CANopen keys frame — byte0 = K1-8, byte1 = K9-16.
+           Unassigned cells greyed, paired keys flagged, click jumps to the key. */
+        window.kpKeysMapPick = function (i) { kp.selected = i; kpRenderStage(); kpRenderInspector(); kpFlowJump("keys"); };
+        function _kpKeysMapHtml() {
+            var n = kp.model.rows * kp.model.cols;
+            if (kpIsJ()) {
+                return "<details class='kp-bus-filefold kp-km'><summary>Keys frame map</summary>" +
+                    "<div class='kp-bus-note'>J1939 sends the pressed <b>key number in byte&nbsp;3</b> (byte&nbsp;4 = 01/00), not a per-key bitmap. Switch to CANopen for the byte/bit map.</div></details>";
+            }
+            var bytes = n > 8 ? 2 : 1, out = "";
+            for (var by = 0; by < bytes; by++) {
+                var cells = "";
+                for (var bit = 0; bit < 8; bit++) {
+                    var idx = by * 8 + bit;
+                    if (idx >= n) { cells += "<span class='kp-km-cell empty'></span>"; continue; }
+                    var k = kp.keys[idx], assigned = k && keyAssigned(k), paired = k && k.mode === "paired";
+                    var lbl = assigned ? _kpEsc(k.label || ("K" + (idx + 1))) : "&#183;";
+                    cells += "<button class='kp-km-cell" + (assigned ? "" : " un") + (paired ? " pair" : "") + (idx === kp.selected ? " sel" : "") + "' onclick='kpKeysMapPick(" + idx + ")' title='key " + (idx + 1) + (assigned ? " — " + _kpEsc(k.label || "") : " — unassigned") + "'>" +
+                        "<span class='b'>bit" + bit + "</span><span class='l'>" + lbl + "</span></button>";
+                }
+                out += "<div class='kp-km-row'><span class='kp-km-byte'>byte" + by + "</span><div class='kp-km-cells'>" + cells + "</div></div>";
+            }
+            return "<details class='kp-bus-filefold kp-km'><summary>Keys frame map (byte &middot; bit &#8594; key)</summary>" + out +
+                "<div class='kp-bus-note'>Each key sets one bit of the keys frame " + kpHex(kpIds().keys) + ". Paired ▲▼ keys share the frame. Click a cell to jump to that key.</div></details>";
         }
         function kpRenderBus() {
             var box = document.getElementById("kpBusBox");
@@ -3142,6 +3310,14 @@
                     opt("0", "On press only", String(kp.periodMs)) + opt("50", "Every 50ms", String(kp.periodMs)) + opt("100", "Every 100ms", String(kp.periodMs)) + opt("500", "Every 500ms", String(kp.periodMs)) + "</select></div>";
                 h += "<div class='lt-expbtns' style='margin-top:6px'><button class='ws-btn-line' onclick='kpCopyProvision()'>Copy setup frames</button><button class='ws-btn-line' onclick='kpExportProvisionCsv()'>SavvyCAN CSV</button><button class='ws-btn-line' onclick='kpExportDbc()'>Export .dbc</button></div>" +
                     "<div class='kp-bus-note'>The SavvyCAN CSV loads straight into Send Frames. The DBC names every button + LED for MoTeC / Haltech / Link / SavvyCAN.</div>";
+                /* bus-load estimate from broadcast rate + baud */
+                if (kp.periodMs > 0) {
+                    var rate = Math.round(1000 / kp.periodMs), loadPct = rate * 110 / (kp.baud * 1000) * 100;
+                    h += "<div class='kp-bus-note'>Bus load: &#8776; " + rate + " frames/s &middot; " + (loadPct < 1 ? "<1" : Math.round(loadPct)) + "% of the " + kp.baud + "k bus.</div>";
+                } else {
+                    h += "<div class='kp-bus-note'>Bus load: event-driven — the keypad only sends on a press (&#8776; 0% when idle).</div>";
+                }
+                h += _kpKeysMapHtml();
                 h += "</div>";
             }
             box.innerHTML = h;
@@ -3156,7 +3332,7 @@
             if (g("kpFPeriod")) g("kpFPeriod").addEventListener("change", function (e) { kp.periodMs = +e.target.value; kpBusChanged(); });
         }
         window.kpToggleAdv = function () { kp._busAdv = !kp._busAdv; kpRenderBus(); };
-        function kpBusChanged() { kpSaveCfg(); kpRenderBus(); kpUpdateChip(); kpRenderInspector(); kpRenderStage(); }
+        function kpBusChanged() { kpSaveCfg(); kpRenderBus(); kpUpdateChip(); kpRenderInspector(); kpRenderStage(); kpUpdateFlowProgress(); }
         window.kpSetProto = function (p) {
             kp.proto = p;
             if (p === "j1939" && [500, 250].indexOf(kp.baud) < 0) kp.baud = 250;
@@ -3185,7 +3361,7 @@
             var ws = document.getElementById("kpWorkspace");
             if (ws) ws.style.display = "flex";
             kpRenderEcuPicker(); kpRenderBus(); kpUpdateChip(); kpRenderLighting();
-            kpRenderStage(); kpRenderInspector();
+            kpRenderStage(); kpRenderInspector(); kpUpdateFlowProgress();
         };
         window._kpClose = function () {
             if (kpSimTimer) { clearInterval(kpSimTimer); kpSimTimer = null; kp.live = false; }
