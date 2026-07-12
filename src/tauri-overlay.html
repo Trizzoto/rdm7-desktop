@@ -662,16 +662,29 @@
         }
         .kp-note b { color: var(--text); }
         .kp-none { color: var(--text-muted); font-size: 11px; padding: 28px 8px; text-align: center; }
-        /* 3-position cycle editor: one card per position */
+        /* 3-position cycle editor: one card per position, dropdown controls */
         .kp-pos { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px; margin-bottom: 7px; }
-        .kp-pos-h { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+        .kp-pos-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
         .kp-pos-n { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
         .kp-pos-name { flex: 1; box-sizing: border-box; background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 4px 7px; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; }
         .kp-pos-name:focus { outline: none; border-color: var(--accent); }
-        .kp-pos-sw { margin-bottom: 7px; }
-        .kp-psw { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border); cursor: pointer; padding: 0; box-shadow: var(--shadow-inset); }
-        .kp-psw.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent); }
-        .kp-psw:disabled { opacity: 0.28; cursor: not-allowed; }
+        .kp-pos-dot { flex: 0 0 auto; width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--border-light); box-shadow: var(--shadow-inset); }
+        .kp-pos-row { display: flex; gap: 8px; }
+        .kp-pos-col { flex: 1; min-width: 0; }
+        .kp-pos-col label { display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 3px; }
+        .kp-pos-col select { width: 100%; box-sizing: border-box; background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 4px 6px; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+        .kp-pos-col select:focus { outline: none; border-color: var(--accent); }
+        .kp-pos-col select:disabled { opacity: 0.4; }
+        /* ECU setup recipe */
+        .kp-ecu { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 9px 10px; margin-top: 9px; }
+        .kp-ecu-spec { font-size: 11px; color: var(--text); font-family: 'JetBrains Mono', monospace; line-height: 1.5; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px dashed var(--border); }
+        .kp-ecu-recipe { font-size: 11px; color: var(--text-muted); line-height: 1.55; }
+        .kp-ecu-recipe b { color: var(--text); }
+        .kp-ecutab { width: 100%; border-collapse: collapse; margin: 8px 0; font-family: 'JetBrains Mono', monospace; }
+        .kp-ecutab th, .kp-ecutab td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); font-size: 10.5px; }
+        .kp-ecutab th { color: var(--text-muted); font-weight: 600; }
+        .kp-ecu-copy { margin-top: 9px; width: 100%; background: var(--panel-elevated); border: 1px solid var(--border-light); color: var(--text); border-radius: var(--radius-md); padding: 7px 0; font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer; }
+        .kp-ecu-copy:hover { border-color: var(--accent); }
         /* connection (rail) + what-fires (inspector) + live bus trace */
         .kp-bus-card { display: block; width: 100%; box-sizing: border-box; text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 7px 9px; margin-bottom: 5px; cursor: pointer; box-shadow: var(--shadow-sm); }
         .kp-bus-card:hover { border-color: var(--border-light); }
@@ -1513,7 +1526,7 @@
             { label: "NIGHT", text: false, icon: "moon", mode: "toggle", preset: "Dash: night mode", follows: "self", color: "yellow", behavior: "solid" },
             { label: "LIGHTS", text: false, icon: "light", mode: "toggle", preset: "Headlights", follows: "self", color: "white", behavior: "solid" },
             { label: "ALS", text: true, icon: "blank", mode: "toggle", preset: "Anti-lag", follows: "self", color: "red", behavior: "slow" },
-            { label: "WIPER", text: true, icon: "blank", mode: "state3", preset: "Wiper sequence", follows: "self", color: "cyan", behavior: "solid", positions: [{ name: "OFF", color: "cyan", behavior: "off" }, { name: "INT", color: "cyan", behavior: "slow" }, { name: "LOW", color: "cyan", behavior: "solid" }, { name: "HIGH", color: "blue", behavior: "solid" }] },
+            { label: "WIPER", text: true, icon: "blank", mode: "state3", preset: "Wiper sequence", follows: "self", color: "cyan", behavior: "solid", positions: [{ name: "OFF", color: "off", behavior: "solid" }, { name: "INT", color: "cyan", behavior: "slow" }, { name: "LOW", color: "cyan", behavior: "solid" }, { name: "HIGH", color: "blue", behavior: "solid" }] },
             { label: "PAGE", text: false, icon: "page", mode: "momentary", preset: "Dash: next page", follows: "self", color: "cyan", behavior: "solid" },
             { label: "LOG", text: true, icon: "blank", mode: "momentary", preset: "Log marker", follows: "self", color: "green", behavior: "solid" },
             { label: "", text: true, icon: "blank", mode: "momentary", preset: "— unassigned —", follows: "self", color: "red", behavior: "solid" },
@@ -1795,7 +1808,7 @@
         function _kpPositions(k) {
             if (!k.positions || !k.positions.length) {
                 k.positions = [
-                    { name: "OFF", color: k.color, behavior: "off" },
+                    { name: "OFF", color: "off", behavior: "solid" },
                     { name: "ON", color: k.color, behavior: "solid" },
                     { name: "HIGH", color: k.color, behavior: "slow" }
                 ];
@@ -1810,7 +1823,7 @@
                 /* a tripped alert lights the key regardless of press; otherwise
                  * the LED shows the button's own state. */
                 if (kpActiveAlert(i)) return true;
-                if (k.mode === "state3") { var p = _kpCurPos(k, i); return !!p && p.behavior !== "off"; }
+                if (k.mode === "state3") { var p = _kpCurPos(k, i); return !!p && p.color !== "off" && p.behavior !== "off"; }
                 return !!kp.keyOn[i];
             }
             return true;
@@ -1819,7 +1832,7 @@
             var k = kp.keys[i];
             if (kp.live) {
                 var a = kpActiveAlert(i); if (a) return HEX[a.color] || HEX.red;
-                if (k.mode === "state3") { var p = _kpCurPos(k, i); return HEX[(p && p.color) || k.color]; }
+                if (k.mode === "state3") { var p = _kpCurPos(k, i); return HEX[(p && p.color)] || HEX[k.color] || HEX.red; }
             }
             return HEX[k.color];
         }
@@ -2097,31 +2110,111 @@
 
         /* Per-position editor for a 3-position (cycle) key: one card per
            position with a name, LED colour and blink. Shown only in state3. */
+        var _KP_RING_COLORS = LED_COLORS.filter(function (c) { return !(KP_COL[c.id] && KP_COL[c.id].bl); });
+        function _kpColorOpts(sel) {
+            var o = '<option value="off"' + (sel === "off" ? " selected" : "") + '>Off (dark)</option>';
+            return o + _KP_RING_COLORS.map(function (c) {
+                var nm = c.id.charAt(0).toUpperCase() + c.id.slice(1);
+                return '<option value="' + c.id + '"' + (sel === c.id ? " selected" : "") + ">" + nm + "</option>";
+            }).join("");
+        }
+        function _kpBehOpts(sel) {
+            return [["solid", "Solid"], ["slow", "Slow blink"], ["fast", "Fast blink"]].map(function (b) {
+                return '<option value="' + b[0] + '"' + (sel === b[0] ? " selected" : "") + ">" + b[1] + "</option>";
+            }).join("");
+        }
         function _kpPositionsHtml(k) {
             var ps = _kpPositions(k);
-            var behs = [["off", "Off"], ["solid", "Solid"], ["slow", "Slow blink"], ["fast", "Fast blink"]];
             var rows = ps.map(function (p, pi) {
-                var sw = LED_COLORS.map(function (c) {
-                    if (KP_COL[c.id] && KP_COL[c.id].bl) return "";   /* backlight-only colours can't show on the ring */
-                    return '<button class="kp-psw' + (p.color === c.id ? " on" : "") + '" data-pi="' + pi + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '"' + (p.behavior === "off" ? " disabled" : "") + "></button>";
-                }).join("");
-                var seg = behs.map(function (b) {
-                    return '<button data-pi="' + pi + '" data-b="' + b[0] + '"' + (p.behavior === b[0] ? ' class="on"' : "") + ">" + b[1] + "</button>";
-                }).join("");
+                var dark = (p.color === "off" || p.behavior === "off");
+                var dot = dark ? "#3A4046" : (HEX[p.color] || "#3A4046");
                 return '<div class="kp-pos">' +
                     '<div class="kp-pos-h"><span class="kp-pos-n">' + pi + '</span>' +
-                    '<input class="kp-pos-name" data-pi="' + pi + '" type="text" maxlength="8" value="' + (p.name || "") + '" placeholder="name (e.g. LOW)"></div>' +
-                    '<div class="kp-pos-sw kp-swatches">' + sw + "</div>" +
-                    '<div class="kp-seg kp-pos-beh">' + seg + "</div>" +
-                    "</div>";
+                    '<input class="kp-pos-name" data-pi="' + pi + '" type="text" maxlength="8" value="' + (p.name || "") + '" placeholder="name (e.g. LOW)">' +
+                    '<span class="kp-pos-dot" style="background:' + dot + '"></span></div>' +
+                    '<div class="kp-pos-row">' +
+                    '<div class="kp-pos-col"><label>Ring colour</label><select class="kp-pos-color" data-pi="' + pi + '">' + _kpColorOpts(dark ? "off" : p.color) + "</select></div>" +
+                    '<div class="kp-pos-col"><label>Blink</label><select class="kp-pos-beh" data-pi="' + pi + '"' + (dark ? " disabled" : "") + ">" + _kpBehOpts(p.behavior === "off" ? "solid" : p.behavior) + "</select></div>" +
+                    "</div></div>";
             }).join("");
             return '<div class="kp-grp"><div class="kp-gt">Cycle positions</div>' +
-                '<div class="kp-field"><label>How many positions</label><div class="kp-seg" id="kpPosCount">' +
-                [2, 3, 4, 5, 6].map(function (n) { return '<button data-n="' + n + '"' + (ps.length === n ? ' class="on"' : "") + ">" + n + "</button>"; }).join("") +
-                "</div></div>" + rows +
-                '<div class="kp-note">Each press steps to the next position; the ring shows that position&#8217;s colour &amp; blink (set position 0 to <b>Off</b> for a dark &#8220;idle&#8221;). The button still pulses its CAN bit every press &#8212; your ECU counts presses to know the position. Switch to <b>Live (sim)</b> and tap the key to cycle through them.</div>' +
+                '<div class="kp-field"><label>How many positions</label><select id="kpPosCount">' +
+                [2, 3, 4, 5, 6].map(function (n) { return '<option value="' + n + '"' + (ps.length === n ? " selected" : "") + ">" + n + " positions</option>"; }).join("") +
+                "</select></div>" + rows +
+                '<div class="kp-note">Each press steps to the next position; the ring shows that position&#8217;s colour &amp; blink (pick <b>Off</b> for a dark idle). See <b>What your ECU needs</b> below for exactly how to read this switch, then switch to <b>Live (sim)</b> and tap the key to cycle.</div>' +
                 "</div>";
         }
+        /* The fool-proof ECU recipe. The PKP keypad is a live button reporter —
+           byte0 of the keys frame is just "which keys are pressed right now"; it
+           has NO internal toggle or position memory. So this spells out the exact
+           frame + how the reader (ECU or gateway) must derive toggle / position. */
+        function _kpEcuSetupHtml(k, i) {
+            var fids = kpIds(), keyNo = i + 1, frameHtml, spec, truth, recipe;
+            if (kpIsJ()) {
+                var jb = [0x04, 0x1B, 0x01, keyNo, 0x01, kp.sa & 0xFF, 0xFF, 0xFF];
+                frameHtml = kpHex8(fids.keys) + " [ " + jb.map(function (b, bi) { return "<i" + (bi === 3 || bi === 4 ? " class='on'" : "") + ">" + kpHex2(b) + "</i>"; }).join(" ") + " ]";
+                spec = "J1939 &middot; " + kp.baud + "k &middot; ID <b>" + kpHex8(fids.keys) + "</b> (29-bit) &middot; key-contact frame: <b>byte&nbsp;3 = " + keyNo + "</b>, <b>byte&nbsp;4 = 01</b> when pressed.";
+                truth = "The keypad sends this frame on every press and release (byte&nbsp;4 = 01 held, 00 released). It stores no toggle or position state.";
+            } else {
+                var byteIdx = Math.floor(i / 8), bit = i % 8, val = 1 << bit, cells = "";
+                for (var bi = 0; bi < 8; bi++) { var bv = bi === byteIdx ? val : 0; cells += "<i" + (bi === byteIdx ? " class='on'" : "") + ">" + kpHex2(bv) + "</i>"; }
+                frameHtml = kpHex(fids.keys) + " [ " + cells + " ]";
+                spec = "CANopen &middot; " + kp.baud + "k &middot; ID <b>" + kpHex(fids.keys) + "</b> (11-bit) &middot; <b>byte " + byteIdx + ", bit " + bit + "</b> (mask <b>0x" + kpHex2(val) + "</b>) = 1 while pressed.";
+                truth = "Byte 0 of " + kpHex(fids.keys) + " is a live bitmap of the keys pressed right now (byte 4 = a 100&nbsp;ms tick). The keypad stores no toggle or position state.";
+            }
+            if (k.mode === "momentary") {
+                recipe = "Add a CAN <b>digital input</b> on that ID + bit: 1 = pressed, 0 = released. That&#8217;s it.";
+            } else if (k.mode === "toggle") {
+                recipe = "The keypad only pulses the bit &mdash; it does <b>not</b> latch. Set this input to <b>Toggle / Latching</b> in your ECU (flips each press), or use its CAN-keypad &#8220;latching button&#8221; mode. Don&#8217;t read the raw bit as on/off.";
+            } else if (k.mode === "state3") {
+                var ps = _kpPositions(k);
+                var list = ps.map(function (p, pi) {
+                    var look = (p.color === "off" || p.behavior === "off") ? "dark" : (p.color + " &middot; " + (p.behavior === "slow" ? "slow blink" : p.behavior === "fast" ? "fast blink" : "solid"));
+                    return "<tr><td>" + pi + "</td><td>" + (p.name || ("pos " + pi)) + "</td><td>" + look + "</td></tr>";
+                }).join("");
+                recipe = "The position is the <b>press count, wrapping every " + ps.length + "</b>. Two fool-proof ways:<br><br>" +
+                    "<b>1 &middot; ECU keypad mode (easiest)</b> &mdash; Haltech, MoTeC &amp; Link CAN-keypad inputs have a built-in multi-position button. Point it at this ID, <b>key " + keyNo + "</b>, and set <b>" + ps.length + " positions</b> &mdash; it counts for you.<br><br>" +
+                    "<b>2 &middot; Manual counter</b> &mdash; if your ECU only exposes raw bits, add a counter/table that steps on each <b>rising edge</b> of the bit above and wraps after " + ps.length + ":" +
+                    "<table class='kp-ecutab'><tr><th>#</th><th>Name</th><th>Ring shows</th></tr>" + list + "</table>" +
+                    "Map each state number to your output (e.g. wiper off / int / low / high).";
+            } else {
+                recipe = "Paired &#9650;&#9660; &mdash; this key shares the frame with key " + (keyNo + 1) + "; read both bits as up / down.";
+            }
+            return "<div class='kp-grp'><div class='kp-gt'>What your ECU needs</div>" +
+                "<div class='kp-fire'><span class='lbl'>Sends &#8594;</span><span class='frame'>" + frameHtml + "</span></div>" +
+                "<div class='kp-note' style='border-left-color:#E0A24E;'><b>How the keypad behaves:</b> " + truth + "</div>" +
+                "<div class='kp-ecu'><div class='kp-ecu-spec'>" + spec + "</div><div class='kp-ecu-recipe'>" + recipe + "</div></div>" +
+                "<button class='kp-ecu-copy' onclick='kpCopyEcuSetup()'>&#128203; Copy ECU setup</button>" +
+                "<div class='kp-note' style='margin-top:8px;'>Switch to <b>Live (sim)</b> and press keys to watch the frame build on the bus.</div></div>";
+        }
+        window.kpCopyEcuSetup = function () {
+            var i = kp.selected, k = kp.keys[i]; if (!k) return;
+            var fids = kpIds(), keyNo = i + 1, L = [];
+            L.push("RDM Keypad — ECU setup for key " + keyNo + " (" + (k.label || "unassigned") + ")");
+            L.push("Keypad: " + kp.model.name + "-SI, " + (kpIsJ() ? "J1939" : "CANopen") + " @ " + kp.baud + "k" + (kpIsJ() ? "" : ", node " + kpHex(kp.node)));
+            if (kpIsJ()) {
+                L.push("Frame: " + kpHex8(fids.keys) + " (29-bit) — byte 3 = key " + keyNo + ", byte 4 = 01 pressed / 00 released");
+            } else {
+                var byteIdx = Math.floor(i / 8), bit = i % 8, val = 1 << bit;
+                L.push("Frame ID: " + kpHex(fids.keys) + " (11-bit) — byte " + byteIdx + ", bit " + bit + " (mask 0x" + kpHex2(val) + ") = 1 while pressed");
+            }
+            L.push("Mode: " + k.mode);
+            if (k.mode === "state3") {
+                var ps = _kpPositions(k);
+                L.push("The keypad only sends momentary presses — it stores NO position. Derive position = press count mod " + ps.length + " (advance on each rising edge, wrap after " + ps.length + "):");
+                ps.forEach(function (p, pi) { L.push("  " + pi + " = " + (p.name || ("pos " + pi))); });
+                L.push("Easiest: use your ECU's CAN-keypad input, key " + keyNo + ", set to " + ps.length + " positions.");
+            } else if (k.mode === "toggle") {
+                L.push("The keypad only pulses the bit — configure the ECU input as Toggle / Latching (flips each press).");
+            } else if (k.mode === "momentary") {
+                L.push("Read the bit directly: 1 = pressed, 0 = released.");
+            } else {
+                L.push("Paired up/down — read this bit and key " + (keyNo + 1) + "'s bit together.");
+            }
+            var txt = L.join("\n");
+            try { if (navigator.clipboard) navigator.clipboard.writeText(txt); } catch (e) { }
+            if (typeof showToast === "function") showToast("ECU setup copied to clipboard", "success");
+        };
         function kpRenderInspector() {
             var box = document.getElementById("kpInspector");
             if (!box) return;
@@ -2180,25 +2273,8 @@
                 '<button data-n="0"' + (!kp.night ? ' class="on"' : "") + ">Day</button>" +
                 '<button data-n="1"' + (kp.night ? ' class="on"' : "") + ">Night</button>" +
                 "</div></div></div>";
-            /* what-fires — the exact CAN frame that transmits when this key is pressed */
-            var modeNote = k.mode === "momentary" ? "Momentary — high only while held." :
-                k.mode === "toggle" ? "Toggle — the bit latches on / off each press." :
-                k.mode === "state3" ? ("Cycle — each press steps through " + _kpPositions(k).length + " positions; the ring shows the current one and the ECU counts presses.") : "Paired ▲▼ — shares the frame with the next key.";
-            var fids = kpIds(), fireHtml, fireNote;
-            if (kpIsJ()) {
-                var jb = [0x04, 0x1B, 0x01, i + 1, 0x01, kp.sa & 0xFF, 0xFF, 0xFF];
-                fireHtml = kpHex8(fids.keys) + " [ " + jb.map(function (b, bi) { return "<i" + (bi === 3 || bi === 4 ? " class='on'" : "") + ">" + kpHex2(b) + "</i>"; }).join(" ") + " ]";
-                fireNote = "J1939 key-contact frame — byte3 = key " + (i + 1) + ", byte4 = 01 (pressed). Event-driven on every press &amp; release.";
-            } else {
-                var byteIdx = Math.floor(i / 8), bit = i % 8, val = 1 << bit, cells = "";
-                for (var bi = 0; bi < 8; bi++) { var bv = bi === byteIdx ? val : 0; cells += "<i" + (bi === byteIdx ? " class='on'" : "") + ">" + kpHex2(bv) + "</i>"; }
-                fireHtml = kpHex(fids.keys) + " [ " + cells + " ]";
-                fireNote = "Byte " + byteIdx + ", bit " + bit + ". " + modeNote + " The ECU reads this bit of " + kpHex(fids.keys) + " (byte4 = a 100 ms tick counter).";
-            }
-            html += "<div class='kp-grp'><div class='kp-gt'>On the bus — what fires</div>" +
-                "<div class='kp-fire'><span class='lbl'>Press &#8594;</span><span class='frame'>" + fireHtml + "</span></div>" +
-                "<div class='kp-note'>" + fireNote + "</div>" +
-                "<div class='kp-note' style='margin-top:6px;'>Switch to <b>Live (sim)</b> and press keys to watch the whole frame build on the bus.</div></div>";
+            /* What your ECU needs — the exact frame + how to read this key */
+            html += _kpEcuSetupHtml(k, i);
             if (k.follows !== "self") {
                 html += '<div class="kp-note">LED bound to <b>' + k.follows + "</b> — it shows the car’s real state, not just the button (switch to Live to watch it react).</div>";
             }
@@ -2228,30 +2304,24 @@
             g("kpFDayNight").querySelectorAll("button").forEach(function (b) {
                 b.addEventListener("click", function () { kp.night = b.getAttribute("data-n") === "1"; kpRenderInspector(); kpRenderStage(); });
             });
-            /* 3-position cycle editor bindings */
+            /* 3-position cycle editor bindings (dropdowns) */
             if (k.mode === "state3") {
                 var ps = _kpPositions(k);
-                box.querySelectorAll("#kpPosCount button").forEach(function (b) {
-                    b.addEventListener("click", function () {
-                        var n = +b.getAttribute("data-n");
-                        while (ps.length < n) ps.push({ name: "POS " + ps.length, color: k.color, behavior: "solid" });
-                        ps.length = n;
-                        kpSaveCfg(); kpRenderInspector(); kpRenderStage();
-                    });
+                var cnt = g("kpPosCount");
+                if (cnt) cnt.addEventListener("change", function () {
+                    var n = +cnt.value;
+                    while (ps.length < n) ps.push({ name: "POS " + ps.length, color: k.color, behavior: "solid" });
+                    ps.length = n;
+                    kpSaveCfg(); kpRenderInspector(); kpRenderStage();
                 });
                 box.querySelectorAll(".kp-pos-name").forEach(function (inp) {
                     inp.addEventListener("input", function () { ps[+inp.getAttribute("data-pi")].name = inp.value.toUpperCase(); kpSaveCfg(); kpRenderStage(); });
                 });
-                box.querySelectorAll(".kp-psw").forEach(function (b) {
-                    b.addEventListener("click", function () {
-                        var p = ps[+b.getAttribute("data-pi")]; if (!p || p.behavior === "off") return;
-                        p.color = b.getAttribute("data-c"); kpSaveCfg(); kpRenderInspector(); kpRenderStage();
-                    });
+                box.querySelectorAll(".kp-pos-color").forEach(function (sel) {
+                    sel.addEventListener("change", function () { ps[+sel.getAttribute("data-pi")].color = sel.value; kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
                 });
-                box.querySelectorAll(".kp-pos-beh button").forEach(function (b) {
-                    b.addEventListener("click", function () {
-                        ps[+b.getAttribute("data-pi")].behavior = b.getAttribute("data-b"); kpSaveCfg(); kpRenderInspector(); kpRenderStage();
-                    });
+                box.querySelectorAll(".kp-pos-beh").forEach(function (sel) {
+                    sel.addEventListener("change", function () { ps[+sel.getAttribute("data-pi")].behavior = sel.value; kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
                 });
             }
         }
