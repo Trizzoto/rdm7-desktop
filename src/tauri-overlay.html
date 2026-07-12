@@ -662,6 +662,16 @@
         }
         .kp-note b { color: var(--text); }
         .kp-none { color: var(--text-muted); font-size: 11px; padding: 28px 8px; text-align: center; }
+        /* 3-position cycle editor: one card per position */
+        .kp-pos { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px; margin-bottom: 7px; }
+        .kp-pos-h { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+        .kp-pos-n { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+        .kp-pos-name { flex: 1; box-sizing: border-box; background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 4px 7px; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; }
+        .kp-pos-name:focus { outline: none; border-color: var(--accent); }
+        .kp-pos-sw { margin-bottom: 7px; }
+        .kp-psw { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border); cursor: pointer; padding: 0; box-shadow: var(--shadow-inset); }
+        .kp-psw.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent); }
+        .kp-psw:disabled { opacity: 0.28; cursor: not-allowed; }
         /* connection (rail) + what-fires (inspector) + live bus trace */
         .kp-bus-card { display: block; width: 100%; box-sizing: border-box; text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 7px 9px; margin-bottom: 5px; cursor: pointer; box-shadow: var(--shadow-sm); }
         .kp-bus-card:hover { border-color: var(--border-light); }
@@ -1503,7 +1513,7 @@
             { label: "NIGHT", text: false, icon: "moon", mode: "toggle", preset: "Dash: night mode", follows: "self", color: "yellow", behavior: "solid" },
             { label: "LIGHTS", text: false, icon: "light", mode: "toggle", preset: "Headlights", follows: "self", color: "white", behavior: "solid" },
             { label: "ALS", text: true, icon: "blank", mode: "toggle", preset: "Anti-lag", follows: "self", color: "red", behavior: "slow" },
-            { label: "WIPER", text: true, icon: "blank", mode: "state3", preset: "Wiper sequence", follows: "self", color: "cyan", behavior: "solid" },
+            { label: "WIPER", text: true, icon: "blank", mode: "state3", preset: "Wiper sequence", follows: "self", color: "cyan", behavior: "solid", positions: [{ name: "OFF", color: "cyan", behavior: "off" }, { name: "INT", color: "cyan", behavior: "slow" }, { name: "LOW", color: "cyan", behavior: "solid" }, { name: "HIGH", color: "blue", behavior: "solid" }] },
             { label: "PAGE", text: false, icon: "page", mode: "momentary", preset: "Dash: next page", follows: "self", color: "cyan", behavior: "solid" },
             { label: "LOG", text: true, icon: "blank", mode: "momentary", preset: "Log marker", follows: "self", color: "green", behavior: "solid" },
             { label: "", text: true, icon: "blank", mode: "momentary", preset: "— unassigned —", follows: "self", color: "red", behavior: "solid" },
@@ -1779,6 +1789,20 @@
             }
             return null;
         }
+        /* A 3-position (cycle) key carries its own list of positions, each with
+           a name + LED colour + behaviour. Seed a sensible default (off / on /
+           high) from the key's base colour the first time it's needed. */
+        function _kpPositions(k) {
+            if (!k.positions || !k.positions.length) {
+                k.positions = [
+                    { name: "OFF", color: k.color, behavior: "off" },
+                    { name: "ON", color: k.color, behavior: "solid" },
+                    { name: "HIGH", color: k.color, behavior: "slow" }
+                ];
+            }
+            return k.positions;
+        }
+        function _kpCurPos(k, i) { var ps = _kpPositions(k); return ps[(kp.keyPos[i] || 0) % ps.length]; }
         function ledActive(i) {
             var k = kp.keys[i];
             if (!keyAssigned(k)) return false;
@@ -1786,22 +1810,25 @@
                 /* a tripped alert lights the key regardless of press; otherwise
                  * the LED shows the button's own state. */
                 if (kpActiveAlert(i)) return true;
-                if (k.mode === "state3") return (kp.keyPos[i] || 0) > 0;   /* off / on / on */
+                if (k.mode === "state3") { var p = _kpCurPos(k, i); return !!p && p.behavior !== "off"; }
                 return !!kp.keyOn[i];
             }
             return true;
         }
         function ledColor(i) {
             var k = kp.keys[i];
-            if (kp.live) { var a = kpActiveAlert(i); if (a) return HEX[a.color] || HEX.red; }
+            if (kp.live) {
+                var a = kpActiveAlert(i); if (a) return HEX[a.color] || HEX.red;
+                if (k.mode === "state3") { var p = _kpCurPos(k, i); return HEX[(p && p.color) || k.color]; }
+            }
             return HEX[k.color];
         }
         function ledBehavior(i) {
             var k = kp.keys[i];
             if (kp.live) {
                 var a = kpActiveAlert(i); if (a) return a.behavior || "fast";
-                /* 3-position: pos 1 solid, pos 2 blinks — reads as three states */
-                if (k.mode === "state3") return (kp.keyPos[i] || 0) >= 2 ? "slow" : "solid";
+                /* each cycle position drives its own colour + blink */
+                if (k.mode === "state3") { var p = _kpCurPos(k, i); return (p && p.behavior !== "off") ? p.behavior : "solid"; }
             }
             return k.behavior;
         }
@@ -1895,10 +1922,11 @@
                         s += '<text x="' + cx + '" y="' + (cy + 5.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" fill="rgba(0,0,0,0.6)">' + k.label + "</text>";
                         s += '<text x="' + cx + '" y="' + (cy + 4.5 + dy) + '" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1" opacity="' + insOp.toFixed(2) + '" fill="' + insCol + '">' + k.label + "</text>";
                     }
-                    /* 3-position keys: a little 0/1/2 level gauge under the icon */
+                    /* cycle keys: a small level gauge (one pip per non-zero position) under the icon */
                     if (kp.live && k.mode === "state3" && keyAssigned(k)) {
-                        var pos = kp.keyPos[i] || 0, pw = 8, pg = 4, py = cy + 22 + dy, px0 = cx - (2 * pw + pg) / 2;
-                        for (var pp = 0; pp < 2; pp++) {
+                        var pos = kp.keyPos[i] || 0, np = Math.max(1, _kpPositions(k).length - 1);
+                        var pw = np <= 2 ? 8 : np <= 4 ? 6 : 4, pg = 3, py = cy + 22 + dy, px0 = cx - (np * pw + (np - 1) * pg) / 2;
+                        for (var pp = 0; pp < np; pp++) {
                             var lit = pos > pp;
                             s += '<rect x="' + (px0 + pp * (pw + pg)) + '" y="' + py + '" width="' + pw + '" height="3.4" rx="1.7" fill="' + (lit ? col : "#3A4046") + '" opacity="' + (lit ? (0.55 + 0.45 * br) : 0.55) + '"/>';
                         }
@@ -1956,10 +1984,10 @@
             setTimeout(function () {
                 kp.keyDown = 0;
                 if (k.mode === "state3") {
-                    /* 3-position: each press steps 0 → 1 → 2 → 0. The button is
-                       physical-momentary so the bus bit pulses; the position
-                       (which drives the LED) is what latches. */
-                    kp.keyPos[i] = ((kp.keyPos[i] || 0) + 1) % 3;
+                    /* cycle: each press steps to the next position (wraps at the
+                       end). The button is physical-momentary so the bus bit
+                       pulses; the position (which drives the LED) is what latches. */
+                    kp.keyPos[i] = ((kp.keyPos[i] || 0) + 1) % _kpPositions(k).length;
                     kpFlashState(i);
                     kp.keyOn[i] = true; setTimeout(function () { kp.keyOn[i] = false; kpRenderStage(); }, 260);
                 } else if (k.mode === "momentary" || k.mode === "paired") {
@@ -1974,9 +2002,9 @@
         function kpFlashState(i) {
             var el = document.getElementById("kpStateMsg");
             if (!el) return;
-            var k = kp.keys[i], pos = kp.keyPos[i] || 0;
-            var names = ["OFF", "1", "2"];
-            el.textContent = (k.label || "KEY " + (i + 1)) + " → position " + names[pos] + " of 3";
+            var ps = _kpPositions(k), pos = (kp.keyPos[i] || 0) % ps.length;
+            var nm = (ps[pos] && ps[pos].name) || ("position " + pos);
+            el.textContent = (k.label || "KEY " + (i + 1)) + " → " + nm + "  (" + (pos + 1) + " of " + ps.length + ")";
             el.classList.add("show");
             clearTimeout(kp._stateMsgT);
             kp._stateMsgT = setTimeout(function () { el.classList.remove("show"); }, 1600);
@@ -2067,6 +2095,33 @@
             k.alerts[ai].color = color; kpSaveCfg(); kpRenderInspector(); kpRenderStage();
         };
 
+        /* Per-position editor for a 3-position (cycle) key: one card per
+           position with a name, LED colour and blink. Shown only in state3. */
+        function _kpPositionsHtml(k) {
+            var ps = _kpPositions(k);
+            var behs = [["off", "Off"], ["solid", "Solid"], ["slow", "Slow blink"], ["fast", "Fast blink"]];
+            var rows = ps.map(function (p, pi) {
+                var sw = LED_COLORS.map(function (c) {
+                    if (KP_COL[c.id] && KP_COL[c.id].bl) return "";   /* backlight-only colours can't show on the ring */
+                    return '<button class="kp-psw' + (p.color === c.id ? " on" : "") + '" data-pi="' + pi + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '"' + (p.behavior === "off" ? " disabled" : "") + "></button>";
+                }).join("");
+                var seg = behs.map(function (b) {
+                    return '<button data-pi="' + pi + '" data-b="' + b[0] + '"' + (p.behavior === b[0] ? ' class="on"' : "") + ">" + b[1] + "</button>";
+                }).join("");
+                return '<div class="kp-pos">' +
+                    '<div class="kp-pos-h"><span class="kp-pos-n">' + pi + '</span>' +
+                    '<input class="kp-pos-name" data-pi="' + pi + '" type="text" maxlength="8" value="' + (p.name || "") + '" placeholder="name (e.g. LOW)"></div>' +
+                    '<div class="kp-pos-sw kp-swatches">' + sw + "</div>" +
+                    '<div class="kp-seg kp-pos-beh">' + seg + "</div>" +
+                    "</div>";
+            }).join("");
+            return '<div class="kp-grp"><div class="kp-gt">Cycle positions</div>' +
+                '<div class="kp-field"><label>How many positions</label><div class="kp-seg" id="kpPosCount">' +
+                [2, 3, 4, 5, 6].map(function (n) { return '<button data-n="' + n + '"' + (ps.length === n ? ' class="on"' : "") + ">" + n + "</button>"; }).join("") +
+                "</div></div>" + rows +
+                '<div class="kp-note">Each press steps to the next position; the ring shows that position&#8217;s colour &amp; blink (set position 0 to <b>Off</b> for a dark &#8220;idle&#8221;). The button still pulses its CAN bit every press &#8212; your ECU counts presses to know the position. Switch to <b>Live (sim)</b> and tap the key to cycle through them.</div>' +
+                "</div>";
+        }
         function kpRenderInspector() {
             var box = document.getElementById("kpInspector");
             if (!box) return;
@@ -2110,6 +2165,7 @@
                     return '<button data-b="' + b + '"' + (k.behavior === b ? ' class="on"' : "") + ">" + (b === "solid" ? "Solid" : b === "slow" ? "Slow blink" : "Fast blink") + "</button>";
                 }).join("") +
                 "</div></div></div>" +
+                (k.mode === "state3" ? _kpPositionsHtml(k) : "") +
                 _kpAlertsHtml(k, i) +
                 '<div class="kp-grp"><div class="kp-gt">Whole keypad — lighting</div>' +
                 '<div class="kp-field"><label>LED brightness — day</label><div class="kp-slider"><input type="range" id="kpFDay" min="0" max="63" value="' + kp.brightDay + '"><span class="val" id="kpVDay">' + kp.brightDay + "</span></div></div>" +
@@ -2127,7 +2183,7 @@
             /* what-fires — the exact CAN frame that transmits when this key is pressed */
             var modeNote = k.mode === "momentary" ? "Momentary — high only while held." :
                 k.mode === "toggle" ? "Toggle — the bit latches on / off each press." :
-                k.mode === "state3" ? "3-position — each press steps off → on → blink; the dash counts presses and drives the LED." : "Paired ▲▼ — shares the frame with the next key.";
+                k.mode === "state3" ? ("Cycle — each press steps through " + _kpPositions(k).length + " positions; the ring shows the current one and the ECU counts presses.") : "Paired ▲▼ — shares the frame with the next key.";
             var fids = kpIds(), fireHtml, fireNote;
             if (kpIsJ()) {
                 var jb = [0x04, 0x1B, 0x01, i + 1, 0x01, kp.sa & 0xFF, 0xFF, 0xFF];
@@ -2154,7 +2210,7 @@
                 else { k.text = false; k.icon = e.target.value; }
                 kpSaveCfg(); kpRenderStage();
             });
-            g("kpFMode").addEventListener("change", function (e) { k.mode = e.target.value; kpSaveCfg(); });
+            g("kpFMode").addEventListener("change", function (e) { k.mode = e.target.value; if (k.mode === "state3") _kpPositions(k); kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
             g("kpFPreset").addEventListener("change", function (e) { k.preset = e.target.value; kpSaveCfg(); kpRenderStage(); });
             g("kpFFollows").addEventListener("change", function (e) { k.follows = e.target.value; kpSaveCfg(); kpRenderInspector(); kpRenderStage(); });
             box.querySelectorAll(".kp-sw").forEach(function (b) {
@@ -2172,6 +2228,32 @@
             g("kpFDayNight").querySelectorAll("button").forEach(function (b) {
                 b.addEventListener("click", function () { kp.night = b.getAttribute("data-n") === "1"; kpRenderInspector(); kpRenderStage(); });
             });
+            /* 3-position cycle editor bindings */
+            if (k.mode === "state3") {
+                var ps = _kpPositions(k);
+                box.querySelectorAll("#kpPosCount button").forEach(function (b) {
+                    b.addEventListener("click", function () {
+                        var n = +b.getAttribute("data-n");
+                        while (ps.length < n) ps.push({ name: "POS " + ps.length, color: k.color, behavior: "solid" });
+                        ps.length = n;
+                        kpSaveCfg(); kpRenderInspector(); kpRenderStage();
+                    });
+                });
+                box.querySelectorAll(".kp-pos-name").forEach(function (inp) {
+                    inp.addEventListener("input", function () { ps[+inp.getAttribute("data-pi")].name = inp.value.toUpperCase(); kpSaveCfg(); kpRenderStage(); });
+                });
+                box.querySelectorAll(".kp-psw").forEach(function (b) {
+                    b.addEventListener("click", function () {
+                        var p = ps[+b.getAttribute("data-pi")]; if (!p || p.behavior === "off") return;
+                        p.color = b.getAttribute("data-c"); kpSaveCfg(); kpRenderInspector(); kpRenderStage();
+                    });
+                });
+                box.querySelectorAll(".kp-pos-beh button").forEach(function (b) {
+                    b.addEventListener("click", function () {
+                        ps[+b.getAttribute("data-pi")].behavior = b.getAttribute("data-b"); kpSaveCfg(); kpRenderInspector(); kpRenderStage();
+                    });
+                });
+            }
         }
 
         /* copy / paste / apply-all a key's LED look + mode (colour, behaviour,
