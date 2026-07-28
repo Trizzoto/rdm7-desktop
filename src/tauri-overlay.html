@@ -5943,15 +5943,18 @@
 
         /* ---- track library ------------------------------------------------
          * Studio owns the library; the dash holds exactly ONE track at a time
-         * (lap_track_t: one start_finish + up to 8 splits). So this is the place
-         * you keep your circuits, and "Send to dash" is what makes one of them
+         * (a lap_track_t, with up to 8 splits). So this is the place you keep
+         * your circuits, and "Send to dash" is what makes one of them
          * live. Everything is stored in the DASH's own units — half-widths in
          * metres, heading = the car's direction of travel across the line — so
          * nothing needs converting on the way out.
          *
-         * Circuit tracks only. The engine closes a lap by RE-crossing the start/
-         * finish line, so a point-to-point sprint or hillclimb (separate start
-         * and finish) cannot be timed by the current firmware — see gpTaNote(). */
+         * There is ONE kind of track. A start/finish line makes it a circuit;
+         * adding a second line makes it a time trial, timed from the start line
+         * to the finish line. That is not two features — lap_track_t already
+         * carries both lines, and the firmware's `point_to_point` flag is just
+         * "is the finish line populated". So Studio does not ask: it derives the
+         * flag on the way out (gpIsTrial) and nothing here stores it. */
         var GP_TRACKS_LS = "rdm7_tracks_v1";
         var GP_MAX_SECTORS = 8;          /* LAP_MAX_SECTORS in lap_core.h */
 
@@ -5974,7 +5977,7 @@
         function gpTracksLoad() {
             var s = null;
             try { s = JSON.parse(localStorage.getItem(GP_TRACKS_LS) || "null"); } catch (e) { }
-            if (s && s.version === 1 && Array.isArray(s.tracks)) return s;
+            if (s && s.version === 1 && Array.isArray(s.tracks)) return gpTracksNormalise(s);
             return gpTracksMigrate();
         }
 
@@ -6045,6 +6048,32 @@
         }
         function gpActiveTrack() { return gpTrackById(gp.tracks && gp.tracks.active); }
 
+        /* One line is a circuit, two is a time trial. There is no third thing
+           and no mode to choose: the presence of a finish line IS the course
+           type, which is why no track stores a flag for it. */
+        function gpIsTrial(t) { return !!(t && t.finish); }
+
+        /* Same recording, different word: a circuit splits into laps, a time
+           trial into runs. Calling a hillclimb attempt "Lap 3" is the kind of
+           small wrongness that makes a tool feel built for somebody else. */
+        function gpRunWord(cap) {
+            var w = gpIsTrial(gpActiveTrack()) ? "run" : "lap";
+            return cap ? w.charAt(0).toUpperCase() + w.slice(1) : w;
+        }
+
+        /* Course type used to be a flag you set BEFORE placing anything, so the
+           library can hold two shapes that no longer mean anything: a sprint
+           that never got its finish line, and a circuit carrying a leftover
+           one. Resolve both to the only question that matters now. */
+        function gpTracksNormalise(s) {
+            ((s && s.tracks) || []).forEach(function (t) {
+                if (!t) return;
+                if (t.point_to_point === false) delete t.finish;
+                delete t.point_to_point;
+            });
+            return s;
+        }
+
         /* ---- Session rail: the laps in the recording ---------------------- */
         function gpBuildSessionRail(rail) {
             var h = "<div class='ws-rail-title'>Session</div>";
@@ -6053,22 +6082,25 @@
                 rail.innerHTML = h;
                 return;
             }
-            var mins = (gp.trace.length / 25 / 60);
+            var mins = gpSecs(gp.trace, 0, gp.trace.length - 1) / 60;
             h += "<button class='ws-item" + (gp.selLap < 0 ? " on" : "") + "' data-gp-lap='-1'>" +
                  "<span class='st'></span>Whole session<span class='tag'>" + mins.toFixed(1) + " min</span></button>";
             if (!gp.traceLaps.length) {
-                h += "<div class='ws-note'>No start/finish crossings found in this recording. Place the line on the active track and it will split into laps automatically.</div>";
+                h += "<div class='ws-note'>No " + (gpIsTrial(gpActiveTrack()) ? "start-to-finish runs" : "start/finish crossings") +
+                     " found in this recording. Place the " + (gpIsTrial(gpActiveTrack()) ? "gates" : "line") +
+                     " on the active track and it will split into " + gpRunWord() + "s automatically.</div>";
             }
             var S = gpSessionSectors();
+            var word = gpRunWord(true);
             var bestLap = -1, bestT = Infinity;
             gp.traceLaps.forEach(function (l, i) {
-                var s = (l.to - l.from) / 25;
+                var s = gpSecs(gp.trace, l.from, l.to);
                 if (s < bestT) { bestT = s; bestLap = i; }
             });
             gp.traceLaps.forEach(function (l, i) {
-                var secs = (l.to - l.from) / 25;
+                var secs = gpSecs(gp.trace, l.from, l.to);
                 h += "<button class='ws-item" + (gp.selLap === i ? " on" : "") + "' data-gp-lap='" + i + "'>" +
-                     "<span class='st" + (gp.cmpLap === i ? " on" : "") + "'></span>Lap " + (i + 1) +
+                     "<span class='st" + (gp.cmpLap === i ? " on" : "") + "'></span>" + word + " " + (i + 1) +
                      "<span class='tag" + (i === bestLap ? " gp-best" : "") + "'>" +
                      gpLapTime(secs) + "</span>" + gpSectorChips(i) + "</button>";
             });
@@ -6078,12 +6110,12 @@
                existed. */
             if (S && S.best && S.best.length > 1 && gp.traceLaps.length > 1) {
                 var ideal = S.best.reduce(function (a, b) { return a + b; }, 0);
-                h += "<div class='ws-item gp-ideal'><span class='st'></span>Ideal lap" +
+                h += "<div class='ws-item gp-ideal'><span class='st'></span>Ideal " + gpRunWord() +
                      "<span class='tag'>" + gpLapTime(ideal) + "</span>" +
                      "<div class='gp-secs'>" + S.best.map(function (v) {
                          return "<span class='p'>" + v.toFixed(2) + "</span>";
                      }).join("") + "</div>" +
-                     "<div class='gp-ideal-n'>best sectors from lap" +
+                     "<div class='gp-ideal-n'>best sectors from " + gpRunWord() +
                      (function () {
                          var u = []; S.owner.forEach(function (o) { if (u.indexOf(o + 1) < 0) u.push(o + 1); });
                          return (u.length > 1 ? "s " : " ") + u.join(", ");
@@ -6095,8 +6127,8 @@
                      "<span class='st'></span>None</button>";
                 gp.traceLaps.forEach(function (l, i) {
                     h += "<button class='ws-item" + (gp.cmpLap === i ? " on" : "") + "' data-gp-cmp='" + i + "'>" +
-                         "<span class='st'></span>Lap " + (i + 1) +
-                         "<span class='tag'>" + gpLapTime((l.to - l.from) / 25) + "</span></button>";
+                         "<span class='st'></span>" + word + " " + (i + 1) +
+                         "<span class='tag'>" + gpLapTime(gpSecs(gp.trace, l.from, l.to)) + "</span></button>";
                 });
             }
             rail.innerHTML = h;
@@ -6150,7 +6182,7 @@
                 var mmode = gpEffectiveMapMode(), i;
                 h += "<div class='ws-grp'><div class='ws-gt'>" +
                      (mmode === "speed" ? "Speed" :
-                      mmode === "ref" ? "Time against lap " + (gp.cmpLap + 1) :
+                      mmode === "ref" ? "Time against " + gpRunWord() + " " + (gp.cmpLap + 1) :
                       "Braking &amp; acceleration") +
                      "<i class='gp-lamp info' data-tip=\"" + (
                        mmode === "speed"
@@ -7145,7 +7177,7 @@
             var selT = gpSecs(gp.trace, gp.traceLaps[gp.selLap].from, gp.traceLaps[gp.selLap].to);
             var refT = gpSecs(gp.trace, gp.traceLaps[gp.cmpLap].from, gp.traceLaps[gp.cmpLap].to);
             var h = "<div class='ws-grp'><div class='ws-gt'>Coach</div>";
-            h += "<div class='gp-coach-hd'>Lap " + (gp.selLap + 1) + " against lap " +
+            h += "<div class='gp-coach-hd'>" + gpRunWord(true) + " " + (gp.selLap + 1) + " against " + gpRunWord() + " " +
                  (gp.cmpLap + 1) + "<b class='" + (selT > refT ? "bad" : "ok") + "'>" +
                  gpSigned(selT - refT, 2, " s") + "</b></div>";
 
@@ -7417,20 +7449,34 @@
             gp.chan = null; gp.chanKey = "";
             var trk = gpActiveTrack();
             var sf = trk && trk.start_finish;
+            var fin = trk && trk.finish;      /* time trial: runs end on their own line */
             var rows = gp.trace || [];
             if (!sf || rows.length < 2) return;
-            var hw = gpN(sf.half_width_m) || 15;
-            var prev = gpSignedDist(sf, rows[0].lat, rows[0].lon).along;
+            var hwS = gpN(sf.half_width_m) || 15;
+            var hwF = fin ? (gpN(fin.half_width_m) || 15) : 0;
+            var prevS = gpSignedDist(sf, rows[0].lat, rows[0].lon).along;
+            var prevF = fin ? gpSignedDist(fin, rows[0].lat, rows[0].lon).along : 0;
             var start = -1;
             for (var i = 1; i < rows.length; i++) {
-                var d = gpSignedDist(sf, rows[i].lat, rows[i].lon);
-                /* Same rule as the engine: a sign change from before to on/past,
-                   and inside the gate's half-width. */
-                if (prev < 0 && d.along >= 0 && Math.abs(d.lateral) <= hw) {
-                    if (start >= 0) gp.traceLaps.push({ from: start, to: i });
+                var s = gpSignedDist(sf, rows[i].lat, rows[i].lon);
+                var f = fin ? gpSignedDist(fin, rows[i].lat, rows[i].lon) : null;
+                /* Same rule as the engine, and in the same order: a sign change
+                   from before to on/past, inside the gate's half-width, start
+                   line resolved before finish line. */
+                if (prevS < 0 && s.along >= 0 && Math.abs(s.lateral) <= hwS) {
+                    /* On a circuit one crossing closes a lap and opens the next.
+                       On a time trial it can only open one — a run that never
+                       reached the finish was abandoned, not a slow result, and
+                       lap_core.c restarts it for exactly that reason. */
+                    if (!fin && start >= 0) gp.traceLaps.push({ from: start, to: i });
                     start = i;
                 }
-                prev = d.along;
+                if (fin && start >= 0 && prevF < 0 && f.along >= 0 && Math.abs(f.lateral) <= hwF) {
+                    gp.traceLaps.push({ from: start, to: i });
+                    start = -1;              /* disarmed until the next start */
+                }
+                prevS = s.along;
+                if (fin) prevF = f.along;
             }
             /* Circuit Tools auto-selects the fastest lap as the reference and
                nobody has ever complained: it is what you compare against nearly
@@ -7440,7 +7486,7 @@
                 (gp.cmpLap < 0 || gp.cmpLap >= gp.traceLaps.length)) {
                 var bi = 0, bt = Infinity;
                 for (var li = 0; li < gp.traceLaps.length; li++) {
-                    var lt = gp.traceLaps[li].to - gp.traceLaps[li].from;
+                    var lt = gpSecs(gp.trace, gp.traceLaps[li].from, gp.traceLaps[li].to);
                     if (lt < bt) { bt = lt; bi = li; }
                 }
                 gp.cmpLap = bi;
@@ -8107,6 +8153,8 @@
             if (!api) return;
             var msg = what === "start_finish"
                 ? "Set the start/finish line at the car's position now?\n\nThis clears any sector splits and resets the session — best, last and the predictive reference are lost."
+                : what === "finish"
+                ? "Set the finish line at the car's position now?\n\nThe track becomes a time trial: timing runs from the start line to here, then stops. This resets the session."
                 : "Add a sector split at the car's position now?\n\nThis resets the session — best, last and the predictive reference are lost.";
             if (!window.confirm(msg)) return;
             gpLapAction(function () { return api.capture(what); }, function (j) {
@@ -8115,6 +8163,8 @@
                 }
                 return what === "start_finish"
                     ? "Start/finish set from the car's position."
+                    : what === "finish"
+                    ? "Finish set from the car's position — this is a time trial now."
                     : "Split " + (j && j.sector_count ? j.sector_count : "") + " set from the car's position.";
             });
         };
@@ -8356,10 +8406,11 @@
             var t = gpActiveTrack();
             if (!t) return [];
             var out = [];
+            var trial = gpIsTrial(t);
             if (t.start_finish) out.push({ key: "sf", line: t.start_finish,
-                label: t.point_to_point ? "Start" : "Start / finish",
-                color: t.point_to_point ? "#6FBF73" : "#F5F7FA" });
-            if (t.point_to_point && t.finish) out.push({ key: "fin", line: t.finish, label: "Finish", color: "#F5F7FA" });
+                label: trial ? "Start" : "Start / finish",
+                color: trial ? "#6FBF73" : "#F5F7FA" });
+            if (trial) out.push({ key: "fin", line: t.finish, label: "Finish", color: "#F5F7FA" });
             (t.sectors || []).forEach(function (s, i) {
                 out.push({ key: i, line: s, label: "Split " + (i + 1), color: "#FF9F0A" });
             });
@@ -8546,8 +8597,7 @@
                 t.start_finish = line;
                 gp.selGate = "sf";
             } else if (what === "fin") {
-                t.point_to_point = true;
-                t.finish = line;
+                t.finish = line;          /* this alone makes it a time trial */
                 gp.selGate = "fin";
             } else {
                 if ((t.sectors || []).length >= GP_MAX_SECTORS) {
@@ -8559,7 +8609,10 @@
                 gp.selGate = t.sectors.length - 1;
             }
             gpTracksSave();
-            gpDrawEditor(); gpRenderInspector();
+            /* The rail summarises each track by its gates, so it goes stale the
+               moment one is added — and then contradicts the inspector next to
+               it, which is worse than showing nothing. */
+            gpBuildRail(); gpDrawEditor(); gpRenderInspector();
             gpSetMsg("gpTrackMsg", "Drag the centre onto the line, then drag the end to aim it the way the car travels.", null);
         };
 
@@ -8567,13 +8620,13 @@
             var t = gpActiveTrack();
             if (!t) return;
             if (gp.selGate === "sf") { t.start_finish = null; }
-            else if (gp.selGate === "fin") { delete t.finish; t.point_to_point = false; gp.selGate = "sf"; }
+            else if (gp.selGate === "fin") { delete t.finish; gp.selGate = "sf"; }   /* back to a circuit */
             else {
                 t.sectors.splice(Number(gp.selGate), 1);
                 gp.selGate = "sf";
             }
             gpTracksSave();
-            gpDrawEditor(); gpRenderInspector();
+            gpBuildRail(); gpDrawEditor(); gpRenderInspector();
         };
 
         window.gpGateField = function (field, value) {
@@ -8596,18 +8649,6 @@
             return (t.sectors || [])[Number(gp.selGate)] || null;
         }
 
-        /* Circuit <-> point-to-point. A sprint needs its own finish line;
-           switching back drops it rather than leaving a stale line on a
-           course that no longer uses one. */
-        window.gpSetCourseType = function (p2p) {
-            var t = gpActiveTrack();
-            if (!t) return;
-            t.point_to_point = !!p2p;
-            if (!t.point_to_point) { delete t.finish; if (gp.selGate === "fin") gp.selGate = "sf"; }
-            gpTracksSave();
-            gpDrawEditor(); gpRenderInspector();
-        };
-
         /* ---- library <-> dash ---------------------------------------------- */
 
         window.gpSendTrack = function () {
@@ -8619,17 +8660,15 @@
                 return;
             }
             if (!window.confirm("Send “" + t.name + "” to the " + api.label + "?\n\nIt replaces whatever track is loaded there and resets the session — best, last and the predictive reference are cleared.")) return;
-            if (t.point_to_point && !t.finish) {
-                gpSetMsg("gpTrackMsg", "This is a sprint course but has no finish line yet — the timer would arm a run nothing could close.", "warn");
-                return;
-            }
             var body = {
                 name: t.name.slice(0, 31),
                 min_lap_time_s: gpN(t.min_lap_time_s) === null ? 10 : t.min_lap_time_s,
                 start_finish: t.start_finish,
                 sectors: (t.sectors || []).slice(0, GP_MAX_SECTORS)
             };
-            if (t.point_to_point) { body.point_to_point = true; body.finish = t.finish; }
+            /* The flag exists on the wire because lap_core reads it; it is
+               derived here rather than stored, so the two can never disagree. */
+            if (gpIsTrial(t)) { body.point_to_point = true; body.finish = t.finish; }
             var wanted = body.sectors.length;
             gpLapAction(function () { return api.trackSet(body); }, function (j) {
                 /* The dash SILENTLY drops a split it can't parse and still
@@ -8654,9 +8693,9 @@
                     id: gpTrackUid(), name: (j.name || "From dash").slice(0, 31),
                     center: [j.start_finish.lat, j.start_finish.lon], zoom: 18,
                     start_finish: j.start_finish, sectors: j.sectors || [],
-                    min_lap_time_s: gpN(j.min_lap_time_s) === null ? 10 : j.min_lap_time_s,
-                    point_to_point: !!j.point_to_point, finish: j.finish || undefined
+                    min_lap_time_s: gpN(j.min_lap_time_s) === null ? 10 : j.min_lap_time_s
                 };
+                if (j.point_to_point && j.finish) t.finish = j.finish;
                 gp.tracks.tracks.push(t);
                 gpTracksSave();
                 window.gpTrackSelect(t.id);
@@ -8682,6 +8721,8 @@
                     var added = 0;
                     list.forEach(function (t) {
                         if (!t || !t.start_finish) return;
+                        if (t.point_to_point === false) delete t.finish;
+                        delete t.point_to_point;
                         t.id = gpTrackUid();
                         gp.tracks.tracks.push(t); added++;
                     });
@@ -8924,7 +8965,8 @@
             h += "</div>";
             h += "<div class='lt-expbtns' style='margin-top:8px'>" +
                  "<button class='ws-btn-line' onclick=\"gpCapture('start_finish')\">Capture start" +
-                 "</button><button class='ws-btn-line' onclick=\"gpCapture('sector')\">Capture split</button></div>";
+                 "</button><button class='ws-btn-line' onclick=\"gpCapture('sector')\">Capture split" +
+                 "</button><button class='ws-btn-line' onclick=\"gpCapture('finish')\">Capture finish</button></div>";
             h += "<button class='ws-btn-line' style='margin-top:6px' onclick='gpResetSession()'>Reset session</button>";
             h += "<div class='gp-msg' id='gpLapMsg'></div>";
             h += gpLapListHtml();
@@ -8951,36 +8993,33 @@
             }
             var g = gpSelectedLine();
             var secs = t.sectors || [];
+            var trial = gpIsTrial(t);
             var h = "<h2>" + gpEsc(t.name) + "</h2>" +
-                "<div class='ws-sub'>" + (t.point_to_point ? "sprint" : "circuit") + " · " +
+                "<div class='ws-sub'>" + (trial ? "time trial" : "circuit") + " · " +
                 (secs.length + 1) + " sector" + (secs.length ? "s" : "") + "</div>";
 
             h += "<div class='ws-field'><label>Track name</label>" +
                  "<input type='text' maxlength='31' value='" + gpEsc(t.name) + "' onchange='gpTrackRename(this)'></div>";
 
-            /* Gate picker */
-            h += "<div class='ws-grp'><div class='ws-gt'>Course" +
-                 "<i class='gp-lamp info' data-tip=\"<b>" +
-                 (t.point_to_point ? "Sprint / hillclimb" : "Circuit") + "</b>" +
-                 (t.point_to_point
-                   ? "A run starts on the start line and ends on the finish line. The dash stops timing there, so the trip back down is not counted."
-                   : "A lap starts and ends on the same line. The first crossing arms the timer rather than completing a lap, so there is no out-lap.") +
-                 "\"></i></div>" +
-                 "<div class='ws-seg'>" +
-                 "<button class='" + (t.point_to_point ? "" : "on") + "' onclick='gpSetCourseType(false)'>Circuit</button>" +
-                 "<button class='" + (t.point_to_point ? "on" : "") + "' onclick='gpSetCourseType(true)'>Sprint / hillclimb</button>" +
-                 "</div>" +
-                 "</div>";
-            h += "<div class='ws-grp'><div class='ws-gt'>Gates</div>";
+            /* Gates. There is no course-type control: a track with one line is
+               a circuit and a track with two is a time trial, so adding the
+               finish line is the whole gesture. */
+            h += "<div class='ws-grp'><div class='ws-gt'>Gates" +
+                 "<i class='gp-lamp info' data-tip=\"<b>One line, or two</b>" +
+                 "With just the start/finish line this is a <b>circuit</b>: the first crossing arms the timer " +
+                 "rather than counting an out-lap, and every crossing after it closes a lap and opens the next." +
+                 "<br><br>Add a <b>finish line</b> and it becomes a <b>time trial</b> — timed from the start line " +
+                 "to the finish line, and then nothing until you cross the start again. That covers time attack " +
+                 "on a circuit, a sprint, and a hillclimb whose finish is kilometres from its start." +
+                 "<br><br>Splits work the same way in between either way.\"></i></div>";
             h += "<div class='gp-gatelist'>";
             h += "<button class='gp-gate" + (gp.selGate === "sf" ? " on" : "") + "' onclick=\"gpSelectGate('sf')\">" +
-                 "<i style='background:" + (t.point_to_point ? "#6FBF73" : "#F5F7FA") + "'></i>" +
-                 (t.point_to_point ? "Start" : "Start / finish") +
+                 "<i style='background:" + (trial ? "#6FBF73" : "#F5F7FA") + "'></i>" +
+                 (trial ? "Start" : "Start / finish") +
                  (t.start_finish ? "" : " <em>— not placed</em>") + "</button>";
-            if (t.point_to_point) {
+            if (trial) {
                 h += "<button class='gp-gate" + (gp.selGate === "fin" ? " on" : "") + "' onclick=\"gpSelectGate('fin')\">" +
-                     "<i style='background:#F5F7FA'></i>Finish" +
-                     (t.finish ? "" : " <em>— not placed</em>") + "</button>";
+                     "<i style='background:#F5F7FA'></i>Finish</button>";
             }
             secs.forEach(function (s, i) {
                 h += "<button class='gp-gate" + (String(gp.selGate) === String(i) ? " on" : "") + "' onclick='gpSelectGate(" + i + ")'>" +
@@ -8989,10 +9028,9 @@
             h += "</div>";
             h += "<div class='lt-expbtns' style='margin-top:7px'>" +
                  "<button class='ws-btn-line' onclick=\"gpPlaceGate('sf')\">" +
-                 (t.start_finish ? "Re-place " : "Place ") + (t.point_to_point ? "start" : "start/finish") + "</button>" +
-                 (t.point_to_point
-                   ? "<button class='ws-btn-line' onclick=\"gpPlaceGate('fin')\">" + (t.finish ? "Re-place finish" : "Place finish") + "</button>"
-                   : "") +
+                 (t.start_finish ? "Re-place " : "Place ") + (trial ? "start" : "start/finish") + "</button>" +
+                 "<button class='ws-btn-line' onclick=\"gpPlaceGate('fin')\">" +
+                 (trial ? "Re-place finish" : "+ Finish line") + "</button>" +
                  "<button class='ws-btn-line' onclick=\"gpPlaceGate('sector')\"" +
                  (secs.length >= GP_MAX_SECTORS ? " disabled" : "") + ">+ Split</button></div>";
             h += "<div class='ws-note'>Drop a gate at the centre of the map, drag it onto the line, then drag its <b>end</b> to aim it the way the car travels and set how wide it is. " +
@@ -9002,7 +9040,7 @@
             /* Selected gate */
             if (g) {
                 h += "<div class='ws-grp'><div class='ws-gt'>" +
-                     (gp.selGate === "sf" ? (t.point_to_point ? "Start" : "Start / finish")
+                     (gp.selGate === "sf" ? (trial ? "Start" : "Start / finish")
                       : gp.selGate === "fin" ? "Finish"
                       : "Split " + (Number(gp.selGate) + 1)) + "</div>";
                 h += "<div class='gp-rows'>" +
@@ -9016,7 +9054,9 @@
                      "<div class='ws-slider'><input type='range' data-gp-fld='half_width_m' min='2' max='100' step='0.5' value='" + g.half_width_m +
                      "' oninput=\"gpGateField('half_width_m', this.value)\">" +
                      "<span class='val'>" + g.half_width_m + " m</span></div></div>";
-                h += "<button class='ws-btn-line' onclick='gpGateDelete()'>Remove this gate</button>";
+                h += "<button class='ws-btn-line' onclick='gpGateDelete()'>" +
+                     (gp.selGate === "fin" ? "Remove the finish line — back to a circuit" : "Remove this gate") +
+                     "</button>";
                 h += "</div>";
             }
 
@@ -9056,23 +9096,8 @@
                  "<button class='ws-btn-line' style='margin-top:6px' onclick='gpTrackDelete()'>Delete “" + gpEsc(t.name) + "”</button>" +
                  "</div>";
 
-            h += gpTaNote();
             box.innerHTML = h;
             gpRestoreMsgs();
-        }
-
-        /* Time attack, stated honestly. Circuit lapping is what the dash does;
-           a point-to-point sprint or hillclimb is a different timing model the
-           firmware does not have — the lap closes by RE-crossing start/finish
-           (lap_core.c), and lap_track_t holds no separate finish line. The
-           previous workspace drew a start AND a chequered finish for "sprint",
-           but that only ever fed its own simulator. */
-        function gpTaNote() {
-            return "<div class='ws-note' style='border-left-color:#FF9F0A'>" +
-                   "<b>Time attack:</b> on a circuit the timer arms on your first crossing — so no out-lap — and every " +
-                   "crossing after that closes a lap and updates best, theoretical and the predictive delta.<br><br>" +
-                   "<b>Sprint / hillclimb:</b> the run is timed from the start line to the finish line and the timer " +
-                   "then stops, so coasting back down is not counted. Splits work the same way in between.</div>";
         }
 
         /* ---- CAN bus setup (Monitor) --------------------------------------
