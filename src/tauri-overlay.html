@@ -6247,8 +6247,8 @@
             }
 
             var out = [], prevI = lap.from;
-            for (i = 0; i < marks.length; i++) { out.push((marks[i] - prevI) * GP_DT); prevI = marks[i]; }
-            out.push((lap.to - prevI) * GP_DT);
+            for (i = 0; i < marks.length; i++) { out.push(gpSecs(rows, prevI, marks[i])); prevI = marks[i]; }
+            out.push(gpSecs(rows, prevI, lap.to));
             return out;
         }
 
@@ -6360,7 +6360,7 @@
             if (!gp.traceLaps || gp.traceLaps.length < 2) return "";
             var n = gp.traceLaps.length, best = Infinity, bi = 0, sum = 0, worst = 0, i, tl;
             for (i = 0; i < n; i++) {
-                tl = (gp.traceLaps[i].to - gp.traceLaps[i].from) * GP_DT;
+                tl = gpSecs(gp.trace, gp.traceLaps[i].from, gp.traceLaps[i].to);
                 sum += tl;
                 if (tl < best) { best = tl; bi = i; }
                 if (tl > worst) worst = tl;
@@ -6499,7 +6499,8 @@
                 var d = rows[b].hdg - rows[a].hdg;
                 while (d > 180) d -= 360;
                 while (d < -180) d += 360;
-                var w = d / ((b - a) * GP_DT);          /* deg/s */
+                var dtw = gpSecs(rows, a, b);
+                var w = dtw > 0 ? d / dtw : 0;          /* deg/s */
                 /* Heading is noise at a standstill, and the seam-unwrap turns
                    that noise into spikes that dwarf every real corner. A real
                    recording of a puck sitting on a desk for 3.7 hours peaked at
@@ -6584,7 +6585,7 @@
                     if (d < bd) { bd = d; best = k; }
                 }
                 j = best;
-                out[i] = (i * GP_DT) - ((best - ref.from) * GP_DT);
+                out[i] = gpSecs(gp.trace, sel.from, sel.from + i) - gpSecs(gp.trace, ref.from, best);
             }
             gp.deltaKey = key; gp.delta = out;
             return out;
@@ -6618,7 +6619,7 @@
            are the ones a driver can count in their head. Aim for a tick every
            ~90 px so the labels never collide. */
         function gpAxisTicks(rng, plotW) {
-            var secs = (rng.to - rng.from) * GP_DT;
+            var secs = gpSecs(gp.trace, rng.from, rng.to);
             if (!(secs > 0) || plotW < 40) return [];
             var want = Math.max(2, Math.floor(plotW / 90));
             var steps = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800];
@@ -6871,7 +6872,7 @@
 
                 /* Elapsed time at the cursor, pinned to the axis line — the
                    thing you actually want when scrubbing a timeline. */
-                var el = (pi - rng.from) * GP_DT;
+                var el = gpSecs(gp.trace, rng.from, pi);
                 var lab = gpAxisLabel(el, 0.5);
                 g.font = "9.5px 'JetBrains Mono', monospace";
                 var lw = g.measureText(lab).width;
@@ -6987,7 +6988,7 @@
                 var m = { segLoss: 0, peakD: 0, cons: 0, carried: false, lift: null,
                           selA: selA, selB: selB };
                 if (refB > refA + 1 && selB > selA + 1) {
-                    m.segLoss = ((selB - selA) - (refB - refA)) * GP_DT;
+                    m.segLoss = gpSecs(gp.trace, selA, selB) - gpSecs(gp.trace, refA, refB);
                     m.peakD = gpSegPeakKph(selA, selB) - gpSegPeakKph(refA, refB);
                     m.carried = o.exitKph_d < -1.0 && m.peakD < -0.5 * Math.abs(o.exitKph_d);
                     if (m.carried) {
@@ -7141,8 +7142,8 @@
                        "That usually means one of them left the circuit or is not a complete lap.</div></div>";
             }
 
-            var selT = (gp.traceLaps[gp.selLap].to - gp.traceLaps[gp.selLap].from) * GP_DT;
-            var refT = (gp.traceLaps[gp.cmpLap].to - gp.traceLaps[gp.cmpLap].from) * GP_DT;
+            var selT = gpSecs(gp.trace, gp.traceLaps[gp.selLap].from, gp.traceLaps[gp.selLap].to);
+            var refT = gpSecs(gp.trace, gp.traceLaps[gp.cmpLap].from, gp.traceLaps[gp.cmpLap].to);
             var h = "<div class='ws-grp'><div class='ws-gt'>Coach</div>";
             h += "<div class='gp-coach-hd'>Lap " + (gp.selLap + 1) + " against lap " +
                  (gp.cmpLap + 1) + "<b class='" + (selT > refT ? "bad" : "ok") + "'>" +
@@ -7245,7 +7246,7 @@
             }
             for (i = 0; i < n; i++) {
                 var i0 = i > 0 ? i - 1 : 0, i1 = i < n - 1 ? i + 1 : n - 1;
-                var dt = (i1 - i0) * GP_DT;
+                var dt = gpSecs(rows, i0, i1);
                 /* km/h -> m/s is /3.6; then /9.81 for g. */
                 rows[i].g = dt > 0 ? ((sm[i1] - sm[i0]) / 3.6) / dt / 9.81 : 0;
             }
@@ -7303,10 +7304,12 @@
             if (gp.rateKey === key && gp.rate) return gp.rate;
             var d = gpDeltaSeries();
             if (!d) return null;
+            var r = gpLapRange();
             var n = d.length, out = new Float32Array(n), W = 6, i;
             for (i = 0; i < n; i++) {
                 var a = i - W < 0 ? 0 : i - W, b = i + W >= n ? n - 1 : i + W;
-                out[i] = b > a ? (d[b] - d[a]) / ((b - a) * GP_DT) : 0;
+                var w = gpSecs(gp.trace, r.from + a, r.from + b);
+                out[i] = w > 0 ? (d[b] - d[a]) / w : 0;
             }
             gp.rateKey = key; gp.rate = out;
             return out;
@@ -7339,15 +7342,28 @@
                         var bin = atob(pg.data || "");
                         var dv = new DataView(new ArrayBuffer(bin.length));
                         for (var b = 0; b < bin.length; b++) dv.setUint8(b, bin.charCodeAt(b));
+
+                        /* t_marks is [[index, itow_ms], ...] within THIS page:
+                           the first dates the page, any later one marks where
+                           recording paused or a sample was dropped. Between
+                           marks the step is a flat 40 ms. An older node sends
+                           no marks at all, and gpSecs falls back to assuming
+                           40 ms — right for a recording that never paused,
+                           which is exactly what those nodes produced. */
+                        var mk = (pg && pg.t_marks) || [];
+                        var mi = 0, tcur = null;
                         for (var i = 0; i < cnt; i++) {
+                            while (mi < mk.length && mk[mi][0] === i) { tcur = mk[mi][1]; mi++; }
                             var o = i * 12;
                             rows.push({
                                 lat: dv.getInt32(o, true) / 1e7,
                                 lon: dv.getInt32(o + 4, true) / 1e7,
                                 kph: dv.getUint16(o + 8, true) / 100,
                                 hdg: dv.getUint16(o + 10, true) / 100,
+                                t: tcur === null ? undefined : tcur,
                                 g: 0
                             });
+                            if (tcur !== null) tcur += 40;
                         }
                         gp.tracePct = Math.min(100, Math.round(rows.length / total * 100));
                         gpRenderInspector();
@@ -7453,6 +7469,38 @@
         var GP_COAST_G = 0.05;   /* |g| under this is neither braking nor driving */
         var GP_BRAKE_G = 0.15;   /* g under -this is a deliberate brake application */
 
+        /* Seconds between two samples, from the clock the receiver stamped them
+           with — never from (j - i) * 40 ms.
+           That shortcut was right only while every sample was 40 ms after the
+           last one, and the node now skips idle on purpose (and has always
+           been able to drop a sample when the flash writer fell behind). A lap
+           that contains a pause would read short by exactly the pause, and
+           nothing on screen would look wrong. */
+        function gpSecs(rows, i, j) {
+            if (!rows || !rows.length) return 0;
+            var a = rows[i], b = rows[j];
+            if (a && b && a.t !== undefined && b.t !== undefined)
+                return (b.t - a.t) / 1000;
+            return (j - i) * GP_DT;      /* pre-timestamp recording */
+        }
+
+        /* How much time ONE sample stands for, for anything that accumulates.
+           A pause leaves a 30-second step between two adjacent samples, and a
+           loop adding that up decides the car coasted for half a minute — or
+           travelled however far the last speed reading implies. Neither
+           happened; we simply have no data across the gap. Past the threshold,
+           fall back to the nominal interval and let the gap contribute nothing
+           it cannot support. Mirrors LAP_MAX_FIX_GAP_MS in lap_core.c.
+
+           Spans are different and must NOT use this: a lap that contained a
+           30-second stop really did take 30 seconds longer. */
+        var GP_MAX_STEP_S = 0.5;
+
+        function gpStep(rows, i) {
+            var d = gpSecs(rows, i, i + 1);
+            return (d > 0 && d <= GP_MAX_STEP_S) ? d : GP_DT;
+        }
+
         function gpMetres(a, b) {
             var D = Math.PI / 180, R = 6371008.8;
             var e = (b.lon - a.lon) * D * Math.cos(a.lat * D) * R;
@@ -7466,7 +7514,7 @@
            Doppler speed for its distance channel. */
         function gpArcLength(rows, i, j) {
             var a = Math.min(i, j), b = Math.max(i, j), m = 0;
-            for (var k = a; k < b; k++) m += (rows[k].kph / 3.6) * GP_DT;
+            for (var k = a; k < b; k++) m += (rows[k].kph / 3.6) * gpStep(rows, k);
             return m;
         }
 
@@ -7559,7 +7607,7 @@
 
             var coast = 0;
             for (i = c.entry; i <= c.exit; i++)
-                if (Math.abs(rows[i].g) < GP_COAST_G) coast += GP_DT;
+                if (Math.abs(rows[i].g) < GP_COAST_G) coast += gpStep(rows, i);
 
             return {
                 bounds: [c.entry, bE, aS, aE, c.exit],
@@ -7620,8 +7668,8 @@
 
                 var phases = [], total = 0;
                 for (var k = 0; k < 4; k++) {
-                    var tr = (ph.bounds[k + 1] - ph.bounds[k]) * GP_DT;
-                    var ts = (mapped[k + 1] - mapped[k]) * GP_DT;
+                    var tr = gpSecs(rows, ph.bounds[k], ph.bounds[k + 1]);
+                    var ts = gpSecs(rows, mapped[k], mapped[k + 1]);
                     phases.push({ name: ph.names[k], ref_s: tr, sel_s: ts, delta_s: ts - tr });
                     total += ts - tr;
                 }
@@ -7808,7 +7856,7 @@
             var read = document.getElementById("gpPlayRead");
             if (read) {
                 var r = gpLapRange();
-                var tsec = (gp.playIdx - r.from) * GP_DT;
+                var tsec = gpSecs(gp.trace, r.from, gp.playIdx);
                 /* Delta at the cursor: scrubbing a corner should answer "and
                    how far up or down was I here" without a second look. */
                 var dser = gpDeltaSeries(), dtxt = "";
