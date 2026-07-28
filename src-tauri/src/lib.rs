@@ -123,7 +123,11 @@ async fn discover_devices(
         let app = app.clone();
         set.spawn(async move {
             let _permit = sem.acquire_owned().await.ok()?;
-            let dev = probe_device_info(&client, &ip, Duration::from_millis(1500)).await;
+            // 2.5 s per host, not 1.5: a dash busy rendering can take >1.5 s
+            // to answer /api/device/info, and a missed sweep here reads as
+            // "no dash on the network". Wall time barely moves — probes run
+            // 128-way and dead hosts still fail at the 400 ms connect.
+            let dev = probe_device_info(&client, &ip, Duration::from_millis(2500)).await;
             let done = scanned.fetch_add(1, Ordering::Relaxed) + 1;
             if done % 32 == 0 || dev.is_some() || done == total {
                 let _ = app.emit(
@@ -398,6 +402,9 @@ impl SerialConnection {
 static SERIAL: std::sync::LazyLock<Mutex<SerialConnection>> =
     std::sync::LazyLock::new(|| Mutex::new(SerialConnection::new()));
 
+mod device_type;
+use device_type::device_type_of;
+
 // ── Serial Port Info ────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize)]
@@ -408,6 +415,10 @@ pub struct SerialPortInfo {
     pub manufacturer: String,
     pub product: String,
     pub port_type: String,  // "uart_bridge" or "usb_cdc"
+    /// `device_type` from the probe's device.info reply ("dash", "gps", …),
+    /// or "" when the port was listed but never probed. Lets the UI name what
+    /// it found instead of assuming every RDM node is a dash.
+    pub device_type: String,
 }
 
 /// Known UART bridge VID/PID pairs
@@ -460,6 +471,9 @@ async fn serial_list_ports() -> Result<Vec<SerialPortInfo>, String> {
             manufacturer,
             product,
             port_type: classify_port(vid, pid).to_string(),
+            /* Listing only enumerates ports; nothing has been probed, so the
+             * type is genuinely unknown here rather than assumed. */
+            device_type: String::new(),
         });
     }
     Ok(result)
@@ -510,17 +524,17 @@ fn read_frame_silent(
     Ok(payload)
 }
 
-/// Probe a serial port to check if an RDM-7 device is connected.
-/// Opens the port, sends a device.info request, checks for valid response.
+/// Probe a serial port for an RDM device. Opens the port, sends a device.info
+/// request, and returns the device's `device_type` on a valid reply.
 /// Retries once in case port-open toggled DTR and reset the device.
-fn probe_port(port_name: &str) -> bool {
+fn probe_port(port_name: &str) -> Option<String> {
     let port = serialport::new(port_name, 921600)
         .timeout(Duration::from_millis(100))
         .open();
 
     let mut port = match port {
         Ok(p) => p,
-        Err(_) => return false,
+        Err(_) => return None,
     };
 
     // Prevent DTR/RTS toggling from resetting the device
@@ -569,8 +583,8 @@ fn probe_port(port_name: &str) -> bool {
             Ok(payload) => {
                 if let Ok(resp) = parse_json_response(&payload) {
                     if let Some(result) = resp.get("result") {
-                        if result.get("serial").is_some() && result.get("schema").is_some() {
-                            return true;
+                        if let Some(kind) = device_type_of(result) {
+                            return Some(kind);
                         }
                     }
                 }
@@ -578,7 +592,7 @@ fn probe_port(port_name: &str) -> bool {
             Err(_) => continue,
         }
     }
-    false
+    None
 }
 
 /// Auto-detect RDM-7 device by probing all USB serial ports
@@ -596,6 +610,7 @@ async fn serial_auto_detect() -> Result<Option<SerialPortInfo>, String> {
                 manufacturer: usb.manufacturer.clone().unwrap_or_default(),
                 product: usb.product.clone().unwrap_or_default(),
                 port_type: classify_port(usb.vid, usb.pid).to_string(),
+                device_type: String::new(),
             }),
             _ => None,
         }
@@ -607,8 +622,10 @@ async fn serial_auto_detect() -> Result<Option<SerialPortInfo>, String> {
     let ordered: Vec<_> = cdc_ports.drain(..).chain(uart_ports.drain(..)).collect();
 
     for port_info in ordered {
-        if probe_port(&port_info.name) {
-            return Ok(Some(port_info.clone()));
+        if let Some(kind) = probe_port(&port_info.name) {
+            let mut found = port_info.clone();
+            found.device_type = kind;
+            return Ok(Some(found));
         }
     }
 
@@ -1560,11 +1577,14 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .text("connect_wifi", "Connect over WiFi…")
         .text("scan", "Scan for Devices")
         .separator()
-        .text("keypad", "Keypad Configurator…")
-        .text("laptimer", "GPS Lap Timer…")
+        /* Devices you own, then instruments. Lap timing is no longer its own
+         * entry — it lives inside the RDM GPS workspace, which is the device
+         * that feeds it. */
+        .text("gps_node", "RDM GPS && Lap Timing…")
+        .text("keypad", "CAN Keypad…")
         .text("io_expander", "IO Expander…")
-        .text("analyzer", "CAN Bus Analyzer…")
         .separator()
+        .text("analyzer", "CAN Bus Analyzer…")
         .text("transfer", "Transfer Layouts…")
         .text("device_manager", "Device Manager…")
         .item(&boot_anim)
