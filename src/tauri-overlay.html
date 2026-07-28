@@ -1036,6 +1036,9 @@
         .gp-modes button:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
         .gp-modes button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
         .gp-modes button.na { opacity: 0.45; }
+        .gp-mapbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .gp-tip .k { display: inline-block; min-width: 74px; color: var(--text);
+                     font-family: 'JetBrains Mono', monospace; font-size: 10px; }
         .gp-glance { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
         .gp-glance .t { background: var(--bg); border: 1px solid var(--border);
                         border-radius: var(--radius-md); padding: 7px 9px; }
@@ -1740,8 +1743,13 @@
                                 title="Colour the line by time gained or lost against the comparison lap">vs Ref</button>
                     </div>
                     <button class="gp-mapbtn" id="gpPlayBtn" onclick="gpPlayToggle()">&#9654; Play</button>
-                    <button class="gp-mapbtn" id="gpLanesBtn" onclick="gpLanesToggle()"
-                            title="Show or hide the channels this recording cannot fill yet">Channels</button>
+                    <button class="gp-mapbtn" id="gpLanesBtn" onclick="gpLanesToggle()"></button>
+                    <i class="gp-lamp info" id="gpKeysLamp" data-tip="<b>Keyboard</b>
+                       <span class='k'>Space</span> play / pause<br>
+                       <span class='k'>&larr; &rarr;</span> one sample<br>
+                       <span class='k'>Shift + &larr; &rarr;</span> one second<br>
+                       <span class='k'>&uarr; &darr;</span> step through the coach findings<br>
+                       <span class='k'>Double-click</span> the rack to leave a corner"></i>
                     <input type="range" id="gpScrub" min="0" max="0" value="0" step="1"
                            oninput="gpScrubTo(this.value)">
                     <span class="gp-playread" id="gpPlayRead"></span>
@@ -6379,6 +6387,32 @@
             gpDrawStrip();
         };
 
+        /* A button labelled "Channels" tells you nothing about what pressing it
+           does. Label it with the outcome, and count the lanes rather than
+           hard-coding four — the number changes the day a channel starts
+           arriving over CAN. */
+        function gpLanesBtnLabel() {
+            var pend = 0;
+            for (var i = 0; i < GP_LANES.length; i++) if (GP_LANES[i].pending) pend++;
+            if (!pend) return { text: "Channels", on: false, tip: "" };
+            return gp.lanesOpen
+                ? { text: "Hide " + pend + " empty", on: true,
+                    tip: "<b>Empty channels</b>Hide the " + pend + " lanes this recording " +
+                         "cannot fill yet." }
+                : { text: "+ " + pend + " channels", on: false,
+                    tip: "<b>Empty channels</b>Show the " + pend + " lanes that are coming, " +
+                         "and what each one is waiting on." };
+        }
+
+        function gpSyncLanesBtn() {
+            var b = document.getElementById("gpLanesBtn");
+            if (!b) return;
+            var s = gpLanesBtnLabel();
+            b.textContent = s.text;
+            b.classList.toggle("on", s.on);
+            if (s.tip) b.setAttribute("data-tip", s.tip); else b.removeAttribute("data-tip");
+        }
+
         window.gpMapModeSet = function (m) {
             gp.mapMode = (m === "speed" || m === "ref") ? m : "pace";
             try { window.localStorage.setItem("rdm7_gp_mapmode", gp.mapMode); } catch (e) {}
@@ -6577,11 +6611,41 @@
            Lanes with no data are drawn as an empty frame with a label rather
            than omitted. Seeing the shape of what is coming is the point of the
            layout; a flat zero line would look like a car that never turned. */
-        var GP_LANE_H = 46, GP_LANE_GAP = 3, GP_LANE_LBL = 74;
+        var GP_LANE_H = 46, GP_LANE_GAP = 3, GP_LANE_LBL = 74, GP_AXIS_H = 15;
+
+        /* Round tick intervals only. A "timeline" whose gridlines land on
+           7.3 s tells you nothing; 1/2/5/10/15/30 s and their minute multiples
+           are the ones a driver can count in their head. Aim for a tick every
+           ~90 px so the labels never collide. */
+        function gpAxisTicks(rng, plotW) {
+            var secs = (rng.to - rng.from) * GP_DT;
+            if (!(secs > 0) || plotW < 40) return [];
+            var want = Math.max(2, Math.floor(plotW / 90));
+            var steps = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800];
+            var step = steps[steps.length - 1], i;
+            for (i = 0; i < steps.length; i++) {
+                if (secs / steps[i] <= want) { step = steps[i]; break; }
+            }
+            /* Past the table, keep doubling rather than capping the tick COUNT:
+               a hard cap draws 64 labels on top of each other, which is worse
+               than a coarse axis. Doubling 1800 stays round in hours. */
+            while (secs / step > want) step *= 2;
+
+            var out = [];
+            for (var s = 0; s <= secs + 1e-9; s += step) out.push({ s: s, frac: s / secs });
+            return out;
+        }
+
+        /* mm:ss once past a minute, otherwise plain seconds. */
+        function gpAxisLabel(s, step) {
+            if (s < 60) return (step < 1 ? s.toFixed(1) : String(Math.round(s))) + "s";
+            var m = Math.floor(s / 60), r = s - m * 60;
+            return m + ":" + (r < 10 ? "0" : "") + (step < 1 ? r.toFixed(1) : String(Math.round(r)));
+        }
 
         function gpRackHeight() {
             var rows = gpLaneRows();
-            return rows.length * (GP_LANE_H + GP_LANE_GAP) + 4;
+            return rows.length * (GP_LANE_H + GP_LANE_GAP) + 4 + GP_AXIS_H;
         }
 
         /* Min/max over the visible window, padded so a flat trace is not a line
@@ -6648,6 +6712,19 @@
             var g = off.getContext("2d");
             var rows = gpLaneRows(), n = rng.to - rng.from + 1;
             var plotX = GP_LANE_LBL, plotW = w - GP_LANE_LBL - 6;
+
+            /* Gridlines first, so every lane is drawn over them and the eye can
+               run a tick straight down the stack. */
+            var ticks = gpAxisTicks(rng, plotW);
+            var rackBottom = 2 + rows.length * (GP_LANE_H + GP_LANE_GAP);
+            g.strokeStyle = "rgba(255,255,255,0.055)";
+            g.lineWidth = 1;
+            g.beginPath();
+            ticks.forEach(function (tk) {
+                var tx = Math.round(plotX + tk.frac * plotW) + 0.5;
+                g.moveTo(tx, 2); g.lineTo(tx, rackBottom);
+            });
+            g.stroke();
 
             rows.forEach(function (lane, li) {
                 var top = 2 + li * (GP_LANE_H + GP_LANE_GAP);
@@ -6730,6 +6807,24 @@
                 g.fillText(sc.lo.toFixed(lane.dp), plotX + plotW - 30, top + GP_LANE_H - 4);
             });
 
+            /* Axis labels below the stack. The first is anchored left and the
+               last right, so neither hangs off the end of the plot. */
+            var step = ticks.length > 1 ? ticks[1].s - ticks[0].s : 1;
+            g.fillStyle = "rgba(255,255,255,0.38)";
+            g.font = "9px 'JetBrains Mono', monospace";
+            ticks.forEach(function (tk, ti) {
+                var tx = plotX + tk.frac * plotW;
+                var lab = gpAxisLabel(tk.s, step);
+                var wpx = g.measureText(lab).width;
+                var lx = tx - wpx / 2;
+                if (ti === 0) lx = tx;
+                if (ti === ticks.length - 1 && tx + wpx / 2 > plotX + plotW) lx = tx - wpx;
+                g.fillText(lab, lx, rackBottom + 11);
+            });
+            g.fillStyle = "rgba(255,255,255,0.26)";
+            g.font = "9px system-ui";
+            g.fillText(gp.stripZoom ? "corner" : "lap", 6, rackBottom + 11);
+
             gp.stripCache = { key: key, cv: off };
             return off;
         }
@@ -6741,7 +6836,10 @@
             cv.style.display = show ? "block" : "none";
             var tog = document.getElementById("gpLanesBtn");
             if (tog) tog.style.display = show ? "" : "none";
+            var kl = document.getElementById("gpKeysLamp");
+            if (kl) kl.style.display = show ? "" : "none";
             if (!show) return;
+            gpSyncLanesBtn();
 
             var h = gpRackHeight();
             cv.style.height = h + "px";
@@ -6769,7 +6867,19 @@
                 var px = plotX + (pi - rng.from) / (n - 1) * plotW;
                 g.strokeStyle = "rgba(124,192,255,0.85)";
                 g.lineWidth = 1;
-                g.beginPath(); g.moveTo(px + 0.5, 2); g.lineTo(px + 0.5, h - 2); g.stroke();
+                g.beginPath(); g.moveTo(px + 0.5, 2); g.lineTo(px + 0.5, h - GP_AXIS_H); g.stroke();
+
+                /* Elapsed time at the cursor, pinned to the axis line — the
+                   thing you actually want when scrubbing a timeline. */
+                var el = (pi - rng.from) * GP_DT;
+                var lab = gpAxisLabel(el, 0.5);
+                g.font = "9.5px 'JetBrains Mono', monospace";
+                var lw = g.measureText(lab).width;
+                var lx = Math.max(GP_LANE_LBL, Math.min(px - lw / 2, w - 6 - lw));
+                g.fillStyle = "rgba(124,192,255,0.95)";
+                g.fillRect(lx - 3, h - GP_AXIS_H + 1, lw + 6, 12);
+                g.fillStyle = "#0c0e10";
+                g.fillText(lab, lx, h - GP_AXIS_H + 10);
 
                 gpLaneRows().forEach(function (lane, li) {
                     if (lane.pending) return;
