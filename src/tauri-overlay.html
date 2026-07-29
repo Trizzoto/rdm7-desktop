@@ -1281,6 +1281,12 @@
         .gp-strip { display: none; width: calc(100% - 28px); margin: 8px 14px 0;
                     background: var(--panel); border: 1px solid var(--border);
                     border-radius: var(--radius-md); cursor: crosshair; }
+        /* The navigator: the whole lap, always, with a window you drag. Same
+           width and gutter as the rack so the two share an x-axis by eye. */
+        .gp-nav { display: none; width: calc(100% - 28px); margin: 4px 14px 0;
+                  background: var(--panel); border: 1px solid var(--border);
+                  border-radius: var(--radius-md); cursor: grab; }
+        .gp-nav.dragging { cursor: grabbing; }
         /* coach */
         .gp-coach-hd { display: flex; justify-content: space-between; align-items: baseline;
                        font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
@@ -2004,6 +2010,7 @@
                 </div>
                 <div class="gp-setup" id="gpSetupWrap"><div class="gp-setup-col" id="gpSetup"></div></div>
                 <canvas class="gp-strip" id="gpStrip"></canvas>
+                <canvas class="gp-nav" id="gpNav" title="The whole lap. Drag the bright window to move what the rack above is showing; drag its edges to widen or narrow it; double-click to see the lap again."></canvas>
                 <div class="gp-playbar" id="gpPlaybar">
                     <div class="gp-modes" id="gpModes">
                         <button data-m="pace" onclick="gpMapModeSet('pace')"
@@ -2013,6 +2020,7 @@
                         <button data-m="ref" onclick="gpMapModeSet('ref')"
                                 title="Colour the line by time gained or lost against the comparison lap">vs Ref</button>
                     </div>
+                    <button class="gp-lanesbtn" id="gpPlotBtn" onclick="gpPlotModeToggle()"></button>
                     <button class="gp-lanesbtn" id="gpLanesBtn" onclick="gpLanesToggle()"></button>
                     <span class="gp-sep"></span>
                     <!-- The transport cluster: the NLE grammar, icon for icon.
@@ -5972,6 +5980,10 @@
                 try { return window.localStorage.getItem("rdm7_gp_mapmode") || "pace"; }
                 catch (e) { return "pace"; }
             })(),
+            plotMode: (function () {     /* tiled = one lane each, over = one well */
+                try { return window.localStorage.getItem("rdm7_gp_plotmode") === "over" ? "over" : "tiled"; }
+                catch (e) { return "tiled"; }
+            })(),
             sectors: null, secKey: "",   /* memoised per-lap sector splits */
             stripZoom: null,             /* {lap,from,to} when zoomed to a corner */
             coachAll: false,      /* three things, or the full teardown */
@@ -7560,7 +7572,11 @@
            change from before the line to on/past it, inside the gate width.
            Sector lines are crossed in order, so each search starts where the
            previous one finished. */
-        function gpSectorTimes(lap) {
+        /* Where the lap crosses each sector line, as sample indices. Split out
+           so the navigator can mark the same divisions the split times are
+           computed from, rather than a second opinion about where sector 2
+           starts. */
+        function gpSectorMarks(lap) {
             var trk = gpActiveTrack();
             var secs = (trk && trk.sectors) || [];
             var rows = gp.trace;
@@ -7582,7 +7598,14 @@
                 marks.push(found);
                 at = found;
             }
+            return marks;
+        }
 
+        function gpSectorTimes(lap) {
+            var rows = gp.trace;
+            var marks = gpSectorMarks(lap);
+            if (!marks) return null;
+            var i;
             var out = [], prevI = lap.from;
             for (i = 0; i < marks.length; i++) { out.push(gpSecs(rows, prevI, marks[i])); prevI = marks[i]; }
             out.push(gpSecs(rows, prevI, lap.to));
@@ -7750,7 +7773,28 @@
             b.textContent = s.text;
             b.classList.toggle("on", s.on);
             if (s.tip) b.setAttribute("data-tip", s.tip); else b.removeAttribute("data-tip");
+
+            var p = document.getElementById("gpPlotBtn");
+            if (!p) return;
+            var over = gp.plotMode === "over";
+            p.textContent = over ? "Stacked" : "Combined";
+            p.classList.toggle("on", over);
+            p.setAttribute("data-tip", over
+                ? "<b>Stacked</b>Back to one lane per channel, each with its own frame and its own scale."
+                : "<b>Combined</b>Every channel on one set of axes, so their shapes line up against each other — where the brakes come off against where the speed stops falling. Each keeps its own scale; the tags along the top say which line is which.");
         }
+
+        /* Stacked reads one channel at a time; combined reads them AGAINST each
+           other. Both are right for different questions, which is why every
+           analysis package ships both, so this is a toggle and not a decision
+           made once in the code. */
+        window.gpPlotModeToggle = function () {
+            gp.plotMode = gp.plotMode === "over" ? "tiled" : "over";
+            try { window.localStorage.setItem("rdm7_gp_plotmode", gp.plotMode); } catch (e) {}
+            gp.stripCache = null;
+            gpDrawStrip();
+            gpSyncLanesBtn();
+        };
 
         window.gpMapModeSet = function (m) {
             gp.mapMode = (m === "speed" || m === "ref") ? m : "pace";
@@ -8137,7 +8181,7 @@
            leaves the last column a fraction of a pixel out, which is the
            difference between a hairline and a grey smear. */
         function gpRackStatic(w, h, rng, dpr) {
-            var key = [gp.selLap, gp.cmpLap, rng.from, rng.to, w, h, dpr, gp.lanesOpen].join(":");
+            var key = [gp.selLap, gp.cmpLap, rng.from, rng.to, w, h, dpr, gp.lanesOpen, gp.plotMode].join(":");
             if (gp.stripCache && gp.stripCache.key === key) return gp.stripCache.cv;
 
             var off = document.createElement("canvas");
@@ -8206,6 +8250,82 @@
             });
             g.stroke();
 
+            /* ---- combined: every channel in one well ------------------------
+               Stacked answers "what did this channel do". Combined answers
+               "what did these channels do to each other" — where the brake
+               trace stops falling against where the speed does, which is a
+               question about two shapes sharing an x-axis and cannot be asked
+               of two frames sitting one above the other.
+
+               Each channel keeps its OWN scale. A shared one would put a 0.4 g
+               trace flat against 180 km/h and call it a plot. What the eye is
+               reading here is shape and timing, not magnitude; the magnitudes
+               live in the tags and on the playhead. */
+            if (gp.plotMode === "over") {
+                var live = rows.filter(function (l) {
+                    return !l.pending && !noData && !(l.absent && l.absent());
+                });
+                var wellTop = 2, wellH = rackBottom - 2;
+                /* The gutter becomes a legend: a swatch, the name, and the
+                   channel's own top-of-scale, one row each. */
+                rows.forEach(function (lane, li) {
+                    var ty = snapT(14 + li * 13);
+                    if (ty > rackBottom - 4) return;
+                    var dim = live.indexOf(lane) < 0;
+                    g.fillStyle = dim ? "rgba(255,255,255,0.20)" : lane.colour;
+                    g.fillRect(6, ty - 7, 7, 7);
+                    g.fillStyle = dim ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.78)";
+                    g.font = "10px system-ui";
+                    var lbl = lane.label.replace(/&amp;/g, "&");
+                    var lu2 = typeof lane.unit === "function" ? lane.unit() : lane.unit;
+                    if (lu2) lbl += "  " + lu2;
+                    g.fillText(lbl, 18, ty);
+                });
+                if (!live.length) {
+                    g.fillStyle = "rgba(255,255,255,0.30)";
+                    g.font = "10px system-ui";
+                    g.fillText(noData ? "" : "Nothing to plot yet.", plotX + 9, snapT(wellTop + wellH / 2));
+                }
+                live.forEach(function (lane) {
+                    var sc2 = gpLaneScale(lane, rng);
+                    if (!sc2) return;
+                    var yo = function (v) {
+                        return wellTop + wellH - 4 - ((v - sc2.lo) / (sc2.hi - sc2.lo)) * (wellH - 8);
+                    };
+                    g.strokeStyle = lane.colour;
+                    var env2 = gpDecimate(lane, rng, Math.max(1, Math.round(plotW * sx)));
+                    if (env2) {
+                        /* Overlapping envelopes turn into a grey wash if every
+                           one is opaque. Slight transparency lets a channel
+                           underneath stay legible without dimming any of them
+                           to the point of being decorative. */
+                        g.globalAlpha = 0.85;
+                        g.lineWidth = hairV; g.lineCap = "butt"; g.lineJoin = "miter";
+                        g.beginPath();
+                        for (var c2 = 0; c2 < env2.length; c2++) {
+                            if (!env2[c2]) continue;
+                            var ex2 = snapX(plotX + c2 / sx);
+                            var a2 = yo(env2[c2].hi), b2 = yo(env2[c2].lo);
+                            if (Math.abs(b2 - a2) < hair) b2 = a2 + hair;
+                            g.moveTo(ex2, a2); g.lineTo(ex2, b2);
+                        }
+                        g.stroke();
+                        g.globalAlpha = 1;
+                    } else {
+                        g.globalAlpha = 0.9;
+                        g.lineWidth = 1.4; g.lineJoin = "round"; g.lineCap = "round";
+                        g.beginPath();
+                        for (var i2 = rng.from; i2 <= rng.to; i2++) {
+                            var v2 = lane.get(i2);
+                            if (v2 === null || v2 === undefined || !isFinite(v2)) continue;
+                            var x2 = plotX + (i2 - rng.from) / (n - 1) * plotW;
+                            if (i2 === rng.from) g.moveTo(x2, yo(v2)); else g.lineTo(x2, yo(v2));
+                        }
+                        g.stroke();
+                        g.globalAlpha = 1;
+                    }
+                });
+            } else
             rows.forEach(function (lane, li) {
                 var top = 2 + li * (laneH + GP_LANE_GAP);
                 var mid = top + laneH / 2;
@@ -8350,7 +8470,17 @@
             return off;
         }
 
+        /* The rack and the navigator are one view of one window: whenever the
+           rack is redrawn the strip under it has to agree, and there are a
+           dozen call sites that would each have to remember. So they don't —
+           the pair is drawn together, behind the name every caller already
+           uses. */
         function gpDrawStrip() {
+            gpDrawRack();
+            gpDrawNav();
+        }
+
+        function gpDrawRack() {
             var cv = document.getElementById("gpStrip");
             if (!cv) return;
             /* The rack shows in Session even before anything is loaded: the
@@ -8444,6 +8574,25 @@
                 g.fillStyle = "#0c0e10";
                 g.fillText(lab, lx, h - GP_AXIS_H + 10);
 
+                /* Combined puts every reading in the legend gutter instead of
+                   beside the playhead: nine numbers stacked on one vertical
+                   line is a column of digits over the traces they describe. */
+                if (gp.plotMode === "over") {
+                    gpLaneRows().forEach(function (lane, li) {
+                        var ty = 14 + li * 13;
+                        if (ty > h - GP_AXIS_H - 4) return;
+                        if (lane.pending) return;
+                        var v = lane.get(pi);
+                        if (v === null || v === undefined || !isFinite(v)) return;
+                        var txt = (lane.zero && v >= 0 ? "+" : "") + v.toFixed(lane.dp);
+                        g.font = "10px 'JetBrains Mono', monospace";
+                        var tw = g.measureText(txt).width;
+                        g.fillStyle = "rgba(8,9,10,0.88)";
+                        g.fillRect(GP_LANE_LBL - 9 - tw, ty - 9, tw + 6, 12);
+                        g.fillStyle = lane.colour;
+                        g.fillText(txt, GP_LANE_LBL - 6 - tw, ty);
+                    });
+                } else
                 gpLaneRows().forEach(function (lane, li) {
                     if (lane.pending) return;
                     var v = lane.get(pi);
@@ -8459,6 +8608,231 @@
                     g.fillText(txt, bx, top + 14);
                 });
             }
+        }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * The navigator
+         *
+         * The rack shows a window. Until now the only ways to change that
+         * window were a coach finding (which jumps to a corner) and a
+         * double-click (which throws the zoom away) — so there was no way to
+         * say "show me the second half", or to slide a two-second window
+         * along a lap and watch the traces move through it.
+         *
+         * So: the whole lap, always, drawn small, with the rack's window
+         * marked on it. Drag the window to pan, drag an edge to zoom, click
+         * outside to jump. Every desktop package has this strip and they all
+         * use it the same way, because it is the one control that makes a
+         * zoomed plot navigable rather than lost.
+         * ═════════════════════════════════════════════════════════════════ */
+        var GP_NAV_H = 42, GP_NAV_EDGE = 6;   /* edge grab zone, css px */
+
+        /* The window, as fractions of the selected lap. */
+        function gpNavWin() {
+            var lap = gpLapRange(), span = lap.to - lap.from;
+            if (span < 1) return { a: 0, b: 1 };
+            var r = gpStripRange();
+            return { a: (r.from - lap.from) / span, b: (r.to - lap.from) / span };
+        }
+
+        function gpDrawNav() {
+            var cv = document.getElementById("gpNav");
+            if (!cv) return;
+            var noData = !gp.trace || !gp.trace.length;
+            var show = gp.view === "session" && !noData && !gp.liveMode;
+            cv.style.display = show ? "block" : "none";
+            if (!show) return;
+
+            var lap = gpLapRange(), span = lap.to - lap.from;
+            if (span < 2) { cv.style.display = "none"; return; }
+
+            cv.style.height = GP_NAV_H + "px";
+            var dpr = window.devicePixelRatio || 1;
+            var w = cv.getBoundingClientRect().width || cv.clientWidth || 600;
+            if (w < 2) return;
+            var wDev = Math.round(w * dpr), hDev = Math.round(GP_NAV_H * dpr);
+            if (cv.width !== wDev || cv.height !== hDev) { cv.width = wDev; cv.height = hDev; }
+            var g = cv.getContext("2d");
+            var sx = wDev / w, sy = hDev / GP_NAV_H;
+            g.setTransform(sx, 0, 0, sy, 0, 0);
+            g.clearRect(0, 0, w, GP_NAV_H);
+
+            /* Same gutter as the rack, so the two strips share an x-axis by
+               eye — a navigator that does not line up with what it navigates
+               is a second thing to mentally align rather than a control. */
+            var plotX = GP_LANE_LBL, plotW = w - GP_LANE_LBL - 6;
+            g.fillStyle = "rgba(0,0,0,0.62)";
+            g.fillRect(plotX, 2, plotW, GP_NAV_H - 4);
+
+            g.fillStyle = "rgba(255,255,255,0.40)";
+            g.font = "9px system-ui";
+            g.fillText(gpRunWord(true) + (gp.selLap >= 0 ? " " + (gp.selLap + 1) : ""), 6, 15);
+            g.fillStyle = "rgba(255,255,255,0.26)";
+            g.fillText("drag to move", 6, 27);
+
+            /* Speed is the shape everyone recognises a lap by — the straights
+               and the corners are legible in it at 40 px tall, which is the
+               whole job of this strip. */
+            var lo = Infinity, hi = -Infinity, i;
+            for (i = lap.from; i <= lap.to; i++) {
+                var kv = gp.trace[i].kph;
+                if (kv < lo) lo = kv;
+                if (kv > hi) hi = kv;
+            }
+            if (!(hi > lo)) { lo = 0; hi = 1; }
+            var cols = Math.max(1, Math.round(plotW * sx));
+            g.strokeStyle = "rgba(120,170,215,0.85)";
+            g.lineWidth = 1 / sx;
+            g.lineCap = "butt";
+            g.beginPath();
+            for (var c = 0; c < cols; c++) {
+                var a0 = lap.from + Math.floor(c / cols * span);
+                var b0 = lap.from + Math.floor((c + 1) / cols * span);
+                if (b0 <= a0) b0 = a0;
+                var mn = Infinity, mx = -Infinity;
+                for (i = a0; i <= b0 && i <= lap.to; i++) {
+                    var v = gp.trace[i].kph;
+                    if (v < mn) mn = v;
+                    if (v > mx) mx = v;
+                }
+                if (mn === Infinity) continue;
+                var xg = (Math.round((plotX + c / sx) * sx) + 0.5) / sx;
+                var yA = GP_NAV_H - 4 - (mx - lo) / (hi - lo) * (GP_NAV_H - 8);
+                var yB = GP_NAV_H - 4 - (mn - lo) / (hi - lo) * (GP_NAV_H - 8);
+                if (yB - yA < 1 / sy) yB = yA + 1 / sy;
+                g.moveTo(xg, yA); g.lineTo(xg, yB);
+            }
+            g.stroke();
+
+            /* Sector marks, from the same crossings the split times are
+               computed from — not a second opinion about where sector 2
+               starts. */
+            var marks = gp.selLap >= 0 ? gpSectorMarks(lap) : null;
+            if (marks && marks.length) {
+                g.strokeStyle = "rgba(255,255,255,0.22)";
+                g.lineWidth = 1 / sx;
+                g.beginPath();
+                marks.forEach(function (ci) {
+                    if (ci <= lap.from || ci >= lap.to) return;
+                    var cx = (Math.round((plotX + (ci - lap.from) / span * plotW) * sx) + 0.5) / sx;
+                    g.moveTo(cx, 2); g.lineTo(cx, GP_NAV_H - 2);
+                });
+                g.stroke();
+            }
+
+            /* Everything outside the window is dimmed rather than the window
+               being highlighted: the eye reads the bright part as the subject,
+               which is what it is. */
+            var win = gpNavWin();
+            var xa = plotX + win.a * plotW, xb = plotX + win.b * plotW;
+            g.fillStyle = "rgba(6,8,10,0.62)";
+            if (xa > plotX) g.fillRect(plotX, 2, xa - plotX, GP_NAV_H - 4);
+            if (xb < plotX + plotW) g.fillRect(xb, 2, plotX + plotW - xb, GP_NAV_H - 4);
+            g.strokeStyle = "rgba(124,192,255,0.85)";
+            g.lineWidth = 1 / sx;
+            g.strokeRect((Math.round(xa * sx) + 0.5) / sx, 2.5,
+                         Math.max(2 / sx, xb - xa), GP_NAV_H - 5);
+            /* Grab handles, so the edges look like edges you can take hold of. */
+            g.fillStyle = "rgba(124,192,255,0.85)";
+            g.fillRect(xa - 1, GP_NAV_H / 2 - 7, 2, 14);
+            g.fillRect(xb - 1, GP_NAV_H / 2 - 7, 2, 14);
+
+            /* The playhead, on the same axis, so the window and the cursor are
+               readable against each other. */
+            if (gp.playIdx >= lap.from && gp.playIdx <= lap.to) {
+                var pxn = plotX + (gp.playIdx - lap.from) / span * plotW;
+                g.strokeStyle = "rgba(255,255,255,0.55)";
+                g.beginPath();
+                g.moveTo((Math.round(pxn * sx) + 0.5) / sx, 2);
+                g.lineTo((Math.round(pxn * sx) + 0.5) / sx, GP_NAV_H - 2);
+                g.stroke();
+            }
+        }
+
+        /* Setting the window IS setting gp.stripZoom — the state the rack
+           already reads. No second source of truth for "what is on screen". */
+        function gpNavSet(a, b) {
+            var lap = gpLapRange(), span = lap.to - lap.from;
+            if (span < 2) return;
+            /* Never narrower than 20 samples: below that the rack has nothing
+               to draw and dragging feels like it broke. */
+            var minF = Math.min(0.9, 20 / span);
+            if (b - a < minF) { var mid = (a + b) / 2; a = mid - minF / 2; b = mid + minF / 2; }
+            if (a < 0) { b -= a; a = 0; }
+            if (b > 1) { a -= (b - 1); b = 1; }
+            a = Math.max(0, a); b = Math.min(1, b);
+            if (a <= 0.0005 && b >= 0.9995) { gp.stripZoom = null; }
+            else gp.stripZoom = { lap: gp.selLap,
+                                  from: lap.from + Math.round(a * span),
+                                  to: lap.from + Math.round(b * span) };
+            gpDrawStrip();       /* which redraws the navigator too */
+        }
+
+        function gpNavBind() {
+            var cv = document.getElementById("gpNav");
+            if (!cv || cv._bound) return;
+            cv._bound = true;
+            var mode = null, grabF = 0, win0 = null;
+
+            var fracAt = function (ev) {
+                var r = cv.getBoundingClientRect();
+                var plotW = r.width - GP_LANE_LBL - 6;
+                if (plotW <= 0) return null;
+                return Math.max(0, Math.min(1, (ev.clientX - r.left - GP_LANE_LBL) / plotW));
+            };
+            var edgePx = function (ev, xf) {
+                var r = cv.getBoundingClientRect();
+                var plotW = r.width - GP_LANE_LBL - 6;
+                return Math.abs((ev.clientX - r.left - GP_LANE_LBL) - xf * plotW);
+            };
+
+            cv.addEventListener("mousedown", function (ev) {
+                var f = fracAt(ev);
+                if (f === null) return;
+                var win = gpNavWin();
+                win0 = win;
+                if (edgePx(ev, win.a) <= GP_NAV_EDGE) mode = "a";
+                else if (edgePx(ev, win.b) <= GP_NAV_EDGE) mode = "b";
+                else if (f > win.a && f < win.b) { mode = "pan"; grabF = f - win.a; }
+                else {
+                    /* Outside: centre the current width on where they clicked
+                       — a click on the far side of the lap means "go there",
+                       not "select from here to there". */
+                    var wid = win.b - win.a;
+                    mode = "pan"; grabF = wid / 2;
+                    gpNavSet(f - wid / 2, f + wid / 2);
+                    win0 = gpNavWin();
+                }
+                cv.classList.add("dragging");
+                ev.preventDefault();
+            });
+
+            window.addEventListener("mousemove", function (ev) {
+                if (!mode) return;
+                var f = fracAt(ev);
+                if (f === null) return;
+                if (mode === "pan") {
+                    var wid = win0.b - win0.a;
+                    gpNavSet(f - grabF, f - grabF + wid);
+                } else if (mode === "a") {
+                    gpNavSet(Math.min(f, win0.b - 0.002), win0.b);
+                } else {
+                    gpNavSet(win0.a, Math.max(f, win0.a + 0.002));
+                }
+            });
+
+            window.addEventListener("mouseup", function () {
+                if (!mode) return;
+                mode = null;
+                cv.classList.remove("dragging");
+            });
+
+            /* Double-click anywhere: the whole lap again. Same gesture the
+               rack already uses for the same meaning. */
+            cv.addEventListener("dblclick", function () {
+                gp.stripZoom = null;
+                gpDrawStrip();
+            });
         }
 
         /* Click or drag the strip to move the playhead — the same bidirectional
@@ -11028,7 +11402,7 @@
             if (pb) pb.style.display = gp.view === "session" ? "flex" : "none";
             if (gp.view !== "session") gpPlayStop();
             gpDrawTrace();
-            gpStripBind(); gpDrawStrip();
+            gpStripBind(); gpNavBind(); gpDrawStrip();
             gpBuildRail();
             /* Gates are drawn in ONE place: the Tracks editor. The map in
                Monitor is the car and its trail, nothing else. */
