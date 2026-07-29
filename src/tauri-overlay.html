@@ -5973,6 +5973,9 @@
             rates: {},         /* counter key -> per-second rate */
             _prev: null,       /* {t, s} previous sample, for those rates */
             err: null,         /* last RPC failure — surfaced, never swallowed */
+            wasLinked: false,  /* a puck has been attached at least once */
+            relinking: false,  /* an automatic re-attach is in flight */
+            _relinkAt: 0,      /* throttle for those attempts */
             sel: "fix",
             wifi: null         /* wifi.config.get result (never carries a password) */
         };
@@ -12233,6 +12236,13 @@
             if (gp.lapErr && gpLapUsable()) return "Lost contact with the lap engine on the " + (gpLapWhere() || "device") + ": " + gp.lapErr;
             if (!gpLinked()) {
                 if (gp.connecting) return "Looking for an RDM GPS on USB…";
+                /* A link that DROPPED is a different sentence from one that
+                   was never made: the user did nothing wrong, and something
+                   is already trying to fix it. */
+                if (gp.wasLinked)
+                    return "Lost the RDM GPS" + (gp.err ? " (" + gp.err + ")" : "") +
+                        ". Checking for it every few seconds — or press Connect over USB " +
+                        "if you have moved it to another port.";
                 if (typeof RDM === "undefined" || RDM.mode === "local")
                     return "No RDM GPS connected. Plug the node in over USB, then press Connect over USB.";
                 /* Linked to something, just not a puck — say which, so this
@@ -12257,11 +12267,15 @@
                once we're linked, or give up after the auto-detect port sweep
                has had time to run, so the hint can't sit on "Looking…" forever. */
             if (gp.connecting && (gpLinked() || Date.now() - gp.connectingAt > 25000)) gp.connecting = false;
+            /* Remember that a puck was once here: it is what separates "lost
+               it" from "never had one", and it is what licenses the automatic
+               re-attach in gpRelink. */
+            if (gpLinked()) gp.wasLinked = true;
             var cbtn = document.getElementById("gpConnectBtn");
             if (cbtn) {
                 cbtn.style.display = gpLinked() ? "none" : "";
-                cbtn.disabled = !!gp.connecting;
-                cbtn.textContent = gp.connecting ? "Searching…" : "Connect over USB";
+                cbtn.disabled = !!(gp.connecting || gp.relinking);
+                cbtn.textContent = (gp.connecting || gp.relinking) ? "Searching…" : "Connect over USB";
             }
             var dev = document.getElementById("gpChipDev");
             if (dev) {
@@ -12285,9 +12299,65 @@
         }
 
         /* ---- polling ---- */
+        /* Past this much unbroken silence the node is not slow, it is GONE.
+           Expressed in time rather than in poll counts so changing the poll
+           rate cannot quietly turn a 3 s grace period into 300 ms. */
+        var GP_DEAD_MISSES = Math.max(2, Math.round(3000 / GP_POLL_MS));
+        var GP_RELINK_MS = 5000;
+
+        /* Give the link up properly.
+           Nothing used to do this. gpLinked() asks the transport registry
+           whether a puck is attached, and a failing poll never removed the
+           entry — so after the cable came out the workspace went on believing
+           it was connected. That is why "Connect over USB" stayed hidden (it
+           is shown only when NOT linked) and why nothing ever retried: from
+           the registry's point of view there was nothing wrong. */
+        function gpLinkLost() {
+            if (!gpDev()) return;
+            gp.status = null; gp._prev = null; gp.rates = {}; gp._misses = 0;
+            gp._relinkAt = Date.now();
+            /* detachDevice, not detach: it also releases the serial port, and
+               the port has to be free before anything can re-open it. */
+            try {
+                var p = RDM.detachDevice ? RDM.detachDevice("gps") : RDM.detach("gps");
+                if (p && p.catch) p.catch(function () { });
+            } catch (e) { }
+            gpUpdateChips();
+            gpUpdateStage();
+            gpRenderInspector();
+        }
+
+        /* Pick it up again by itself. Only for a link that EXISTED — a first
+           connection stays a deliberate button press, the same contract the
+           dash's own recovery loop keeps. Uses the same _attachUsbDevice the
+           button does, so it refuses a non-GPS device on that port instead of
+           hijacking the dash's connection. */
+        function gpRelink() {
+            if (gp.connecting || gp.relinking || !gp.wasLinked) return;
+            if (typeof window._attachUsbDevice !== "function") return;
+            /* mode 'usb' means the DASH holds the one serial port the backend
+               owns; sweeping it out from under a working dash to look for a
+               puck would be a worse bug than the one being fixed. */
+            if (typeof RDM === "undefined" || RDM.mode === "usb") return;
+            if (Date.now() - (gp._relinkAt || 0) < GP_RELINK_MS) return;
+            gp._relinkAt = Date.now();
+            gp.relinking = true;
+            window._attachUsbDevice("gps").then(function () {
+                gp.relinking = false;
+                gp.err = null; gp._misses = 0;
+                gp.status = null; gp._prev = null; gp.rates = {};
+                gpRefreshDevice();
+                gpTick();
+            }).catch(function () {
+                /* Still unplugged. Not an error worth reporting every 5 s —
+                   the hint already says the link is down. */
+                gp.relinking = false;
+            }).then(function () { gpUpdateChips(); });
+        }
+
         function gpTick() {
             if (!gp.open || gp.inFlight) return;
-            if (!gpLinked()) { gpUpdateChips(); return; }
+            if (!gpLinked()) { gpRelink(); gpUpdateChips(); return; }
             var epoch = gp._epoch;
             /* Serial is single-threaded — one request in flight at a time, or
                replies interleave and the frame parser sees garbage. */
@@ -12303,6 +12373,10 @@
                    drawing the last sample as though it were live. */
                 gp._misses = (gp._misses || 0) + 1;
                 if (gp._misses >= 2) { gp.status = null; gp._prev = null; gp.rates = {}; }
+                /* Two misses stops the screen lying about the DATA; this stops
+                   it lying about the LINK. Without it the workspace sat on a
+                   dead transport for the rest of the session. */
+                if (gp._misses >= GP_DEAD_MISSES) gpLinkLost();
             }).then(function () {
                 if (epoch !== gp._epoch) return;
                 gp._misses = gp.err ? gp._misses : 0;
