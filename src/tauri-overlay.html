@@ -6262,6 +6262,156 @@
             return rows;
         }
 
+        /* ---- export / import ----------------------------------------------
+         * CSV is for everyone else's tools — i2, Excel, RaceRender — and
+         * .rdmsession moves a recording between PCs whole. Both are built from
+         * the same rows the screen shows, so what exports is what you see.
+         *
+         * The typed arrays go into the file as base64 of their bytes. That is
+         * little-endian because every machine this app runs on is; the format
+         * field is there so a future reader can be told if that ever stops
+         * being true. */
+        function gpB64(u8) {
+            var s = "", CH = 0x8000;
+            for (var i = 0; i < u8.length; i += CH)
+                s += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+            return btoa(s);
+        }
+        function gpB64Dec(b64) {
+            var bin = atob(b64), u8 = new Uint8Array(bin.length);
+            for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+            return u8;
+        }
+
+        /* One row per sample, one column per thing a spreadsheet can use.
+           Speed is in the READING units and the header says which, because a
+           column of bare numbers with a unit nobody recorded is how data gets
+           misread a year later. Position stays raw degrees. */
+        function gpCsvBuild() {
+            var rows = gp.trace || [];
+            if (!rows.length) return null;
+            var ch = gpChannels() || {};
+            var meta = (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0] || null;
+            var t0 = rows[0].t;
+            var word = gpRunWord();
+            var lapOf = new Array(rows.length);
+            (gp.traceLaps || []).forEach(function (l, i) {
+                for (var k = l.from; k <= l.to; k++) lapOf[k] = i + 1;
+            });
+            var out = [word + ",t_s,utc,lat_deg,lon_deg," +
+                       "speed_" + (gpSpdU() === "km/h" ? "kph" : "mph") +
+                       ",heading_deg,long_g,lat_g,yaw_dps"];
+            for (var i = 0; i < rows.length; i++) {
+                var r = rows[i];
+                var utc = (meta && meta.dated === "gps" && r.t !== undefined && t0 !== undefined)
+                    ? new Date(meta.recordedAt + (r.t - t0)).toISOString() : "";
+                out.push([lapOf[i] || "", gpSecs(rows, 0, i).toFixed(3), utc,
+                          r.lat.toFixed(7), r.lon.toFixed(7),
+                          gpSpdN(r.kph).toFixed(2), r.hdg.toFixed(2),
+                          (r.g || 0).toFixed(3),
+                          (ch.glat ? ch.glat[i] : 0).toFixed(3),
+                          (ch.yaw ? ch.yaw[i] : 0).toFixed(1)].join(","));
+            }
+            return out.join("\n");
+        }
+
+        var GP_SESFILE_FMT = "rdm-session";
+
+        function gpSessionFileBuild(meta, pk) {
+            var m = {};
+            /* The id is THIS PC's primary key; the receiving PC mints its own,
+               so two imports of the same file cannot collide. */
+            Object.keys(meta).forEach(function (k) { if (k !== "id") m[k] = meta[k]; });
+            return JSON.stringify({
+                format: GP_SESFILE_FMT, version: 1, meta: m,
+                data: { n: pk.n,
+                        lat: gpB64(new Uint8Array(pk.lat.buffer)),
+                        lon: gpB64(new Uint8Array(pk.lon.buffer)),
+                        kph: gpB64(new Uint8Array(pk.kph.buffer)),
+                        hdg: gpB64(new Uint8Array(pk.hdg.buffer)),
+                        t: gpB64(new Uint8Array(pk.t.buffer)) }
+            });
+        }
+
+        function gpSessionFileParse(text) {
+            var j = JSON.parse(text);
+            if (!j || j.format !== GP_SESFILE_FMT || !j.data || !j.meta)
+                throw new Error("not an RDM session file");
+            var d = j.data;
+            /* Checked BEFORE the typed-array views: a short buffer would make
+               Int32Array throw its own RangeError, which is refusal by
+               accident with a message no user can act on. */
+            var arr = function (b64, Ctor, bytes) {
+                var u8 = gpB64Dec(b64 || "");
+                if (u8.byteLength !== d.n * bytes) throw new Error("session file is truncated");
+                return new Ctor(u8.buffer);
+            };
+            var pk = { v: 1, n: d.n,
+                       lat: arr(d.lat, Int32Array, 4),
+                       lon: arr(d.lon, Int32Array, 4),
+                       kph: arr(d.kph, Uint16Array, 2),
+                       hdg: arr(d.hdg, Uint16Array, 2),
+                       t: arr(d.t, Uint32Array, 4) };
+            var meta = j.meta;
+            meta.id = gpSesUid();
+            meta.savedAt = Date.now();
+            return { meta: meta, pk: pk };
+        }
+
+        function gpSesFilename(meta, ext) {
+            var n = ((meta && meta.name) || "recording").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "_");
+            return (n || "recording") + ext;
+        }
+
+        window.gpSessionExportCsv = function (id) {
+            /* CSV is built from the LOADED rows (it needs g and the lap split),
+               and the buttons only render on the loaded recording. */
+            if (id !== gp.sessionId || !gp.trace || !gp.trace.length) return;
+            var meta = (gp.sessions || []).filter(function (s) { return s.id === id; })[0];
+            var csv = gpCsvBuild();
+            if (csv) _wsDownload(gpSesFilename(meta, ".csv"), csv, "text/csv");
+        };
+
+        window.gpSessionExportFile = function (id) {
+            var meta = (gp.sessions || []).filter(function (s) { return s.id === id; })[0];
+            if (!meta) return;
+            gpStore.rows(id).then(function (pk) {
+                if (!pk) throw new Error("the samples for this recording are missing");
+                _wsDownload(gpSesFilename(meta, ".rdmsession"), gpSessionFileBuild(meta, pk), "application/json");
+            }).catch(function (e) {
+                gpSetMsg("gpTraceMsg", "Export failed: " + (e && e.message ? e.message : e), "bad");
+            });
+        };
+
+        window.gpSessionImport = function (input) {
+            var f = input && input.files && input.files[0];
+            if (!f) return;
+            var rd = new FileReader();
+            rd.onload = function () {
+                try {
+                    var r = gpSessionFileParse(rd.result);
+                    gpStore.put(r.meta, r.pk).then(function () {
+                        return gpSessionsRefresh();
+                    }).then(function () {
+                        gpBuildRail();
+                        window.gpSessionLoad(r.meta.id);
+                    }).catch(function (e) {
+                        gpSetMsg("gpTraceMsg", "Import failed: " + (e && e.message ? e.message : e), "bad");
+                    });
+                } catch (e) {
+                    gpSetMsg("gpTraceMsg", "Import failed: " + (e && e.message ? e.message : e), "bad");
+                }
+                input.value = "";
+            };
+            rd.readAsText(f);
+        };
+
+        function gpSesImportHtml() {
+            return "<div class='gp-ses-act' style='margin-top:4px'>" +
+                   "<button class='ws-btn-line' onclick=\"document.getElementById('gpSesFile').click()\">Import a session file</button></div>" +
+                   "<input type='file' id='gpSesFile' accept='.rdmsession,application/json' style='display:none' onchange='gpSessionImport(this)'>";
+        }
+
         /* iTOW dates a sample to the second but only within its GPS week. The
            node reports UTC and iTOW from the SAME fix, which pins the week
            exactly; with no fix at download time there is nothing to anchor to,
@@ -6405,7 +6555,7 @@
                 : "";
             if (!gp.sessions.length) {
                 return h + orphan + "<div class='ws-none' style='padding:14px 6px'>Nothing saved yet.<br>" +
-                       "Downloads are kept here automatically.</div>";
+                       "Downloads are kept here automatically.</div>" + gpSesImportHtml();
             }
             h += orphan;
             gp.sessions.forEach(function (s) {
@@ -6423,9 +6573,12 @@
                 if (on) {
                     h += "<div class='gp-ses-act'>" +
                          "<button class='ws-btn-line' data-gp-ses-ren='" + gpEsc(s.id) + "'>Rename</button>" +
+                         "<button class='ws-btn-line' data-gp-ses-csv='" + gpEsc(s.id) + "' title='one row per sample, for Excel / i2 / RaceRender'>CSV</button>" +
+                         "<button class='ws-btn-line' data-gp-ses-file='" + gpEsc(s.id) + "' title='the whole recording as one file, for another PC running Studio'>Export</button>" +
                          "<button class='ws-btn-line' data-gp-ses-del='" + gpEsc(s.id) + "'>Delete</button></div>";
                 }
             });
+            h += gpSesImportHtml();
             return h;
         }
 
@@ -6438,6 +6591,8 @@
             bind("data-gp-lap", function (v) { window.gpSelectLap(v); });
             bind("data-gp-cmp", function (v) { window.gpCompareLap(v); });
             bind("data-gp-ses-ren", function (v) { window.gpSessionRename(v); });
+            bind("data-gp-ses-csv", function (v) { window.gpSessionExportCsv(v); });
+            bind("data-gp-ses-file", function (v) { window.gpSessionExportFile(v); });
             bind("data-gp-ses-del", function (v) { window.gpSessionDelete(v); });
             bind("data-gp-ses", function (v) { if (v !== gp.sessionId) window.gpSessionLoad(v); });
         }
