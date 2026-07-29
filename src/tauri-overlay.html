@@ -10830,9 +10830,15 @@
                     gpSetRow("<b>Right of the puck</b>board +Y, derived",
                              "<span class='gp-set-v'>" + gpEsc(m.y || "?") + "</span>");
 
+            /* Patched every poll by gpCanLiveUpdate, not left at whatever the
+               last full render caught. This is the number that confirms the
+               two answers above were right, and the moment it matters most is
+               the instant after a change — exactly when a render-time snapshot
+               would still be showing the OLD orientation. */
             var mag = gpImuMag();
             h += gpSetRow("<b>Reading now</b>should be ×1.0 g on one axis",
-                          "<span class='gp-set-v'>" + (mag === null ? "—" : mag) + "</span>");
+                          "<span class='gp-set-v' id='gpMountLive'>" +
+                          (mag === null ? "—" : mag) + "</span>");
             h += gpSetRow("<b>Gyro zero</b>" +
                           (b[0] || b[1] || b[2]
                               ? "trimmed " + b.map(function (v) { return (v / 100).toFixed(2); }).join(" / ") + " °/s"
@@ -11275,6 +11281,12 @@
            Setup is not the visible view. */
         function gpCanLiveUpdate() {
             if (gp.view !== "setup") return;
+            var ml = document.getElementById("gpMountLive");
+            if (ml) {
+                var mg = gpImuMag();
+                var mtxt = mg === null ? "—" : mg;
+                if (ml.textContent !== mtxt) ml.textContent = mtxt;
+            }
             var ctx = gpMapCtx();
             var patch = function (sg, key) {
                 if (!sg.live) return;
