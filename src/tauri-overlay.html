@@ -10381,7 +10381,7 @@
             if (gp.view === "session") { gpBuildSessionRail(rail); return; }
             if (gp.view === "setup") {
                 rail.innerHTML = "<div class='ws-rail-title'>Setup</div>" +
-                    [["Display", "d"], ["Camera", "c"], ["CAN bus", "b"],
+                    [["Display", "d"], ["Mounting", "m"], ["Camera", "c"], ["CAN bus", "b"],
                      ["Network", "n"], ["Advanced", "a"], ["Device", "v"],
                      ["Frame map", "f"]].map(function (s, i) {
                         return "<button class='ws-item' data-gp-set='" + i + "'>" +
@@ -10603,7 +10603,7 @@
                     control right — the shape every professional config screen
                     uses, and the reason two fit side by side. ---- */
             h += "<div class='ws-grp'><div class='ws-gt'>Display" +
-                 gpTip("Reading units",
+                 gpTip("Units and local time",
                        "The device always stores metric \u2014 the wire carries millimetres and " +
                        "mm/s, and the lap engine works in metres. This converts at the last " +
                        "moment, so nothing sent to a device or stored in a recording changes. " +
@@ -10613,7 +10613,16 @@
                      "<button id='gpBtnMetric' onclick=\"gpUnitsSet('metric')\">km/h \u00b7 m</button>" +
                      "<button id='gpBtnImperial' onclick=\"gpUnitsSet('imperial')\">mph \u00b7 ft</button>" +
                      "</div>") +
+                 gpTzHtml() +
                  "</div>";
+
+            h += "<div class='ws-grp'><div class='ws-gt'>Mounting" +
+                 gpTip("How the puck is fitted",
+                       "The IMU reads in the puck's own axes. Tell it which way the puck faces " +
+                       "and it rotates every reading into vehicle terms \u2014 forward, right, " +
+                       "up \u2014 before anything goes on the bus, so no dash has to be told. " +
+                       "Applies to the next sample; no reboot.") + "</div>" +
+                 gpMountHtml() + "</div>";
 
             h += "<div class='ws-grp'><div class='ws-gt'>Camera" +
                  gpTip("Link and sync",
@@ -10670,6 +10679,193 @@
             gpFillWifiForm();
             gpSyncEnabled();
             gpRestoreMsgs();
+        }
+
+        /* ---- mounting, gyro zero, timezone ---------------------------
+           Three things the node stores that only a human can answer, so all
+           three are asked plainly rather than guessed. */
+
+        /* Vehicle-space unit vectors, in the node's own axis order:
+           0 = forward, 1 = right, 2 = up. */
+        var GP_DIRS = [
+            ["forward", [1, 0, 0]], ["back", [-1, 0, 0]],
+            ["right", [0, 1, 0]], ["left", [0, -1, 0]],
+            ["up", [0, 0, 1]], ["down", [0, 0, -1]]
+        ];
+        function gpDirVec(name) {
+            for (var i = 0; i < GP_DIRS.length; i++) if (GP_DIRS[i][0] === name) return GP_DIRS[i][1];
+            return null;
+        }
+        function gpDirName(v) {
+            for (var i = 0; i < GP_DIRS.length; i++) {
+                var d = GP_DIRS[i][1];
+                if (d[0] === v[0] && d[1] === v[1] && d[2] === v[2]) return GP_DIRS[i][0];
+            }
+            return null;
+        }
+        /* Two axes fully determine the third: a rigid body has three, and the
+           board frame is right-handed, so Y = Z × X. Asking for Y as well
+           would only let someone describe a mounting that cannot exist. */
+        function gpDeriveY(zName, xName) {
+            var z = gpDirVec(zName), x = gpDirVec(xName);
+            if (!z || !x) return null;
+            var y = [z[1] * x[2] - z[2] * x[1],
+                     z[2] * x[0] - z[0] * x[2],
+                     z[0] * x[1] - z[1] * x[0]];
+            return gpDirName(y);   /* null if z and x share an axis */
+        }
+        function gpDirSelect(call, cur, excludeAxisOf) {
+            var ex = excludeAxisOf ? gpDirVec(excludeAxisOf) : null;
+            var h = "<select onchange='" + call + "'>";
+            GP_DIRS.forEach(function (d) {
+                /* A board axis cannot point along the same vehicle axis as
+                   another one, so those choices are never offered. */
+                if (ex && (Math.abs(ex[0]) === Math.abs(d[1][0]) &&
+                           Math.abs(ex[1]) === Math.abs(d[1][1]) &&
+                           Math.abs(ex[2]) === Math.abs(d[1][2]))) return;
+                h += "<option value='" + d[0] + "'" + (cur === d[0] ? " selected" : "") + ">" +
+                     d[0].charAt(0).toUpperCase() + d[0].slice(1) + "</option>";
+            });
+            return h + "</select>";
+        }
+
+        window.gpMountSet = function (which, val) {
+            var m = (gp.node && gp.node.mounting) || { x: "forward", y: "right", z: "up" };
+            var z = which === "z" ? val : m.z;
+            var x = which === "x" ? val : m.x;
+            /* Changing one can leave the other on the same axis. Rather than
+               refuse, move the OTHER one somewhere legal — the person is
+               mid-thought, and an error message here would just be a wall. */
+            if (!gpDeriveY(z, x)) {
+                var alt = ["forward", "right", "up", "back", "left", "down"];
+                for (var i = 0; i < alt.length; i++) {
+                    if (which === "z" ? gpDeriveY(z, alt[i]) : gpDeriveY(alt[i], x)) {
+                        if (which === "z") x = alt[i]; else z = alt[i];
+                        break;
+                    }
+                }
+            }
+            var y = gpDeriveY(z, x);
+            if (!y) return;
+            gpNodeSave({ mounting: { x: x, y: y, z: z } },
+                       "Mounting saved — it applies to the next sample, no reboot.");
+        };
+
+        window.gpTzSet = function (min) {
+            gpNodeSave({ tz_offset_min: parseInt(min, 10) }, "Timezone saved to the node.");
+        };
+        window.gpTzMatchPc = function () {
+            gpTzSet(-new Date().getTimezoneOffset());
+        };
+
+        function gpNodeSave(body, okMsg) {
+            var dev = gpDev();
+            if (!dev || !dev.nodeConfigSet) return;
+            gpSetMsg("gpMountMsg", "Saving···", "");
+            dev.nodeConfigSet(body).then(function (r) {
+                if (r) gp.node = r;
+                gpSetMsg("gpMountMsg", okMsg, "ok");
+                gpRenderInspector();
+            }).catch(function (e) {
+                gpSetMsg("gpMountMsg", (e && e.message) ? e.message : String(e), "bad");
+            });
+        }
+
+        window.gpGyroZero = function () {
+            var dev = gpDev();
+            if (!dev || !dev.imuCalibrate) return;
+            if (!window.confirm("Measure the gyro's resting offset?\n\nThe node averages two " +
+                                "seconds of readings, so the car must be completely still \u2014 " +
+                                "engine off is safest. It refuses rather than storing a bad " +
+                                "figure if it detects movement.")) return;
+            gpSetMsg("gpMountMsg", "Hold still··· measuring for two seconds.", "");
+            dev.imuCalibrate().then(function (r) {
+                if (r && r.gyro_bias_cdps && gp.node) gp.node.gyro_bias_cdps = r.gyro_bias_cdps;
+                gpSetMsg("gpMountMsg", "Gyro zeroed from " + ((r && r.samples) || 0) +
+                                       " samples.", "ok");
+                gpRenderInspector();
+            }).catch(function (e) {
+                /* The node's refusals are written to be shown verbatim. */
+                gpSetMsg("gpMountMsg", (e && e.message) ? e.message : String(e), "bad");
+            });
+        };
+
+        /* Every offset a country actually keeps, in minutes east of UTC.
+           A plain -12..+14 hour list would be missing half of Australia. */
+        var GP_TZS = [-720, -660, -600, -570, -540, -480, -420, -360, -300, -240, -210, -180,
+                      -120, -60, 0, 60, 120, 180, 210, 240, 270, 300, 330, 345, 360, 390, 420,
+                      480, 525, 540, 570, 600, 630, 660, 720, 765, 780, 840];
+        function gpTzLabel(min) {
+            var s = min < 0 ? "-" : "+", a = Math.abs(min);
+            return "UTC" + s + String(Math.floor(a / 60)).padStart(2, "0") + ":" +
+                   String(a % 60).padStart(2, "0");
+        }
+        /* The node's own UTC, shifted. Shown next to the setting so the answer
+           is checkable at a glance instead of on trust. */
+        function gpNodeLocalTime() {
+            var s = gp.status;
+            if (!s || !s.utc || !gp.node) return null;
+            var ms = Date.parse(s.utc);
+            if (isNaN(ms)) return null;
+            var d = new Date(ms + (gpN(gp.node.tz_offset_min) || 0) * 60000);
+            return String(d.getUTCHours()).padStart(2, "0") + ":" +
+                   String(d.getUTCMinutes()).padStart(2, "0");
+        }
+
+        function gpMountHtml() {
+            if (!gp.node) {
+                return "<div class='ws-note'>" +
+                    (gpLinked() ? "Reading the node's mounting···"
+                                : "Attach the RDM GPS to set how it is mounted.") + "</div>";
+            }
+            var m = gp.node.mounting || {};
+            var b = gp.node.gyro_bias_cdps || [0, 0, 0];
+            var h = gpSetRow("<b>Top of the puck</b>board +Z points",
+                             gpDirSelect("gpMountSet(\"z\", this.value)", m.z, m.x)) +
+                    gpSetRow("<b>Front of the puck</b>board +X points",
+                             gpDirSelect("gpMountSet(\"x\", this.value)", m.x, m.z)) +
+                    /* Y is shown, never asked: it is whatever the other two
+                       leave room for, and offering it would invite a mounting
+                       that is a mirror rather than a rotation. */
+                    gpSetRow("<b>Right of the puck</b>board +Y, derived",
+                             "<span class='gp-set-v'>" + gpEsc(m.y || "?") + "</span>");
+
+            var mag = gpImuMag();
+            h += gpSetRow("<b>Reading now</b>should be ×1.0 g on one axis",
+                          "<span class='gp-set-v'>" + (mag === null ? "—" : mag) + "</span>");
+            h += gpSetRow("<b>Gyro zero</b>" +
+                          (b[0] || b[1] || b[2]
+                              ? "trimmed " + b.map(function (v) { return (v / 100).toFixed(2); }).join(" / ") + " °/s"
+                              : "not trimmed"),
+                          "<button class='ws-btn-line' style='width:144px' onclick='gpGyroZero()'>" +
+                          "Measure now</button>");
+            return h + "<div class='gp-msg' id='gpMountMsg'></div>";
+        }
+
+        /* The vehicle-frame gravity vector, as a sentence. The number that
+           tells someone their mounting answer was right. */
+        function gpImuMag() {
+            var s = gp.status, i = s && s.imu;
+            if (!i || gpN(i.az_mg) === null) return null;
+            return "fwd " + (i.ax_mg / 1000).toFixed(2) + "  right " + (i.ay_mg / 1000).toFixed(2) +
+                   "  up " + (i.az_mg / 1000).toFixed(2);
+        }
+
+        function gpTzHtml() {
+            if (!gp.node) return "";
+            var cur = gpN(gp.node.tz_offset_min) || 0;
+            var sel = "<select onchange='gpTzSet(this.value)'>";
+            GP_TZS.forEach(function (v) {
+                sel += "<option value='" + v + "'" + (v === cur ? " selected" : "") + ">" +
+                       gpTzLabel(v) + "</option>";
+            });
+            sel += "</select>";
+            var local = gpNodeLocalTime();
+            return gpSetRow("<b>Timezone</b>" +
+                            (local ? "the node reads " + local + " local" : "stored on the node"), sel) +
+                   gpSetRow("Match this PC",
+                            "<button class='ws-btn-line' style='width:144px' onclick='gpTzMatchPc()'>" +
+                            gpTzLabel(-new Date().getTimezoneOffset()) + "</button>");
         }
 
         /* One row: label (with an optional second line) on the left, the
@@ -10920,15 +11116,15 @@
                   } }] },
             { off: 0x5, name: "Accel", rate: "fast", dlc: 6, needs: "imu", s: [
                 { b: "0-1", n: "Accel X", t: "i16", sc: "×0.001", u: "g",
-                  note: "board axes \u2014 no mounting rotation applied", live: gpImuRow("ax_mg", 1000, 3) },
+                  note: "vehicle axes, per the mounting setting", live: gpImuRow("ax_mg", 1000, 3) },
                 { b: "2-3", n: "Accel Y", t: "i16", sc: "×0.001", u: "g", live: gpImuRow("ay_mg", 1000, 3) },
                 { b: "4-5", n: "Accel Z", t: "i16", sc: "×0.001", u: "g",
-                  note: "about +1 g with the puck flat", live: gpImuRow("az_mg", 1000, 3) }] },
+                  note: "about +1 g at rest, any mounting", live: gpImuRow("az_mg", 1000, 3) }] },
             { off: 0x6, name: "Gyro", rate: "fast", dlc: 6, needs: "imu", s: [
                 { b: "0-1", n: "Gyro X", t: "i16", sc: "×0.01", u: "°/s", live: gpImuRow("gx_cdps", 100, 2) },
                 { b: "2-3", n: "Gyro Y", t: "i16", sc: "×0.01", u: "°/s", live: gpImuRow("gy_cdps", 100, 2) },
                 { b: "4-5", n: "Gyro Z", t: "i16", sc: "×0.01", u: "°/s",
-                  note: "yaw rate when the puck is flat", live: gpImuRow("gz_cdps", 100, 2) }] },
+                  note: "yaw rate, zeroed by the gyro trim", live: gpImuRow("gz_cdps", 100, 2) }] },
             { off: 0x7, name: "Lap", rate: "slow", s: [
                 { b: "0-1", n: "Current lap", t: "u16", sc: "×0.01", u: "s",
                   note: "0xFFFF means no time yet", live: gpCsRow("lap_time_current") },
@@ -11671,6 +11867,9 @@
                 return t.canConfigGet ? t.canConfigGet() : null;
             }).then(function (c) {
                 if (c) { gp.can = c; gp.canEdit = gpCanEditFrom(c); }
+                return t.nodeConfigGet ? t.nodeConfigGet() : null;
+            }).then(function (n) {
+                if (n) gp.node = n;
                 gpRenderInspector();
                 gpUpdateChips();
             }).catch(function (e) {
@@ -11698,7 +11897,9 @@
             gp.inFlight = false; gp.lapInFlight = false; gp._epoch = (gp._epoch || 0) + 1;
             gp._msgs = {}; gp._misses = 0;
             /* Identity is the previous NODE's, not this one's. */
-            if (!gpDev()) { gp.info = null; gp.wifi = null; gp.can = null; gp.canEdit = null; }
+            if (!gpDev()) {
+                gp.info = null; gp.wifi = null; gp.can = null; gp.canEdit = null; gp.node = null;
+            }
             if (info) gp.info = info;
             gp.lap = null; gp.lapErr = null; gp._sortedByFix = false;
             gp.history = null; gp._lapSeen = -1;

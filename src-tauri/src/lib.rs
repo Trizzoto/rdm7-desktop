@@ -875,8 +875,12 @@ async fn serial_request(
         port.write_all(&frame).map_err(|e| format!("Write error: {e}"))?;
         port.flush().map_err(|e| format!("Flush error: {e}"))?;
 
-        // Longer timeout for screenshot and layout.current (large responses)
-        let timeout = if method == "screenshot" || method == "layout.current" {
+        // Longer timeout for screenshot and layout.current (large responses),
+        // and for imu.calibrate, which deliberately spends ~2 s averaging the
+        // gyro on the node before it answers.
+        let timeout = if method == "screenshot" || method == "layout.current"
+            || method == "imu.calibrate"
+        {
             Duration::from_secs(10)
         } else {
             Duration::from_secs(5)

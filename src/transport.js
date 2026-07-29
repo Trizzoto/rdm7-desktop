@@ -1158,6 +1158,16 @@
             async canConfigGet() { return await rpc('can.config.get'); },
             async canConfigSet(cfg) { return await rpc('can.config.set', cfg); },
 
+            /* Mounting orientation and timezone. Unlike the CAN block these
+             * take effect on the next sample, no reboot — the node applies
+             * the rotation itself, so nothing downstream has to know. */
+            async nodeConfigGet() { return await rpc('node.config.get'); },
+            async nodeConfigSet(cfg) { return await rpc('node.config.set', cfg); },
+            /* Measures the gyro's resting offset. Blocks on the node for ~2 s
+             * and REFUSES if the unit was not still, so the caller must show
+             * the error rather than assume success. */
+            async imuCalibrate() { return await rpc('imu.calibrate'); },
+
             async lapStatus() { return await rpc('lap.status'); },
             /* Completed laps, oldest-first. `total` may exceed the list —
              * the node caps what it reports rather than putting the whole
