@@ -1065,6 +1065,12 @@
         .gp-ideal-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; }
         .gp-ses-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; width: 100%; }
         .gp-hist-svg { width: 100%; height: 44px; display: block; margin: 6px 0 4px; }
+        .gp-place-search { width: 100%; box-sizing: border-box; margin: 2px 0 6px;
+                           background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
+                           border-radius: 6px; color: var(--text); font: inherit; font-size: 11px;
+                           padding: 5px 8px; }
+        .gp-place-search:focus { outline: none; border-color: #4a90d9; }
+        .gp-place-more { font-size: 9px; color: var(--text-muted); text-align: center; padding: 5px 0 2px; }
         .gp-hist-cor { font-size: 9px; color: var(--text-muted); text-transform: uppercase;
                        letter-spacing: 0.06em; margin: 8px 0 3px; }
         .gp-ses-n .undated { color: #FF9F0A; }
@@ -6053,11 +6059,121 @@
          * be placed on the actual paint, and inventing coordinates for one would
          * be worse than leaving it empty. */
         var GP_PLACES = [
+            /* AU */
             { id: "mallala", name: "Mallala", where: "SA · AUS", center: [-34.4145, 138.5042], zoom: 15 },
             { id: "bend_gt", name: "The Bend GT", where: "SA · AUS", center: [-35.3083, 139.5167], zoom: 15 },
             { id: "phillip", name: "Phillip Island", where: "VIC · AUS", center: [-38.4997, 145.2358], zoom: 15 },
             { id: "smp", name: "Sydney Motorsport Park", where: "NSW · AUS", center: [-33.8039, 150.8703], zoom: 15 },
-            { id: "winton", name: "Winton", where: "VIC · AUS", center: [-36.5183, 146.0861], zoom: 16 }
+            { id: "winton", name: "Winton", where: "VIC · AUS", center: [-36.5183, 146.0861], zoom: 16 },
+            { id: "bathurst", name: "Mount Panorama (Bathurst)", where: "NSW · AUS", center: [-33.4361, 149.5544], zoom: 14 },
+            { id: "sandown", name: "Sandown", where: "VIC · AUS", center: [-37.9497, 145.1308], zoom: 15 },
+            { id: "calder", name: "Calder Park", where: "VIC · AUS", center: [-37.6614, 144.7561], zoom: 15 },
+            { id: "lakeside", name: "Lakeside", where: "QLD · AUS", center: [-27.2286, 152.9654], zoom: 16 },
+            { id: "qldraceway", name: "Queensland Raceway", where: "QLD · AUS", center: [-27.6900, 152.6540], zoom: 15 },
+            { id: "morganpark", name: "Morgan Park", where: "QLD · AUS", center: [-28.2620, 152.0370], zoom: 16 },
+            { id: "oneraceway", name: "One Raceway (Wakefield)", where: "NSW · AUS", center: [-34.8407, 149.6851], zoom: 16 },
+            { id: "luddenham", name: "Luddenham", where: "NSW · AUS", center: [-33.9090, 150.7110], zoom: 16 },
+            { id: "symmons", name: "Symmons Plains", where: "TAS · AUS", center: [-41.6586, 147.2519], zoom: 16 },
+            { id: "baskerville", name: "Baskerville", where: "TAS · AUS", center: [-42.7450, 147.3010], zoom: 16 },
+            { id: "wanneroo", name: "Wanneroo (Barbagallo)", where: "WA · AUS", center: [-31.6653, 115.7869], zoom: 16 },
+            { id: "collie", name: "Collie", where: "WA · AUS", center: [-33.3500, 116.2100], zoom: 16 },
+            { id: "hiddenvalley", name: "Hidden Valley", where: "NT · AUS", center: [-12.4497, 130.8919], zoom: 15 },
+            /* NZ */
+            { id: "hampton", name: "Hampton Downs", where: "NZ", center: [-37.2886, 175.1108], zoom: 15 },
+            { id: "taupo", name: "Taupo", where: "NZ", center: [-38.6592, 176.1108], zoom: 15 },
+            { id: "manfeild", name: "Manfeild", where: "NZ", center: [-40.2306, 175.5622], zoom: 15 },
+            { id: "highlands", name: "Highlands Park", where: "NZ", center: [-45.0367, 169.1892], zoom: 15 },
+            { id: "teretonga", name: "Teretonga", where: "NZ", center: [-46.4370, 168.2640], zoom: 16 },
+            { id: "ruapuna", name: "Ruapuna", where: "NZ", center: [-43.5560, 172.4430], zoom: 15 },
+            /* US */
+            { id: "lagunaseca", name: "Laguna Seca", where: "CA · USA", center: [36.5841, -121.7536], zoom: 15 },
+            { id: "sonoma", name: "Sonoma Raceway", where: "CA · USA", center: [38.1613, -122.4547], zoom: 15 },
+            { id: "thunderhill", name: "Thunderhill", where: "CA · USA", center: [39.5383, -122.3310], zoom: 15 },
+            { id: "buttonwillow", name: "Buttonwillow", where: "CA · USA", center: [35.4890, -119.5440], zoom: 15 },
+            { id: "willowsprings", name: "Willow Springs", where: "CA · USA", center: [34.8711, -118.2625], zoom: 15 },
+            { id: "chuckwalla", name: "Chuckwalla Valley", where: "CA · USA", center: [33.6670, -115.6320], zoom: 15 },
+            { id: "roadamerica", name: "Road America", where: "WI · USA", center: [43.7978, -87.9895], zoom: 14 },
+            { id: "roadatlanta", name: "Road Atlanta", where: "GA · USA", center: [34.1497, -83.8161], zoom: 15 },
+            { id: "vir", name: "Virginia International", where: "VA · USA", center: [36.5631, -79.2064], zoom: 15 },
+            { id: "watkinsglen", name: "Watkins Glen", where: "NY · USA", center: [42.3369, -76.9272], zoom: 15 },
+            { id: "midohio", name: "Mid-Ohio", where: "OH · USA", center: [40.3892, -82.6394], zoom: 15 },
+            { id: "cota", name: "Circuit of the Americas", where: "TX · USA", center: [30.1328, -97.6411], zoom: 15 },
+            { id: "sebring", name: "Sebring", where: "FL · USA", center: [27.4547, -81.3483], zoom: 15 },
+            { id: "daytona", name: "Daytona Road Course", where: "FL · USA", center: [29.1852, -81.0705], zoom: 15 },
+            { id: "barber", name: "Barber Motorsports Park", where: "AL · USA", center: [33.5325, -86.6194], zoom: 15 },
+            { id: "ncm", name: "NCM Motorsports Park", where: "KY · USA", center: [36.8890, -86.4243], zoom: 15 },
+            { id: "limerock", name: "Lime Rock Park", where: "CT · USA", center: [41.9280, -73.3839], zoom: 16 },
+            { id: "njmp", name: "New Jersey Motorsports Park", where: "NJ · USA", center: [39.3567, -75.0692], zoom: 15 },
+            { id: "summitpoint", name: "Summit Point", where: "WV · USA", center: [39.2353, -77.9700], zoom: 15 },
+            { id: "gingerman", name: "GingerMan Raceway", where: "MI · USA", center: [42.4080, -86.1400], zoom: 16 },
+            { id: "pittrace", name: "Pitt Race", where: "PA · USA", center: [40.8450, -80.3350], zoom: 15 },
+            { id: "portland", name: "Portland International", where: "OR · USA", center: [45.5950, -122.6940], zoom: 15 },
+            { id: "pacific", name: "Pacific Raceways", where: "WA · USA", center: [47.3210, -122.1480], zoom: 15 },
+            { id: "theridge", name: "The Ridge", where: "WA · USA", center: [47.2544, -123.1913], zoom: 15 },
+            { id: "utah", name: "Utah Motorsports Campus", where: "UT · USA", center: [40.5830, -112.3760], zoom: 15 },
+            { id: "highplains", name: "High Plains Raceway", where: "CO · USA", center: [39.7014, -103.9906], zoom: 15 },
+            /* Canada */
+            { id: "mosport", name: "Canadian Tire Motorsport Park", where: "ON · CAN", center: [44.0533, -78.6753], zoom: 15 },
+            { id: "tremblant", name: "Mont-Tremblant", where: "QC · CAN", center: [46.1867, -74.6086], zoom: 15 },
+            { id: "shannonville", name: "Shannonville", where: "ON · CAN", center: [44.2250, -77.1610], zoom: 15 },
+            /* UK */
+            { id: "silverstone", name: "Silverstone", where: "UK", center: [52.0786, -1.0169], zoom: 14 },
+            { id: "brandshatch", name: "Brands Hatch", where: "UK", center: [51.3569, 0.2631], zoom: 15 },
+            { id: "donington", name: "Donington Park", where: "UK", center: [52.8306, -1.3753], zoom: 15 },
+            { id: "oulton", name: "Oulton Park", where: "UK", center: [53.1800, -2.6133], zoom: 15 },
+            { id: "snetterton", name: "Snetterton", where: "UK", center: [52.4636, 0.9450], zoom: 15 },
+            { id: "cadwell", name: "Cadwell Park", where: "UK", center: [53.3100, -0.0597], zoom: 16 },
+            { id: "knockhill", name: "Knockhill", where: "UK", center: [56.1319, -3.5083], zoom: 16 },
+            { id: "anglesey", name: "Anglesey", where: "UK", center: [53.1890, -4.4960], zoom: 16 },
+            { id: "castlecombe", name: "Castle Combe", where: "UK", center: [51.4919, -2.2153], zoom: 15 },
+            { id: "thruxton", name: "Thruxton", where: "UK", center: [51.2081, -1.6089], zoom: 15 },
+            { id: "goodwood", name: "Goodwood", where: "UK", center: [50.8583, -0.7514], zoom: 15 },
+            { id: "croft", name: "Croft", where: "UK", center: [54.4556, -1.5556], zoom: 15 },
+            { id: "mallory", name: "Mallory Park", where: "UK", center: [52.5983, -1.3364], zoom: 16 },
+            /* Europe */
+            { id: "nurburgring", name: "Nürburgring GP", where: "DEU", center: [50.3356, 6.9475], zoom: 14 },
+            { id: "nordschleife", name: "Nordschleife", where: "DEU", center: [50.3700, 6.9500], zoom: 12 },
+            { id: "hockenheim", name: "Hockenheimring", where: "DEU", center: [49.3278, 8.5658], zoom: 14 },
+            { id: "spa", name: "Spa-Francorchamps", where: "BEL", center: [50.4372, 5.9714], zoom: 14 },
+            { id: "zolder", name: "Zolder", where: "BEL", center: [50.9900, 5.2572], zoom: 15 },
+            { id: "zandvoort", name: "Zandvoort", where: "NLD", center: [52.3888, 4.5409], zoom: 15 },
+            { id: "assen", name: "Assen", where: "NLD", center: [52.9614, 6.5236], zoom: 15 },
+            { id: "redbullring", name: "Red Bull Ring", where: "AUT", center: [47.2197, 14.7647], zoom: 15 },
+            { id: "monza", name: "Monza", where: "ITA", center: [45.6156, 9.2811], zoom: 14 },
+            { id: "imola", name: "Imola", where: "ITA", center: [44.3439, 11.7167], zoom: 14 },
+            { id: "mugello", name: "Mugello", where: "ITA", center: [43.9975, 11.3719], zoom: 14 },
+            { id: "misano", name: "Misano", where: "ITA", center: [43.9614, 12.6833], zoom: 15 },
+            { id: "paulricard", name: "Paul Ricard", where: "FRA", center: [43.2506, 5.7917], zoom: 14 },
+            { id: "magnycours", name: "Magny-Cours", where: "FRA", center: [46.8642, 3.1633], zoom: 15 },
+            { id: "dijon", name: "Dijon-Prenois", where: "FRA", center: [47.3625, 4.8992], zoom: 15 },
+            { id: "lemansbugatti", name: "Le Mans Bugatti", where: "FRA", center: [47.9561, 0.2075], zoom: 14 },
+            { id: "catalunya", name: "Barcelona-Catalunya", where: "ESP", center: [41.5700, 2.2611], zoom: 14 },
+            { id: "jerez", name: "Jerez", where: "ESP", center: [36.7083, -6.0339], zoom: 15 },
+            { id: "valencia", name: "Ricardo Tormo (Valencia)", where: "ESP", center: [39.4589, -0.6317], zoom: 15 },
+            { id: "aragon", name: "Motorland Aragón", where: "ESP", center: [41.0797, -0.2039], zoom: 14 },
+            { id: "portimao", name: "Portimão", where: "PRT", center: [37.2270, -8.6267], zoom: 15 },
+            { id: "estoril", name: "Estoril", where: "PRT", center: [38.7506, -9.3942], zoom: 15 },
+            { id: "brno", name: "Brno", where: "CZE", center: [49.2039, 16.4522], zoom: 14 },
+            { id: "hungaroring", name: "Hungaroring", where: "HUN", center: [47.5789, 19.2486], zoom: 15 },
+            { id: "slovakiaring", name: "Slovakia Ring", where: "SVK", center: [48.0550, 17.5730], zoom: 14 },
+            { id: "anderstorp", name: "Anderstorp", where: "SWE", center: [57.2642, 13.6014], zoom: 15 },
+            /* Asia · ME · elsewhere */
+            { id: "suzuka", name: "Suzuka", where: "JPN", center: [34.8431, 136.5411], zoom: 14 },
+            { id: "fuji", name: "Fuji Speedway", where: "JPN", center: [35.3717, 138.9275], zoom: 14 },
+            { id: "motegi", name: "Motegi", where: "JPN", center: [36.5330, 140.2270], zoom: 14 },
+            { id: "okayama", name: "Okayama", where: "JPN", center: [34.9146, 134.2200], zoom: 15 },
+            { id: "tsukuba", name: "Tsukuba", where: "JPN", center: [36.1508, 139.9236], zoom: 16 },
+            { id: "sepang", name: "Sepang", where: "MYS", center: [2.7606, 101.7381], zoom: 14 },
+            { id: "buriram", name: "Buriram (Chang)", where: "THA", center: [14.9580, 103.0850], zoom: 15 },
+            { id: "shanghai", name: "Shanghai International", where: "CHN", center: [31.3389, 121.2197], zoom: 14 },
+            { id: "zhuhai", name: "Zhuhai", where: "CHN", center: [22.3670, 113.5600], zoom: 15 },
+            { id: "dubai", name: "Dubai Autodrome", where: "ARE", center: [25.0490, 55.2390], zoom: 15 },
+            { id: "yasmarina", name: "Yas Marina", where: "ARE", center: [24.4672, 54.6031], zoom: 14 },
+            { id: "losail", name: "Lusail", where: "QAT", center: [25.4900, 51.4542], zoom: 14 },
+            { id: "bahrain", name: "Bahrain International", where: "BHR", center: [26.0325, 50.5106], zoom: 14 },
+            { id: "kyalami", name: "Kyalami", where: "ZAF", center: [-25.9989, 28.0697], zoom: 15 },
+            { id: "interlagos", name: "Interlagos", where: "BRA", center: [-23.7036, -46.6997], zoom: 14 },
+            { id: "mexico", name: "Autódromo Hermanos Rodríguez", where: "MEX", center: [19.4042, -99.0907], zoom: 14 }
         ];
 
         function gpTrackUid() {
@@ -9518,21 +9634,69 @@
                      "<span class='tag'>" + tag + "</span></button>";
             });
             h += "<div class='ws-rail-title'>Start from a circuit</div>";
-            gpByDistance(GP_PLACES, here).forEach(function (e) {
+            h += "<input type='text' class='gp-place-search' id='gpPlaceSearch' placeholder='Search " +
+                 GP_PLACES.length + " circuits…' value='" + gpEsc(gp.placeFilter || "") + "'>";
+            h += "<div id='gpPlaceList'>" + gpPlaceListHtml(here) + "</div>";
+            h += "<button class='ws-btn-line' style='margin-top:8px' data-gp-place=''>+ Blank track here</button>";
+            rail.innerHTML = h;
+            var search = rail.querySelector("#gpPlaceSearch");
+            if (search) search.addEventListener("input", function () {
+                gp.placeFilter = search.value;
+                /* Only the list re-renders — replacing the whole rail would
+                   destroy this input and drop focus on every keystroke. */
+                var box = rail.querySelector("#gpPlaceList");
+                if (box) {
+                    box.innerHTML = gpPlaceListHtml(gpHerePos());
+                    gpBindPlaceButtons(box);
+                }
+            });
+            Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-trk]"), function (b) {
+                b.addEventListener("click", function () { window.gpTrackSelect(b.getAttribute("data-gp-trk")); });
+            });
+            gpBindPlaceButtons(rail);
+        }
+
+        function gpBindPlaceButtons(root) {
+            Array.prototype.forEach.call(root.querySelectorAll("[data-gp-place]"), function (b) {
+                b.addEventListener("click", function () { window.gpTrackNew(b.getAttribute("data-gp-place")); });
+            });
+        }
+
+        /* Nearest first with a fix, listed order without one — same rule as
+           the library above. Unfiltered, the list is capped and says what it
+           is hiding; a search shows everything that matches. */
+        var GP_PLACE_CAP = 12;
+
+        function gpPlaceMatches(filter) {
+            var f = String(filter || "").trim().toLowerCase();
+            if (!f) return GP_PLACES;
+            return GP_PLACES.filter(function (pl) {
+                return (pl.name + " " + pl.where + " " + pl.id).toLowerCase().indexOf(f) >= 0;
+            });
+        }
+
+        function gpPlaceListHtml(here) {
+            var filter = gp.placeFilter || "";
+            var matches = gpPlaceMatches(filter);
+            if (!matches.length) {
+                return "<div class='ws-note'>Nothing called “" + gpEsc(filter) + "”. " +
+                       "Pan the map there and press <b>+ Blank track here</b> — a name and a " +
+                       "start/finish line are all a track needs.</div>";
+            }
+            var ordered = gpByDistance(matches, here);
+            var shown = filter ? ordered : ordered.slice(0, GP_PLACE_CAP);
+            var h = "";
+            shown.forEach(function (e) {
                 var pl = e.item;
                 h += "<button class='ws-item' data-gp-place='" + gpEsc(pl.id) + "'" +
                      " title='" + gpEsc(pl.name) + " · " + gpEsc(pl.where) + "'>" +
                      "<span class='st'></span>" + gpEsc(pl.name) + "<span class='tag'>" +
                      (e.distM !== null ? gpFmtDistance(e.distM) : gpEsc(pl.where)) + "</span></button>";
             });
-            h += "<button class='ws-btn-line' style='margin-top:8px' data-gp-place=''>+ Blank track here</button>";
-            rail.innerHTML = h;
-            Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-trk]"), function (b) {
-                b.addEventListener("click", function () { window.gpTrackSelect(b.getAttribute("data-gp-trk")); });
-            });
-            Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-place]"), function (b) {
-                b.addEventListener("click", function () { window.gpTrackNew(b.getAttribute("data-gp-place")); });
-            });
+            if (!filter && ordered.length > shown.length)
+                h += "<div class='gp-place-more'>" + (ordered.length - shown.length) +
+                     " more — type to search</div>";
+            return h;
         }
         function gpSelect(id) {
             gp.sel = id;
