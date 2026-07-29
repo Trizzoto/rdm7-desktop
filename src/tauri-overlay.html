@@ -1076,8 +1076,8 @@
         .gp-map-f > .id { color: var(--accent-hover); font-weight: 600; }
         .gp-map-f > .nm { color: var(--text); }
         .gp-map-f > .hz { color: var(--text-muted); }
-        .gp-map-s { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px;
-                    padding: 2px 8px; }
+        .gp-map-s { display: grid; grid-template-columns: 44px 1fr auto auto; gap: 8px;
+                    padding: 2px 8px; align-items: baseline; }
         .gp-map-s:last-child { padding-bottom: 4px; }
         .gp-map-s > .by { color: var(--text-muted); }
         .gp-map-s > .sg { color: var(--text); }
@@ -1085,6 +1085,16 @@
         /* The scale is the decode instruction — everything else on the row is
            context. Bold and full brightness, not a new colour (ADR-0014). */
         .gp-map-s > .un .sc { color: var(--text); font-weight: 700; }
+        /* The live value is the actual answer to "what should my dash show" —
+           right-aligned tabular numerals, same bold/full-bright treatment as
+           the scale, so the row reads left to right as structure, meaning,
+           then current state. "—" (no source) drops to the muted colour;
+           there is nothing to cross-check there. */
+        .gp-map-s > .lv { color: var(--text); font-weight: 700; text-align: right;
+                          font-variant-numeric: tabular-nums; white-space: nowrap; }
+        /* "—": no USB source for this signal, not merely no reading yet.
+           Muted and regular weight, same as every other empty state. */
+        .gp-map-s > .lv.na { color: var(--text-muted); font-weight: 400; }
         .gp-map-f.off, .gp-map-s.off { opacity: 0.45; }
         .gp-set-v, .gp-set-na { font-family: 'JetBrains Mono', monospace; font-size: 11px;
                                 color: var(--text); width: 144px; display: inline-block; }
@@ -9701,6 +9711,7 @@
                     gp.lapInFlight = false;
                     gpUpdateStage();
                     gpUpdateChips();
+                    gpCanLiveUpdate();
                     /* The Tracks inspector shows live timing now, so it has to
                        follow the poll — but only there, and never while a text
                        field has focus, or a rebuild would eat the keystroke. */
@@ -10694,34 +10705,155 @@
         /* The frame map, straight out of rdm_gps_proto.h/.c — every byte of
            every frame the node broadcasts. A tuner checking against their own
            DBC should not have to read our firmware to do it. */
+        /* ---- exact wire-value replicas ----------------------------------
+           Every helper here mirrors a firmware rounding step in proto.c
+           bit-for-bit — div_round's round-half-away-from-zero, the same
+           truncate-to-milliseconds cast rdm_gps_cs_from_s applies before it,
+           the same u16/i16/u8 saturation. The point of this column is "does
+           my dash show the same number", so it has to be the number the WIRE
+           actually carries, not a more-precise figure Studio happens to have
+           lying around from a higher-resolution source. Where no source
+           exists over USB at all, the live function is simply absent — a "—"
+           is honest; a guessed number is not. */
+        function gpDivRound(num, den) {
+            var h = Math.trunc(den / 2);
+            return num >= 0 ? Math.trunc((num + h) / den) : Math.trunc((num - h) / den);
+        }
+        function gpSatU16(v) { return Math.max(0, Math.min(65535, v)); }
+        function gpSatI16(v) { return Math.max(-32768, Math.min(32767, v)); }
+        function gpSatU8(v) { return Math.max(0, Math.min(255, v)); }
+        /* rdm_gps_cs_from_s, verbatim: null stands in for the 0xFFFF sentinel,
+           since "no time yet" is what that value MEANS, on both ends. */
+        function gpCsFromS(s) {
+            if (!(s > 0)) return null;
+            var cs = gpDivRound(Math.trunc(s * 1000), 10);
+            return cs >= 65535 ? 65534 : cs;
+        }
+        function gpCsSecs(cs) { return cs === null ? null : (cs / 100).toFixed(2) + " s"; }
+        /* The delta frame has no sentinel — 0.00 s is a real result (dead
+           level with the reference), so validity rides on the flags bit
+           alone, never on the number. */
+        function gpDeltaCs(d) { return gpSatI16(gpDivRound(Math.trunc(d * 1000), 10)); }
+        /* Reconstructed from the same three booleans + one presence check the
+           firmware packs into this exact byte — see main.c's broadcast loop. */
+        function gpLapFlagsByte(lap) {
+            if (!lap) return null;
+            var f = 0;
+            if (lap.has_track) f |= 0x01;
+            if (lap.timing && lap.timing.armed) f |= 0x02;
+            if (lap.timing && ("lap_delta" in lap.timing)) f |= 0x04;
+            if (lap.point_to_point) f |= 0x08;
+            return f;
+        }
+        function gpLapFlagsHex(lap) {
+            var f = gpLapFlagsByte(lap);
+            return f === null ? null : "0x" + f.toString(16).toUpperCase().padStart(2, "0");
+        }
+
         var GP_FRAMES = [
             { off: 0x0, name: "Status", rate: "slow", s: [
-                ["0", "Device type", ""], ["1", "Fix type", "0-4"], ["2", "Satellites", ""],
-                ["3", "Flags", "bitfield"], ["4", "pDOP", "×0.1"], ["5-7", "Firmware", "maj.min.patch"]] },
+                ["0", "Device type", ""],
+                ["1", "Fix type", "0-4", function (s) { return s ? String(s.fix_type) : null; }],
+                ["2", "Satellites", "", function (s) { return s ? String(s.sats) : null; }],
+                ["3", "Flags", "bitfield"],
+                ["4", "pDOP", "×0.1", function (s) {
+                    if (!s || gpN(s.pdop_1e2) === null) return null;
+                    return (gpSatU8(gpDivRound(s.pdop_1e2, 10)) / 10).toFixed(1);
+                }],
+                ["5-7", "Firmware", "maj.min.patch", function (s, lap, info) {
+                    return (info && info.firmware) ? info.firmware : null;
+                }]] },
             { off: 0x1, name: "Position", rate: "fast", s: [
-                ["0-3", "Latitude", "i32 ×1e-7°"], ["4-7", "Longitude", "i32 ×1e-7°"]] },
+                ["0-3", "Latitude", "i32 ×1e-7°", function (s) {
+                    return (s && gpN(s.lat_1e7) !== null) ? (s.lat_1e7 / 1e7).toFixed(7) + "°" : null;
+                }],
+                ["4-7", "Longitude", "i32 ×1e-7°", function (s) {
+                    return (s && gpN(s.lon_1e7) !== null) ? (s.lon_1e7 / 1e7).toFixed(7) + "°" : null;
+                }]] },
             { off: 0x2, name: "Motion", rate: "fast", s: [
-                ["0-1", "Speed", "u16 ×0.01 km/h"], ["2-3", "Heading", "u16 ×0.01°"],
-                ["4-5", "Altitude", "i16 ×0.1 m"], ["6-7", "Climb rate", "i16 ×0.01 m/s"]] },
+                ["0-1", "Speed", "u16 ×0.01 km/h", function (s) {
+                    if (!s || gpN(s.gspeed_mm_s) === null) return null;
+                    return (gpSatU16(gpDivRound(s.gspeed_mm_s * 36, 100)) / 100).toFixed(2) + " km/h";
+                }],
+                ["2-3", "Heading", "u16 ×0.01°", function (s) {
+                    if (!s || gpN(s.head_1e5) === null) return null;
+                    var h = s.head_1e5 % 36000000; if (h < 0) h += 36000000;
+                    var w = gpDivRound(h, 1000); if (w >= 36000) w -= 36000;
+                    return (w / 100).toFixed(2) + "°";
+                }],
+                ["4-5", "Altitude", "i16 ×0.1 m", function (s) {
+                    if (!s || gpN(s.alt_mm) === null) return null;
+                    return (gpSatI16(gpDivRound(s.alt_mm, 100)) / 10).toFixed(1) + " m";
+                }],
+                ["6-7", "Climb rate", "i16 ×0.01 m/s", function (s) {
+                    if (!s || gpN(s.veld_mm_s) === null) return null;
+                    return (gpSatI16(gpDivRound(-s.veld_mm_s, 10)) / 100).toFixed(2) + " m/s";
+                }]] },
             { off: 0x3, name: "Quality", rate: "slow", s: [
-                ["0-1", "Horiz accuracy", "u16 ×0.01 m"], ["2-3", "Vert accuracy", "u16 ×0.01 m"],
-                ["4-5", "Speed accuracy", "u16 ×0.01 m/s"], ["6-7", "Heading accuracy", "u16 ×0.01°"]] },
+                ["0-1", "Horiz accuracy", "u16 ×0.01 m", function (s) {
+                    if (!s || gpN(s.hacc_mm) === null) return null;
+                    return (gpSatU16(gpDivRound(s.hacc_mm, 10)) / 100).toFixed(2) + " m";
+                }],
+                ["2-3", "Vert accuracy", "u16 ×0.01 m", function (s) {
+                    if (!s || gpN(s.vacc_mm) === null) return null;
+                    return (gpSatU16(gpDivRound(s.vacc_mm, 10)) / 100).toFixed(2) + " m";
+                }],
+                ["4-5", "Speed accuracy", "u16 ×0.01 m/s", function (s) {
+                    if (!s || gpN(s.sacc_mm_s) === null) return null;
+                    return (gpSatU16(gpDivRound(s.sacc_mm_s, 10)) / 100).toFixed(2) + " m/s";
+                }],
+                ["6-7", "Heading accuracy", "u16 ×0.01°", function (s) {
+                    if (!s || gpN(s.headacc_1e5) === null) return null;
+                    return (gpSatU16(gpDivRound(s.headacc_1e5, 1000)) / 100).toFixed(2) + "°";
+                }]] },
             { off: 0x4, name: "Time (UTC)", rate: "slow", s: [
-                ["0-1", "Year", "u16"], ["2", "Month", ""], ["3", "Day", ""], ["4", "Hour", ""],
-                ["5", "Minute", ""], ["6", "Second", ""], ["7", "Sub-second", "×10 ms"]] },
+                ["0-1", "Year", "u16", function (s) { return (s && s.utc) ? s.utc.slice(0, 4) : null; }],
+                ["2", "Month", "", function (s) { return (s && s.utc) ? String(parseInt(s.utc.slice(5, 7), 10)) : null; }],
+                ["3", "Day", "", function (s) { return (s && s.utc) ? String(parseInt(s.utc.slice(8, 10), 10)) : null; }],
+                ["4", "Hour", "", function (s) { return (s && s.utc) ? s.utc.slice(11, 13) : null; }],
+                ["5", "Minute", "", function (s) { return (s && s.utc) ? s.utc.slice(14, 16) : null; }],
+                ["6", "Second", "", function (s) { return (s && s.utc) ? s.utc.slice(17, 19) : null; }],
+                ["7", "Sub-second", "×10 ms"]] },
             { off: 0x5, name: "Accel", rate: "off", s: [["—", "Reserved", "rev B IMU"]] },
             { off: 0x6, name: "Gyro", rate: "off", s: [["—", "Reserved", "rev B IMU"]] },
             { off: 0x7, name: "Lap", rate: "slow", s: [
-                ["0-1", "Current lap", "u16 ×0.01 s"], ["2-3", "Last lap", "u16 ×0.01 s"],
-                ["4-5", "Best lap", "u16 ×0.01 s"], ["6", "Lap number", ""],
-                ["7", "Lap flags", "bitfield"]] },
+                ["0-1", "Current lap", "u16 ×0.01 s", function (s, lap) {
+                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.lap_time_current)) : null;
+                }],
+                ["2-3", "Last lap", "u16 ×0.01 s", function (s, lap) {
+                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.lap_time_last)) : null;
+                }],
+                ["4-5", "Best lap", "u16 ×0.01 s", function (s, lap) {
+                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.lap_time_best)) : null;
+                }],
+                ["6", "Lap number", "", function (s, lap) {
+                    return lap && lap.timing ? String((gpN(lap.timing.lap_number) || 0) & 0xFF) : null;
+                }],
+                ["7", "Lap flags", "bitfield", function (s, lap) { return gpLapFlagsHex(lap); }]] },
             { off: 0x8, name: "Sector", rate: "slow", s: [
-                ["0-1", "Current sector", "u16 ×0.01 s"], ["2-3", "Last sector", "u16 ×0.01 s"],
-                ["4-5", "Theoretical best", "u16 ×0.01 s"], ["6", "Sector number", "1-based"],
-                ["7", "Lap flags", "bitfield"]] },
+                ["0-1", "Current sector", "u16 ×0.01 s", function (s, lap) {
+                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.sector_time_current)) : null;
+                }],
+                ["2-3", "Last sector", "u16 ×0.01 s", function (s, lap) {
+                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.sector_time_last)) : null;
+                }],
+                ["4-5", "Theoretical best", "u16 ×0.01 s", function (s, lap) {
+                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.lap_time_theoretical)) : null;
+                }],
+                ["6", "Sector number", "1-based", function (s, lap) {
+                    return lap && lap.timing ? String(gpN(lap.timing.sector_number) || 0) : null;
+                }],
+                ["7", "Lap flags", "bitfield", function (s, lap) { return gpLapFlagsHex(lap); }]] },
             { off: 0x9, name: "Delta", rate: "slow", s: [
-                ["0-1", "Predictive delta", "i16 ×0.01 s"], ["2-3", "Lap distance", "u16 m"],
-                ["7", "Lap flags", "bitfield"]] },
+                ["0-1", "Predictive delta", "i16 ×0.01 s", function (s, lap) {
+                    if (!lap || !lap.timing || !("lap_delta" in lap.timing)) return null;
+                    return (gpDeltaCs(lap.timing.lap_delta) / 100).toFixed(2) + " s";
+                }],
+                ["2-3", "Lap distance", "u16 m", function (s, lap) {
+                    return (lap && lap.timing && gpN(lap.timing.distance_m) !== null)
+                        ? String(Math.round(lap.timing.distance_m)) + " m" : null;
+                }],
+                ["7", "Lap flags", "bitfield", function (s, lap) { return gpLapFlagsHex(lap); }]] },
             { off: 0xE, name: "Command", rate: "in", s: [
                 ["0", "Command", ""], ["1-7", "Arguments", ""]] },
             { off: 0xF, name: "Response", rate: "out", s: [
@@ -10744,10 +10876,17 @@
                    "<b class='sc'>" + gpEsc(m[2]) + "</b></span>";
         }
 
+        /* A live() throwing must not take the whole map down with it — one
+           wrong field in one row would otherwise blank every row after it. */
+        function gpMapLiveSafe(fn, s, lap, info) {
+            try { return fn(s, lap, info); } catch (e) { return null; }
+        }
+
         function gpFrameMapHtml() {
             var c = gp.canEdit || {};
             var base = gpN(c.base_id);
             var fast = gpN(c.fast_hz) || 25, slow = gpN(c.slow_hz) || 5;
+            var s = gp.status, lap = gp.lap, info = gp.info;
             var h = "<div class='gp-map'>";
             GP_FRAMES.forEach(function (fr) {
                 var off = fr.rate === "off";
@@ -10758,15 +10897,41 @@
                                                           : gpHex(base + fr.off)) + "</span>" +
                      "<span class='nm'>" + fr.name + "</span>" +
                      "<span class='hz'>" + rate + "</span></div>";
-                fr.s.forEach(function (sg) {
+                fr.s.forEach(function (sg, idx) {
+                    var val = sg[3] ? gpMapLiveSafe(sg[3], s, lap, info) : null;
                     h += "<div class='gp-map-s" + (off ? " off" : "") + "'>" +
                          "<span class='by'>" + sg[0] + "</span>" +
                          "<span class='sg'>" + sg[1] + "</span>" +
-                         gpMapUnitHtml(sg[2]) + "</div>";
+                         gpMapUnitHtml(sg[2]) +
+                         "<span class='lv" + (val === null ? " na" : "") + "' id='gpMapLv_" + fr.off + "_" + idx + "'>" +
+                         (val === null ? "—" : gpEsc(val)) + "</span></div>";
                 });
             });
             return h + "</div><div class='gp-set-note'>Little-endian, byte offsets from 0. " +
-                   "Lap flags: " + GP_LAP_FLAGS + ". A lap time of 0xFFFF means no time yet.</div>";
+                   "Lap flags: " + GP_LAP_FLAGS + ". A lap time of 0xFFFF means no time yet. " +
+                   "The live column is what Studio currently reads over USB, quantised the same " +
+                   "way the node packs it — your dash should decode the same number.</div>";
+        }
+
+        /* Patches the live cells in place, without touching anything else in
+           Setup — a full gpRenderInspector() on every status/lap tick would
+           tear the cursor out of the WiFi SSID field the instant someone
+           started typing. Cheap to call unconditionally: it no-ops the moment
+           Setup is not the visible view. */
+        function gpCanLiveUpdate() {
+            if (gp.view !== "setup") return;
+            var s = gp.status, lap = gp.lap, info = gp.info;
+            GP_FRAMES.forEach(function (fr) {
+                fr.s.forEach(function (sg, idx) {
+                    if (!sg[3]) return;
+                    var el = document.getElementById("gpMapLv_" + fr.off + "_" + idx);
+                    if (!el) return;
+                    var val = gpMapLiveSafe(sg[3], s, lap, info);
+                    var txt = val === null ? "—" : val;
+                    if (el.textContent !== txt) el.textContent = txt;
+                    el.classList.toggle("na", val === null);
+                });
+            });
         }
 
         /* Live timing readout + the capture controls, for the Tracks inspector.
@@ -11316,6 +11481,7 @@
                 gpUpdateStage();
                 gpUpdateChips();
                 gpMapUpdate();
+                gpCanLiveUpdate();
                 /* The first usable fix changes the track list's ORDER, so the
                    rail has to be rebuilt once — but only once, not every 500 ms,
                    or clicking an entry would race the redraw. */
