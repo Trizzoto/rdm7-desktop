@@ -1020,8 +1020,13 @@
         .gp-lap.best .t { color: #C77DFF; font-weight: 600; }
         .gp-lapfoot { font-size: 10px; color: var(--text-muted); margin-top: 5px; text-align: right; }
         /* playback bar */
-        .gp-playbar { display: none; align-items: center; gap: 10px; margin: 8px 14px 0; padding: 6px 10px;
-                      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); }
+        /* Sticky at the foot of the scrolling stage: the transport stays under
+           your cursor while the map/rack column scrolls behind it — the same
+           contract every video editor keeps. */
+        .gp-playbar { display: none; align-items: center; gap: 10px; margin: 8px 14px 10px; padding: 6px 10px;
+                      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md);
+                      position: sticky; bottom: 8px; z-index: 60;
+                      box-shadow: 0 4px 18px rgba(0,0,0,0.45); }
         .gp-playbar input[type=range] { flex: 1; accent-color: var(--accent); }
         .gp-playbar select { background: var(--bg); border: 1px solid var(--border); color: var(--text);
                              border-radius: var(--radius-sm); font-size: 11px; padding: 3px 6px; }
@@ -1132,7 +1137,11 @@
            to live on the map wrap move up here so both tiles share them. */
         .gp-viewer { display: flex; gap: 10px; margin: 14px 14px 0; flex-shrink: 0;
                      align-items: stretch; min-height: 0; }
-        .gp-viewer.tall { flex: 1; min-height: 0; margin-bottom: 14px; }
+        /* Grow to fill a tall window, but never SHRINK below a usable map —
+           shrinking is how the map became a 40px sliver under a full lane
+           rack, with nothing overflowing and therefore nothing to scroll.
+           With a floor, the column overflows instead and the stage scrolls. */
+        .gp-viewer.tall { flex: 1 0 auto; min-height: 340px; margin-bottom: 0; }
         .gp-mapwrap { position: relative; margin: 0; flex: 1 1 58%; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; flex-shrink: 1; }
         .gp-vtile { display: none; position: relative; flex: 1 1 42%; min-width: 0;
                     background: #000; border: 1px solid var(--border);
@@ -6825,6 +6834,14 @@
                 gp.trace = rows;
                 gp.traceInfo = { used_samples: rows.length };
                 gp.sessionId = id;
+                /* A video opened before any recording existed has been playing
+                   untethered — tether it now: its clock against this session's,
+                   by the same rule as opening it the other way round. */
+                if (gp.video && !gp.video.probing) {
+                    gp.video.t0 = (gp.video.autoT0 !== null && meta.dated === "gps")
+                        ? gp.video.autoT0 : meta.recordedAt;
+                    gp.video.offsetMs = 0;
+                }
                 gpComputeG(gp.trace);
                 gp.cmpLap = -1;
                 gpSplitLaps();
@@ -9266,7 +9283,6 @@
         }
 
         function gpVideoHtml() {
-            if (!gp.trace || !gp.trace.length) return "";
             var v = gp.video;
             var h = "<div class='ws-grp'><div class='ws-gt'>Video" +
                     "<i class='gp-lamp info' data-tip=\"<b>Footage beside the data</b>" +
@@ -9277,26 +9293,39 @@
                     "the timeline and the video follows. Nothing is uploaded anywhere \u2014 the file " +
                     "stays on this PC.\"></i></div>";
             if (!v) {
-                h += "<button class='ws-btn-line' onclick=\"document.getElementById('gpVideoFile').click()\">Open a video of this session\u2026</button>" +
+                h += "<button class='ws-btn-line' onclick=\"document.getElementById('gpVideoFile').click()\">" +
+                     ((gp.trace && gp.trace.length) ? "Open a video of this session\u2026" : "Open a video\u2026") +
+                     "</button>" +
                      "<input type='file' id='gpVideoFile' accept='video/*' style='display:none' onchange='gpVideoOpen(this)'>";
+                if (!gp.trace || !gp.trace.length)
+                    h += "<div class='gp-video-status'>It appears beside the map, and syncs itself to a recording once one is loaded.</div>";
                 return h + "</div>";
             }
             var meta = gpCurSessionMeta();
+            var tethered = !!meta && !!gp.trace && gp.trace.length > 0;
             var synced = v.autoT0 !== null && v.t0 === v.autoT0;
             h += "<div class='gp-video-status'>" +
                  (v.probing ? "Reading the file's clock\u2026"
+                  : !tethered ? "Playing on its own \u2014 load a recording and it syncs against it" +
+                                (v.autoT0 !== null ? " from the file's own clock" : "") + "."
                   : synced ? "Synced from the file's own clock (" + gpEsc(gpSesDay(v.autoT0)) + ")."
                   : v.autoT0 !== null ? "The file has a clock \u2014 press Auto to use it."
                   : "No usable clock in this file \u2014 aligned to the session start; nudge below.") +
                  "</div>";
-            h += "<div class='ws-field'><label>Nudge (video later \u2192 positive)</label>" +
-                 "<div class='ws-slider'><input type='range' min='-30' max='30' step='0.04' value='" +
-                 (v.offsetMs / 1000) + "' oninput='gpVideoOffset(this.value)'>" +
-                 "<span class='val' id='gpVideoOffLab'>" + (v.offsetMs / 1000).toFixed(2) + " s</span></div></div>";
+            /* The tether controls only mean something WITH a session to tether
+               to \u2014 a nudge slider on an untethered video adjusts nothing. */
+            if (tethered) {
+                h += "<div class='ws-field'><label>Nudge (video later \u2192 positive)</label>" +
+                     "<div class='ws-slider'><input type='range' min='-30' max='30' step='0.04' value='" +
+                     (v.offsetMs / 1000) + "' oninput='gpVideoOffset(this.value)'>" +
+                     "<span class='val' id='gpVideoOffLab'>" + (v.offsetMs / 1000).toFixed(2) + " s</span></div></div>";
+            }
             h += "<div class='lt-expbtns'>" +
-                 "<button class='ws-btn-line" + (v.follow ? " on" : "") + "' onclick='gpVideoFollowToggle()'>" +
-                 (v.follow ? "Following the timeline" : "Follow the timeline") + "</button>" +
-                 (v.autoT0 !== null && meta && meta.dated === "gps" && !synced
+                 (tethered
+                   ? "<button class='ws-btn-line" + (v.follow ? " on" : "") + "' onclick='gpVideoFollowToggle()'>" +
+                     (v.follow ? "Following the timeline" : "Follow the timeline") + "</button>"
+                   : "") +
+                 (tethered && v.autoT0 !== null && meta && meta.dated === "gps" && !synced
                    ? "<button class='ws-btn-line' onclick='gpVideoAuto()'>Auto</button>" : "") +
                  "<button class='ws-btn-line' onclick='gpVideoClose()'>Close</button></div>";
             return h + "</div>";
