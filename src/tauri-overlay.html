@@ -1060,6 +1060,8 @@
         .gp-secs span.r { background: rgba(224, 93, 82, 0.18); color: #e05d52; }
         .ws-item .tag.gp-best { color: #c98ae0; }
         .gp-ideal { cursor: default; opacity: 0.9; }
+        .gp-units { margin-left: 8px; }
+        .gp-units button { min-width: 44px; }
         .gp-ideal-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; }
         .gp-ses-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; width: 100%; }
         .gp-ses-n .undated { color: #FF9F0A; }
@@ -1713,6 +1715,11 @@
                 <button id="gpBtnMonitor" class="on" onclick="gpSetView('monitor')">Monitor</button>
                 <button id="gpBtnTracks" onclick="gpSetView('tracks')">Tracks</button>
                 <button id="gpBtnSession" onclick="gpSetView('session')">Session</button>
+            </div>
+            <div class="ws-modes gp-units" role="group" aria-label="Units"
+                 title="Units — the device always stores metric; this is what you read">
+                <button id="gpBtnMetric" onclick="gpUnitsSet('metric')">km/h</button>
+                <button id="gpBtnImperial" onclick="gpUnitsSet('imperial')">mph</button>
             </div>
         </div>
         <div class="ws-body">
@@ -5721,6 +5728,80 @@
            a field the node never sent would print a confident "0.00 m" — and
            then get graded red by a tone function reading the same 0. Every
            scaled readout goes through here for exactly that reason. */
+        /* ---- units --------------------------------------------------------
+         * The device stores metric and always will: the wire carries mm, mm/s
+         * and 1e-7 degrees, and lap_core does its geometry in metres. This is
+         * a READING preference, converted at the last moment, so nothing that
+         * is sent to a device or stored in a track ever changes.
+         *
+         * Everything routes through here rather than each screen doing its own
+         * arithmetic — that is what stops a number being right in the coach and
+         * wrong in the lane rack six months from now. g is g in both systems;
+         * only speed and distance move. */
+        var GP_UNITS_LS = "rdm7_units";
+        var GP_UNITS = {
+            metric:   { spd: 1,          spdU: "km/h", d: 1,       dU: "m",
+                        far: 0.001,      farU: "km",   farAt: 1000 },
+            imperial: { spd: 0.62137119, spdU: "mph",  d: 3.2808399, dU: "ft",
+                        far: 0.00062137, farU: "mi",   farAt: 1609.344 }
+        };
+        var _gpUnits = null;
+
+        function gpUnits() {
+            if (_gpUnits) return _gpUnits;
+            var v = null;
+            try { v = window.localStorage.getItem(GP_UNITS_LS); } catch (e) { }
+            _gpUnits = GP_UNITS[v] ? v : "metric";
+            return _gpUnits;
+        }
+        function gpU() { return GP_UNITS[gpUnits()]; }
+
+        /* Numbers only — for axis ticks, sliders and anywhere the unit is
+           printed once in a heading rather than on every value. */
+        function gpSpdN(kph) { var n = gpN(kph); return n === null ? null : n * gpU().spd; }
+        function gpDistN(m) { var n = gpN(m); return n === null ? null : n * gpU().d; }
+        function gpSpdU() { return gpU().spdU; }
+        function gpDistU() { return gpU().dU; }
+
+        /* Value + unit. `dp` is the metric precision; imperial keeps the same
+           number of decimals, which is the right call for every case here —
+           mph and feet are both coarser than the metric unit they replace, so
+           carrying the same dp never invents precision. */
+        function gpSpd(kph, dp) {
+            var n = gpSpdN(kph);
+            return n === null ? "\u2014" : n.toFixed(dp === undefined ? 0 : dp) + " " + gpU().spdU;
+        }
+        function gpDist(m, dp) {
+            var n = gpDistN(m);
+            return n === null ? "\u2014" : n.toFixed(dp === undefined ? 0 : dp) + " " + gpU().dU;
+        }
+        /* Distances big enough to want the other unit — track-away distances,
+           not corner geometry. */
+        function gpFar(m) {
+            var n = gpN(m), u = gpU();
+            if (n === null) return "";
+            if (n < u.farAt) return Math.round(n * u.d) + " " + u.dU;
+            var big = n * u.far;
+            return (big < 100 ? big.toFixed(1) : Math.round(big).toLocaleString()) + " " + u.farU;
+        }
+
+        window.gpUnitsSet = function (u) {
+            if (!GP_UNITS[u] || u === gpUnits()) return;
+            _gpUnits = u;
+            try { window.localStorage.setItem(GP_UNITS_LS, u); } catch (e) { }
+            gpSyncUnitBtns();
+            /* Every cached render carries formatted strings, so they all go. */
+            gp.stripCache = null; gp.stripZoom = null;
+            gp.coach = null; gp.chan = null; gp.chanKey = "";
+            gpBuildRail(); gpDrawTrace(); gpRenderInspector();
+        };
+
+        function gpSyncUnitBtns() {
+            var m = document.getElementById("gpBtnMetric"), i = document.getElementById("gpBtnImperial");
+            if (m) m.className = gpUnits() === "metric" ? "on" : "";
+            if (i) i.className = gpUnits() === "imperial" ? "on" : "";
+        }
+
         function gpUnit(v, div, dp, unit) {
             var n = gpN(v);
             return n === null ? "—" : (n / div).toFixed(dp) + (unit || "");
@@ -5757,10 +5838,10 @@
                     tone: function (s) { return s.sats >= 8 ? "ok" : s.sats >= 4 ? "warn" : "bad"; } },
                 { label: "PDOP", v: function (s) { return gpUnit(s.pdop_1e2, 100, 2); },
                     tone: function (s) { var d = s.pdop_1e2 / 100; return d <= 2 ? "ok" : d <= 5 ? "warn" : "bad"; } },
-                { label: "Horizontal accuracy", v: function (s) { return gpUnit(s.hacc_mm, 1000, 2, " m"); },
+                { label: "Horizontal accuracy", v: function (s) { return gpDist(gpN(s.hacc_mm) === null ? null : s.hacc_mm / 1000, 2); },
                     sub: function (s) { return gpRaw(s.hacc_mm, "mm"); },
                     tone: function (s) { return s.hacc_mm <= 1500 ? "ok" : s.hacc_mm <= 5000 ? "warn" : "bad"; } },
-                { label: "Vertical accuracy", v: function (s) { return gpUnit(s.vacc_mm, 1000, 2, " m"); },
+                { label: "Vertical accuracy", v: function (s) { return gpDist(gpN(s.vacc_mm) === null ? null : s.vacc_mm / 1000, 2); },
                     sub: function (s) { return gpRaw(s.vacc_mm, "mm"); } },
                 /* diffSoln, not "is SBAS switched on". The receiver only sets it
                    once corrections are actually being applied to the solution,
@@ -5780,11 +5861,11 @@
                     sub: function (s) { return gpRaw(s.lat_1e7, "×1e-7°"); } },
                 { label: "Longitude", v: function (s) { return gpDeg(s.lon_1e7, 1e7, 7); },
                     sub: function (s) { return gpRaw(s.lon_1e7, "×1e-7°"); } },
-                { label: "Altitude", v: function (s) { return gpUnit(s.alt_mm, 1000, 3, " m"); },
+                { label: "Altitude", v: function (s) { return gpDist(gpN(s.alt_mm) === null ? null : s.alt_mm / 1000, 3); },
                     sub: function (s) { return gpRaw(s.alt_mm, "mm"); } }
             ], note: "Position is omitted from the reply entirely until there is a fix. Values are the receiver's own 1e-7° integers — shown to full resolution, never rounded through a float." },
             { id: "motion", title: "Motion", ok: function (s) { return s.gspeed_mm_s !== undefined; }, rows: [
-                { label: "Ground speed", v: function (s) { return gpUnit(s.gspeed_mm_s, 1000 / 3.6, 2, " km/h"); },
+                { label: "Ground speed", v: function (s) { return gpSpd(gpN(s.gspeed_mm_s) === null ? null : s.gspeed_mm_s * 3.6 / 1000, 2); },
                     sub: function (s) { return gpRaw(s.gspeed_mm_s, "mm/s"); } },
                 { label: "Heading", v: function (s) { return gpDeg(s.head_1e5, 1e5, 3); },
                     sub: function (s) { return gpRaw(s.head_1e5, "×1e-5°"); } },
@@ -6488,7 +6569,8 @@
                     for (i = 0; i <= 12; i++)
                         h += "<i style='background:" + gpSpeedColour(i / 12) + "'></i>";
                     h += "</div><div class='gp-glegend-lab'><span>" + Math.round(slo) +
-                         " km/h</span><span></span><span>" + Math.round(shi) + " km/h</span></div>";
+                         " " + gpSpdU() + "</span><span></span><span>" + Math.round(gpSpdN(shi)) +
+                         " " + gpSpdU() + "</span></div>";
                 } else if (mmode === "ref") {
                     h += "<div class='gp-glegend'>";
                     for (i = -6; i <= 6; i++)
@@ -6514,7 +6596,7 @@
                 h += "<div class='gp-rows' style='margin-top:9px'>" +
                      "<div class='gp-row'><span class='k'>Hardest braking</span><span class='v'>" + maxB.toFixed(2) + " g</span></div>" +
                      "<div class='gp-row'><span class='k'>Best acceleration</span><span class='v'>+" + maxA.toFixed(2) + " g</span></div>" +
-                     "<div class='gp-row'><span class='k'>Top speed</span><span class='v'>" + top.toFixed(0) + " km/h</span></div>" +
+                     "<div class='gp-row'><span class='k'>Top speed</span><span class='v'>" + gpSpd(top) + "</span></div>" +
                      "<div class='gp-row'><span class='k'>Samples shown</span><span class='v'>" + (r.to - r.from + 1).toLocaleString() + "</span>" +
                      "<span class='s'>25 Hz, full resolution</span></div></div>";
                 h += "";
@@ -6846,8 +6928,8 @@
            of what has to happen before it fills. Drawing a flat zero for a
            channel nobody is recording would be a lie with a grid behind it. */
         var GP_LANES = [
-            { id: "speed", label: "Speed", unit: "km/h", dp: 0, colour: "#9ecbff",
-              get: function (i) { return gp.trace[i].kph; }, zero: false },
+            { id: "speed", label: "Speed", unit: function () { return gpSpdU(); }, dp: 0, colour: "#9ecbff",
+              get: function (i) { return gpSpdN(gp.trace[i].kph); }, zero: false },
             { id: "glong", label: "Braking / accel", unit: "g", dp: 2, colour: "#e0a24e",
               get: function (i) { return gp.trace[i].g; }, zero: true },
             { id: "glat", label: "Lateral", unit: "g", dp: 2, colour: "#c98ae0",
@@ -7061,7 +7143,8 @@
                 g.fillText(lane.label.replace(/&amp;/g, "&"), 6, top + 13);
                 g.fillStyle = "rgba(255,255,255,0.30)";
                 g.font = "9px system-ui";
-                if (lane.unit) g.fillText(lane.unit, 6, top + 25);
+                var lu = typeof lane.unit === "function" ? lane.unit() : lane.unit;
+                if (lu) g.fillText(lu, 6, top + 25);
 
                 var absent = lane.pending || (lane.absent && lane.absent());
                 if (absent) {
@@ -7379,9 +7462,9 @@
                     " data-gp-a='" + ins.a + "' data-gp-b='" + ins.b + "'>";
             var title, i;
             if (ins.kind === "straight") {
-                title = "Straight after the corner at " + ins.afterKph + " km/h";
+                title = "Straight after the corner at " + gpSpd(ins.afterKph);
             } else {
-                title = "Corner at " + Math.round(gp.trace[ins.op.apex].kph) + " km/h";
+                title = "Corner at " + gpSpd(gp.trace[ins.op.apex].kph);
                 if (ins.kind === "chain")
                     title += ins.members === 2 ? " + the next"
                                                : " + the next " + (ins.members - 1) + " corners";
@@ -7394,7 +7477,7 @@
             if (ins.kind === "straight") {
                 var stry = ins.lift
                      ? "The trace shows a lift partway down \u2014 speed drops " +
-                       Math.round(ins.lift.dip) + " km/h and recovers. If that was not " +
+                       gpSpd(ins.lift.dip) + " and recovers. If that was not " +
                        "traffic, hold it flat through here next time."
                      : "Exit speed matched the reference, but time kept slipping away " +
                        "down the straight \u2014 worth checking shift points, or whether " +
@@ -7421,7 +7504,7 @@
                finding spills into what comes next. */
             if (ins.kind === "chain") {
                 h += "<i class='gp-lamp carry' data-tip=\"<b>Carried</b>The next corner " +
-                     "starts " + Math.abs(ins.carryKph).toFixed(0) + " km/h down because of " +
+                     "starts " + gpSpd(Math.abs(ins.carryKph)) + " down because of " +
                      "this exit, so fix this one first.\"></i>";
             } else if (ins.cons_s > 0.03) {
                 h += "<i class='gp-lamp carry' data-tip=\"<b>Carried</b>" +
@@ -7433,7 +7516,7 @@
             if (!pres && ins.kind === "chain") {
                 pres = { why: "the exit sets up everything after it",
                          try: "The corner itself is close to the reference, but the exit is " +
-                              Math.abs(op.exitKph_d).toFixed(0) + " km/h down and the next " +
+                              gpSpd(Math.abs(op.exitKph_d)) + " down and the next " +
                               "corner inherits it. Get to throttle earlier here." };
             }
             if (pres) {
@@ -8051,15 +8134,15 @@
             var m = op.brakeLater_m, km = op.minKph_d, ex = op.exitKph_d, co = op.coast_d;
 
             if (worst.name === "Braking" && m !== null && m < -3) {
-                return { why: "braking " + Math.abs(m).toFixed(0) + " m earlier",
+                return { why: "braking " + gpDist(Math.abs(m)) + " earlier",
                          try: "Move your brake marker " + Math.min(10, Math.abs(m)).toFixed(0) +
                               " m later for the next 4 laps. Check turn-in stays smooth — " +
                               "if you run wide, you have gone too far." };
             }
             if ((worst.name === "Entry" || worst.name === "Apex") && km < -2) {
-                return { why: Math.abs(km).toFixed(0) + " km/h less through the apex",
+                return { why: gpSpd(Math.abs(km)) + " less through the apex",
                          try: "Ease the brake off earlier and carry the speed in. Aim for " +
-                              Math.abs(km).toFixed(0) + " km/h more at the apex, and let the " +
+                              gpSpd(Math.abs(km)) + " more at the apex, and let the " +
                               "car run wider on exit." };
             }
             if (co > 0.15) {
@@ -8069,7 +8152,7 @@
                               "hold it for a few laps." };
             }
             if (worst.name === "Exit" && ex < -2) {
-                return { why: Math.abs(ex).toFixed(0) + " km/h down at corner exit",
+                return { why: gpSpd(Math.abs(ex)) + " down at corner exit",
                          try: "Get to throttle earlier. Sacrifice a little apex speed for a " +
                               "straighter exit and see if the next straight comes to you." };
             }
@@ -8204,7 +8287,7 @@
                            (dv > 0.02 ? "#e05d52" : dv < -0.02 ? "#6FBF73" : "#999") + "'>" +
                            (dv >= 0 ? "+" : "\u2212") + Math.abs(dv).toFixed(2) + " s</span>";
                 }
-                read.innerHTML = "<b>" + s.kph.toFixed(0) + "</b> km/h &nbsp; " +
+                read.innerHTML = "<b>" + gpSpdN(s.kph).toFixed(0) + "</b> " + gpSpdU() + " &nbsp; " +
                     "<span style='color:" + gpGColour(s.g, gpGScale()) + "'>" +
                     (s.g >= 0 ? "+" : "") + s.g.toFixed(2) + " g</span> &nbsp; " +
                     (tsec >= 0 ? tsec.toFixed(1) + " s" : "") + dtxt;
@@ -8451,7 +8534,7 @@
             if (!window.confirm(msg)) return;
             gpLapAction(function () { return api.capture(what); }, function (j) {
                 if (j && j.heading_reliable === false) {
-                    return "Line set — but the car was under 5 km/h, so the direction it recorded is unreliable. Re-capture while driving across the line.";
+                    return "Line set — but the car was under " + gpSpd(5) + ", so the direction it recorded is unreliable. Re-capture while driving across the line.";
                 }
                 return what === "start_finish"
                     ? "Start/finish set from the car's position."
@@ -8567,9 +8650,9 @@
             if (chip) {
                 chip.innerHTML =
                     "<b>" + ll[0].toFixed(6) + ", " + ll[1].toFixed(6) + "</b><br>" +
-                    gpUnit(s.gspeed_mm_s, 1000 / 3.6, 1, " km/h") + " &#183; " +
+                    gpSpd(gpN(s.gspeed_mm_s) === null ? null : s.gspeed_mm_s * 3.6 / 1000, 1) + " &#183; " +
                     gpDeg(s.head_1e5, 1e5, 1) + " &#183; &plusmn;" +
-                    gpUnit(s.hacc_mm, 1000, 2, " m");
+                    gpDist(gpN(s.hacc_mm) === null ? null : s.hacc_mm / 1000, 2);
             }
         }
 
@@ -8793,7 +8876,7 @@
             var h = box.querySelector("[data-gp-fld='heading']");
             var w = box.querySelector("[data-gp-fld='half_width_m']");
             if (h) { h.value = Math.round(line.heading); if (h.nextElementSibling) h.nextElementSibling.textContent = Math.round(line.heading) + "°"; }
-            if (w) { w.value = line.half_width_m; if (w.nextElementSibling) w.nextElementSibling.textContent = line.half_width_m + " m"; }
+            if (w) { w.value = line.half_width_m; if (w.nextElementSibling) w.nextElementSibling.textContent = gpDist(line.half_width_m, 1); }
         }
 
         window.gpSelectGate = function (key) {
@@ -9079,10 +9162,7 @@
         }
 
         function gpFmtDistance(m) {
-            if (m === null || m === undefined) return "";
-            if (m < 1000) return Math.round(m) + " m";
-            if (m < 100000) return (m / 1000).toFixed(1) + " km";
-            return Math.round(m / 1000).toLocaleString() + " km";
+            return (m === null || m === undefined) ? "" : gpFar(m);
         }
 
         /* Sort a copy by distance from `here`, nearest first. Entries with no
@@ -9270,7 +9350,7 @@
             h += "<div class='ws-note'>Both capture buttons <b>reset the session</b>." +
                  "<i class='gp-lamp info' data-tip=\"<b>Capture</b>Takes the position and the " +
                  "direction from the live GPS while you drive across the line, so there is " +
-                 "nothing to aim. Above 5 km/h, or the direction is noise.\"></i></div>";
+                 "nothing to aim. Above \" + gpSpd(5) + \", or the direction is noise.\"></i></div>";
             h += "</div>";
             return h;
         }
@@ -9349,7 +9429,7 @@
                 h += "<div class='ws-field'><label>Gate width (&plusmn; each side)</label>" +
                      "<div class='ws-slider'><input type='range' data-gp-fld='half_width_m' min='2' max='100' step='0.5' value='" + g.half_width_m +
                      "' oninput=\"gpGateField('half_width_m', this.value)\">" +
-                     "<span class='val'>" + g.half_width_m + " m</span></div></div>";
+                     "<span class='val'>" + gpDist(g.half_width_m, 1) + "</span></div></div>";
                 h += "<button class='ws-btn-line' onclick='gpGateDelete()'>" +
                      (gp.selGate === "fin" ? "Remove the finish line — back to a circuit" : "Remove this gate") +
                      "</button>";
@@ -9651,7 +9731,7 @@
             if (fix) {
                 var s = gp.status;
                 fix.innerHTML = (s && s.fix)
-                    ? "<b>" + gpInt(s.sats) + "</b> sats · " + gpUnit(s.hacc_mm, 1000, 2, " m")
+                    ? "<b>" + gpInt(s.sats) + "</b> sats · " + gpDist(gpN(s.hacc_mm) === null ? null : s.hacc_mm / 1000, 2)
                     : (s ? "no fix" : "—");
             }
             var hint = document.getElementById("gpHint");
@@ -9733,6 +9813,7 @@
                claiming to be searching when it isn't. */
             gp.status = null; gp._prev = null; gp.rates = {}; gp.err = null;
             gp.connecting = false;
+            gpSyncUnitBtns();
             /* Guards belong to the session that set them: a reply still in
                flight from the LAST session would otherwise keep every poll
                early-returning until it landed, then overwrite fresh state. */
