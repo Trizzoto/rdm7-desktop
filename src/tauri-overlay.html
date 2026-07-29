@@ -9218,6 +9218,125 @@
         }
 
         /* ---- draw ---------------------------------------------------------- */
+        /* ---- The drawn line ------------------------------------------------
+           The map shows POSITION, and position off a GNSS receiver carries
+           roughly half a metre of noise. At 100 km/h the car covers 1.1 m
+           between samples and that noise is invisible; crawling down a street
+           it covers 0.1 m and the noise is larger than the movement, so the
+           line becomes a scribble. That is what zooming in was showing — not
+           a rendering fault, the actual fixes.
+
+           So the DRAWN line is smoothed, and only the drawn line. Lap times,
+           sector crossings, deltas and every distance the coach quotes go on
+           reading the raw fixes. Moving a position to make a picture tidier
+           must never move a start-finish crossing (ADR-0011: what is shown is
+           measured — this smooths presentation, it does not invent samples).
+
+           The window is set by physics rather than by eye: never average over
+           more than about a metre of real travel, so no corner can be rounded
+           into a line the car did not drive. Parked, that allows a wide
+           window and the scribble collapses to a point; at speed it collapses
+           to no smoothing at all, which is correct because none is needed. */
+        var GP_SMOOTH_M = 1.0;         /* max real travel blurred, metres */
+        var GP_SMOOTH_LIVE = 10;       /* live: cap the lag, in samples */
+
+        function gpSmoothPath() {
+            var rows = gp.trace;
+            if (!rows || !rows.length) return null;
+            var key = rows.length + ":" + (rows[0].t || 0) + ":" + (rows[rows.length - 1].t || 0);
+            if (gp.pathKey === key && gp.path) return gp.path;
+
+            var n = rows.length, i;
+            /* Prefix sums: window width then costs nothing, so a 331k-sample
+               ring is O(n) however wide the windows get. */
+            var pLat = new Float64Array(n + 1), pLon = new Float64Array(n + 1);
+            var cum = new Float64Array(n);        /* distance along the raw line */
+            for (i = 0; i < n; i++) {
+                pLat[i + 1] = pLat[i] + rows[i].lat;
+                pLon[i + 1] = pLon[i] + rows[i].lon;
+                if (i) cum[i] = cum[i - 1] + gpMetres(rows[i - 1], rows[i]);
+            }
+
+            /* How wide a window is SAFE depends on how bent the line is here,
+               not on how far the car travelled.
+
+               Averaging along a straight is free: slide a window down a
+               straight line and every point lands back on it, so the window
+               can be metres long and all it removes is the wobble. Averaging
+               round a corner is what costs — it pulls the point inside the
+               bend. For an arc of radius R the pull is about L²/24R, so
+               solving for L gives the longest window that keeps the error
+               inside a tolerance:  L = sqrt(24 · tol · R).
+
+               That is why the two earlier attempts failed. Both bounded the
+               window by travel — a fixed sample count, then a fixed half
+               metre of path — and at 50 km/h half a metre is one sample, so
+               a car driving down a straight street got no smoothing at all
+               while its line visibly wobbled. Bounded by curvature instead,
+               the same street gets a 25 m window and goes clean, and a
+               20 m-radius hairpin tightens itself to 12 m and keeps its
+               apex. Parked, the line does not advance, so the window
+               swallows the whole scribble.
+
+               Radius comes from the heading channel, which the puck already
+               reports: curvature is heading change per metre travelled. */
+            var TOL = 0.30, L_CAP = 25;
+            var out = new Array(n), a = 0, b = 0;
+            var cap = gp.liveMode ? GP_SMOOTH_LIVE : 0;   /* 0 = no cap */
+            for (i = 0; i < n; i++) {
+                var j0 = i > 1 ? i - 2 : 0, j1 = i < n - 2 ? i + 2 : n - 1;
+                var ds = cum[j1] - cum[j0];
+                var dh = Math.abs(rows[j1].hdg - rows[j0].hdg) % 360;
+                if (dh > 180) dh = 360 - dh;
+                var kappa = ds > 0.05 ? (dh * Math.PI / 180) / ds : 0;
+                var L = kappa > 1e-6 ? Math.sqrt(24 * TOL * (1 / kappa)) : L_CAP;
+                if (L > L_CAP) L = L_CAP;
+                var H = L / 2;
+                /* Both ends must be able to CONTRACT as well as extend. A
+                   sliding window that only ever advances is fine when the
+                   width is constant, and wrong here because the width is the
+                   whole point: a wide window opened on a straight stayed open
+                   into the corner after it and cut six metres off the apex.
+                   H moves smoothly, so the walk stays near O(n). */
+                if (a > i) a = i;
+                while (a < i && cum[i] - cum[a] > H) a++;
+                while (a > 0 && cum[i] - cum[a - 1] <= H) a--;
+                if (b < i) b = i;
+                while (b > i && cum[b] - cum[i] > H) b--;
+                while (b + 1 < n && cum[b + 1] - cum[i] <= H) b++;
+                var lo = a, hi = b;
+                /* Live has to stay responsive: a wide window here would show
+                   the car where it was a second ago. */
+                if (cap) {
+                    if (i - lo > cap) lo = i - cap;
+                    if (hi - i > cap) hi = i + cap;
+                }
+                /* SYMMETRIC, always. An average taken over more samples ahead
+                   than behind slides the point along the path — which is
+                   invisible in the middle of a lap and glaring at the two
+                   ends, where the window has nothing on one side: the first
+                   sample of a recording was being dragged six metres down the
+                   road. Shrink to whichever side is shorter and the bias
+                   cancels; at the very edge that means no smoothing, which is
+                   the honest answer there. */
+                var half = Math.min(i - lo, hi - i);
+                lo = i - half; hi = i + half;
+                var c = hi - lo + 1;
+                out[i] = [(pLat[hi + 1] - pLat[lo]) / c, (pLon[hi + 1] - pLon[lo]) / c];
+            }
+            gp.pathKey = key; gp.path = out;
+            return out;
+        }
+
+        /* Where the car is DRAWN at a sample — on the line the user can see,
+           not half a metre off it. */
+        function gpDrawnAt(i) {
+            var p = gpSmoothPath();
+            if (p && p[i]) return p[i];
+            var r = gp.trace && gp.trace[i];
+            return r ? [r.lat, r.lon] : null;
+        }
+
         function gpDrawTrace() {
             if (!gp.map) return;
             if (!gp.traceLayer) gp.traceLayer = L.layerGroup().addTo(gp.map);
@@ -9233,8 +9352,8 @@
             /* The comparison lap first, underneath, in a flat colour — the point
                of it is the LINE, and colouring both by g makes neither readable. */
             if (gp.cmpLap >= 0 && gp.traceLaps[gp.cmpLap] && gp.cmpLap !== gp.selLap) {
-                var c = gp.traceLaps[gp.cmpLap], pts = [];
-                for (var k = c.from; k <= c.to; k++) pts.push([rows[k].lat, rows[k].lon]);
+                var c = gp.traceLaps[gp.cmpLap], pts = [], P = gpSmoothPath();
+                for (var k = c.from; k <= c.to; k++) pts.push(P ? P[k] : [rows[k].lat, rows[k].lon]);
                 L.polyline(pts, { color: "#7CC0FF", weight: 5, opacity: 0.5,
                                   renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
             }
@@ -9272,8 +9391,8 @@
             for (var i = r.from + 1; i <= r.to; i++) {
                 var b = value(i);
                 if (b !== runB || i === r.to) {
-                    var seg = [];
-                    for (var j = runStart; j <= i; j++) seg.push([rows[j].lat, rows[j].lon]);
+                    var seg = [], SP = gpSmoothPath();
+                    for (var j = runStart; j <= i; j++) seg.push(SP ? SP[j] : [rows[j].lat, rows[j].lon]);
                     if (seg.length > 1) {
                         L.polyline(seg, { color: colour(runB), weight: 4,
                                           opacity: 0.95, lineCap: "butt",
@@ -9308,21 +9427,44 @@
             gpTcUpdate();
         }
 
+        /* Playback follows the car. Not by recentring on every sample — that
+           makes the whole map twitch under a stationary cursor and fights any
+           pan the user makes — but by keeping it inside the middle of the
+           view and recentring when it reaches the edge of that box. Zoom in
+           as far as you like and the car stays with you. */
+        function gpFollowCar(ll) {
+            if (!gp.map || gp.view !== "session" || !ll) return;
+            if (gp.followCar === false) return;
+            var b = gp.map.getBounds(), c = gp.map.getCenter();
+            var padY = (b.getNorth() - b.getSouth()) * 0.30;
+            var padX = (b.getEast() - b.getWest()) * 0.30;
+            if (ll[0] > b.getNorth() - padY || ll[0] < b.getSouth() + padY ||
+                ll[1] > b.getEast() - padX || ll[1] < b.getWest() + padX) {
+                gp.map.panTo(ll, { animate: false });
+            } else if (!c) {
+                gp.map.panTo(ll, { animate: false });
+            }
+        }
+
         function gpDrawPlayhead() {
             gpVideoFollowSeek();
             gpVideoDrawOverlay();
             gpDrawStrip();
             if (!gp.map || !gp.trace || !gp.trace.length) return;
-            var s = gp.trace[gp.playIdx];
-            if (!s) return;
+            /* On the line the user can SEE, not on the raw fix half a metre
+               off it — a car that floats beside its own trace is worse than a
+               jittery trace. */
+            var ll = gpDrawnAt(gp.playIdx);
+            if (!ll) return;
             if (!gp.playMarker) {
-                gp.playMarker = L.circleMarker([s.lat, s.lon], {
+                gp.playMarker = L.circleMarker(ll, {
                     radius: 6, color: "#fff", weight: 2, fillColor: "#7CC0FF", fillOpacity: 1
                 }).addTo(gp.traceLayer);
             } else {
-                gp.playMarker.setLatLng([s.lat, s.lon]);
+                gp.playMarker.setLatLng(ll);
                 if (!gp.traceLayer.hasLayer(gp.playMarker)) gp.playMarker.addTo(gp.traceLayer);
             }
+            gpFollowCar(ll);
             gpTcUpdate();
         }
 
