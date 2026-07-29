@@ -1029,7 +1029,7 @@
         /* Sticky at the foot of the scrolling stage: the transport stays under
            your cursor while the map/rack column scrolls behind it — the same
            contract every video editor keeps. */
-        .gp-playbar { display: none; align-items: center; gap: 10px; margin: 8px 14px 10px; padding: 6px 10px;
+        .gp-playbar { display: none; align-items: center; gap: 7px; margin: 8px 14px 10px; padding: 5px 8px;
                       background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md);
                       position: sticky; bottom: 8px; z-index: 60;
                       flex-wrap: wrap; row-gap: 4px; }
@@ -1127,44 +1127,78 @@
         .gp-set-na { color: var(--text-muted); }
         .gp-set-note { font-size: 10px; color: var(--text-muted); margin-top: 5px; }
         .gp-sep { width: 1px; height: 16px; background: var(--border); flex: none; }
-        .gp-tbtn { width: 26px; height: 24px; flex: none; display: inline-flex; align-items: center;
-                   justify-content: center; background: none; border: none; border-radius: var(--radius-sm);
-                   color: var(--text-muted); cursor: pointer; padding: 0; }
-        .gp-tbtn svg { width: 12px; height: 12px; fill: currentColor; }
+        /* The transport is one cluster, not five buttons that happen to be
+           adjacent: tight internal spacing, and the bar's own gap only
+           separates it from what is on either side. */
+        .gp-tgroup { display: flex; align-items: center; gap: 1px; flex: none; }
+        .gp-tbtn { width: 24px; height: 24px; flex: none; display: inline-flex; align-items: center;
+                   justify-content: center; background: none; border: 1px solid transparent;
+                   border-radius: var(--radius-sm); color: var(--text-muted); cursor: pointer; padding: 0; }
+        .gp-tbtn svg { width: 11px; height: 11px; fill: currentColor; }
         .gp-tbtn:hover { color: var(--text); background: var(--panel-elevated); }
-        .gp-tbtn-play { width: 30px; color: var(--text); }
+        /* Play is the primary control, marked by a hairline ring rather than a
+           fill — ADR-0014 keeps fills for the one primary action on a panel,
+           and a transport should not be shouting on a bar full of greys. */
+        .gp-tbtn-play { width: 30px; color: var(--text); border-color: var(--border-light); }
+        .gp-tbtn-play svg { width: 12px; height: 12px; }
         /* The timeline: a hairline with the elapsed portion filled and a thin
            playhead handle — not a browser slider blob. The fill fraction is
            driven from JS through --p. */
-        .gp-playbar input[type=range] { flex: 1 1 60px; min-width: 60px; -webkit-appearance: none;
+        /* The timeline is the ONLY elastic item on the bar, so it has to be
+           able to give way: the stage is ~600 px at 125% DPI and a floor of
+           90 px here pushed the keyboard lamp onto a second row. */
+        .gp-playbar input[type=range] { flex: 1 1 56px; min-width: 44px; -webkit-appearance: none;
                                         appearance: none; height: 20px; background: transparent; margin: 0; }
         .gp-playbar input[type=range]::-webkit-slider-runnable-track {
-            height: 3px; border-radius: 0;
-            background: linear-gradient(90deg, #46647c var(--p, 0%), var(--border-light) var(--p, 0%)); }
+            height: 2px; border-radius: 0;
+            background: linear-gradient(90deg, #5c7f99 var(--p, 0%), var(--border-light) var(--p, 0%)); }
         .gp-playbar input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 3px; height: 15px; margin-top: -6px;
-            background: var(--text); border-radius: 1px; }
+            -webkit-appearance: none; width: 2px; height: 14px; margin-top: -6px;
+            background: var(--text); border-radius: 0; }
         .gp-playbar input[type=range]:hover::-webkit-slider-thumb { background: var(--accent); }
         .gp-playbar input[type=range]:disabled::-webkit-slider-thumb { background: var(--border-light); }
-        .gp-tc { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text);
-                 flex: none; min-width: 0; text-align: right; white-space: nowrap;
+        /* The timecode is the one piece of DATA on this bar, so it is the one
+           thing allowed to be bright. Fixed width and tabular figures so the
+           digits do not dance while the playhead runs. */
+        .gp-tc { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text);
+                 flex: none; min-width: 94px; text-align: right; white-space: nowrap;
                  font-variant-numeric: tabular-nums; }
+        /* Nothing loaded means no timecode at all — and then the reserved
+           width would just be a hole between the transport and the timeline. */
+        .gp-tc:empty { min-width: 0; }
         .gp-tc em { font-style: normal; color: var(--text-muted); }
         .gp-tc .d { margin-left: 8px; }
-        .gp-rate { flex: none; background: none; border: none; color: var(--text-muted);
-                   font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 6px;
-                   border-radius: var(--radius-sm); cursor: pointer; min-width: 34px; }
+        .gp-rate { flex: none; background: none; border: 1px solid var(--border); color: var(--text-muted);
+                   font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 2px 6px;
+                   border-radius: var(--radius-sm); cursor: pointer; min-width: 34px;
+                   font-variant-numeric: tabular-nums; }
         .gp-rate:hover { color: var(--text); background: var(--panel-elevated); }
+        /* The rack's own control, so it stays quiet: a text button, not the
+           translucent chip the MAP overlay uses. Borrowing .gp-mapbtn here
+           made the least important thing on the bar the loudest. */
+        .gp-lanesbtn { flex: none; background: none; border: none; color: var(--text-muted);
+                       font-family: 'Sora', sans-serif; font-size: 10px; padding: 4px 7px;
+                       border-radius: var(--radius-sm); cursor: pointer; white-space: nowrap; }
+        .gp-lanesbtn:hover { color: var(--text); background: var(--panel-elevated); }
+        /* No brightening for the active state: the LABEL already says which
+           way the toggle is pointing ("Hide 4 empty" vs "+ 4 channels"), and
+           colouring it as well made the least important control on the bar
+           the only bright thing on it. */
         .gp-playread { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted);
                        min-width: 190px; text-align: right; }
         .gp-playread b { color: var(--text); font-size: 13px; }
-        .gp-modes { display: flex; gap: 0; flex: none; }
-        .gp-modes button { background: var(--bg); border: 1px solid var(--border);
-                           color: var(--text-muted); font-size: 10px; padding: 3px 9px;
-                           cursor: pointer; margin-left: -1px; }
-        .gp-modes button:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); margin-left: 0; }
-        .gp-modes button:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
-        .gp-modes button.on { background: var(--panel-elevated); border-color: var(--border);
+        /* One segmented control, outlined once — not three buttons each
+           carrying their own box (ADR-0014: active is an underline on an
+           elevated neutral, never a fill). */
+        .gp-modes { display: flex; gap: 0; flex: none;
+                    border: 1px solid var(--border); border-radius: var(--radius-sm);
+                    overflow: hidden; }
+        .gp-modes button { background: none; border: none; border-left: 1px solid var(--border);
+                           color: var(--text-muted); font-size: 10px; padding: 4px 9px;
+                           cursor: pointer; }
+        .gp-modes button:first-child { border-left: none; }
+        .gp-modes button:hover { color: var(--text); background: var(--panel-elevated); }
+        .gp-modes button.on { background: var(--panel-elevated);
                               color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
         .gp-modes button.na { opacity: 0.45; }
         .gp-mapbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -1215,7 +1249,10 @@
         .gp-ghost-pick { width: 100%; box-sizing: border-box; margin: 3px 0 5px;
                          background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
                          border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 6px; }
-        .gp-playbar.idle .gp-mapbtn, .gp-playbar.idle #gpModes, .gp-playbar.idle #gpPlayRate,
+        /* Idle = nothing to play. Everything that acts on a recording goes
+           dim and dead; the lanes toggle does NOT, because it acts on the
+           rack, and the rack is worth arranging before a recording lands. */
+        .gp-playbar.idle #gpModes, .gp-playbar.idle #gpPlayRate,
         .gp-playbar.idle .gp-tbtn, .gp-playbar.idle .gp-tc {
             opacity: 0.45; pointer-events: none; }
         .gp-strip { display: none; width: calc(100% - 28px); margin: 8px 14px 0;
@@ -1937,10 +1974,13 @@
                         <button data-m="ref" onclick="gpMapModeSet('ref')"
                                 title="Colour the line by time gained or lost against the comparison lap">vs Ref</button>
                     </div>
-                    <button class="gp-mapbtn" id="gpLanesBtn" onclick="gpLanesToggle()"></button>
+                    <button class="gp-lanesbtn" id="gpLanesBtn" onclick="gpLanesToggle()"></button>
                     <span class="gp-sep"></span>
                     <!-- The transport cluster: the NLE grammar, icon for icon.
-                         SVGs rather than glyphs so the geometry is ours. -->
+                         SVGs rather than glyphs so the geometry is ours.
+                         Timecode sits between the buttons and the timeline —
+                         controls, then where you are, then the timeline. -->
+                    <div class="gp-tgroup">
                     <button class="gp-tbtn" onclick="gpTransport('start')" title="Jump to start (Home)">
                         <svg viewBox="0 0 12 12"><path d="M1.5 1.5h1.6v9H1.5zM10.5 1.5v9L4 6z"/></svg></button>
                     <button class="gp-tbtn" onclick="gpTransport('back')" title="Step back one sample (&larr;)">
@@ -1951,9 +1991,10 @@
                         <svg viewBox="0 0 12 12"><path d="M3 1.5v9L9 6z"/></svg></button>
                     <button class="gp-tbtn" onclick="gpTransport('end')" title="Jump to end (End)">
                         <svg viewBox="0 0 12 12"><path d="M8.9 1.5h1.6v9H8.9zM1.5 1.5v9L8 6z"/></svg></button>
+                    </div>
+                    <span class="gp-tc" id="gpPlayRead"></span>
                     <input type="range" id="gpScrub" min="0" max="0" value="0" step="1"
                            oninput="gpScrubTo(this.value)">
-                    <span class="gp-tc" id="gpPlayRead"></span>
                     <span class="gp-sep"></span>
                     <button class="gp-rate" id="gpPlayRate" onclick="gpRateCycle()"
                             title="Playback speed — click to cycle, or J / L">4&times;</button>
@@ -7717,10 +7758,17 @@
            the delta says WHERE you lost it, the traces above say WHY, and your
            eye never moves between them.
 
-           Lanes with no data are drawn as an empty frame with a label rather
-           than omitted. Seeing the shape of what is coming is the point of the
-           layout; a flat zero line would look like a car that never turned. */
-        var GP_LANE_H = 46, GP_LANE_GAP = 3, GP_LANE_LBL = 74, GP_AXIS_H = 15;
+           Lanes with no data keep their row and their name rather than being
+           omitted. Seeing the shape of what is coming is the point of the
+           layout; a flat zero line would look like a car that never turned.
+
+           The rack is ONE instrument, not a stack of nine panels: a light
+           column of names on the left, one dark plot well on the right, and
+           hairlines between lanes. Every lane having its own outline is what
+           made nine empty channels read as fuzz — the eye counted borders
+           instead of channels. Contiguous lanes (gap 0) also buy back the
+           vertical space the gaps were spending on nothing. */
+        var GP_LANE_H = 46, GP_LANE_GAP = 0, GP_LANE_LBL = 116, GP_AXIS_H = 15;
 
         /* Round tick intervals only. A "timeline" whose gridlines land on
            7.3 s tells you nothing; 1/2/5/10/15/30 s and their minute multiples
@@ -7821,17 +7869,40 @@
             var g = off.getContext("2d");
             var rows = gpLaneRows(), n = rng.to - rng.from + 1;
             var plotX = GP_LANE_LBL, plotW = w - GP_LANE_LBL - 6;
-            /* No recording yet: the structure still renders — every lane as a
-               named, framed empty, exactly the way a pending lane always has.
-               The rack is a promise of what loads here, not a blank. */
+            /* No recording yet: the structure still renders — the names, the
+               units, the well the traces land in. The rack is a promise of
+               what loads here, not a blank. */
             var noData = !gp.trace || !gp.trace.length || n < 2;
-
-            /* Gridlines first, so every lane is drawn over them and the eye can
-               run a tick straight down the stack. */
             var ticks = noData ? [] : gpAxisTicks(rng, plotW);
             var rackBottom = 2 + rows.length * (GP_LANE_H + GP_LANE_GAP);
-            g.strokeStyle = "rgba(255,255,255,0.055)";
+
+            /* The plot well: one dark field for the whole rack, drawn once.
+               Sinking the data below the chrome is what every analysis package
+               does, and it is the reason a trace reads as the subject rather
+               than as one more thing inside a box. */
+            g.fillStyle = "rgba(0,0,0,0.34)";
+            g.fillRect(plotX, 2, plotW, rackBottom - 2);
+
+            /* Structure: the rule dividing names from traces, then a hairline
+               between lanes, run across BOTH columns so the rack reads as one
+               table rather than a list beside a chart. */
             g.lineWidth = 1;
+            g.strokeStyle = "rgba(255,255,255,0.11)";
+            g.beginPath();
+            g.moveTo(plotX - 0.5, 2); g.lineTo(plotX - 0.5, rackBottom);
+            g.stroke();
+
+            g.strokeStyle = "rgba(255,255,255,0.06)";
+            g.beginPath();
+            for (var sep = 1; sep < rows.length; sep++) {
+                var sy = 2 + sep * (GP_LANE_H + GP_LANE_GAP) + 0.5;
+                g.moveTo(6, sy); g.lineTo(plotX + plotW, sy);
+            }
+            g.stroke();
+
+            /* Gridlines under every trace, so the eye can run a tick straight
+               down the stack. Only where there is a time axis to grid. */
+            g.strokeStyle = "rgba(255,255,255,0.07)";
             g.beginPath();
             ticks.forEach(function (tk) {
                 var tx = Math.round(plotX + tk.frac * plotW) + 0.5;
@@ -7842,36 +7913,39 @@
             rows.forEach(function (lane, li) {
                 var top = 2 + li * (GP_LANE_H + GP_LANE_GAP);
                 var mid = top + GP_LANE_H / 2;
+                var absent = lane.pending || noData || (lane.absent && lane.absent());
 
-                g.fillStyle = "rgba(255,255,255,0.022)";
-                g.fillRect(plotX, top, plotW, GP_LANE_H);
-                g.strokeStyle = "rgba(255,255,255,0.07)";
-                g.lineWidth = 1;
-                g.strokeRect(plotX + 0.5, top + 0.5, plotW - 1, GP_LANE_H - 1);
-
-                g.fillStyle = "rgba(255,255,255,0.62)";
+                /* Name, unit, and — for a channel that needs hardware we do
+                   not have — the source it is waiting on. Three facts in the
+                   name column, one per place. Nothing that is not data ever
+                   goes inside the well. */
+                g.fillStyle = absent ? "rgba(255,255,255,0.40)" : "rgba(255,255,255,0.74)";
                 g.font = "10px system-ui";
-                g.fillText(lane.label.replace(/&amp;/g, "&"), 6, top + 13);
-                g.fillStyle = "rgba(255,255,255,0.30)";
+                g.fillText(lane.label.replace(/&amp;/g, "&"), 6, top + 14);
+                g.fillStyle = "rgba(255,255,255,0.28)";
                 g.font = "9px system-ui";
                 var lu = typeof lane.unit === "function" ? lane.unit() : lane.unit;
-                if (lu) g.fillText(lu, 6, top + 25);
+                if (lu) g.fillText(lu, 6, top + 27);
 
-                var absent = lane.pending || noData || (lane.absent && lane.absent());
+                if (lane.pending) {
+                    var tag = "needs " + lane.pending;
+                    g.font = "8.5px 'JetBrains Mono', monospace";
+                    g.fillStyle = "rgba(255,255,255,0.30)";
+                    g.fillText(tag, plotX - 7 - g.measureText(tag).width, top + 27);
+                }
+
                 if (absent) {
-                    /* An empty frame, said plainly. */
-                    g.fillStyle = "rgba(255,255,255,0.20)";
-                    g.font = "10px system-ui";
-                    var say = lane.pending ? "awaiting " + lane.pending
-                            : noData ? "loads with a recording"
-                            : lane.absentSay;
-                    g.fillText(say, plotX + 10, mid + 3);
-                    g.strokeStyle = "rgba(255,255,255,0.05)";
-                    g.beginPath();
-                    g.setLineDash([3, 4]);
-                    g.moveTo(plotX, mid + 0.5); g.lineTo(plotX + plotW, mid + 0.5);
-                    g.stroke();
-                    g.setLineDash([]);
+                    /* An empty lane is empty. With no recording at all the
+                       reason is stated once, on the axis line below — not nine
+                       times, once per lane, over a dashed rule. The one
+                       exception is a lane the user can fill right now by
+                       choosing something, which is worth saying where they
+                       are looking. */
+                    if (!noData && !lane.pending && lane.absentSay) {
+                        g.fillStyle = "rgba(255,255,255,0.30)";
+                        g.font = "10px system-ui";
+                        g.fillText(lane.absentSay, plotX + 9, mid + 3);
+                    }
                     return;
                 }
 
@@ -7883,7 +7957,7 @@
                 };
 
                 if (lane.zero) {
-                    g.strokeStyle = "rgba(255,255,255,0.14)";
+                    g.strokeStyle = "rgba(255,255,255,0.16)";
                     g.beginPath();
                     g.moveTo(plotX, Math.round(y(0)) + 0.5);
                     g.lineTo(plotX + plotW, Math.round(y(0)) + 0.5);
@@ -7892,7 +7966,8 @@
 
                 var env = gpDecimate(lane, rng, Math.max(1, Math.floor(plotW)));
                 g.strokeStyle = lane.colour;
-                g.lineWidth = 1.2;
+                /* The one thing on this canvas allowed to be emphatic. */
+                g.lineWidth = 1.5;
                 if (env) {
                     /* One vertical per column, spanning that column's range.
                        Half-pixel offsets keep a 1 px line crisp instead of
@@ -7917,10 +7992,18 @@
                     g.stroke();
                 }
 
-                g.fillStyle = "rgba(255,255,255,0.26)";
+                /* Top and bottom of this lane's scale, in the name column
+                   against the rule — NOT inside the well. Printed over the
+                   plot they landed exactly where the trace runs, so the two
+                   things the eye most needs to separate were drawn on top of
+                   each other. Top of the scale sits on the lane's top line,
+                   bottom of it on the lane's bottom line, so the numbers read
+                   off the same edges they describe. */
+                g.fillStyle = "rgba(255,255,255,0.34)";
                 g.font = "8.5px 'JetBrains Mono', monospace";
-                g.fillText(sc.hi.toFixed(lane.dp), plotX + plotW - 30, top + 10);
-                g.fillText(sc.lo.toFixed(lane.dp), plotX + plotW - 30, top + GP_LANE_H - 4);
+                var shi = sc.hi.toFixed(lane.dp), slo = sc.lo.toFixed(lane.dp);
+                g.fillText(shi, plotX - 7 - g.measureText(shi).width, top + 14);
+                g.fillText(slo, plotX - 7 - g.measureText(slo).width, top + GP_LANE_H - 6);
             });
 
             /* Axis labels below the stack. The first is anchored left and the
@@ -7937,11 +8020,15 @@
                 if (ti === ticks.length - 1 && tx + wpx / 2 > plotX + plotW) lx = tx - wpx;
                 g.fillText(lab, lx, rackBottom + 11);
             });
-            g.fillStyle = "rgba(255,255,255,0.26)";
+            /* The axis-scope word describes a time axis. With no recording
+               there is no axis to describe, so this slot carries the one
+               statement of why the whole rack is empty — said once, in the
+               place that answers "what is the x-axis showing", instead of
+               repeated into every lane. */
+            g.fillStyle = "rgba(255,255,255,0.30)";
             g.font = "9px system-ui";
-            /* The axis-scope word describes a time axis; with no data there
-               is no axis to describe, and a lone "lap" dangles meaninglessly. */
-            g.fillText(noData ? "" : (gp.stripZoom ? "corner" : "lap"), 6, rackBottom + 11);
+            g.fillText(noData ? "no recording loaded" : (gp.stripZoom ? "corner" : "lap"),
+                       6, rackBottom + 11);
 
             gp.stripCache = { key: key, cv: off };
             return off;
@@ -7962,6 +8049,15 @@
             if (tog) tog.style.display = show ? "" : "none";
             var kl = document.getElementById("gpKeysLamp");
             if (kl) kl.style.display = show && !noData ? "" : "none";
+            /* The transport is dead while there is nothing to play, and alive
+               the moment there is. This lived in gpSetView, so it was only
+               ever re-evaluated when you SWITCHED to Session: loading a
+               recording from the rail while already standing in Session left
+               `idle` on, and `idle` sets pointer-events:none — every button
+               from Play to the rate silently ignored clicks until you left
+               the view and came back. */
+            var pbar = document.getElementById("gpPlaybar");
+            if (pbar) pbar.classList.toggle("idle", noData);
             if (!show) return;
             gpSyncLanesBtn();
 
@@ -8019,7 +8115,7 @@
                     g.font = "11px 'JetBrains Mono', monospace";
                     var tw = g.measureText(txt).width;
                     var bx = Math.min(px + 5, plotX + plotW - tw - 5);
-                    g.fillStyle = "rgba(20,20,20,0.82)";
+                    g.fillStyle = "rgba(8,9,10,0.88)";
                     g.fillRect(bx - 3, top + 3, tw + 6, 14);
                     g.fillStyle = lane.colour;
                     g.fillText(txt, bx, top + 14);
@@ -10171,11 +10267,11 @@
             if (su) su.style.display = gp.view === "setup" ? "flex" : "none";
             if (grid) grid.style.display = (big || gp.view === "setup") ? "none" : "";
             /* The playback bar is part of the structure: visible in Session
-               either way, idle until a recording gives it something to play. */
-            if (pb) {
-                pb.style.display = gp.view === "session" ? "flex" : "none";
-                pb.classList.toggle("idle", !(gp.trace && gp.trace.length));
-            }
+               either way, idle until a recording gives it something to play.
+               Whether it is IDLE is decided in gpDrawStrip, which runs every
+               time the rack redraws — switching view is not the only way to
+               acquire a recording. */
+            if (pb) pb.style.display = gp.view === "session" ? "flex" : "none";
             if (gp.view !== "session") gpPlayStop();
             gpDrawTrace();
             gpStripBind(); gpDrawStrip();
