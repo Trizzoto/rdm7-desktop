@@ -32,6 +32,34 @@
         return !!(window.__TAURI_INTERNALS__ || window.__TAURI__);
     }
 
+    /* ── Device type ───────────────────────────────────────────────────
+     * The RDM family shares one wire protocol but NOT one API: a GPS puck,
+     * keypad or IO node has no concept of layouts, images or fonts, and must
+     * never be asked for them (rdm-gps-node/docs/USB_RPC.md).
+     *
+     * device.info's `device_type` is the discriminator. Dash firmware predates
+     * the field, so its ABSENCE means "dash" — that default is what keeps
+     * every existing device working unchanged. */
+    const DEVICE_DASH = 'dash';
+
+    /* Display names for the device types Studio can meet. Unknown types still
+     * connect and report themselves — they just get no bespoke workspace. */
+    const DEVICE_LABELS = {
+        dash: 'RDM-7 Dash',
+        gps: 'RDM GPS',
+        keypad: 'RDM Keypad',
+        io: 'RDM IO Expander',
+    };
+
+    /* device.info payload -> device type string, or null if this isn't one of
+     * ours. A router or captive portal answering the same address returns HTML
+     * or an array, never an object carrying a serial. */
+    function _deviceTypeOf(info) {
+        if (!info || typeof info !== 'object' || Array.isArray(info)) return null;
+        if (info.device_type) return String(info.device_type);
+        return ('serial' in info || 'schema' in info) ? DEVICE_DASH : null;
+    }
+
     async function _tauriInvoke(cmd, args) {
         if (window.__TAURI_INTERNALS__) {
             return window.__TAURI_INTERNALS__.invoke(cmd, args);
@@ -1095,11 +1123,72 @@
             async setFuelFull() { await rpc('fuel.set-full'); },
 
             /* ── WiFi Config ──────────────────────────────────── */
+            /* Same method names on the dash and the GPS node. On the node an
+             * ABSENT password leaves the stored one alone (USB_RPC.md), so
+             * callers must omit the key rather than send '' — see gpWifiSave. */
             async getWifiConfig() {
                 try { return await rpc('wifi.config.get'); } catch (e) { return null; }
             },
             async setWifiConfig(cfg) {
-                await rpc('wifi.config.set', cfg);
+                /* Returned, not swallowed: the node reports reboot_required
+                 * and the UI has to be honest about it. */
+                return await rpc('wifi.config.set', cfg);
+            },
+
+            /* ── GPS node (device_type "gps") ─────────────────── */
+            async gpsStatus() {
+                return await rpc('gps.status');
+            },
+
+            /* Flashes the status LED. Returns {ok, seconds, led_healthy};
+             * led_healthy reports the RMT channel, NOT that light was emitted
+             * (rdm-gps-node REV_A_ERRATA E6/E7). */
+            async identify(seconds) {
+                return await rpc('identify', seconds === undefined ? {} : { seconds });
+            },
+
+            /* ── Lap timing on the puck ────────────────────────────
+             * The node owns a track and times its own laps, so it works with
+             * no dash on the bus. Payload shapes deliberately mirror the
+             * dash's HTTP lap surface — same field names, same units, same
+             * "0 means unset" convention — so one client drives either. */
+            /* CAN block + bitrate. Applied at boot, so a change needs a power
+             * cycle — the reply says so rather than letting a caller assume
+             * the new id is already on the wire. */
+            async canConfigGet() { return await rpc('can.config.get'); },
+            async canConfigSet(cfg) { return await rpc('can.config.set', cfg); },
+
+            /* Mounting orientation and timezone. Unlike the CAN block these
+             * take effect on the next sample, no reboot — the node applies
+             * the rotation itself, so nothing downstream has to know. */
+            async nodeConfigGet() { return await rpc('node.config.get'); },
+            async nodeConfigSet(cfg) { return await rpc('node.config.set', cfg); },
+            /* Measures the gyro's resting offset. Blocks on the node for ~2 s
+             * and REFUSES if the unit was not still, so the caller must show
+             * the error rather than assume success. */
+            async imuCalibrate() { return await rpc('imu.calibrate'); },
+
+            async lapStatus() { return await rpc('lap.status'); },
+            /* Completed laps, oldest-first. `total` may exceed the list —
+             * the node caps what it reports rather than putting the whole
+             * ring on its RPC task stack. */
+            async lapHistory() { return await rpc('lap.history'); },
+
+            /* ── session trace ────────────────────────────────────
+             * The recorded line at 25 Hz. Pages come back base64'd because a
+             * page as JSON numbers is ~800 cJSON nodes on a node with a 4 KB
+             * RPC stack — and twice the bytes on the wire. */
+            async traceInfo() { return await rpc('trace.info'); },
+            async traceRead(from) { return await rpc('trace.read', { from: from | 0 }); },
+            async traceClear() { return await rpc('trace.clear'); },
+            async traceRecord(on) { return await rpc('trace.record', { on: !!on }); },
+            async lapTrackGet() { return await rpc('lap.track.get'); },
+            async lapTrackSet(track) { return await rpc('lap.track.set', track); },
+            async lapSessionReset() { return await rpc('lap.session.reset'); },
+            async lapCapture(what, halfWidthM) {
+                const p = { what };
+                if (halfWidthM !== undefined) p.half_width_m = halfWidthM;
+                return await rpc('lap.capture', p);
             },
 
             async applyToDevice(name) {
@@ -1288,6 +1377,28 @@
         return ok({ ok: true });
     }
 
+    /* Endpoint families that only a dash implements. On any other RDM node
+     * these RPCs don't exist, so forwarding them just produces a stream of
+     * "unknown method" errors from the editor's boot-time fetches. */
+    const _DASH_ONLY_API = /^\/api\/(layout|splash|image|font|signal|signals|fuel|sd|log|brightness|dimmer|ecu|indicator|warning|replay|gear|presets|screenshot|touch)\b/;
+
+    /* Replies for the editor's own background fetches while a non-dash node is
+     * connected, so they degrade quietly instead of erroring every tick. */
+    function _nonDashApiStub(pathname) {
+        /* Collections: empty is the TRUTHFUL answer — this node has none. */
+        if (pathname === '/api/layout/list') { const l = []; l._active = null; return l; }
+        if (pathname === '/api/image/list') return { images: [] };
+        if (pathname === '/api/font/list') return { fonts: [] };
+        if (pathname === '/api/splash/list') return { splashes: [] };
+        if (pathname === '/api/log/list' || pathname === '/api/sd/files') return [];
+        /* Anything that would hand back a LAYOUT has to fail outright: a
+         * placeholder object would be fed straight into the renderer. */
+        if (/^\/api\/(layout|splash)\//.test(pathname)) {
+            throw new Error('not available on ' + RDM.deviceLabel());
+        }
+        return { ok: true };
+    }
+
     async function _usbRouteApiCall(url, method, body, t, binBody) {
         const qIdx = url.indexOf('?');
         const pathname = qIdx >= 0 ? url.slice(0, qIdx) : url;
@@ -1297,6 +1408,12 @@
             const eq = p.indexOf('=');
             if (eq >= 0) params[p.slice(0, eq)] = decodeURIComponent(p.slice(eq + 1));
         });
+
+        /* device.info is how a caller LEARNS the type, so it must always go
+         * through — only the dash-only families are short-circuited. */
+        if (RDM.deviceType !== DEVICE_DASH && _DASH_ONLY_API.test(pathname)) {
+            return _nonDashApiStub(pathname);
+        }
 
         if (pathname === '/api/layout/list') return t.listLayouts();
         if (pathname === '/api/layout/current') return t.loadCurrentLayout ? t.loadCurrentLayout() : null;
@@ -1408,6 +1525,73 @@
         _transport: LocalTransport,
         _listeners: [],
 
+        /* What the far end actually IS, from device.info. Defaults to 'dash'
+         * so nothing changes until a device says otherwise; re-probed on every
+         * connect and reset by setMode. */
+        deviceType: DEVICE_DASH,
+        DEVICE_LABELS,
+
+        isDash() { return this.deviceType === DEVICE_DASH; },
+
+        deviceLabel() {
+            return DEVICE_LABELS[this.deviceType] || this.deviceType || 'device';
+        },
+
+        /* ── Attached devices ─────────────────────────────────────────
+         * `mode`/`_transport` is the PRIMARY connection — the dash, i.e. the
+         * thing the layout editor and every /api/* call address. Other RDM
+         * devices attach ALONGSIDE it, keyed by role, because they live on
+         * different pipes: a dash on WiFi and a puck on USB are two
+         * independent links and Studio has no reason to force a choice.
+         *
+         * Before this, connecting the puck REPLACED the dash transport, so
+         * lap timing — which needs the dash's engine and the puck's position
+         * — could never be seen in one place. */
+        _attached: Object.create(null),        /* role -> {transport, info} */
+        _dashInfo: null,                       /* device.info of the primary */
+
+        attach(role, transport, info) {
+            if (!role || !transport) return;
+            this._attached[role] = { transport, info: info || null };
+            this._notifyListeners();
+        },
+
+        detach(role) {
+            if (this._attached[role]) {
+                delete this._attached[role];
+                this._notifyListeners();
+            }
+        },
+
+        /* Transport for a role, or null. 'dash' resolves to the primary. */
+        get(role) {
+            if (role === DEVICE_DASH) {
+                return (this.mode !== 'local' && this.isDash()) ? this._transport : null;
+            }
+            const a = this._attached[role];
+            return a ? a.transport : null;
+        },
+
+        /* Cached device.info for a role, or null. */
+        infoFor(role) {
+            if (role === DEVICE_DASH) return this._dashInfo;
+            const a = this._attached[role];
+            return a ? a.info : null;
+        },
+
+        attachedRoles() { return Object.keys(this._attached); },
+
+        /* Ask the device what it is. Returns {info, type}; type is null when
+         * nothing recognisable answered. Call this BEFORE any dash-only
+         * request — that ordering is the whole point (USB_RPC.md). */
+        async probeDeviceType(opts) {
+            const info = await this.getDeviceInfo(opts);
+            const type = _deviceTypeOf(info);
+            this.deviceType = type || DEVICE_DASH;
+            if (type === DEVICE_DASH) this._dashInfo = info;
+            return { info, type };
+        },
+
         /* ── Connection Management ───────────────────────────── */
         get transport() { return this._transport; },
 
@@ -1421,6 +1605,13 @@
         setMode(mode, opts) {
             opts = opts || {};
             this.mode = mode;
+            /* Stale type = the previous device's API applied to this one.
+             * Back to the safe default until the new link is probed.
+             * Attached devices are deliberately NOT cleared — they're on
+             * their own pipes and changing the dash link says nothing
+             * about whether a puck is still plugged in. */
+            this.deviceType = DEVICE_DASH;
+            this._dashInfo = null;
 
             if (mode === 'local') {
                 this._transport = LocalTransport;
@@ -1567,6 +1758,55 @@
             this.setMode('usb', { portName });
         },
 
+        /* Open a serial port and file whatever answers under its own role.
+         * A dash becomes the PRIMARY connection (unchanged behaviour); any
+         * other RDM device attaches alongside, leaving the dash link — WiFi
+         * or Offline — exactly as it was.
+         *
+         * Returns {role, info}. Throws if nothing recognisable answers, so a
+         * dead port can't masquerade as a successful connect.
+         *
+         * Note the backend holds ONE serial port, so a USB dash and a USB
+         * puck are mutually exclusive. Dash-on-WiFi + puck-on-USB, the normal
+         * case, works fine. */
+        async serialConnectDevice(portName) {
+            if (!_isTauri()) throw new Error('Serial requires desktop app');
+            /* The backend owns ONE serial port, so opening a new one silently
+             * re-points whatever was attached over USB. Drop those roles first
+             * or they linger as live-looking entries pointing at a port that is
+             * now someone else's — and a "save" in that workspace would go to
+             * the wrong device. */
+            for (const role of this.attachedRoles()) {
+                const a = this._attached[role];
+                if (a && a.transport && a.transport.name === 'usb') this.detach(role);
+            }
+            await _tauriInvoke('serial_connect', { portName });
+            const t = createUsbTransport(portName);
+            let info = null;
+            try { info = await t.getDeviceInfo(); } catch (e) { info = null; }
+            const role = _deviceTypeOf(info);
+            if (!role) {
+                try { await _tauriInvoke('serial_disconnect'); } catch (e) { }
+                throw new Error('No RDM device answered on ' + portName);
+            }
+            if (role === DEVICE_DASH) {
+                this.setMode('usb', { portName });
+                this._dashInfo = info;
+            } else {
+                this.attach(role, t, info);
+            }
+            return { role, info };
+        },
+
+        /* Release an attached (non-primary) device and its serial port. */
+        async detachDevice(role) {
+            const t = this.get(role);
+            this.detach(role);
+            if (t && t.name === 'usb' && this.mode !== 'usb') {
+                try { await _tauriInvoke('serial_disconnect'); } catch (e) { }
+            }
+        },
+
         async serialDisconnect() {
             if (!_isTauri()) return;
             try { await _tauriInvoke('serial_disconnect'); } catch (e) { }
@@ -1641,6 +1881,23 @@
         async setFuelFull() { return this._transport.setFuelFull(); },
         async getWifiConfig() { return this._transport.getWifiConfig(); },
         async setWifiConfig(c) { return this._transport.setWifiConfig(c); },
+
+        /* ── GPS node ─────────────────────────────────────────────
+         * Role-addressed, never via the primary transport: the puck is an
+         * ATTACHED device and the dash is what `_transport` points at.
+         * Config/diagnostics only — CAN remains the data path (ADR-0008). */
+        gpsTransport() { return this.get('gps'); },
+
+        async gpsStatus() {
+            const t = this.get('gps');
+            if (!t) throw new Error('No RDM GPS attached');
+            return t.gpsStatus();
+        },
+        async identify(seconds) {
+            const t = this.get('gps');
+            if (!t) throw new Error('No RDM GPS attached');
+            return t.identify(seconds);
+        },
         async applyToDevice(n) { return this._transport.applyToDevice(n); },
         async previewOnDevice(d) { return this._transport.previewOnDevice(d); },
         async testConnection() { return this._transport.testConnection(); },

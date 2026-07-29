@@ -4404,6 +4404,11 @@
                 <div class="card-body">Browse and download community layouts and presets.</div>
                 <div class="card-stat">Community</div>
             </div>
+            <div class="setup-card" onclick="openLapTiming && openLapTiming()">
+                <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="13" x2="15" y2="15"/><line x1="9" y1="2" x2="15" y2="2"/></svg>Lap Timing</div>
+                <div class="card-body">GPS lap timer with an RDM GPS puck. Drive across your start/finish line and capture it — no coordinates, no PC.</div>
+                <div class="card-stat" id="setupLapStat">RDM GPS</div>
+            </div>
         </div>
 
         <div class="setup-section-title" style="margin-top:30px;">Files &amp; storage</div>
@@ -5321,6 +5326,70 @@
                     <input id="devDash" type="checkbox" style="width:16px; height:16px;" onchange="devToggleDash(this.checked)">
                 </label>
                 <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">Simulate the real dash in the offline preview: RGB565 colour banding + firmware-feasible glow (no Gaussian blur / radial halos). Editor preview only.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lap Timing modal (Setup ▸ Lap Timing). Configure the GPS lap timer:
+         capture the start/finish line and sector splits from the car's live
+         position, watch lap state, reset the session. Backed by /api/lap/*
+         (main/net/web_server_lap.c, ADR-0008). -->
+    <div id="lapTimingModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeLapTiming()">
+        <div class="dbc-modal-content" style="width:min(520px, 92vw);" onclick="event.stopPropagation()">
+            <div class="signal-modal-header">
+                <span>Lap Timing</span>
+                <button class="close-btn" onclick="closeLapTiming()">&times;</button>
+            </div>
+            <div class="dbc-form">
+                <!-- Live status strip -->
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <span id="lapGpsBadge" style="font-size:11px; font-weight:700; padding:3px 8px; border-radius:var(--radius-sm); background:var(--bg); border:1px solid var(--border); color:var(--text-muted);">GPS: —</span>
+                    <span id="lapFixBadge" style="font-size:11px; padding:3px 8px; border-radius:var(--radius-sm); background:var(--bg); border:1px solid var(--border); color:var(--text-muted);"></span>
+                    <span id="lapTrackBadge" style="font-size:11px; padding:3px 8px; border-radius:var(--radius-sm); background:var(--bg); border:1px solid var(--border); color:var(--text-muted);">No track configured</span>
+                </div>
+                <!-- Live timing (hidden until armed) -->
+                <div id="lapLiveRow" style="display:none; font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px;"></div>
+
+                <div style="border-top:1px solid var(--border); margin:4px 0;"></div>
+
+                <!-- Capture flow -->
+                <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">
+                    <b>Setting up a track:</b> drive across the start/finish line at speed and
+                    tap Capture — the line's position <i>and direction</i> come from the live GPS.
+                    Then do the same at each sector split, in driving order. A stationary
+                    capture works but cannot know the crossing direction, so prefer a moving one.
+                </div>
+                <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+                    <div style="flex:0 0 110px;">
+                        <label>Line half-width (m)</label>
+                        <input type="text" id="lapHalfWidth" value="15" inputmode="numeric">
+                    </div>
+                    <button class="btn" onclick="lapCapture('start_finish')">Capture Start/Finish</button>
+                    <button class="btn btn-secondary" id="lapCaptureSectorBtn" onclick="lapCapture('sector')">Capture Sector</button>
+                </div>
+
+                <div style="border-top:1px solid var(--border); margin:4px 0;"></div>
+
+                <!-- Track details -->
+                <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+                    <div style="flex:1 1 140px;">
+                        <label>Track name</label>
+                        <input type="text" id="lapTrackName" placeholder="e.g. Mallala">
+                    </div>
+                    <div style="flex:0 0 110px;">
+                        <label>Min lap time (s)</label>
+                        <input type="text" id="lapMinLap" placeholder="10" inputmode="numeric">
+                    </div>
+                    <button class="btn btn-secondary" onclick="lapSaveTrackMeta()">Save</button>
+                </div>
+                <div id="lapSectorSummary" style="font-size:11px; color:var(--text-muted);"></div>
+            </div>
+            <div class="dbc-footer" style="justify-content:space-between;">
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-secondary" onclick="lapResetSession()">Reset Session</button>
+                    <button class="btn btn-secondary" style="color:hsl(0,70%,60%);" onclick="lapClearTrack()">Clear Track</button>
+                </div>
+                <button class="btn" onclick="closeLapTiming()">Close</button>
             </div>
         </div>
     </div>
@@ -7429,6 +7498,9 @@
                                   { v: 3, l: "Edges In" }
                               ] },
                             { name: "bar_bg_color", label: "Background", type: "color", def: 0xF0F0F0, cat: "appearance", group: "Frame", help: "Colour of the empty background.", nightOverridable: true },
+                            { name: "show_rpm_value", label: "Show RPM Number", type: "checkbox", def: false, cat: "appearance", group: "Text", help: "Show the RPM as a number on the bar." },
+                            { name: "rpm_value_font", label: "RPM Number Font", type: "font", def: "", cat: "appearance", group: "Text", help: "Text style and size of the RPM number.", enabledBy: "show_rpm_value" },
+                            { name: "rpm_value_color", label: "RPM Number Color", type: "color", def: 0xE8E8E8, cat: "appearance", group: "Text", help: "Colour of the RPM number.", enabledBy: "show_rpm_value", nightOverridable: true },
                             { name: "limiter_color", label: "Limiter Color", type: "color", def: 0xFF0000, cat: "appearance", group: "Redline", help: "Colour shown when you hit the limiter.", nightOverridable: true },
                             { name: "show_ticks", label: "Show Ticks", type: "checkbox", def: true, cat: "appearance", group: "Ticks", help: "Show marks along the bar." },
                             { name: "tick_side", label: "Tick Side", type: "select", def: 2, cat: "appearance", group: "Ticks", help: "Which side of the bar the marks sit on.", enabledBy: "show_ticks",
@@ -7508,7 +7580,8 @@
                     "bar": {
                         displayName: "Bar Graph", defW: 300, defH: 30,
                         fields: [
-                            { name: "label", label: "Label", type: "text", def: "", cat: "data", group: "Value", help: "Text shown with the bar." },
+                            { name: "show_bar_label", label: "Show Label", type: "checkbox", def: true, cat: "data", group: "Value", help: "Show the text label next to the bar. Turn off for a clean value-only bar." },
+                            { name: "label", label: "Label", type: "text", def: "", cat: "data", group: "Value", help: "Text shown with the bar.", enabledBy: "show_bar_label" },
                             { name: "bar_min", label: "Min Value", type: "number", def: 0, cat: "data", group: "Value", help: "The reading at the empty end of the bar." },
                             { name: "bar_max", label: "Max Value", type: "number", def: 100, cat: "data", group: "Value", help: "The reading at the full end of the bar." },
                             { name: "decimals", label: "Decimals", type: "number", def: 0, cat: "data", group: "Value", help: "How many digits after the decimal point to show." },
@@ -7758,7 +7831,14 @@
                              * regardless of size. Independent of Show Needle. */
                             { name: "show_needle_ball", label: "Show Needle Ball", type: "checkbox", def: true, cat: "appearance", group: "Needle", help: "Show a round hub in the middle of the needle." },
                             { name: "needle_ball_size", label: "Needle Ball Size", type: "stepper", def: 10, cat: "appearance", group: "Needle", help: "How big the hub is.", min: 0, max: 40, enabledBy: "show_needle_ball" },
-                            { name: "needle_ball_color", label: "Needle Ball Color", type: "color", def: 0xFFFFFF, cat: "appearance", group: "Needle", help: "Colour of the hub.", enabledBy: "show_needle_ball", nightOverridable: true }
+                            { name: "needle_ball_color", label: "Needle Ball Color", type: "color", def: 0xFFFFFF, cat: "appearance", group: "Needle", help: "Colour of the hub.", enabledBy: "show_needle_ball", nightOverridable: true },
+                            { name: "shadow_enabled", label: "Needle Shadow", type: "checkbox", def: false, cat: "appearance", group: "Needle", help: "Drop a soft shadow under the needle to lift it off the dial face." },
+                            { name: "shadow_dynamic", label: "Dynamic (Sun Overhead)", type: "checkbox", def: true, cat: "appearance", group: "Needle", help: "Swing the shadow as the needle moves, as if lit from above. Turn off to keep it at a fixed offset.", enabledBy: "shadow_enabled" },
+                            { name: "shadow_offset_x", label: "Shadow Offset X", type: "stepper", def: 3, cat: "appearance", group: "Needle", help: "How far the shadow sits to the side of the needle.", min: -32, max: 32, enabledBy: "shadow_enabled" },
+                            { name: "shadow_offset_y", label: "Shadow Offset Y", type: "stepper", def: 4, cat: "appearance", group: "Needle", help: "How far the shadow sits below the needle.", min: -32, max: 32, enabledBy: "shadow_enabled" },
+                            { name: "shadow_opa", label: "Shadow Opacity", type: "stepper", def: 120, cat: "appearance", group: "Needle", help: "How dark the shadow is (255 = solid).", min: 0, max: 255, enabledBy: "shadow_enabled" },
+                            { name: "shadow_width_extra", label: "Shadow Extra Width", type: "stepper", def: 2, cat: "appearance", group: "Needle", help: "Make the shadow wider than the needle for a softer look.", min: 0, max: 32, enabledBy: "shadow_enabled" },
+                            { name: "shadow_color", label: "Shadow Color", type: "color", def: 0x000000, cat: "appearance", group: "Needle", help: "Colour of the needle's shadow.", enabledBy: "shadow_enabled" }
                         ]
                     },
                     "image": {
@@ -7812,7 +7892,8 @@
                             { name: "line_width", label: "Thickness", type: "stepper", def: 4, cat: "appearance", group: "Style", help: "How thick the line is.", min: 1, max: 30 },
                             { name: "line_opa", label: "Opacity (0-255)", type: "stepper", def: 255, cat: "appearance", group: "Style", help: "How see-through the line is (0-255).", min: 0, max: 255 },
                             { name: "rounded", label: "Rounded Ends", type: "checkbox", def: false, cat: "appearance", group: "Style", help: "Round the line's ends." },
-                            { name: "dash_gap", label: "Dash Gap (0 = solid)", type: "stepper", def: 0, cat: "appearance", group: "Style", help: "Gap between dashes (0 = a solid line).", min: 0, max: 40 }
+                            { name: "dash_gap", label: "Dash Gap (0 = solid)", type: "stepper", def: 0, cat: "appearance", group: "Style", help: "Gap between dashes (0 = a solid line).", min: 0, max: 40 },
+                            { name: "curvature", label: "Curvature", type: "slider", def: 0, cat: "appearance", group: "Style", help: "Bend the line into a curve. 0 is straight; negative and positive bow it opposite ways.", min: -200, max: 200 }
                         ]
                     },
                     "banner": {
@@ -8117,7 +8198,7 @@
                      * channel picks which frame shows. Firmware module is gated by
                      * RDM_WIDGET_ANIM_ENABLED — see tools/WIDGET_ANIM_README.md before removing. */
                     "anim": {
-                        displayName: "Animation", defW: 200, defH: 200,
+                        displayName: "Animation", defW: 200, defH: 200, hidden: true,
                         fields: [
                             { name: "anim_upload", label: "Animation", type: "anim_frames", def: "", cat: "data", group: "Frames", help: "Upload a GIF, short video clip, or a set of still images. The editor slices it into frames, converts them and sends them to the dash." },
                             { name: "frame_prefix", label: "Frame Prefix", type: "text", def: "", cat: "data", group: "Frames", help: "Name prefix of the frame set on the device (frames are stored as prefix_0, prefix_1, ...). Set automatically when you upload an animation." },
@@ -8611,7 +8692,11 @@
          * so the two never drift. _paletteTileTypes honors the splash-mode
          * filter; _paletteTileHtml renders one tile's inner markup. */
         function _paletteTileTypes() {
-            return Object.entries(WIDGET_DEFS).filter(([type]) =>
+            return Object.entries(WIDGET_DEFS).filter(([type, def]) =>
+                /* hidden types (e.g. experimental widgets) can't be added anew from
+                 * the palette, but stay fully registered so existing layouts still
+                 * load and edit them. */
+                !def.hidden &&
                 !(currentScreenMode === 'splash' && !SPLASH_WIDGET_TYPES.includes(type)));
         }
         function _paletteTileHtml(type, def) {
@@ -11657,9 +11742,14 @@
                  * renderFieldHTML scope — read the selected widget directly. */
                 const _afW = (selectedIndex >= 0 && currentLayout.widgets[selectedIndex]) || null;
                 const _afPrefix = (_afW && _afW.config && _afW.config.frame_prefix) || '';
-                const _afCount = (_afW && _afW.config && _afW.config.frame_count) || 0;
+                /* frame_count is defaults-only in the JSON (default 8) — show 8
+                 * rather than 0 when it was omitted. */
+                const _afCount = (_afW && _afW.config && _afW.config.frame_count) || 8;
+                /* Escape: frame_prefix is a free-text field, so a stray '<' would
+                 * otherwise break (or inject into) this inspector row. */
+                const _afPrefixEsc = _pvEsc(_afPrefix);
                 const _afSummary = _afPrefix
-                    ? `<span style="color:#9aa;font-size:11px;">${_afPrefix}_0 … ${_afPrefix}_${Math.max(0, _afCount - 1)}</span>`
+                    ? `<span style="color:#9aa;font-size:11px;">${_afPrefixEsc}_0 … ${_afPrefixEsc}_${Math.max(0, _afCount - 1)}</span>`
                     : `<span style="color:#777;font-size:11px;">No frames uploaded yet</span>`;
                 html += `<div style="display:flex;gap:8px;align-items:center;">
                     <button type="button" class="btn btn-secondary" style="padding:4px 10px;cursor:pointer;" onclick="document.getElementById('animUploadInput').click()" ${disabledAttr}>&#x1F39E; Upload animation…</button>
@@ -16989,8 +17079,12 @@
                  * image_picker field — enumerate them here or the bundle
                  * ships without its animation (missing frames are skipped
                  * with the same warning as any other unfetchable image). */
-                if (w.type === 'anim' && w.config.frame_prefix && w.config.frame_count) {
-                    for (let i = 0; i < Math.min(ANIM_MAX_FRAMES, w.config.frame_count); i++)
+                if (w.type === 'anim' && w.config.frame_prefix) {
+                    /* frame_count is defaults-only in the layout JSON (default 8),
+                     * so a default-length animation reloads with it undefined —
+                     * fall back to 8 or the export ships zero frames. */
+                    const _fc = Math.min(ANIM_MAX_FRAMES, w.config.frame_count || 8);
+                    for (let i = 0; i < _fc; i++)
                         imageNames.add(`${w.config.frame_prefix}_${i}`);
                 }
                 const def = WIDGET_DEFS[w.type];
@@ -19780,7 +19874,7 @@
             3: 'Electrical', 4: 'Chassis — Dynamics', 5: 'Chassis — Per-corner',
             6: 'Brakes & Inputs', 7: 'Fuel & Distance', 8: 'Environment',
             9: 'Lap Timing', 10: 'Body & Lights', 11: 'Diagnostic',
-            12: 'Dash Internals',
+            12: 'Dash Internals', 13: 'Position & GPS',
         };
         const _CH_ZONE_COLORS_DEFAULT = {
             color_low_warn:      0x9BC4E6,
@@ -20466,7 +20560,7 @@
             4: 'Chassis', 5: 'Wheels & corners', 6: 'Brakes & inputs',
             7: 'Fuel', 8: 'Environment', 9: 'Lap timing',
             10: 'Body & lights', 11: 'Diagnostic',
-            12: 'Dash Internals', 99: 'Custom',
+            12: 'Dash Internals', 13: 'Position & GPS', 99: 'Custom',
         };
 
         /* Sidebar: every canonical channel + every custom channel, grouped
@@ -23862,6 +23956,185 @@
 
         /* Re-sync on viewport change (rotation / resize) */
         window.addEventListener('resize', _wstUpdate);
+
+        /* ── Lap Timing modal ───────────────────────────────────────────
+         * Configuration + live view for the GPS lap timer. Bound to:
+         *   GET  /api/lap/status         presence, fix, track, live timing
+         *   GET  /api/lap/track          full track detail
+         *   POST /api/lap/track          replace track / {"clear":true}
+         *   POST /api/lap/capture        set a line from the car's position
+         *   POST /api/lap/session/reset  clear times, keep track
+         * The capture flow is the product: no coordinate entry, no map. */
+        let _lapTimer = null;
+        let _lapTrack = null;   /* last GET /api/lap/track payload, or null */
+        let _lapPollInFlight = false;   /* guard: never stack /api/lap/status calls */
+        let _lapModalOpen = false;      /* drives the self-rescheduling poll loop */
+
+        function _lapFmtTime(s) {
+            if (!s || s <= 0) return '—';
+            const m = Math.floor(s / 60);
+            const r = s - m * 60;
+            return m > 0 ? `${m}:${r.toFixed(3).padStart(6, '0')}` : r.toFixed(3);
+        }
+
+        async function _lapRefreshTrack() {
+            try {
+                const r = await fetch('/api/lap/track');
+                if (!r.ok) return;
+                const t = await r.json();
+                _lapTrack = t.empty ? null : t;
+                const nameEl = document.getElementById('lapTrackName');
+                const minEl  = document.getElementById('lapMinLap');
+                /* Don't clobber in-progress typing: only fill when blank/unfocused */
+                if (_lapTrack) {
+                    if (document.activeElement !== nameEl) nameEl.value = _lapTrack.name || '';
+                    if (document.activeElement !== minEl)  minEl.value  = _lapTrack.min_lap_time_s || '';
+                }
+                const n = _lapTrack ? (_lapTrack.sectors || []).length : 0;
+                document.getElementById('lapSectorSummary').textContent = _lapTrack
+                    ? `Start/finish set · ${n} sector split${n === 1 ? '' : 's'} (${n + 1} sector${n ? 's' : ''} per lap, max 8 splits)`
+                    : 'No track yet — capture a start/finish line to begin.';
+            } catch (e) { /* silent */ }
+        }
+
+        async function _lapPoll() {
+            /* In-flight guard + self-reschedule instead of setInterval: the dash
+             * round-trips at ~1-1.5 s under load, and a fixed 1 s interval would
+             * stack requests and multiply device latency (see the channels-probe
+             * lesson). Only the NEXT poll is scheduled once this one settles. */
+            if (_lapPollInFlight) return;
+            _lapPollInFlight = true;
+            try {
+                const r = await fetch('/api/lap/status');
+                if (!r.ok) return;
+                const st = await r.json();
+
+                const gps = document.getElementById('lapGpsBadge');
+                gps.textContent = st.gps_present ? 'GPS: connected' : 'GPS: not detected';
+                gps.style.color = st.gps_present ? 'hsl(152,60%,55%)' : 'hsl(0,60%,60%)';
+
+                const fix = document.getElementById('lapFixBadge');
+                if (st.fix) {
+                    fix.style.display = '';
+                    fix.textContent = `${st.fix.speed_kph.toFixed(1)} km/h · hdg ${Math.round(st.fix.heading)}°`;
+                } else {
+                    fix.style.display = st.gps_present ? '' : 'none';
+                    fix.textContent = 'no fix yet';
+                }
+
+                document.getElementById('lapTrackBadge').textContent =
+                    st.has_track ? `Track: ${st.track_name}` : 'No track configured';
+
+                const live = document.getElementById('lapLiveRow');
+                const t = st.timing || {};
+                if (t.armed) {
+                    live.style.display = '';
+                    const delta = (t.lap_delta === undefined) ? '—'
+                        : (t.lap_delta >= 0 ? '+' : '') + t.lap_delta.toFixed(2);
+                    live.textContent =
+                        `Lap ${t.lap_number}  cur ${_lapFmtTime(t.lap_time_current)}  ` +
+                        `last ${_lapFmtTime(t.lap_time_last)}  best ${_lapFmtTime(t.lap_time_best)}  Δ ${delta}`;
+                } else {
+                    live.style.display = 'none';
+                }
+
+                const stat = document.getElementById('setupLapStat');
+                if (stat) stat.textContent = st.gps_present
+                    ? (st.has_track ? st.track_name : 'GPS connected')
+                    : 'RDM GPS';
+            } catch (e) { /* silent */ }
+            finally {
+                _lapPollInFlight = false;
+                /* Reschedule only while the modal is open — a settled poll queues
+                 * the next one 1 s out, so calls never overlap. */
+                if (_lapModalOpen) _lapTimer = setTimeout(_lapPoll, 1000);
+            }
+        }
+
+        function openLapTiming() {
+            document.getElementById('lapTimingModal').style.display = 'flex';
+            _lapModalOpen = true;
+            _lapRefreshTrack();
+            if (_lapTimer) { clearTimeout(_lapTimer); _lapTimer = null; }
+            _lapPoll();   /* self-reschedules while _lapModalOpen */
+        }
+
+        function closeLapTiming() {
+            document.getElementById('lapTimingModal').style.display = 'none';
+            _lapModalOpen = false;
+            if (_lapTimer) { clearTimeout(_lapTimer); _lapTimer = null; }
+        }
+
+        async function lapCapture(what) {
+            const hw = parseFloat(document.getElementById('lapHalfWidth').value) || 15;
+            try {
+                const r = await fetch('/api/lap/capture', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({what, half_width_m: hw}),
+                });
+                if (!r.ok) {
+                    const msg = await r.text().catch(() => '');
+                    throw new Error(msg || ('HTTP ' + r.status));
+                }
+                const d = await r.json();
+                const label = what === 'start_finish' ? 'Start/finish' : `Sector split ${d.sector_count}`;
+                showToast(`${label} captured`, 'success');
+                if (d.heading_reliable === false) {
+                    showToast('Captured while stationary — direction unknown. Re-capture while driving across the line.', 'info');
+                }
+                _lapRefreshTrack();
+            } catch (e) {
+                showToast('Capture failed: ' + e.message, 'error');
+            }
+        }
+
+        async function lapSaveTrackMeta() {
+            if (!_lapTrack) { showToast('Capture a start/finish line first', 'error'); return; }
+            /* Empty field → keep the current value; an explicit "0" must pass
+             * through (firmware reads 0 as "use the default gate"), so don't let
+             * the falsy-OR chain swallow a typed zero. */
+            const _mlRaw = document.getElementById('lapMinLap').value.trim();
+            const _ml = _mlRaw === '' ? (_lapTrack.min_lap_time_s || 0)
+                                      : (parseFloat(_mlRaw) || 0);
+            const body = Object.assign({}, _lapTrack, {
+                name: document.getElementById('lapTrackName').value.trim() || _lapTrack.name,
+                min_lap_time_s: _ml,
+            });
+            try {
+                const r = await fetch('/api/lap/track', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body),
+                });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                showToast('Track saved', 'success');
+                _lapRefreshTrack();
+            } catch (e) { showToast('Save failed: ' + e.message, 'error'); }
+        }
+
+        async function lapClearTrack() {
+            if (!confirm('Remove the configured track? Lap and sector times will be lost.')) return;
+            try {
+                const r = await fetch('/api/lap/track', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({clear: true}),
+                });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                showToast('Track cleared', 'success');
+                _lapRefreshTrack(); _lapPoll();
+            } catch (e) { showToast('Clear failed: ' + e.message, 'error'); }
+        }
+
+        async function lapResetSession() {
+            try {
+                const r = await fetch('/api/lap/session/reset', {method: 'POST'});
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                showToast('Session reset — best times cleared', 'success');
+                _lapPoll();
+            } catch (e) { showToast('Reset failed: ' + e.message, 'error'); }
+        }
 
     </script>
 </body>
