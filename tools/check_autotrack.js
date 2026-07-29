@@ -42,10 +42,11 @@ function grabVar(name) {
 }
 
 const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
-    'gpMetres', 'gpSecs', 'gpStep', 'gpSignedDist', 'gpSplitRows',
+    'gpMetres', 'gpSecs', 'gpStep', 'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpSplitRows', 'gpNoLapsWhy',
     'gpTrackById', 'gpActiveTrack', 'gpIsTrial', 'gpRunWord', 'gpTrackUid', 'gpTracksSave',
     'gpTraceHome', 'gpKmBetween', 'gpMatchTrack', 'gpHeadingAt', 'gpAngleDiff',
-    'gpLoopClosure', 'gpProposeLine', 'gpAutoLine', 'gpAutoSetUp', 'gpStints'];
+    'gpLoopClosure', 'gpProposeLine', 'gpAutoLine', 'gpAutoSetUp', 'gpStints',
+    'gpLapRange', 'gpLaneScale', 'gpScaleFor'];
 const NEEDED_VAR = ['GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
     'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S'];
 
@@ -59,6 +60,10 @@ const run = new Function('env', code + '\n; return {' + NEEDED_FN.concat(NEEDED_
 /* `gp` is a free variable inside the extracted code — give it a real global. */
 global.gp = null;
 global.localStorage = env.localStorage;
+/* gpUnits() closes over a module-private _gpUnits the extractor cannot
+   reach. The scale cache only uses it as a cache-key token, so a fixed
+   stub is faithful for these checks. */
+global.gpUnits = () => 'metric';
 const F = run(env);
 
 /* Every export has to be a real value. An assertion written against an
@@ -196,6 +201,44 @@ ok('Winton is still recognised (it started there)', !!F.gpActiveTrack());
 ok('no line is invented from a straight line', !F.gpActiveTrack().start_finish);
 ok('it admits it', /could not find a repeated loop/.test(said || ''), JSON.stringify(said));
 
+console.log('\nthe gate arrow points the wrong way (the bug from the bench)');
+/* Same five laps, but flip the placed line's heading 180 deg — as happens
+   whenever a gate is dropped by hand and the arrow lands against traffic.
+   The old splitter required crossings in the arrow's direction and produced
+   zero laps with no explanation. */
+freshGp();
+F.gpAutoSetUp(rows);
+const sfGood = F.gpActiveTrack().start_finish;
+const before = F.gpSplitRows(rows).length;
+F.gpActiveTrack().start_finish = Object.assign({}, sfGood, { heading: (sfGood.heading + 180) % 360 });
+ok('flipping the line changes nothing', F.gpSplitRows(rows).length === before,
+    F.gpSplitRows(rows).length + ' vs ' + before);
+/* And driven the other way round — laps must still split. */
+const revRows = rows.slice().reverse().map((r, i) => Object.assign({}, r, { t: i * 40 }));
+ok('driving the circuit the other way still splits', F.gpSplitRows(revRows).length === before,
+    F.gpSplitRows(revRows).length + ' vs ' + before);
+F.gpActiveTrack().start_finish = sfGood;
+
+console.log('\nzero laps always says why');
+freshGp();
+global.gp.trace = rows;
+ok('no track: says pick one', /No track is chosen/.test(F.gpNoLapsWhy()));
+F.gpAutoSetUp(rows);
+const trkW = F.gpActiveTrack();
+const sfKeep = trkW.start_finish;
+trkW.start_finish = null;
+ok('no line: says place it', /has no start\/finish line yet/.test(F.gpNoLapsWhy()));
+/* Line 900 m off the driven loop: the car never came near it. */
+trkW.start_finish = Object.assign({}, sfKeep, { lat: sfKeep.lat + 0.009 });
+let why = F.gpNoLapsWhy();
+ok('line far away: says how far and where to fix it', /never|from anywhere|passed about/.test(why) && /Tracks/.test(why),
+    JSON.stringify(why));
+/* Line just beside the racing line: near miss reads differently. */
+trkW.start_finish = Object.assign({}, sfKeep, { lat: sfKeep.lat + 0.0004, half_width_m: 4 });
+why = F.gpNoLapsWhy();
+ok('near miss: talks metres, not philosophy', /m /.test(why) || /wider|onto the driven/.test(why), JSON.stringify(why));
+trkW.start_finish = sfKeep;
+
 console.log('\na drive somewhere else entirely, with a track already active');
 freshGp();
 F.gpAutoSetUp(drive(WINTON.center, 3, {}));          /* Winton is now active, line placed */
@@ -244,6 +287,40 @@ console.log('\na recording with no clock at all (pre-timestamp node)');
 const noClock = drive(WINTON.center, 3, {}).map(r => { const c = Object.assign({}, r); delete c.t; return c; });
 ok('never split on a clock that is not there', F.gpStints(noClock).length === 1,
     F.gpStints(noClock).length + ' found');
+
+console.log('\nthe y-scale is the lap\'s, not the visible window\'s');
+freshGp();
+F.gpAutoSetUp(rows);
+global.gp.trace = rows;
+global.gp.traceLaps = F.gpSplitRows(rows);
+global.gp.selLap = 1; global.gp.cmpLap = 0;
+const lap = global.gp.traceLaps[1];
+const speedLane = { id: 'speed', get: i => rows[i].kph, zero: false, dp: 0 };
+const whole = F.gpLaneScale(speedLane, lap);
+/* A quarter of the lap, containing no top speed — the old code rescaled to it. */
+const quarter = { from: lap.from, to: lap.from + Math.floor((lap.to - lap.from) / 4) };
+const windowed = F.gpLaneScale(speedLane, quarter);
+ok('a quarter-lap window really does have a different range',
+    Math.abs(windowed.hi - whole.hi) > 1 || Math.abs(windowed.lo - whole.lo) > 1,
+    'whole ' + whole.lo.toFixed(1) + '..' + whole.hi.toFixed(1) +
+    ' vs window ' + windowed.lo.toFixed(1) + '..' + windowed.hi.toFixed(1));
+const held = F.gpScaleFor(speedLane);
+ok('gpScaleFor ignores the zoom and uses the lap',
+    Math.abs(held.hi - whole.hi) < 1e-6 && Math.abs(held.lo - whole.lo) < 1e-6,
+    'got ' + held.lo.toFixed(1) + '..' + held.hi.toFixed(1));
+/* Zooming must not move it: gpScaleFor keys on the LAP, so a stripZoom is
+   invisible to it. */
+global.gp.stripZoom = { lap: 1, from: quarter.from, to: quarter.to };
+const zoomed = F.gpScaleFor(speedLane);
+ok('and it stays put when the navigator zooms in',
+    Math.abs(zoomed.hi - whole.hi) < 1e-6 && Math.abs(zoomed.lo - whole.lo) < 1e-6,
+    'got ' + zoomed.lo.toFixed(1) + '..' + zoomed.hi.toFixed(1));
+global.gp.stripZoom = null;
+/* Selecting a different lap SHOULD move it — the scale belongs to the lap. */
+global.gp.selLap = 2;
+const otherLap = F.gpScaleFor(speedLane);
+ok('a different lap gets its own scale (cache is keyed, not frozen)',
+    typeof otherLap.hi === 'number' && isFinite(otherLap.hi));
 
 console.log('\nthe readiness panel says what is actually true');
 /* Nothing plugged in, nothing known. */

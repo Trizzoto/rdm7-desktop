@@ -1361,6 +1361,14 @@
         .gp-vtile canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
         .gp-vtile-btns { position: absolute; top: 9px; right: 9px; z-index: 1000; display: flex; gap: 6px; }
         #gpMap { height: 300px; background: #0C0E10; }
+        /* Imagery off: a flat field with a faint grid, so the line has
+           something to sit on and the eye still gets a sense of scale. */
+        #gpMap.gp-notiles {
+            background:
+                repeating-linear-gradient(0deg, rgba(255,255,255,0.045) 0 1px, transparent 1px 44px),
+                repeating-linear-gradient(90deg, rgba(255,255,255,0.045) 0 1px, transparent 1px 44px),
+                #0A0C0E;
+        }
         #gpMap .leaflet-control-attribution { background: rgba(12,14,16,0.72); color: var(--text-muted); font-size: 9px; }
         #gpMap .leaflet-control-attribution a { color: #7C8590; }
         .gp-mapchip {
@@ -1995,6 +2003,7 @@
                     <div class="gp-mapbtns">
                         <button class="gp-mapbtn" id="gpBtnLocate" onclick="gpLocate()" title="Centre on the car's current position">&#9678; My position</button>
                         <button class="gp-mapbtn on" id="gpBtnFollow" onclick="gpToggleFollow()" title="Keep the car centred">Follow</button>
+                        <button class="gp-mapbtn" id="gpBtnTiles" onclick="gpTilesToggle()" title="Drop the satellite imagery and read the driven line on its own">Hide map</button>
                         <button class="gp-mapbtn" id="gpMapFocusBtn" style="display:none"
                                 onclick="gpViewFocus('map')" title="Map full width / side by side">&#x26F6;</button>
                     </div>
@@ -5980,6 +5989,10 @@
                 try { return window.localStorage.getItem("rdm7_gp_mapmode") || "pace"; }
                 catch (e) { return "pace"; }
             })(),
+            tilesOn: (function () {      /* satellite imagery under the trace */
+                try { return window.localStorage.getItem("rdm7_gp_tiles") !== "0"; }
+                catch (e) { return true; }
+            })(),
             plotMode: (function () {     /* tiled = one lane each, over = one well */
                 try { return window.localStorage.getItem("rdm7_gp_plotmode") === "over" ? "over" : "tiled"; }
                 catch (e) { return "tiled"; }
@@ -7295,11 +7308,7 @@
             var mins = gpSecs(gp.trace, 0, gp.trace.length - 1) / 60;
             h += "<button class='ws-item" + (gp.selLap < 0 ? " on" : "") + "' data-gp-lap='-1'>" +
                  "<span class='st'></span>Whole session<span class='tag'>" + mins.toFixed(1) + " min</span></button>";
-            if (!gp.traceLaps.length) {
-                h += "<div class='ws-note'>No " + (gpIsTrial(gpActiveTrack()) ? "start-to-finish runs" : "start/finish crossings") +
-                     " found in this recording. Place the " + (gpIsTrial(gpActiveTrack()) ? "gates" : "line") +
-                     " on the active track and it will split into " + gpRunWord() + "s automatically.</div>";
-            }
+            if (!gp.traceLaps.length) h += "<div class='ws-note'>" + gpNoLapsWhy() + "</div>";
             var S = gpSessionSectors();
             var word = gpRunWord(true);
             var bestLap = -1, bestT = Infinity;
@@ -7582,21 +7591,18 @@
             var rows = gp.trace;
             if (!secs.length || !rows || lap.to <= lap.from) return null;
 
-            var at = lap.from, marks = [], s, i;
+            var at = lap.from, marks = [], s;
             for (s = 0; s < secs.length; s++) {
-                var line = secs[s], hw = gpN(line.half_width_m) || 15, found = -1;
-                var prev = gpSignedDist(line, rows[at].lat, rows[at].lon).along;
-                for (i = at + 1; i <= lap.to; i++) {
-                    var d = gpSignedDist(line, rows[i].lat, rows[i].lon);
-                    if (prev < 0 && d.along >= 0 && Math.abs(d.lateral) <= hw) { found = i; break; }
-                    prev = d.along;
-                }
+                /* Either direction, same reasoning as the start line: a sector
+                   line's arrow is wherever the mouse happened to leave it, and
+                   the lap already fixes which way the car is going. */
+                var G = gpGateHits(rows, secs[s], at, lap.to);
                 /* A lap that missed a sector line is not a lap with a missing
                    split — it is a lap we cannot time. Reporting partial splits
                    would put a fast-looking sector against an incomplete lap. */
-                if (found < 0) return null;
-                marks.push(found);
-                at = found;
+                if (!G.hits.length) return null;
+                marks.push(G.hits[0].i);
+                at = G.hits[0].i;
             }
             return marks;
         }
@@ -8049,6 +8055,46 @@
 
         function gpLaneH() { return gp.laneH || GP_LANE_H; }
 
+        /* ---- lanes you can resize -----------------------------------------
+           Every lane had the same height, take it or leave it. But nobody
+           reads nine channels with equal attention: speed and delta earn
+           half the screen, yaw rate earns a ribbon. So each lane carries a
+           weight, the rack distributes its height by weight, and dragging
+           the rule between two lanes moves height from one to the other —
+           the same gesture as every pane splitter. Weights persist per lane,
+           so the rack you arranged is the rack you get back. */
+        var GP_LANE_FLOOR = 24;   /* px; below this a trace is a smudge */
+
+        function gpLaneWeights() {
+            if (gp.laneW) return gp.laneW;
+            try { gp.laneW = JSON.parse(window.localStorage.getItem("rdm7_gp_lanew") || "{}") || {}; }
+            catch (e) { gp.laneW = {}; }
+            return gp.laneW;
+        }
+        function gpLaneWSave() {
+            try { window.localStorage.setItem("rdm7_gp_lanew", JSON.stringify(gp.laneW || {})); } catch (e) {}
+        }
+
+        /* Where each visible lane sits: [{top, h}], plus the rack's bottom.
+           One source of truth — the renderer, the playhead tags and the drag
+           hit-test all read this, so they cannot disagree about where a lane
+           ends. */
+        function gpLaneLayout() {
+            var rows = gpLaneRows();
+            var W = gpLaneWeights();
+            var base = gpLaneH();
+            var weights = rows.map(function (l) { return Math.max(0.25, Math.min(4, W[l.id] || 1)); });
+            var total = weights.reduce(function (a, b) { return a + b; }, 0) || 1;
+            var avail = rows.length * base;
+            var out = [], y = 2;
+            rows.forEach(function (l, i) {
+                var h = Math.max(GP_LANE_FLOOR, avail * weights[i] / total);
+                out.push({ top: y, h: h });
+                y += h + GP_LANE_GAP;
+            });
+            return { lanes: out, bottom: y };
+        }
+
         function gpFitLaneH(rows) {
             if (!rows) return GP_LANE_H;
             var stage = document.getElementById("gpStageCol");
@@ -8108,11 +8154,41 @@
         }
 
         function gpRackHeight() {
-            var rows = gpLaneRows();
-            return rows.length * (gpLaneH() + GP_LANE_GAP) + 4 + GP_AXIS_H;
+            return gpLaneLayout().bottom + 2 + GP_AXIS_H;
         }
 
-        /* Min/max over the visible window, padded so a flat trace is not a line
+        /* ---- the scale belongs to the LAP, not to what is on screen --------
+           gpLaneScale was fed the visible window, so every scroll, zoom and
+           navigator drag recomputed min/max and the axis moved under you.
+           Two things went wrong with that. The printed numbers changed
+           constantly, so they read as noise rather than as a scale. And the
+           shape of the trace was no longer comparable between one part of the
+           lap and another: a gentle wiggle on a straight, zoomed in, is drawn
+           exactly like the hardest braking zone on the lap, because each was
+           normalised to its own window.
+
+           So the scale is computed once over the whole selected lap and held.
+           Zooming now magnifies the x-axis only, which is what zooming into a
+           corner is supposed to mean. This is what i2 and Race Studio both
+           do by default, for the same reason.
+
+           Memoised: the range only changes when the lap, the comparison lap
+           or the recording changes, so a pan costs nothing. */
+        function gpScaleFor(lane) {
+            var r = gpLapRange();
+            /* Units are in the key: the speed lane's numbers ARE the unit, so
+               a metric scale held across a switch to mph would be silently
+               wrong rather than merely stale. */
+            var key = [gp.selLap, gp.cmpLap, r.from, r.to,
+                       gp.trace ? gp.trace.length : 0, gp.lanesOpen, gpUnits()].join(":");
+            if (!gp.scaleCache || gp.scaleCache.key !== key)
+                gp.scaleCache = { key: key, map: {} };
+            var m = gp.scaleCache.map;
+            if (!(lane.id in m)) m[lane.id] = gpLaneScale(lane, r);
+            return m[lane.id];
+        }
+
+        /* Min/max over a sample range, padded so a flat trace is not a line
            welded to the frame edge. `zero` lanes keep zero centred, because a
            g trace that does not show which side of zero it is on is useless. */
         function gpLaneScale(lane, rng) {
@@ -8181,7 +8257,8 @@
            leaves the last column a fraction of a pixel out, which is the
            difference between a hairline and a grey smear. */
         function gpRackStatic(w, h, rng, dpr) {
-            var key = [gp.selLap, gp.cmpLap, rng.from, rng.to, w, h, dpr, gp.lanesOpen, gp.plotMode].join(":");
+            var key = [gp.selLap, gp.cmpLap, rng.from, rng.to, w, h, dpr, gp.lanesOpen, gp.plotMode,
+                       JSON.stringify(gp.laneW || {})].join(":");
             if (gp.stripCache && gp.stripCache.key === key) return gp.stripCache.cv;
 
             var off = document.createElement("canvas");
@@ -8209,8 +8286,8 @@
                what loads here, not a blank. */
             var noData = !gp.trace || !gp.trace.length || n < 2;
             var ticks = noData ? [] : gpAxisTicks(rng, plotW);
-            var laneH = gpLaneH();
-            var rackBottom = 2 + rows.length * (laneH + GP_LANE_GAP);
+            var LY = gpLaneLayout();
+            var rackBottom = LY.bottom;
 
             /* The plot well: one dark field for the whole rack, drawn once.
                Sinking the data below the chrome is what every analysis package
@@ -8234,7 +8311,7 @@
             g.strokeStyle = "rgba(255,255,255,0.07)";
             g.beginPath();
             for (var sep = 1; sep < rows.length; sep++) {
-                var ly = snapY(2 + sep * (laneH + GP_LANE_GAP));
+                var ly = snapY(LY.lanes[sep].top - GP_LANE_GAP / 2);
                 g.moveTo(6, ly); g.lineTo(plotX + plotW, ly);
             }
             g.stroke();
@@ -8287,7 +8364,7 @@
                     g.fillText(noData ? "" : "Nothing to plot yet.", plotX + 9, snapT(wellTop + wellH / 2));
                 }
                 live.forEach(function (lane) {
-                    var sc2 = gpLaneScale(lane, rng);
+                    var sc2 = gpScaleFor(lane);
                     if (!sc2) return;
                     var yo = function (v) {
                         return wellTop + wellH - 4 - ((v - sc2.lo) / (sc2.hi - sc2.lo)) * (wellH - 8);
@@ -8327,7 +8404,8 @@
                 });
             } else
             rows.forEach(function (lane, li) {
-                var top = 2 + li * (laneH + GP_LANE_GAP);
+                var laneH = LY.lanes[li].h;
+                var top = LY.lanes[li].top;
                 var mid = top + laneH / 2;
                 var absent = lane.pending || noData || (lane.absent && lane.absent());
 
@@ -8365,7 +8443,7 @@
                     return;
                 }
 
-                var sc = gpLaneScale(lane, rng);
+                var sc = gpScaleFor(lane);
                 if (!sc) return;
                 var y = function (v) {
                     return top + laneH - 3 -
@@ -8593,11 +8671,12 @@
                         g.fillText(txt, GP_LANE_LBL - 6 - tw, ty);
                     });
                 } else
+                var LYp = gpLaneLayout();
                 gpLaneRows().forEach(function (lane, li) {
                     if (lane.pending) return;
                     var v = lane.get(pi);
                     if (v === null || v === undefined || !isFinite(v)) return;
-                    var top = 2 + li * (gpLaneH() + GP_LANE_GAP);
+                    var top = LYp.lanes[li].top;
                     var txt = (lane.zero && v >= 0 ? "+" : "") + v.toFixed(lane.dp);
                     g.font = "11px 'JetBrains Mono', monospace";
                     var tw = g.measureText(txt).width;
@@ -8857,9 +8936,67 @@
                 gpPlayStop();
                 window.gpScrubTo(Math.max(0, Math.min(lap.to - lap.from, idx - lap.from)));
             };
-            cv.addEventListener("mousedown", function (e) { drag = true; seek(e); });
-            window.addEventListener("mousemove", function (e) { if (drag) seek(e); });
-            window.addEventListener("mouseup", function () { drag = false; });
+            /* The rule between two lanes is a splitter. Grab it and height
+               moves from one lane to the other; everywhere else on the canvas
+               is still the seek surface. Combined mode has no lanes to
+               resize, so there the whole canvas seeks. */
+            var rs = null;   /* {above, below, startY, w0a, w0b, pxPerW} */
+            var sepAt = function (ev) {
+                if (gp.plotMode === "over" || !gp.trace || !gp.trace.length) return -1;
+                var r = cv.getBoundingClientRect();
+                var y = ev.clientY - r.top;
+                var LY = gpLaneLayout();
+                for (var i = 1; i < LY.lanes.length; i++) {
+                    var ly = LY.lanes[i].top - GP_LANE_GAP / 2;
+                    if (Math.abs(y - ly) <= 5) return i;
+                }
+                return -1;
+            };
+            cv.addEventListener("mousedown", function (e) {
+                var si = sepAt(e);
+                if (si > 0) {
+                    var rows = gpLaneRows(), W = gpLaneWeights();
+                    var LY = gpLaneLayout();
+                    var wsum = 0;
+                    rows.forEach(function (l) { wsum += Math.max(0.25, Math.min(4, W[l.id] || 1)); });
+                    rs = { above: rows[si - 1].id, below: rows[si].id, startY: e.clientY,
+                           w0a: Math.max(0.25, Math.min(4, W[rows[si - 1].id] || 1)),
+                           w0b: Math.max(0.25, Math.min(4, W[rows[si].id] || 1)),
+                           /* px per unit weight, so the split tracks the mouse
+                              1:1 instead of at some gearing */
+                           pxPerW: (LY.bottom - 4) / (wsum || 1) };
+                    e.preventDefault();
+                    return;
+                }
+                drag = true; seek(e);
+            });
+            window.addEventListener("mousemove", function (e) {
+                if (rs) {
+                    var dw = (e.clientY - rs.startY) / (rs.pxPerW || 1);
+                    var a = Math.max(0.25, Math.min(4, rs.w0a + dw));
+                    var b = Math.max(0.25, Math.min(4, rs.w0b - dw));
+                    gpLaneWeights();
+                    gp.laneW[rs.above] = Math.round(a * 100) / 100;
+                    gp.laneW[rs.below] = Math.round(b * 100) / 100;
+                    gpDrawStrip();
+                    return;
+                }
+                if (drag) { seek(e); return; }
+                /* Cursor says which surface you are over before you commit. */
+                cv.style.cursor = sepAt(e) > 0 ? "row-resize" : "crosshair";
+            });
+            window.addEventListener("mouseup", function () {
+                if (rs) { gpLaneWSave(); rs = null; }
+                drag = false;
+            });
+            /* Double-click a splitter: equal lanes again. */
+            cv.addEventListener("dblclick", function (e) {
+                if (sepAt(e) > 0) {
+                    gp.laneW = {}; gpLaneWSave();
+                    gpDrawStrip();
+                    e.stopImmediatePropagation();
+                }
+            }, true);
             cv.addEventListener("dblclick", function () { gp.stripZoom = null; gpDrawStrip(); });
             /* A resized window changes the pixel width, which invalidates the
                cached layer — without this the strip stretches a stale bitmap. */
@@ -9365,31 +9502,86 @@
         /* The crossing logic on ANY rows, no state touched — the ghost loader
            needs to split a second recording with the same geometry the loaded
            one was split with. */
-        function gpSplitRows(rows) {
+        /* Every crossing of one gate, in EITHER direction, with the direction
+           recorded. Also the nearest the car ever got, which is the only way
+           to tell "you drove the other way through it" apart from "you never
+           went near it" — and those two need opposite fixes.
+
+           Direction used to be a hard requirement: the gate carries a heading
+           and a crossing only counted going that way. Drive the circuit the
+           other way round, or drop the gate with its arrow pointing across the
+           track, and nothing ever fires, with nothing on screen saying so.
+           Nobody sets a heading on a start/finish line in the real world; you
+           drive through it and the tool works out which way you went. */
+        function gpGateHits(rows, gate, from, to) {
+            var hw = gpN(gate.half_width_m) || 15;
+            var hits = [], nearest = Infinity, nearIn = 0;
+            var prev = gpSignedDist(gate, rows[from].lat, rows[from].lon);
+            for (var i = from + 1; i <= to; i++) {
+                var d = gpSignedDist(gate, rows[i].lat, rows[i].lon);
+                var withinBand = Math.abs(d.lateral) <= hw;
+                var dist = Math.hypot(d.along, Math.max(0, Math.abs(d.lateral) - hw));
+                if (dist < nearest) nearest = dist;
+                /* "At the line" needs BOTH coordinates small. The lateral band
+                   alone extends to infinity along the gate's normal, so a car
+                   on a parallel road 50 m away would count as reaching it —
+                   and the no-laps diagnosis would blame the line's width. */
+                if (withinBand && Math.abs(d.along) < 30) nearIn++;
+                if (withinBand) {
+                    if (prev.along < 0 && d.along >= 0) hits.push({ i: i, dir: 1 });
+                    else if (prev.along >= 0 && d.along < 0) hits.push({ i: i, dir: -1 });
+                }
+                prev = d;
+            }
+            return { hits: hits, nearestM: nearest, samplesInBand: nearIn };
+        }
+
+        /* Which way round the car went: whichever direction it crossed most.
+           Mixing the two would time a lap from an out-lap crossing to an
+           in-lap one and call it a lap. */
+        function gpMainDir(hits) {
+            var f = 0, b = 0;
+            hits.forEach(function (h) { if (h.dir > 0) f++; else b++; });
+            return b > f ? -1 : 1;
+        }
+
+        function gpSplitRows(rows, diag) {
             var out = [];
             var trk = gpActiveTrack();
             var sf = trk && trk.start_finish;
             var fin = trk && trk.finish;
             if (!sf || !rows || rows.length < 2) return out;
-            var hwS = gpN(sf.half_width_m) || 15;
-            var hwF = fin ? (gpN(fin.half_width_m) || 15) : 0;
-            var prevS = gpSignedDist(sf, rows[0].lat, rows[0].lon).along;
-            var prevF = fin ? gpSignedDist(fin, rows[0].lat, rows[0].lon).along : 0;
-            var start = -1;
-            for (var i = 1; i < rows.length; i++) {
-                var s = gpSignedDist(sf, rows[i].lat, rows[i].lon);
-                var f = fin ? gpSignedDist(fin, rows[i].lat, rows[i].lon) : null;
-                if (prevS < 0 && s.along >= 0 && Math.abs(s.lateral) <= hwS) {
-                    if (!fin && start >= 0) out.push({ from: start, to: i });
-                    start = i;
-                }
-                if (fin && start >= 0 && prevF < 0 && f.along >= 0 && Math.abs(f.lateral) <= hwF) {
-                    out.push({ from: start, to: i });
-                    start = -1;
-                }
-                prevS = s.along;
-                if (fin) prevF = f.along;
+
+            var S = gpGateHits(rows, sf, 0, rows.length - 1);
+            var dirS = gpMainDir(S.hits);
+            var sHits = S.hits.filter(function (h) { return h.dir === dirS; });
+            if (diag) {
+                diag.start = S;
+                diag.startDir = dirS;
+                diag.startUsable = sHits.length;
+                /* The gate's arrow points the way the driver did NOT go. */
+                diag.startFlipped = dirS < 0;
             }
+
+            if (!fin) {
+                for (var k = 1; k < sHits.length; k++)
+                    out.push({ from: sHits[k - 1].i, to: sHits[k].i });
+                return out;
+            }
+
+            var F = gpGateHits(rows, fin, 0, rows.length - 1);
+            var dirF = gpMainDir(F.hits);
+            var fHits = F.hits.filter(function (h) { return h.dir === dirF; });
+            if (diag) { diag.finish = F; diag.finishUsable = fHits.length; }
+
+            /* A run is a start crossing followed by the next finish crossing —
+               and only ever one run per start, so a lap that re-crosses the
+               start line on its way out does not swallow the next one. */
+            var fi = 0;
+            sHits.forEach(function (h) {
+                while (fi < fHits.length && fHits[fi].i <= h.i) fi++;
+                if (fi < fHits.length) { out.push({ from: h.i, to: fHits[fi].i }); fi++; }
+            });
             return out;
         }
 
@@ -9407,6 +9599,7 @@
                indices mean different laps after a re-download or track change. */
             gp.coach = null; gp.delta = null; gp.deltaKey = "";
             gp.stripCache = null; gp.stripZoom = null; gp.sectors = null; gp.secKey = "";
+            gp.scaleCache = null;
             gp.rate = null; gp.rateKey = ""; gp.insightCursor = -1;
             gp.chan = null; gp.chanKey = "";
             gp.traceLaps = gpSplitRows(gp.trace || []);
@@ -9423,6 +9616,48 @@
                 }
                 gp.cmpLap = bi;
             }
+        }
+
+        /* Zero laps always comes with its reason. Five different failures used
+           to share one message ("place the line"), and four of them were not
+           fixed by placing the line. Diagnose from the same crossing scan the
+           splitter ran, so the explanation cannot disagree with the result. */
+        function gpNoLapsWhy() {
+            var trk = gpActiveTrack();
+            var word = gpRunWord();
+            if (!trk)
+                return "No track is chosen, so there is nothing to time against. Pick or add one in Tracks.";
+            if (!trk.start_finish)
+                return gpEsc(trk.name) + " has no start/finish line yet. Open Tracks, zoom onto the real line, and press Place start/finish — or just download a recording and one is proposed.";
+
+            var diag = {};
+            gpSplitRows(gp.trace || [], diag);
+            var S = diag.start;
+            if (!S) return "Nothing recorded yet.";
+
+            var m = Math.round(S.nearestM);
+            if (!S.samplesInBand) {
+                if (S.nearestM > 500)
+                    return "The start/finish line is " + (m >= 1000 ? (m / 1000).toFixed(1) + " km" : m + " m") +
+                           " from anywhere the car went — it is placed on a different part of the map. Open Tracks and drag it onto the track you drove.";
+                return "The car passed about " + m + " m from the end of the start/finish line but never through it. Open Tracks and drag the line onto the driven part of the track, or make it wider.";
+            }
+            if (!S.hits.length)
+                return "The car reached the start/finish line but no crossing registered — likely clipping the very end of it. Widen the line a little in Tracks.";
+
+            if (gpIsTrial(trk)) {
+                var F = diag.finish;
+                if (F && !F.hits.length) {
+                    var fm = Math.round(F.nearestM);
+                    return "The start was crossed " + diag.startUsable + " time" + (diag.startUsable === 1 ? "" : "s") +
+                           ", but the finish line was never crossed — the car got within " + fm +
+                           " m of it. Drag the finish gate onto the driven line in Tracks.";
+                }
+                return "Starts and finishes were both crossed but never in that order — check the two gates are not swapped.";
+            }
+            if (diag.startUsable === 1)
+                return "The line was crossed once, which starts a " + word + " but cannot finish one. Two crossings make the first " + word + ".";
+            return "Crossings were found but no two of them bracket a " + word + " — if this recording is several separate runs, each may hold only one crossing.";
         }
 
         /* Split, and if that produced nothing, work out why and try once more.
@@ -10098,22 +10333,70 @@
                 colour = function (bkt) { return gpGColour(bkt / 12 * span, span); };
             }
 
-            /* One polyline per RUN of same-coloured samples. Full resolution is
-               kept — only the number of paths is reduced. */
-            var runStart = r.from, runB = value(r.from);
-            for (var i = r.from + 1; i <= r.to; i++) {
-                var b = value(i);
-                if (b !== runB || i === r.to) {
-                    var seg = [], SP = gpSmoothPath();
-                    for (var j = runStart; j <= i; j++) seg.push(SP ? SP[j] : [rows[j].lat, rows[j].lon]);
-                    if (seg.length > 1) {
-                        L.polyline(seg, { color: colour(runB), weight: 4,
-                                          opacity: 0.95, lineCap: "butt",
-                                          renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
-                    }
-                    runStart = i; runB = b;
+            /* ---- drawn at the scale it is being LOOKED at --------------------
+               The line used to be split into one polyline per run of
+               same-coloured samples, at full 25 Hz resolution, with butt caps.
+               Zoomed in that is right: each run covers many pixels and the
+               colour boundaries are where the data says they are.
+
+               Zoomed out it fell apart. A lap is ~1,500 samples over a couple
+               of hundred pixels, so a run is a fraction of a pixel — and a
+               4 px wide stroke with butt caps, drawn a fraction of a pixel
+               long, several thousand times, at slightly different angles,
+               stacks up into a bead-chain with notches at every join. Nothing
+               was wrong with the data; it was being asked to draw detail
+               finer than the screen can hold.
+
+               So: decimate to the current scale, and never emit a run shorter
+               than a few pixels — merge it into its neighbour instead. The
+               colour of a merged run is the average of what went into it, so
+               a braking zone stays red rather than being dropped for being
+               brief. At high zoom the thresholds fall below the sample
+               spacing and this reduces to the old full-resolution path. */
+            var mpp = gpMetresPerPixel();
+            var stepM = mpp * 1.1;      /* keep a point about every pixel */
+            var minRunM = mpp * 5;      /* a colour run shorter than 5 px is noise at this scale */
+            var SP = gpSmoothPath();
+            var at = function (idx) { return SP ? SP[idx] : [rows[idx].lat, rows[idx].lon]; };
+
+            /* Thin the samples to the screen's resolution, carrying the mean
+               colour bucket of everything each kept point stands for. */
+            var keep = [], acc = 0, cnt = 0, run = 0;
+            for (var i = r.from; i <= r.to; i++) {
+                acc += value(i); cnt++;
+                if (i > r.from) run += gpMetres(rows[i - 1], rows[i]);
+                if (i === r.from || i === r.to || run >= stepM) {
+                    keep.push({ i: i, b: acc / cnt });
+                    acc = 0; cnt = 0; run = 0;
                 }
             }
+            if (keep.length < 2) { keep = [{ i: r.from, b: value(r.from) }, { i: r.to, b: value(r.to) }]; }
+
+            /* Group into colour runs, absorbing any run too short to be seen. */
+            var segs = [], cur = { from: 0, sum: keep[0].b, n: 1, m: 0 };
+            for (var q2 = 1; q2 < keep.length; q2++) {
+                var dM = gpMetres(rows[keep[q2 - 1].i], rows[keep[q2].i]);
+                var same = Math.round(keep[q2].b) === Math.round(cur.sum / cur.n);
+                if (same || cur.m < minRunM) {
+                    cur.sum += keep[q2].b; cur.n++; cur.m += dM;
+                } else {
+                    cur.to = q2; segs.push(cur);
+                    cur = { from: q2 - 1, sum: keep[q2].b, n: 1, m: dM };
+                }
+            }
+            cur.to = keep.length - 1; segs.push(cur);
+
+            segs.forEach(function (s) {
+                var seg = [];
+                for (var j = s.from; j <= s.to; j++) seg.push(at(keep[j].i));
+                if (seg.length < 2) return;
+                /* Round joins and caps: with runs now several pixels long the
+                   junction between two colours is a visible corner, and butt
+                   caps leave a notch in it at every direction change. */
+                L.polyline(seg, { color: colour(s.sum / s.n), weight: 4,
+                                  opacity: 0.95, lineCap: "round", lineJoin: "round",
+                                  smoothFactor: 1, renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
+            });
             gpSyncModeButtons();
             gpSyncScrub();
             gpDrawPlayhead();
@@ -11008,16 +11291,52 @@
             /* Same keyless Esri imagery the track editor uses; maxNativeZoom 18
                is the level Esri has almost everywhere, and maxZoom 21 upscales
                rather than blanking on rural circuits. */
-            L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+            gp.tiles = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
                 maxNativeZoom: 18, maxZoom: 21,
                 attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics"
-            }).addTo(gp.map);
+            });
+            if (gp.tilesOn) gp.tiles.addTo(gp.map);
             gp.carLayer = L.layerGroup().addTo(gp.map);
             gp.trail = L.polyline([], { color: "#7CC0FF", weight: 2, opacity: 0.55 }).addTo(gp.map);
             /* Dragging the map is an explicit "stop following me". */
             gp.map.on("dragstart", function () { if (gp.follow) window.gpToggleFollow(); });
+            /* The drawn line is decimated to the CURRENT scale, so it has to be
+               redrawn when the scale changes. Without this the line keeps
+               whatever resolution it was built at and looks wrong at every
+               other zoom. */
+            gp.map.on("zoomend", function () { if (gp.view === "session") gpDrawTrace(); });
             window.__gpMap = gp.map;   /* debug/automation handle */
         }
+
+        /* Metres one screen pixel covers at the current zoom and latitude.
+           Web Mercator: the world is 256 px at zoom 0 and doubles each level,
+           and the cos term is the projection's own stretch away from the
+           equator — without it a line at 35 S decimates ~20% too coarsely. */
+        function gpMetresPerPixel() {
+            if (!gp.map) return 1;
+            var lat = gp.map.getCenter().lat;
+            return 40075016.686 * Math.cos(lat * Math.PI / 180) / Math.pow(2, gp.map.getZoom() + 8);
+        }
+
+        /* The imagery is context, not data. Off, the driven line sits on a flat
+           field with nothing competing with it — which is how every analysis
+           package draws a track map, and is far easier to read a racing line
+           against than a satellite photo of gravel. */
+        window.gpTilesToggle = function () {
+            gp.tilesOn = !gp.tilesOn;
+            try { window.localStorage.setItem("rdm7_gp_tiles", gp.tilesOn ? "1" : "0"); } catch (e) {}
+            if (gp.map && gp.tiles) {
+                if (gp.tilesOn) gp.tiles.addTo(gp.map);
+                else gp.map.removeLayer(gp.tiles);
+            }
+            var mapEl = document.getElementById("gpMap");
+            if (mapEl) mapEl.classList.toggle("gp-notiles", !gp.tilesOn);
+            var b = document.getElementById("gpBtnTiles");
+            if (b) {
+                b.classList.toggle("on", !gp.tilesOn);
+                b.textContent = gp.tilesOn ? "Hide map" : "Show map";
+            }
+        };
 
         window.gpToggleFollow = function () {
             gp.follow = !gp.follow;
