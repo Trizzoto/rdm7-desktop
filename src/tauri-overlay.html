@@ -1088,6 +1088,8 @@
         .gp-ghost-pick { width: 100%; box-sizing: border-box; margin: 3px 0 5px;
                          background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
                          border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 6px; }
+        .gp-playbar.idle .gp-mapbtn, .gp-playbar.idle #gpModes, .gp-playbar.idle #gpPlayRate {
+            opacity: 0.45; pointer-events: none; }
         .gp-strip { display: none; width: calc(100% - 28px); margin: 8px 14px 0;
                     background: var(--panel); border: 1px solid var(--border);
                     border-radius: var(--radius-md); cursor: crosshair; }
@@ -7612,10 +7614,14 @@
             var g = off.getContext("2d");
             var rows = gpLaneRows(), n = rng.to - rng.from + 1;
             var plotX = GP_LANE_LBL, plotW = w - GP_LANE_LBL - 6;
+            /* No recording yet: the structure still renders — every lane as a
+               named, framed empty, exactly the way a pending lane always has.
+               The rack is a promise of what loads here, not a blank. */
+            var noData = !gp.trace || !gp.trace.length || n < 2;
 
             /* Gridlines first, so every lane is drawn over them and the eye can
                run a tick straight down the stack. */
-            var ticks = gpAxisTicks(rng, plotW);
+            var ticks = noData ? [] : gpAxisTicks(rng, plotW);
             var rackBottom = 2 + rows.length * (GP_LANE_H + GP_LANE_GAP);
             g.strokeStyle = "rgba(255,255,255,0.055)";
             g.lineWidth = 1;
@@ -7644,12 +7650,14 @@
                 var lu = typeof lane.unit === "function" ? lane.unit() : lane.unit;
                 if (lu) g.fillText(lu, 6, top + 25);
 
-                var absent = lane.pending || (lane.absent && lane.absent());
+                var absent = lane.pending || noData || (lane.absent && lane.absent());
                 if (absent) {
                     /* An empty frame, said plainly. */
                     g.fillStyle = "rgba(255,255,255,0.20)";
                     g.font = "10px system-ui";
-                    var say = lane.pending ? "awaiting " + lane.pending : lane.absentSay;
+                    var say = lane.pending ? "awaiting " + lane.pending
+                            : noData ? "loads with a recording"
+                            : lane.absentSay;
                     g.fillText(say, plotX + 10, mid + 3);
                     g.strokeStyle = "rgba(255,255,255,0.05)";
                     g.beginPath();
@@ -7724,7 +7732,9 @@
             });
             g.fillStyle = "rgba(255,255,255,0.26)";
             g.font = "9px system-ui";
-            g.fillText(gp.stripZoom ? "corner" : "lap", 6, rackBottom + 11);
+            /* The axis-scope word describes a time axis; with no data there
+               is no axis to describe, and a lone "lap" dangles meaninglessly. */
+            g.fillText(noData ? "" : (gp.stripZoom ? "corner" : "lap"), 6, rackBottom + 11);
 
             gp.stripCache = { key: key, cv: off };
             return off;
@@ -7733,12 +7743,18 @@
         function gpDrawStrip() {
             var cv = document.getElementById("gpStrip");
             if (!cv) return;
-            var show = gp.view === "session" && gp.trace && gp.trace.length;
+            /* The rack shows in Session even before anything is loaded: the
+               structure of the telemetry — which lanes exist, their units,
+               where the time axis runs — is worth seeing empty, so a recording
+               lands somewhere the eye already knows. Frames only, per
+               ADR-0011: what loads here is said, never simulated. */
+            var noData = !gp.trace || !gp.trace.length;
+            var show = gp.view === "session";
             cv.style.display = show ? "block" : "none";
             var tog = document.getElementById("gpLanesBtn");
             if (tog) tog.style.display = show ? "" : "none";
             var kl = document.getElementById("gpKeysLamp");
-            if (kl) kl.style.display = show ? "" : "none";
+            if (kl) kl.style.display = show && !noData ? "" : "none";
             if (!show) return;
             gpSyncLanesBtn();
 
@@ -7753,6 +7769,11 @@
             var g = cv.getContext("2d");
             g.setTransform(dpr, 0, 0, dpr, 0, 0);
             g.clearRect(0, 0, w, h);
+
+            if (noData) {
+                g.drawImage(gpRackStatic(w, h, { from: 0, to: 0 }), 0, 0);
+                return;                     /* no playhead over an empty rack */
+            }
 
             var rng = gpStripRange();
             var n = rng.to - rng.from + 1;
@@ -7807,6 +7828,7 @@
             cv._bound = true;
             var drag = false;
             var seek = function (ev) {
+                if (!gp.trace || !gp.trace.length) return;   /* empty structure: nothing to seek */
                 var rng = gpStripRange(), r = cv.getBoundingClientRect();
                 if (!r.width) return;
                 /* Against the PLOT area, not the canvas: the lane labels take a
@@ -9792,8 +9814,12 @@
             if (fb) fb.style.display = big ? "none" : "";
             if (wrap) wrap.classList.toggle("tall", big);
             if (grid) grid.style.display = big ? "none" : "";
-            /* The playback bar only means anything with a trace loaded. */
-            if (pb) pb.style.display = (gp.view === "session" && gp.trace && gp.trace.length) ? "flex" : "none";
+            /* The playback bar is part of the structure: visible in Session
+               either way, idle until a recording gives it something to play. */
+            if (pb) {
+                pb.style.display = gp.view === "session" ? "flex" : "none";
+                pb.classList.toggle("idle", !(gp.trace && gp.trace.length));
+            }
             if (gp.view !== "session") gpPlayStop();
             gpDrawTrace();
             gpStripBind(); gpDrawStrip();
