@@ -527,6 +527,54 @@ fn read_frame_silent(
 /// Probe a serial port for an RDM device. Opens the port, sends a device.info
 /// request, and returns the device's `device_type` on a valid reply.
 /// Retries once in case port-open toggled DTR and reset the device.
+/// The device.info exchange on an ALREADY-OPEN port: flush, ask, classify.
+/// Shared between probe_port (which just opened the port, possibly resetting
+/// the device) and serial_auto_detect's held-port path (live handle, nothing
+/// was reset). Up to 2 attempts because an ESP32 that WAS just reset needs a
+/// moment before it answers.
+fn probe_transaction(port: &mut Box<dyn serialport::SerialPort>) -> Option<String> {
+    let mut flush_buf = [0u8; 4096];
+    let request = serde_json::json!({
+        "id": 0,
+        "method": "device.info",
+        "params": {},
+    });
+    let json_str = serde_json::to_string(&request).unwrap_or_default();
+    let frame = build_json_frame(&json_str);
+
+    for attempt in 0..2 {
+        if attempt > 0 {
+            std::thread::sleep(Duration::from_millis(1000));
+        }
+        // Flush anything pending (boot chatter, a stale half-frame)
+        loop {
+            match port.read(&mut flush_buf) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => continue,
+            }
+        }
+
+        if port.write_all(&frame).is_err() {
+            continue;
+        }
+        let _ = port.flush();
+
+        match read_frame_silent(port, Duration::from_millis(2000)) {
+            Ok(payload) => {
+                if let Ok(resp) = parse_json_response(&payload) {
+                    if let Some(result) = resp.get("result") {
+                        if let Some(kind) = device_type_of(result) {
+                            return Some(kind);
+                        }
+                    }
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+    None
+}
+
 fn probe_port(port_name: &str) -> Option<String> {
     let port = serialport::new(port_name, 921600)
         .timeout(Duration::from_millis(100))
@@ -544,60 +592,69 @@ fn probe_port(port_name: &str) -> Option<String> {
     // Wait for device to be ready (ESP32 may have been reset by port open)
     std::thread::sleep(Duration::from_millis(500));
 
-    // Flush any pending boot output
-    let mut flush_buf = [0u8; 4096];
-    loop {
-        match port.read(&mut flush_buf) {
-            Ok(0) | Err(_) => break,
-            Ok(_) => continue,
-        }
-    }
-
-    let request = serde_json::json!({
-        "id": 0,
-        "method": "device.info",
-        "params": {},
-    });
-    let json_str = serde_json::to_string(&request).unwrap_or_default();
-    let frame = build_json_frame(&json_str);
-
-    // Try up to 2 times (device may need time after DTR reset)
-    for attempt in 0..2 {
-        if attempt > 0 {
-            std::thread::sleep(Duration::from_millis(1000));
-            // Flush again before retry
-            loop {
-                match port.read(&mut flush_buf) {
-                    Ok(0) | Err(_) => break,
-                    Ok(_) => continue,
-                }
-            }
-        }
-
-        if port.write_all(&frame).is_err() {
-            continue;
-        }
-        let _ = port.flush();
-
-        match read_frame_silent(&mut port, Duration::from_millis(2000)) {
-            Ok(payload) => {
-                if let Ok(resp) = parse_json_response(&payload) {
-                    if let Some(result) = resp.get("result") {
-                        if let Some(kind) = device_type_of(result) {
-                            return Some(kind);
-                        }
-                    }
-                }
-            }
-            Err(_) => continue,
-        }
-    }
-    None
+    probe_transaction(&mut port)
 }
 
 /// Auto-detect RDM-7 device by probing all USB serial ports
 #[tauri::command]
 async fn serial_auto_detect() -> Result<Option<SerialPortInfo>, String> {
+    // A port THIS process already holds can never pass the open-based probe
+    // below — our own open() fails with access denied. A webview reload
+    // forgets the frontend's link but keeps the backend handle, so auto-detect
+    // used to find nothing while the device sat right there, connected.
+    // Ask the held port what it is over the LIVE handle instead: if it
+    // answers, report it like any other candidate (the serial_connect that
+    // follows closes ours before reopening); if it stays silent, the handle
+    // is stale — drop it so the normal scan below can reach the hardware.
+    let held: Option<(String, Option<String>)> = {
+        let mut conn = SERIAL.lock().map_err(|e| format!("Lock error: {e}"))?;
+        let SerialConnection { port, port_name, log_partial, .. } = &mut *conn;
+        if let Some(p) = port.as_mut() {
+            let name = port_name.clone();
+            match probe_transaction(p) {
+                Some(kind) => Some((name, Some(kind))),
+                None => {
+                    drop(port.take());
+                    port_name.clear();
+                    log_partial.clear();
+                    Some((name, None))
+                }
+            }
+        } else {
+            None
+        }
+    };
+    match &held {
+        Some((name, Some(kind))) => {
+            // Fill in the USB identity from enumeration; if the hub lost it
+            // mid-session the name and type are still enough to connect with.
+            let listed = serialport::available_ports().ok().and_then(|ports| {
+                ports.into_iter().find(|p| p.port_name == *name)
+            });
+            let usb = match listed.as_ref().map(|p| &p.port_type) {
+                Some(serialport::SerialPortType::UsbPort(u)) => Some(u.clone()),
+                _ => None,
+            };
+            return Ok(Some(SerialPortInfo {
+                name: name.clone(),
+                vid: usb.as_ref().map(|u| u.vid).unwrap_or(0),
+                pid: usb.as_ref().map(|u| u.pid).unwrap_or(0),
+                manufacturer: usb.as_ref().and_then(|u| u.manufacturer.clone()).unwrap_or_default(),
+                product: usb.as_ref().and_then(|u| u.product.clone()).unwrap_or_default(),
+                port_type: usb.as_ref()
+                    .map(|u| classify_port(u.vid, u.pid).to_string())
+                    .unwrap_or_else(|| "held".to_string()),
+                device_type: kind.clone(),
+            }));
+        }
+        Some((_, None)) => {
+            // Give Windows a moment to release the stale handle before the
+            // scan tries to open the same port.
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        None => {}
+    }
+
     let ports = serialport::available_ports()
         .map_err(|e| format!("Failed to list ports: {e}"))?;
 
