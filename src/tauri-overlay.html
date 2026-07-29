@@ -1293,6 +1293,22 @@
         .gp-strip { display: none; width: calc(100% - 28px); margin: 8px 14px 0;
                     background: var(--panel); border: 1px solid var(--border);
                     border-radius: var(--radius-md); cursor: crosshair; }
+        /* Telemetry channel picker: a dense wrap of togglable chips, because
+           a dash can carry ninety channels and a checkbox list of ninety is a
+           scroll, not a choice. */
+        .gp-chanlist { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; max-height: 190px; overflow-y: auto; }
+        .gp-chan {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: var(--panel); border: 1px solid var(--border); color: var(--text);
+            border-radius: 999px; padding: 3px 9px 3px 6px; font-size: 11px; cursor: pointer;
+            font-family: inherit;
+        }
+        .gp-chan:hover { border-color: var(--text-muted); }
+        .gp-chan .st { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex: none; }
+        .gp-chan.on { border-color: var(--accent); background: var(--panel-elevated); }
+        .gp-chan.on .st { background: var(--accent); }
+        .gp-chan em { font-style: normal; color: var(--text-muted); font-size: 9.5px; }
+
         /* The navigator: the whole lap, always, with a window you drag. Same
            width and gutter as the rack so the two share an x-axis by eye. */
         .gp-nav { display: none; width: calc(100% - 28px); margin: 4px 14px 0;
@@ -7885,8 +7901,11 @@
            hard-coding four — the number changes the day a channel starts
            arriving over CAN. */
         function gpLanesBtnLabel() {
-            var pend = 0;
-            for (var i = 0; i < GP_LANES.length; i++) if (GP_LANES[i].pending) pend++;
+            /* Count the lanes that ACTUALLY exist, not the static table —
+               chosen dash channels replace the generic CAN placeholders, so
+               the static count stopped matching what the rack shows. */
+            var pend = 0, all = gpLaneRowsAll();
+            for (var i = 0; i < all.length; i++) if (all[i].pending) pend++;
             if (!pend) return { text: "Channels", on: false, tip: "" };
             return gp.lanesOpen
                 ? { text: "Hide " + pend + " empty", on: true,
@@ -8100,8 +8119,35 @@
               why: "The puck HAS an IMU and reports it live, but the recorder stores only position, speed and heading \u2014 12 bytes a sample. Logging attitude is a firmware change on the node, not a Studio one." }
         ];
 
+        /* The three generic "needs CAN" lanes are a promise about a category.
+           Once real channels are chosen off the dash, the promise gets names:
+           the lanes become the channels you picked, in the order you picked
+           them, still marked as waiting on the node. A lane that says
+           "Manifold pressure — waiting on the node" is a different statement
+           from "Throttle — waiting on CAN", and only one of them is about
+           this car. */
         function gpLaneRows() {
-            return GP_LANES.filter(function (l) { return gp.lanesOpen || !l.pending; });
+            return gpLaneRowsAll().filter(function (l) { return gp.lanesOpen || !l.pending; });
+        }
+
+        function gpLaneRowsAll() {
+            var sel = gpLogChans();
+            var base = GP_LANES;
+            if (sel.length) {
+                var byId = {};
+                ((gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : []).forEach(function (c) { byId[c.id] = c; });
+                var chosen = sel.map(function (id) {
+                    var c = byId[id];
+                    return { id: "can_" + id, label: (c && (c.name || c.label)) || id,
+                             unit: (c && (c.unit || c.units)) || "", pending: "the node",
+                             why: "Chosen off the dash. The puck records position, speed and " +
+                                  "heading; storing bus channels needs its trace format to grow." };
+                });
+                /* Keep the GPS lanes and the delta; replace only the generic
+                   CAN placeholders, which these supersede. */
+                base = GP_LANES.filter(function (l) { return l.pending !== "CAN"; }).concat(chosen);
+            }
+            return base;
         }
         /* ---- Speed + delta strip -------------------------------------------
            Every desktop tool surveyed lands on the same view: the cumulative
@@ -12298,6 +12344,134 @@
            CAN, WiFi and Identify. The units toggle lived in the top bar
            before, which put one setting in the chrome and the rest three
            clicks away in an inspector. */
+        /* ══════════════════════════════════════════════════════════════════
+         * Telemetry channels — the car's own bus, in the recording
+         *
+         * The puck records position, speed and heading. Throttle, brake,
+         * steering, RPM, boost, temperatures — everything that says WHY a lap
+         * was slow rather than just where — is already on the CAN bus, and
+         * the dash has already decoded and named every one of them. So the
+         * dash's channel list IS the configuration: no DBC to import twice,
+         * no bit offsets to retype. Pick from what the dash already knows.
+         *
+         * What this screen does today is choose and cost the selection, and
+         * name the lanes the rack is waiting on. The node cannot yet store
+         * them: its trace record is a fixed 12 bytes and the format has to
+         * grow first. That is stated here rather than implied, because a
+         * picker that silently changes nothing is worse than no picker.
+         * ═════════════════════════════════════════════════════════════════ */
+        var GP_CHAN_LS = "rdm7_gp_logchans";
+        var GP_CHAN_BYTES = 2;      /* one 16-bit slot per channel per sample */
+        var GP_CHAN_MAX = 12;       /* beyond this the ring is the limit, not the bus */
+
+        function gpLogChans() {
+            if (gp.logChans) return gp.logChans;
+            try { gp.logChans = JSON.parse(window.localStorage.getItem(GP_CHAN_LS) || "[]") || []; }
+            catch (e) { gp.logChans = []; }
+            return gp.logChans;
+        }
+        function gpLogChansSave() {
+            try { window.localStorage.setItem(GP_CHAN_LS, JSON.stringify(gp.logChans || [])); } catch (e) {}
+        }
+
+        /* How long the ring lasts at a given record size. The node's own
+           numbers: a 6.375 MB partition at 25 Hz. Stated in minutes because
+           that is the unit a track day is planned in. */
+        function gpRingMinutes(extraBytes) {
+            var cap = 0;
+            if (gp.traceInfo && gpN(gp.traceInfo.capacity_samples))
+                cap = gpN(gp.traceInfo.capacity_samples) * 12;   /* bytes, at the 12 B record */
+            if (!cap) cap = 0x660000;                            /* the partition, when no node is attached */
+            return cap / (12 + extraBytes) / 25 / 60;
+        }
+
+        /* The dash's active channels, fetched once per Setup visit. */
+        function gpFetchDashChannels() {
+            var dash = gpDash();
+            if (!dash || !dash.httpGet && !dash.fetch) return Promise.resolve(null);
+            var get = dash.httpGet ? dash.httpGet.bind(dash) : null;
+            var p = get ? get("/api/channels")
+                        : fetch("/api/channels").then(function (r) { return r.json(); });
+            return p.then(function (j) {
+                var list = (j && (j.channels || j.active || j)) || [];
+                if (!Array.isArray(list)) list = [];
+                return list.filter(function (c) { return c && c.id; });
+            }).catch(function () { return null; });
+        }
+
+        window.gpChanRefresh = function () {
+            gp.dashChans = "loading";
+            gpRenderSetup();
+            gpFetchDashChannels().then(function (l) {
+                gp.dashChans = l;
+                gpRenderSetup();
+            });
+        };
+
+        window.gpChanToggle = function (id) {
+            var sel = gpLogChans(), i = sel.indexOf(id);
+            if (i >= 0) sel.splice(i, 1);
+            else {
+                if (sel.length >= GP_CHAN_MAX) { showToast("That is as many as the ring will carry", "info"); return; }
+                sel.push(id);
+            }
+            gpLogChansSave();
+            gp.stripCache = null;
+            gpRenderSetup();
+            gpDrawStrip();
+        };
+
+        function gpChannelsHtml() {
+            var sel = gpLogChans();
+            var h = "<div class='ws-grp'><div class='ws-gt'>Telemetry channels" +
+                gpTip("The car's bus, in the recording",
+                      "The dash has already decoded and named every channel on the bus, so " +
+                      "there is nothing to map twice — pick from what it knows. Each one " +
+                      "costs two bytes a sample; the cost in recording time is shown as you " +
+                      "pick. <b>The node cannot store these yet</b>: its record is a fixed " +
+                      "12 bytes and the format has to grow first. Choosing them now names " +
+                      "the lanes the rack is holding open.") + "</div>";
+
+            var mins0 = gpRingMinutes(0);
+            var mins = gpRingMinutes(sel.length * GP_CHAN_BYTES);
+            h += "<div class='gp-rows'>" +
+                 gpReadyRow("Chosen", sel.length + " of " + GP_CHAN_MAX, sel.length ? "ok" : null,
+                            sel.length * GP_CHAN_BYTES + " bytes a sample") +
+                 gpReadyRow("Recording time", Math.round(mins) + " min",
+                            mins < 60 ? "warn" : null,
+                            sel.length ? "was " + Math.round(mins0) + " min" : "at the 12-byte record") +
+                 "</div>";
+
+            var d = gp.dashChans;
+            if (d === "loading") {
+                h += "<div class='ws-note'>Reading the dash…</div>";
+            } else if (!gpDash()) {
+                h += "<div class='ws-note'>No dash connected. The channel list comes from the dash, " +
+                     "which is the thing that knows what the bus means — connect one and the " +
+                     "list fills in.</div>";
+            } else if (!d) {
+                h += "<div class='ws-note'>The dash did not answer with a channel list. " +
+                     "<button class='ws-btn-line' onclick='gpChanRefresh()'>Try again</button></div>";
+            } else if (!d.length) {
+                h += "<div class='ws-note'>The dash has no active channels yet. Add them in the " +
+                     "dash editor — or import a DBC there — and they appear here.</div>";
+            } else {
+                h += "<div class='gp-chanlist'>";
+                d.forEach(function (c) {
+                    var on = sel.indexOf(c.id) >= 0;
+                    var unit = c.unit || c.units || "";
+                    h += "<button class='gp-chan" + (on ? " on" : "") + "' onclick=\"gpChanToggle('" +
+                         gpEsc(c.id) + "')\"><span class='st'></span>" +
+                         gpEsc(c.name || c.label || c.id) +
+                         (unit ? "<em>" + gpEsc(unit) + "</em>" : "") + "</button>";
+                });
+                h += "</div>";
+                h += "<div class='ws-note'>Chosen channels appear as named lanes in the Session " +
+                     "rack, marked as waiting on the node.</div>";
+            }
+            return h + "</div>";
+        }
+
         function gpRenderSetup() {
             var box = document.getElementById("gpSetup");
             if (!box) return;
@@ -12350,6 +12524,7 @@
                      "<span class='gp-set-na'>no camera paired</span>") +
                  "</div>";
 
+            h += gpChannelsHtml();
             h += "<div class='ws-grp'><div class='ws-gt'>CAN bus" +
                  gpTip("Where the node broadcasts",
                        "Move the block if something on your bus already uses it — an ID " +

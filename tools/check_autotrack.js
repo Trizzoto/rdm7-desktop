@@ -46,8 +46,9 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
     'gpTrackById', 'gpActiveTrack', 'gpIsTrial', 'gpRunWord', 'gpTrackUid', 'gpTracksSave',
     'gpTraceHome', 'gpKmBetween', 'gpMatchTrack', 'gpHeadingAt', 'gpAngleDiff',
     'gpLoopClosure', 'gpProposeLine', 'gpAutoLine', 'gpAutoSetUp', 'gpStints',
-    'gpLapRange', 'gpLaneScale', 'gpScaleFor'];
-const NEEDED_VAR = ['GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
+    'gpLapRange', 'gpLaneScale', 'gpScaleFor',
+    'gpLogChans', 'gpRingMinutes', 'gpLaneRows', 'gpLaneRowsAll'];
+const NEEDED_VAR = ['GP_LANES', 'GP_CHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
     'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S'];
 
 let code = '';
@@ -321,6 +322,46 @@ global.gp.selLap = 2;
 const otherLap = F.gpScaleFor(speedLane);
 ok('a different lap gets its own scale (cache is keyed, not frozen)',
     typeof otherLap.hi === 'number' && isFinite(otherLap.hi));
+
+console.log('\ntelemetry channels: cost, and the lanes they name');
+freshGp();
+/* localStorage is stubbed read-only, so drive gp.logChans directly — that is
+   what the getter caches into anyway. */
+global.gp.logChans = [];
+global.gp.lanesOpen = true;
+global.gp.traceInfo = null;
+const bare = F.gpRingMinutes(0);
+ok('the empty ring matches the node partition (6.375 MB, 12 B, 25 Hz)',
+    Math.round(bare) === 371, Math.round(bare) + ' min');
+const with8 = F.gpRingMinutes(8 * 2);
+ok('eight channels cost what the plan said (~152 min)',
+    Math.round(with8) === 159 || Math.abs(with8 - 152) < 10, Math.round(with8) + ' min');
+ok('more channels is always less time', with8 < bare);
+
+global.gp.dashChans = [
+    { id: 'rpm', name: 'Engine RPM', unit: 'rpm' },
+    { id: 'map', name: 'Manifold pressure', unit: 'kPa' }
+];
+global.gp.logChans = ['map', 'rpm'];
+const labels = F.gpLaneRowsAll().map(l => l.label);
+ok('chosen channels become named lanes', labels.indexOf('Manifold pressure') >= 0, labels.join(', '));
+ok('they keep the order they were picked in',
+    labels.indexOf('Manifold pressure') < labels.indexOf('Engine RPM'));
+ok('the generic CAN placeholders step aside',
+    labels.indexOf('Steering') < 0 && labels.indexOf('Throttle') < 0, labels.join(', '));
+ok('the GPS lanes are untouched',
+    labels.indexOf('Speed') >= 0 && labels.indexOf('Delta') >= 0 && labels.indexOf('Yaw rate') >= 0);
+ok('every named lane is still marked as not-yet-recorded',
+    F.gpLaneRowsAll().filter(l => /Manifold|Engine RPM/.test(l.label)).every(l => !!l.pending));
+/* An id with no matching dash channel must not vanish or crash — the dash
+   may be offline when the rack renders. */
+global.gp.dashChans = null;
+const offline = F.gpLaneRowsAll().map(l => l.label);
+ok('with the dash offline the ids still hold their lanes',
+    offline.indexOf('map') >= 0 && offline.indexOf('rpm') >= 0, offline.join(', '));
+global.gp.logChans = [];
+ok('picking nothing restores the generic placeholders',
+    F.gpLaneRowsAll().map(l => l.label).indexOf('Steering') >= 0);
 
 console.log('\nthe readiness panel says what is actually true');
 /* Nothing plugged in, nothing known. */
