@@ -903,6 +903,18 @@
         .ws-modes button.on { background: var(--panel-elevated); color: var(--text);
                               box-shadow: inset 0 -2px 0 var(--accent); }
         .ws-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+        /* The rail/stage divider. 5 px of grab area with a 1 px rule drawn in
+           the middle of it: a splitter you can only hit at exactly the border
+           is a splitter people conclude does not exist. */
+        .ws-split {
+            flex: 0 0 5px; cursor: col-resize; position: relative; z-index: 5;
+            background: transparent; margin-left: -1px;
+        }
+        .ws-split::after {
+            content: ""; position: absolute; left: 2px; top: 0; bottom: 0; width: 1px;
+            background: transparent; transition: background 90ms;
+        }
+        .ws-split:hover::after, .ws-split.on::after { background: var(--accent); }
         .ws-rail {
             width: 208px; min-height: 0; background: var(--bg-sidebar); border-right: 1px solid var(--border);
             padding: 12px 8px; display: flex; flex-direction: column; gap: 3px; overflow-y: auto; flex-shrink: 0;
@@ -3877,6 +3889,119 @@
         };
 
         /* ============ shared workspace plumbing ============ */
+
+        /* ---- the rail / stage divider --------------------------------------
+           Every workspace was a fixed-width rail beside whatever was left.
+           That is the right default and the wrong only option: reading nine
+           telemetry channels wants the rail out of the way, and reading a
+           long channel list wants the opposite. So the border between them
+           is draggable, per workspace, remembered.
+
+           Built in JS rather than in the three markup blocks: the rails
+           already exist in the DOM (workspaces are hidden, not absent), and
+           one insertion point cannot drift out of step with the others. */
+        var WS_RAIL_MIN = 150, WS_RAIL_MAX = 620;
+
+        function wsRailKey(rail) { return "rdm7_ws_railw_" + (rail.id || "x"); }
+
+        /* Resizing has to be a fixed point: whatever we read must be what we
+           can write back unchanged, or every grab shifts the rail.
+           `.ws-rail` is content-box AND `overflow-y: auto`, which makes both
+           obvious readings wrong. offsetWidth is 17 px more than `style.width`
+           takes (padding + border). getComputedStyle().width is the USED
+           content width, so it comes back 6 px short of what we just set —
+           the scrollbar gutter — and the rail crept 6 px narrower per grab.
+
+           So the managed rail is switched to border-box the moment it is
+           dragged, seeded from its current offsetWidth. Border-box width and
+           offsetWidth are the same number, scrollbar or not, so read and write
+           agree; and seeding from the rendered width means flipping the box
+           model changes nothing visible. */
+        function wsRailW(rail) { return rail.offsetWidth; }
+        function wsRailSet(rail, w) {
+            rail.style.boxSizing = "border-box";
+            rail.style.width = Math.round(w) + "px";
+        }
+
+        function wsApplyRailWidth(rail) {
+            var v = null;
+            try { v = window.localStorage.getItem(wsRailKey(rail)); } catch (e) {}
+            var n = v === null ? null : parseInt(v, 10);
+            /* No stored width means "whatever the stylesheet says" — including
+               the .gp-onecol rule that widens Session's rail. Writing a pixel
+               value unconditionally would freeze that at whatever it happened
+               to be on first paint. */
+            if (n && isFinite(n)) wsRailSet(rail, Math.max(WS_RAIL_MIN, Math.min(WS_RAIL_MAX, n)));
+        }
+
+        function wsSplitInit() {
+            Array.prototype.forEach.call(document.querySelectorAll(".ws-body"), function (body) {
+                var rail = body.querySelector(".ws-rail");
+                if (!rail || rail._split) return;
+                rail._split = true;
+                wsApplyRailWidth(rail);
+
+                var sp = document.createElement("div");
+                sp.className = "ws-split";
+                sp.title = "Drag to resize · double-click to reset";
+                if (rail.nextSibling) body.insertBefore(sp, rail.nextSibling);
+                else body.appendChild(sp);
+
+                var from = 0, w0 = 0, live = false;
+                sp.addEventListener("mousedown", function (ev) {
+                    /* A hidden rail (the analyzer's match rail) has no width to
+                       drag; its splitter follows it out of the layout. */
+                    if (!rail.offsetWidth) return;
+                    live = true; from = ev.clientX; w0 = wsRailW(rail);
+                    sp.classList.add("on");
+                    /* The stage holds a Leaflet map and two canvases that all
+                       read their own box on redraw — text selection dragging
+                       across them mid-resize is noise. */
+                    document.body.style.userSelect = "none";
+                    ev.preventDefault();
+                });
+                window.addEventListener("mousemove", function (ev) {
+                    if (!live) return;
+                    var w = Math.max(WS_RAIL_MIN, Math.min(WS_RAIL_MAX, w0 + (ev.clientX - from)));
+                    wsRailSet(rail, w);
+                    wsSplitReflow();
+                });
+                window.addEventListener("mouseup", function () {
+                    if (!live) return;
+                    live = false;
+                    sp.classList.remove("on");
+                    document.body.style.userSelect = "";
+                    try { window.localStorage.setItem(wsRailKey(rail), String(Math.round(wsRailW(rail)))); } catch (e) {}
+                    wsSplitReflow();
+                });
+                sp.addEventListener("dblclick", function () {
+                    rail.style.width = "";
+                    rail.style.boxSizing = "";
+                    try { window.localStorage.removeItem(wsRailKey(rail)); } catch (e) {}
+                    wsSplitReflow();
+                });
+            });
+        }
+
+        /* Nothing in the stage lays itself out from CSS alone: the rack sizes
+           its backing store from its own box, and Leaflet caches the map's.
+           Both live in the GPS block, which merge_overlay drops into a
+           different <script> — and therefore a different closure — so the
+           call goes through window like every other cross-block call here. */
+        function wsSplitReflow() {
+            if (window._gpReflow) window._gpReflow();
+        }
+        /* Same reason in reverse: bootSuite is in the splash block and cannot
+           see a function declared in this one. It also cannot be relied on to
+           run AFTER this one — merge_overlay orders blocks by where their
+           anchors sit in the firmware HTML, not by where they sit here, and
+           the splash block lands first. So this block arms itself once every
+           script has run, and bootSuite's call is a harmless second attempt
+           (wsSplitInit is idempotent per rail). */
+        window._wsSplitInit = wsSplitInit;
+        if (document.readyState === "loading")
+            document.addEventListener("DOMContentLoaded", function () { wsSplitInit(); });
+        else setTimeout(wsSplitInit, 0);
         /* Save text to a file. Lived in the lap-timer module until that was
            removed; it was never lap-specific — the keypad's DBC / setup-file /
            SavvyCAN exporters are its only callers now. */
@@ -11338,6 +11463,14 @@
             }
         };
 
+        /* Re-measure after the rail/stage splitter moves. Leaflet caches the
+           map box and the rack sizes its backing store from its own, so a
+           CSS-only resize leaves both drawing at the old width. */
+        window._gpReflow = function () {
+            if (gp.map) gp.map.invalidateSize();
+            gpDrawStrip();
+        };
+
         window.gpToggleFollow = function () {
             gp.follow = !gp.follow;
             var b = document.getElementById("gpBtnFollow");
@@ -14090,6 +14223,7 @@
             var v1 = document.getElementById("shVer"); if (v1) v1.textContent = "v" + ver;
             var v2 = document.getElementById("shHomeVer"); if (v2) v2.textContent = "v" + ver;
             window._suiteHomeShow();
+            if (window._wsSplitInit) window._wsSplitInit();
             if (!splash) return;
             splash.style.display = "flex";
             var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
