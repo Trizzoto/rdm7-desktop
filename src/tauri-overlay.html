@@ -897,7 +897,11 @@
             border-radius: var(--radius-md); overflow: hidden; height: 30px; box-sizing: border-box;
         }
         .ws-modes button { background: none; border: none; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; padding: 0 16px; height: 100%; cursor: pointer; }
-        .ws-modes button.on { background: var(--accent); color: #fff; }
+        /* Active = a bar under the label, i2/NLE style — the accent marks the
+           active thing, it does not paint it. Four solid-blue fills in one
+           top bar read as a toy. */
+        .ws-modes button.on { background: var(--panel-elevated); color: var(--text);
+                              box-shadow: inset 0 -2px 0 var(--accent); }
         .ws-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
         .ws-rail {
             width: 208px; min-height: 0; background: var(--bg-sidebar); border-right: 1px solid var(--border);
@@ -911,10 +915,11 @@
             font-size: 11px; padding: 6px 8px; cursor: pointer; text-align: left; width: 100%; box-sizing: border-box;
         }
         .ws-item:hover { color: var(--text); background: var(--panel); }
-        .ws-item.on { border-color: var(--accent); color: var(--text); background: var(--panel-elevated); }
+        .ws-item.on { border-color: transparent; color: var(--text); background: var(--panel-elevated);
+                      box-shadow: inset 2px 0 0 var(--accent); }
         .ws-item .tag { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted); }
         .ws-item .st { width: 7px; height: 7px; border-radius: 50%; background: var(--border-light); flex-shrink: 0; }
-        .ws-item .st.on { background: #6FBF73; }
+        .ws-item .st.on { background: #5d8a62; }
         .ws-stage { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: auto; background: var(--bg-canvas); }
         .ws-insp { width: 316px; min-height: 0; max-height: 100%; background: var(--panel); border-left: 1px solid var(--border); padding: 12px 14px; flex-shrink: 0; overflow-y: auto; }
         .ws-insp h2 { font-family: 'Sora', sans-serif; font-size: 12.5px; font-weight: 600; margin: 0 0 1px; }
@@ -930,13 +935,14 @@
         .ws-field input:focus, .ws-field select:focus { outline: none; border-color: var(--accent); }
         .ws-seg { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
         .ws-seg button { flex: 1; background: none; border: none; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 10.5px; font-weight: 600; padding: 5px 0; cursor: pointer; }
-        .ws-seg button.on { background: var(--accent); color: #fff; }
+        .ws-seg button.on { background: var(--panel-elevated); color: var(--text);
+                            box-shadow: inset 0 -2px 0 var(--accent); }
         .ws-slider { display: flex; align-items: center; gap: 8px; }
         .ws-slider input[type=range] { flex: 1; accent-color: var(--accent); }
         .ws-slider .val { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); min-width: 40px; text-align: right; }
         .ws-note {
             font-size: 10.5px; color: var(--text-muted); background: var(--bg);
-            border: 1px solid var(--border); border-left: 3px solid var(--accent);
+            border: 1px solid var(--border); border-left: 3px solid var(--border-light);
             border-radius: var(--radius-sm); padding: 7px 9px; margin-top: 12px; line-height: 1.5;
         }
         .ws-note b { color: var(--text); }
@@ -959,9 +965,9 @@
         .gp-row { display: grid; grid-template-columns: 1fr auto; align-items: baseline; column-gap: 12px; }
         .gp-row .k { font-size: 11px; color: var(--text-muted); }
         .gp-row .v { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); text-align: right; }
-        .gp-row .v.ok { color: #6FBF73; }
-        .gp-row .v.warn { color: #FF9F0A; }
-        .gp-row .v.bad { color: #e05d52; }
+        .gp-row .v.ok { color: #7da982; }
+        .gp-row .v.warn { color: #d99a3d; }
+        .gp-row .v.bad { color: #d16358; }
         /* raw/derived second line, under the value */
         .gp-row .s { grid-column: 2; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--text-muted); text-align: right; }
         .gp-row .s:empty { display: none; }
@@ -973,8 +979,8 @@
                    position: relative; top: -1px; }
         .gp-lamp[data-tip] { cursor: help; }
         .gp-lamp[data-tip]::after { content: ""; position: absolute; inset: -7px; }
-        .gp-lamp.on { background: #6FBF73; box-shadow: 0 0 0 3px rgba(111,191,115,0.15); }
-        .gp-lamp.warn { background: #FF9F0A; box-shadow: 0 0 0 3px rgba(255,159,10,0.15); }
+        .gp-lamp.on { background: #5d8a62; }
+        .gp-lamp.warn { background: #c78f2e; }
         .gp-lamp.info { background: transparent; border: 1px solid var(--border-light);
                         margin: 0 0 0 6px; }
         .gp-lamp.info:hover { border-color: var(--accent); }
@@ -1025,8 +1031,7 @@
            contract every video editor keeps. */
         .gp-playbar { display: none; align-items: center; gap: 10px; margin: 8px 14px 10px; padding: 6px 10px;
                       background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md);
-                      position: sticky; bottom: 8px; z-index: 60;
-                      box-shadow: 0 4px 18px rgba(0,0,0,0.45); }
+                      position: sticky; bottom: 8px; z-index: 60; }
         .gp-playbar input[type=range] { flex: 1; accent-color: var(--accent); }
         .gp-playbar select { background: var(--bg); border: 1px solid var(--border); color: var(--text);
                              border-radius: var(--radius-sm); font-size: 11px; padding: 3px 6px; }
@@ -1039,7 +1044,8 @@
                            cursor: pointer; margin-left: -1px; }
         .gp-modes button:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); margin-left: 0; }
         .gp-modes button:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
-        .gp-modes button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .gp-modes button.on { background: var(--panel-elevated); border-color: var(--border);
+                              color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
         .gp-modes button.na { opacity: 0.45; }
         .gp-mapbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
         .gp-tip .k { display: inline-block; min-width: 74px; color: var(--text);
@@ -1074,7 +1080,7 @@
                            background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
                            border-radius: 6px; color: var(--text); font: inherit; font-size: 11px;
                            padding: 5px 8px; }
-        .gp-place-search:focus { outline: none; border-color: #4a90d9; }
+        .gp-place-search:focus { outline: none; border-color: var(--accent); }
         .gp-place-more { font-size: 9px; color: var(--text-muted); text-align: center; padding: 5px 0 2px; }
         .gp-hist-cor { font-size: 9px; color: var(--text-muted); text-transform: uppercase;
                        letter-spacing: 0.06em; margin: 8px 0 3px; }
@@ -1084,9 +1090,10 @@
         .gp-ses-field { flex: 1; min-width: 0; box-sizing: border-box;
                         background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
                         border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 8px; }
-        .gp-ses-field:focus { outline: none; border-color: #4a90d9; }
+        .gp-ses-field:focus { outline: none; border-color: var(--accent); }
         .gp-video-status { font-size: 10px; color: var(--text-muted); margin: 2px 0 7px; }
-        .lt-expbtns .ws-btn-line.on { border-color: #4a90d9; color: #9ecbff; }
+        .lt-expbtns .ws-btn-line.on { border-color: var(--accent); color: var(--text);
+                                      box-shadow: inset 0 -2px 0 var(--accent); }
         .gp-ghost-pick { width: 100%; box-sizing: border-box; margin: 3px 0 5px;
                          background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
                          border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 6px; }
@@ -1170,7 +1177,8 @@
             font-family: 'Sora', sans-serif; font-size: 10px; font-weight: 600;
             border-radius: var(--radius-sm); padding: 4px 10px; cursor: pointer;
         }
-        .gp-mapbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .gp-mapbtn.on { background: rgba(12,14,16,0.80); border-color: var(--border);
+                        color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
         .gp-mapbtn:disabled { opacity: 0.5; cursor: default; }
         .gp-mapsearch { position: absolute; left: 10px; bottom: 10px; z-index: 500; display: flex; gap: 6px; width: min(360px, 60%); }
         .gp-mapsearch input {
