@@ -1033,6 +1033,10 @@
                       background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md);
                       position: sticky; bottom: 8px; z-index: 60;
                       flex-wrap: wrap; row-gap: 4px; }
+        .gp-setup { display: none; flex: 1; min-height: 0; overflow-y: auto;
+                    justify-content: center; padding: 18px 16px 24px; }
+        .gp-setup-col { width: min(560px, 100%); }
+        .gp-setup-col .ws-grp:first-child { border-top: none; margin-top: 0; }
         .gp-sep { width: 1px; height: 16px; background: var(--border); flex: none; }
         .gp-tbtn { width: 26px; height: 24px; flex: none; display: inline-flex; align-items: center;
                    justify-content: center; background: none; border: none; border-radius: var(--radius-sm);
@@ -1098,8 +1102,6 @@
         .gp-secs span.r { background: rgba(224, 93, 82, 0.18); color: #e05d52; }
         .ws-item .tag.gp-best { color: #c98ae0; }
         .gp-ideal { cursor: default; opacity: 0.9; }
-        .gp-units { margin-left: 8px; }
-        .gp-units button { min-width: 44px; }
         .gp-ideal-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; }
         .gp-ses-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; width: 100%; }
         .gp-hist-svg { width: 100%; height: 44px; display: block; margin: 6px 0 4px; }
@@ -1796,11 +1798,7 @@
                 <button id="gpBtnMonitor" class="on" onclick="gpSetView('monitor')">Monitor</button>
                 <button id="gpBtnTracks" onclick="gpSetView('tracks')">Tracks</button>
                 <button id="gpBtnSession" onclick="gpSetView('session')">Session</button>
-            </div>
-            <div class="ws-modes gp-units" role="group" aria-label="Units"
-                 title="Units — the device always stores metric; this is what you read">
-                <button id="gpBtnMetric" onclick="gpUnitsSet('metric')">km/h</button>
-                <button id="gpBtnImperial" onclick="gpUnitsSet('imperial')">mph</button>
+                <button id="gpBtnSetup" onclick="gpSetView('setup')">Setup</button>
             </div>
         </div>
         <div class="ws-body">
@@ -1839,6 +1837,7 @@
                     </div>
                 </div>
                 </div>
+                <div class="gp-setup" id="gpSetupWrap"><div class="gp-setup-col" id="gpSetup"></div></div>
                 <canvas class="gp-strip" id="gpStrip"></canvas>
                 <div class="gp-playbar" id="gpPlaybar">
                     <div class="gp-modes" id="gpModes">
@@ -10049,9 +10048,10 @@
         };
 
         window.gpSetView = function (v) {
-            gp.view = (v === "tracks" || v === "session") ? v : "monitor";
-            var big = (gp.view !== "monitor");        /* both non-monitor views are map-led */
-            [["gpBtnMonitor", "monitor"], ["gpBtnTracks", "tracks"], ["gpBtnSession", "session"]]
+            gp.view = (v === "tracks" || v === "session" || v === "setup") ? v : "monitor";
+            var big = (gp.view === "tracks" || gp.view === "session");   /* the map-led views */
+            [["gpBtnMonitor", "monitor"], ["gpBtnTracks", "tracks"],
+             ["gpBtnSession", "session"], ["gpBtnSetup", "setup"]]
                 .forEach(function (b) {
                     var el = document.getElementById(b[0]);
                     if (el) el.classList.toggle("on", gp.view === b[1]);
@@ -10063,9 +10063,15 @@
             if (fb) fb.style.display = big ? "none" : "";
             if (wrap) wrap.classList.toggle("tall", big);
             var viewer = document.getElementById("gpViewer");
-            if (viewer) viewer.classList.toggle("tall", big);
+            if (viewer) {
+                viewer.classList.toggle("tall", big);
+                /* Setup has no use for a map at all. */
+                viewer.style.display = gp.view === "setup" ? "none" : "";
+            }
             gpViewerSync();
-            if (grid) grid.style.display = big ? "none" : "";
+            var su = document.getElementById("gpSetupWrap");
+            if (su) su.style.display = gp.view === "setup" ? "flex" : "none";
+            if (grid) grid.style.display = (big || gp.view === "setup") ? "none" : "";
             /* The playback bar is part of the structure: visible in Session
                either way, idle until a recording gives it something to play. */
             if (pb) {
@@ -10291,6 +10297,22 @@
             if (!rail) return;
             if (gp.view === "tracks") { gpBuildTrackRail(rail); return; }
             if (gp.view === "session") { gpBuildSessionRail(rail); return; }
+            if (gp.view === "setup") {
+                rail.innerHTML = "<div class='ws-rail-title'>Setup</div>" +
+                    [["Reading units", "units"], ["CAN bus", "can"],
+                     ["WiFi", "wifi"], ["Identify", "ident"]].map(function (s, i) {
+                        return "<button class='ws-item' data-gp-set='" + i + "'>" +
+                               "<span class='st'></span>" + s[0] + "</button>";
+                    }).join("");
+                Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-set]"), function (b) {
+                    b.addEventListener("click", function () {
+                        var grps = document.querySelectorAll("#gpSetup .ws-grp");
+                        var g = grps[parseInt(b.getAttribute("data-gp-set"), 10)];
+                        if (g) g.scrollIntoView({ behavior: "smooth", block: "start" });
+                    });
+                });
+                return;
+            }
             rail.innerHTML = "<div class='ws-rail-title'>Live status</div>" +
                 GP_CARDS.map(function (c) {
                     return "<button class='ws-item' id='gpItem_" + c.id + "' data-gp-sec='" + c.id + "'>" +
@@ -10458,8 +10480,11 @@
             if (!box) return;
             if (gp.view === "session") { gpRenderSessionInspector(box); return; }
             if (gp.view === "tracks") { gpRenderTrackInspector(box); return; }
+            if (gp.view === "setup") {
+                gpRenderSetup();
+                /* the inspector itself shows the device at a glance */
+            }
             var d = gp.info || {};
-            var revA = gpN(d.hw_rev) === 0;
 
             var h = "<h2>" + gpEsc(d.name || "RDM GPS") + "</h2>" +
                 "<div class='ws-sub'>" + gpEsc(d.serial || "not connected") + "</div>";
@@ -10469,6 +10494,46 @@
                     return "<div class='gp-row'><span class='k'>" + gpEsc(f.label) + "</span>" +
                         "<span class='v'>" + gpEsc(f.v(d)) + "</span></div>";
                 }).join("") + "</div></div>";
+
+            h += "<div class='ws-note'>Units, CAN bus, WiFi and Identify live in <b>Setup</b>.</div>";
+            box.innerHTML = h;
+            gpRestoreMsgs();
+        }
+
+        /* ---- Setup: every setting in one place -----------------------------
+           Monitor watches the device, Tracks defines the course, Session reads
+           the drive — and Setup is where anything is CONFIGURED. One surface,
+           centre column, grouped: reading units for this PC, then the node's
+           CAN, WiFi and Identify. The units toggle lived in the top bar
+           before, which put one setting in the chrome and the rest three
+           clicks away in an inspector. */
+        function gpRenderSetup() {
+            var box = document.getElementById("gpSetup");
+            if (!box) return;
+            var d = gp.info || {};
+            var revA = gpN(d.hw_rev) === 0;
+            var h = "<h2>Setup</h2><div class='ws-sub'>" +
+                    gpEsc(d.serial ? (d.name || "RDM GPS") + " · " + d.serial : "this PC, and the node when attached") +
+                    "</div>";
+
+            h += "<div class='ws-grp'><div class='ws-gt'>Reading units" +
+                 "<i class='gp-lamp info' data-tip=\"<b>A reading preference</b>" +
+                 "The device always stores metric — the wire carries millimetres and " +
+                 "mm/s, and the lap engine works in metres. This changes what YOU read, " +
+                 "converted at the last moment, so nothing sent to a device or stored in " +
+                 "a recording ever changes. Switching back is lossless.\"></i></div>" +
+                 "<div class='ws-seg'>" +
+                 "<button id='gpBtnMetric' onclick=\"gpUnitsSet('metric')\">km/h · m</button>" +
+                 "<button id='gpBtnImperial' onclick=\"gpUnitsSet('imperial')\">mph · ft</button>" +
+                 "</div></div>";
+
+            /* CAN bus. The defaults are fine on an empty bus, but a car may
+               already use this block or run a different bitrate, and a
+               collision is silent — so make it movable rather than telling
+               the user to live with it. */
+            h += "<div class='ws-grp'><div class='ws-gt'>CAN bus</div>" + gpCanFormHtml() + "</div>";
+
+            h += "<div class='ws-grp'><div class='ws-gt'>WiFi</div>" + gpWifiFormHtml() + "</div>";
 
             h += "<div class='ws-grp'><div class='ws-gt'>Identify</div>" +
                 "<button class='ws-btn-line' id='gpIdentBtn' onclick='gpIdentify()'>Flash the status LED</button>" +
@@ -10483,14 +10548,8 @@
             }
             h += "</div>";
 
-            /* CAN bus. The defaults are fine on an empty bus, but a car may
-               already use this block or run a different bitrate, and a
-               collision is silent — so make it movable rather than telling
-               the user to live with it. */
-            h += "<div class='ws-grp'><div class='ws-gt'>CAN bus</div>" + gpCanFormHtml() + "</div>";
-
-            h += "<div class='ws-grp'><div class='ws-gt'>WiFi</div>" + gpWifiFormHtml() + "</div>";
             box.innerHTML = h;
+            gpSyncUnitBtns();
             gpFillWifiForm();
             gpSyncEnabled();
             gpRestoreMsgs();
