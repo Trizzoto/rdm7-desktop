@@ -1080,6 +1080,11 @@
                         background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
                         border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 8px; }
         .gp-ses-field:focus { outline: none; border-color: #4a90d9; }
+        .gp-video-wrap { position: relative; margin: 2px 0 7px; }
+        .gp-video-wrap video { width: 100%; display: block; border-radius: 7px; background: #000; }
+        .gp-video-wrap canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
+        .gp-video-status { font-size: 10px; color: var(--text-muted); margin: 2px 0 7px; }
+        .lt-expbtns .ws-btn-line.on { border-color: #4a90d9; color: #9ecbff; }
         .gp-ghost-pick { width: 100%; box-sizing: border-box; margin: 3px 0 5px;
                          background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
                          border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 6px; }
@@ -5722,6 +5727,7 @@
             sessions: null,             /* stored recordings; null = not read yet */
             sessionId: null,            /* which stored recording is loaded */
             ghostFence: null,           /* gp.trace length before the ghost was appended */
+            video: null,                /* { name, url, t0, autoT0, offsetMs, follow } */
             ghostSrc: null,             /* { sesId, rows, laps, meta, cur } for the ghost's session */
             selGate: "sf",   /* "sf" | a sector index */
             editLayer: null, _gateViews: {},
@@ -7032,6 +7038,7 @@
                 h += "<div class='gp-msg' id='gpTraceMsg'></div>";
             }
             h += "</div>";
+            h += gpVideoHtml();
 
             if (gp.trace && gp.trace.length) {
                 var span = gpGScale();
@@ -7093,6 +7100,7 @@
                 h = gpGlanceHtml() + gpHistoryHtml() + gpRenderCoach() + h;
             }
             box.innerHTML = head + h;
+            gpVideoBind();
             Array.prototype.forEach.call(box.querySelectorAll('[data-gp-focus]'), function (b) {
                 b.addEventListener('click', function () {
                     var rk = parseInt(b.getAttribute('data-gp-rank'), 10);
@@ -8761,6 +8769,8 @@
         }
 
         function gpDrawPlayhead() {
+            gpVideoFollowSeek();
+            gpVideoDrawOverlay();
             gpDrawStrip();
             if (!gp.map || !gp.trace || !gp.trace.length) return;
             var s = gp.trace[gp.playIdx];
@@ -8841,6 +8851,305 @@
             gp.cmpLap = parseInt(i, 10);
             gpDrawTrace(); gpDrawStrip(); gpBuildRail(); gpRenderInspector();
         };
+
+        /* ---- video --------------------------------------------------------
+         * Every incumbent overlay tool asks the user to line the footage up by
+         * eye. The camera already wrote down when it started recording (mvhd
+         * creation time), and the session knows the UTC of every sample — so
+         * the two align themselves, and the slider is for the residual (a
+         * camera clock a second or two adrift), not for finding the offset
+         * from scratch. */
+
+        /* mvhd creation time out of an MP4/MOV box tree. Seconds since 1904,
+           UTC, at a fixed offset inside the first mvhd. Returns ms since
+           epoch, or null — and a camera with a dead clock stamps 1904 or
+           1970, which is a null, not a date. */
+        function gpMp4CreationMs(buf) {
+            var dv;
+            try { dv = new DataView(buf); } catch (e) { return null; }
+            function scan(off, end) {
+                while (off + 8 <= end) {
+                    var size = dv.getUint32(off), type = dv.getUint32(off + 4), hdr = 8;
+                    if (size === 1) {
+                        if (off + 16 > end) return null;
+                        size = dv.getUint32(off + 8) * 4294967296 + dv.getUint32(off + 12);
+                        hdr = 16;
+                    } else if (size === 0) {
+                        size = end - off;       /* "to end of file" */
+                    }
+                    if (size < hdr || off + size > end) return null;
+                    if (type === 0x6d6f6f76) {                       /* moov */
+                        var r = scan(off + hdr, off + size);
+                        if (r !== null) return r;
+                    } else if (type === 0x6d766864) {                /* mvhd */
+                        if (off + hdr + 12 > end) return null;
+                        var v = dv.getUint8(off + hdr);
+                        var secs = v === 1
+                            ? dv.getUint32(off + hdr + 4) * 4294967296 + dv.getUint32(off + hdr + 8)
+                            : dv.getUint32(off + hdr + 4);
+                        return (secs - 2082844800) * 1000;           /* 1904 -> 1970 */
+                    }
+                    off += size;
+                }
+                return null;
+            }
+            var ms = null;
+            try { ms = scan(0, dv.byteLength); } catch (e) { return null; }
+            return (ms !== null && ms > Date.UTC(2004, 0, 1)) ? ms : null;
+        }
+
+        /* The tail of a non-faststart file does not start on a box boundary,
+           so hunt for the moov fourcc and re-scan from 4 bytes before it. */
+        function gpMp4CreationMsLoose(buf) {
+            var direct = gpMp4CreationMs(buf);
+            if (direct !== null) return direct;
+            var u8 = new Uint8Array(buf);
+            for (var i = 4; i + 8 < u8.length; i++) {
+                if (u8[i] === 0x6d && u8[i + 1] === 0x6f && u8[i + 2] === 0x6f && u8[i + 3] === 0x76) {
+                    var r = gpMp4CreationMs(buf.slice(i - 4));
+                    if (r !== null) return r;
+                }
+            }
+            return null;
+        }
+
+        function gpVideoProbeT0(file) {
+            var HEAD = 2 * 1024 * 1024;
+            var read = function (blob) {
+                return new Promise(function (res, rej) {
+                    var r = new FileReader();
+                    r.onload = function () { res(r.result); };
+                    r.onerror = function () { rej(r.error); };
+                    r.readAsArrayBuffer(blob);
+                });
+            };
+            return read(file.slice(0, HEAD)).then(function (b) {
+                var ms = gpMp4CreationMs(b);
+                if (ms !== null || file.size <= HEAD) return ms;
+                return read(file.slice(file.size - HEAD)).then(gpMp4CreationMsLoose);
+            }).catch(function () { return null; });
+        }
+
+        function gpCurSessionMeta() {
+            return (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0] || null;
+        }
+
+        /* UTC of a sample. A GPS-dated session is absolute; anything else uses
+           its stored anchor consistently, which keeps RELATIVE alignment
+           honest even when the calendar date is only when the download
+           happened. Pre-timestamp rows fall back to 40 ms spacing. */
+        function gpSampleUtc(i) {
+            var rows = gp.trace, meta = gpCurSessionMeta();
+            if (!rows || !rows[i] || !meta) return null;
+            var el = (rows[i].t !== undefined && rows[0].t !== undefined)
+                ? rows[i].t - rows[0].t : i * 40;
+            return meta.recordedAt + el;
+        }
+
+        /* Seconds into the video for a sample, or null while unsynced. */
+        function gpVideoTimeFor(i) {
+            var v = gp.video;
+            if (!v || v.t0 === null) return null;
+            var u = gpSampleUtc(i);
+            return u === null ? null : (u - v.t0 - v.offsetMs) / 1000;
+        }
+
+        /* The inverse: which sample a video position lands on. Bounded by the
+           fence — footage never maps onto a ghost. */
+        function gpIndexForVideoTime(ct) {
+            var v = gp.video, rows = gp.trace, meta = gpCurSessionMeta();
+            if (!v || v.t0 === null || !rows || !rows.length || !meta) return null;
+            var target = v.t0 + v.offsetMs + ct * 1000 - meta.recordedAt;
+            var end = (gp.ghostFence !== null ? gp.ghostFence : rows.length) - 1;
+            var elOf = function (i) {
+                return (rows[i].t !== undefined && rows[0].t !== undefined)
+                    ? rows[i].t - rows[0].t : i * 40;
+            };
+            if (target <= elOf(0)) return 0;
+            if (target >= elOf(end)) return end;
+            var lo = 0, hi = end;
+            while (hi - lo > 1) {
+                var mid = (lo + hi) >> 1;
+                if (elOf(mid) <= target) lo = mid; else hi = mid;
+            }
+            return (target - elOf(lo) <= elOf(hi) - target) ? lo : hi;
+        }
+
+        window.gpVideoOpen = function (input) {
+            var f = input && input.files && input.files[0];
+            if (!f) return;
+            if (gp.video && gp.video.url) { try { URL.revokeObjectURL(gp.video.url); } catch (e) { } }
+            var meta = gpCurSessionMeta();
+            gp.video = { name: f.name, url: URL.createObjectURL(f),
+                         t0: meta ? meta.recordedAt : null,   /* aligned to session start until probed */
+                         autoT0: null, offsetMs: 0, follow: true, probing: true };
+            input.value = "";
+            gpRenderInspector();
+            gpVideoProbeT0(f).then(function (ms) {
+                if (!gp.video) return;
+                gp.video.probing = false;
+                gp.video.autoT0 = ms;
+                /* Auto-sync only means something when the session itself is
+                   GPS-dated — against a download-dated anchor the camera clock
+                   is comparing apples to a guess. */
+                if (ms !== null && meta && meta.dated === "gps") gp.video.t0 = ms;
+                gpRenderInspector();
+            });
+        };
+
+        window.gpVideoClose = function () {
+            if (gp.video && gp.video.url) { try { URL.revokeObjectURL(gp.video.url); } catch (e) { } }
+            gp.video = null;
+            gp._videoEl = null;
+            gpRenderInspector();
+        };
+
+        window.gpVideoOffset = function (v) {
+            if (!gp.video) return;
+            gp.video.offsetMs = Math.round((parseFloat(v) || 0) * 1000);
+            var lab = document.getElementById("gpVideoOffLab");
+            if (lab) lab.textContent = (gp.video.offsetMs / 1000).toFixed(2) + " s";
+            gpVideoFollowSeek();
+        };
+
+        window.gpVideoAuto = function () {
+            if (!gp.video || gp.video.autoT0 === null) return;
+            gp.video.t0 = gp.video.autoT0;
+            gp.video.offsetMs = 0;
+            gpRenderInspector();
+            gpVideoFollowSeek();
+        };
+
+        window.gpVideoFollowToggle = function () {
+            if (!gp.video) return;
+            gp.video.follow = !gp.video.follow;
+            gpRenderInspector();
+            gpVideoFollowSeek();
+        };
+
+        function gpVideoFollowSeek() {
+            var v = gp.video, el = document.getElementById("gpVideo");
+            if (!v || !el || !v.follow || v.driving) return;
+            var tsec = gpVideoTimeFor(gp.playIdx);
+            if (tsec === null || !isFinite(el.duration)) return;
+            var c = Math.max(0, Math.min(el.duration, tsec));
+            if (Math.abs(el.currentTime - c) > 0.08) el.currentTime = c;
+        }
+
+        /* The gauges, painted over the footage from the mapped sample. */
+        function gpVideoDrawOverlay() {
+            var el = document.getElementById("gpVideo");
+            var cv = document.getElementById("gpVideoOv");
+            if (!el || !cv || !gp.trace || !gp.trace.length) return;
+            var w = el.clientWidth, h = 46;
+            if (!w) return;
+            if (cv.width !== w * 2) { cv.width = w * 2; cv.height = h * 2; }
+            cv.style.width = w + "px"; cv.style.height = h + "px";
+            var g = cv.getContext("2d");
+            g.setTransform(2, 0, 0, 2, 0, 0);
+            g.clearRect(0, 0, w, h);
+            var i = Math.max(0, Math.min(gp.trace.length - 1, gp.playIdx));
+            var r = gp.trace[i];
+            g.fillStyle = "rgba(10,12,14,0.62)";
+            g.fillRect(0, 0, w, h);
+            g.fillStyle = "#F5F7FA";
+            g.font = "600 20px 'JetBrains Mono', monospace";
+            g.fillText(Math.round(gpSpdN(r.kph)) + " " + gpSpdU(), 10, 29);
+            var d = gpDeltaSeries();
+            var rr = gpLapRange();
+            if (d && i >= rr.from && i - rr.from < d.length) {
+                var dv = d[i - rr.from];
+                g.fillStyle = dv <= 0 ? "#6FBF73" : "#e05d52";
+                g.font = "600 15px 'JetBrains Mono', monospace";
+                g.fillText(gpSigned(dv, 2, " s"), w / 2 - 30, 27);
+            }
+            /* long-g bar, zero centred at the right */
+            var bw = Math.min(120, w * 0.3);
+            var gx = w - bw - 12, mid = gx + bw / 2;
+            g.fillStyle = "rgba(245,247,250,0.25)";
+            g.fillRect(gx, 20, bw, 6);
+            var frac = Math.max(-1, Math.min(1, (r.g || 0) / 1.2));
+            g.fillStyle = frac >= 0 ? "#6FBF73" : "#e05d52";
+            if (frac >= 0) g.fillRect(mid, 20, (bw / 2) * frac, 6);
+            else g.fillRect(mid + (bw / 2) * frac, 20, -(bw / 2) * frac, 6);
+        }
+
+        /* The inspector rebuilds its innerHTML freely — on poll ticks, lap
+           clicks, everything — and a <video> recreated from markup would
+           reload its file and lose its position every time. So the LIVE
+           element is kept and swapped back in over the fresh markup: same
+           node, same buffer, same currentTime. */
+        function gpVideoBind() {
+            var el = document.getElementById("gpVideo");
+            if (!el) return;
+            if (gp._videoEl && gp.video && gp._videoEl._gpUrl === gp.video.url && gp._videoEl !== el) {
+                el.parentNode.replaceChild(gp._videoEl, el);
+                el = gp._videoEl;
+                gpVideoDrawOverlay();
+                return;
+            }
+            el._gpUrl = gp.video && gp.video.url;
+            gp._videoEl = el;
+            if (el._gpBound) return;
+            el._gpBound = true;
+            el.addEventListener("timeupdate", function () {
+                var v = gp.video;
+                if (!v) return;
+                if (v.follow && !el.paused) {
+                    /* The video is the driver while it plays. */
+                    var idx = gpIndexForVideoTime(el.currentTime);
+                    if (idx !== null && idx !== gp.playIdx) {
+                        v.driving = true;
+                        gp.playIdx = idx;
+                        gpDrawPlayhead();
+                        gpSyncScrub();
+                        v.driving = false;
+                    }
+                }
+                gpVideoDrawOverlay();
+            });
+            el.addEventListener("seeked", function () { gpVideoDrawOverlay(); });
+            gpVideoDrawOverlay();
+        }
+
+        function gpVideoHtml() {
+            if (!gp.trace || !gp.trace.length) return "";
+            var v = gp.video;
+            var h = "<div class='ws-grp'><div class='ws-gt'>Video" +
+                    "<i class='gp-lamp info' data-tip=\"<b>Footage beside the data</b>" +
+                    "The camera wrote down when it started recording, and the session knows the UTC " +
+                    "of every sample \u2014 so the two align themselves when both clocks are real. The " +
+                    "nudge slider is for a camera clock a second or two adrift, not for finding the " +
+                    "offset from scratch.<br><br>While the video plays it drives the timeline; scrub " +
+                    "the timeline and the video follows. Nothing is uploaded anywhere \u2014 the file " +
+                    "stays on this PC.\"></i></div>";
+            if (!v) {
+                h += "<button class='ws-btn-line' onclick=\"document.getElementById('gpVideoFile').click()\">Open a video of this session\u2026</button>" +
+                     "<input type='file' id='gpVideoFile' accept='video/*' style='display:none' onchange='gpVideoOpen(this)'>";
+                return h + "</div>";
+            }
+            h += "<div class='gp-video-wrap'><video id='gpVideo' src='" + v.url + "' controls playsinline></video>" +
+                 "<canvas id='gpVideoOv'></canvas></div>";
+            var meta = gpCurSessionMeta();
+            var synced = v.autoT0 !== null && v.t0 === v.autoT0;
+            h += "<div class='gp-video-status'>" +
+                 (v.probing ? "Reading the file's clock\u2026"
+                  : synced ? "Synced from the file's own clock (" + gpEsc(gpSesDay(v.autoT0)) + ")."
+                  : v.autoT0 !== null ? "The file has a clock \u2014 press Auto to use it."
+                  : "No usable clock in this file \u2014 aligned to the session start; nudge below.") +
+                 "</div>";
+            h += "<div class='ws-field'><label>Nudge (video later \u2192 positive)</label>" +
+                 "<div class='ws-slider'><input type='range' min='-30' max='30' step='0.04' value='" +
+                 (v.offsetMs / 1000) + "' oninput='gpVideoOffset(this.value)'>" +
+                 "<span class='val' id='gpVideoOffLab'>" + (v.offsetMs / 1000).toFixed(2) + " s</span></div></div>";
+            h += "<div class='lt-expbtns'>" +
+                 "<button class='ws-btn-line" + (v.follow ? " on" : "") + "' onclick='gpVideoFollowToggle()'>" +
+                 (v.follow ? "Following the timeline" : "Follow the timeline") + "</button>" +
+                 (v.autoT0 !== null && meta && meta.dated === "gps" && !synced
+                   ? "<button class='ws-btn-line' onclick='gpVideoAuto()'>Auto</button>" : "") +
+                 "<button class='ws-btn-line' onclick='gpVideoClose()'>Close</button></div>";
+            return h + "</div>";
+        }
 
         /* ---- comparing against another day --------------------------------
          * The whole comparison stack — delta, coach, phases, lanes — works on
