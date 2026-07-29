@@ -1060,17 +1060,27 @@
         .gp-set .ws-slider input[type=range] { min-width: 0; }
         .gp-set .ws-slider .val { min-width: 32px; flex: none; }
         /* The signal map: what every frame carries, byte for byte. */
+        /* The frame map reads like the analyser's decoded list: a frame
+           header, then one row per signal with its byte span. Prose wrapped
+           across three lines was unreadable; a byte column you can run an eye
+           down is not. */
         .gp-map { border: 1px solid var(--border); border-radius: var(--radius-sm);
-                  overflow: hidden; margin-top: 4px; }
-        .gp-map-r { display: grid; grid-template-columns: 52px 1fr; gap: 10px;
-                    padding: 5px 8px; border-bottom: 1px solid var(--border);
-                    font-family: 'JetBrains Mono', monospace; font-size: 10px; }
-        .gp-map-r:last-child { border-bottom: none; }
-        .gp-map-r > .id { color: var(--text); }
-        .gp-map-r > .f { color: var(--text-muted); line-height: 1.55; }
-        .gp-map-r > .f i { font-style: normal; color: var(--text); }
-        .gp-map-r.hd { background: var(--panel-elevated); color: var(--text-muted); }
-        .gp-map-r.off { opacity: 0.5; }
+                  overflow: hidden; margin-top: 6px;
+                  font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+        .gp-map-f { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px;
+                    padding: 4px 8px; background: var(--panel-elevated);
+                    border-top: 1px solid var(--border); }
+        .gp-map > .gp-map-f:first-child { border-top: none; }
+        .gp-map-f > .id { color: var(--accent-hover); font-weight: 600; }
+        .gp-map-f > .nm { color: var(--text); }
+        .gp-map-f > .hz { color: var(--text-muted); }
+        .gp-map-s { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px;
+                    padding: 2px 8px; }
+        .gp-map-s:last-child { padding-bottom: 4px; }
+        .gp-map-s > .by { color: var(--text-muted); }
+        .gp-map-s > .sg { color: var(--text); }
+        .gp-map-s > .un { color: var(--text-muted); }
+        .gp-map-f.off, .gp-map-s.off { opacity: 0.45; }
         .gp-set-v, .gp-set-na { font-family: 'JetBrains Mono', monospace; font-size: 11px;
                                 color: var(--text); width: 144px; display: inline-block; }
         .gp-set-na { color: var(--text-muted); }
@@ -10679,23 +10689,42 @@
            every frame the node broadcasts. A tuner checking against their own
            DBC should not have to read our firmware to do it. */
         var GP_FRAMES = [
-            { off: 0x0, name: "Status", rate: "slow",
-              f: "0 <i>device type</i> \u00b7 1 <i>fix type</i> \u00b7 2 <i>sats</i> \u00b7 3 <i>flags</i> \u00b7 4 <i>pDOP \u00d70.1</i> \u00b7 5-7 <i>firmware</i>" },
-            { off: 0x1, name: "Position", rate: "fast",
-              f: "0-3 <i>lat i32 \u00d71e-7\u00b0</i> \u00b7 4-7 <i>lon i32 \u00d71e-7\u00b0</i>" },
-            { off: 0x2, name: "Motion", rate: "fast",
-              f: "0-1 <i>speed u16 \u00d70.01 km/h</i> \u00b7 2-3 <i>heading u16 \u00d70.01\u00b0</i> \u00b7 4-5 <i>altitude i16 \u00d70.1 m</i> \u00b7 6-7 <i>climb i16 \u00d70.01 m/s</i>" },
-            { off: 0x3, name: "Quality", rate: "slow",
-              f: "0-1 <i>hAcc \u00d70.01 m</i> \u00b7 2-3 <i>vAcc \u00d70.01 m</i> \u00b7 4-5 <i>sAcc \u00d70.01 m/s</i> \u00b7 6-7 <i>headAcc \u00d70.01\u00b0</i>" },
-            { off: 0x4, name: "Time", rate: "slow",
-              f: "0-1 <i>year u16</i> \u00b7 2 <i>month</i> \u00b7 3 <i>day</i> \u00b7 4 <i>hour</i> \u00b7 5 <i>min</i> \u00b7 6 <i>sec</i> \u00b7 7 <i>\u00d710 ms</i>" },
-            { off: 0x5, name: "Accel", rate: "off", f: "reserved \u2014 rev B IMU" },
-            { off: 0x6, name: "Gyro", rate: "off", f: "reserved \u2014 rev B IMU" },
-            { off: 0xE, name: "Command", rate: "in",
-              f: "bus \u2192 node \u00b7 0 <i>cmd</i> \u00b7 1-7 <i>args</i>" },
-            { off: 0xF, name: "Response", rate: "out",
-              f: "0 <i>cmd</i> \u00b7 1 <i>result</i> \u00b7 2 <i>bitrate</i> \u00b7 3-4 <i>base id</i> \u00b7 5 <i>fast Hz</i> \u00b7 6 <i>slow Hz</i> \u00b7 7 <i>hw rev</i>" }
+            { off: 0x0, name: "Status", rate: "slow", s: [
+                ["0", "Device type", ""], ["1", "Fix type", "0-4"], ["2", "Satellites", ""],
+                ["3", "Flags", "bitfield"], ["4", "pDOP", "×0.1"], ["5-7", "Firmware", "maj.min.patch"]] },
+            { off: 0x1, name: "Position", rate: "fast", s: [
+                ["0-3", "Latitude", "i32 ×1e-7°"], ["4-7", "Longitude", "i32 ×1e-7°"]] },
+            { off: 0x2, name: "Motion", rate: "fast", s: [
+                ["0-1", "Speed", "u16 ×0.01 km/h"], ["2-3", "Heading", "u16 ×0.01°"],
+                ["4-5", "Altitude", "i16 ×0.1 m"], ["6-7", "Climb rate", "i16 ×0.01 m/s"]] },
+            { off: 0x3, name: "Quality", rate: "slow", s: [
+                ["0-1", "Horiz accuracy", "u16 ×0.01 m"], ["2-3", "Vert accuracy", "u16 ×0.01 m"],
+                ["4-5", "Speed accuracy", "u16 ×0.01 m/s"], ["6-7", "Heading accuracy", "u16 ×0.01°"]] },
+            { off: 0x4, name: "Time (UTC)", rate: "slow", s: [
+                ["0-1", "Year", "u16"], ["2", "Month", ""], ["3", "Day", ""], ["4", "Hour", ""],
+                ["5", "Minute", ""], ["6", "Second", ""], ["7", "Sub-second", "×10 ms"]] },
+            { off: 0x5, name: "Accel", rate: "off", s: [["—", "Reserved", "rev B IMU"]] },
+            { off: 0x6, name: "Gyro", rate: "off", s: [["—", "Reserved", "rev B IMU"]] },
+            { off: 0x7, name: "Lap", rate: "slow", s: [
+                ["0-1", "Current lap", "u16 ×0.01 s"], ["2-3", "Last lap", "u16 ×0.01 s"],
+                ["4-5", "Best lap", "u16 ×0.01 s"], ["6", "Lap number", ""],
+                ["7", "Lap flags", "bitfield"]] },
+            { off: 0x8, name: "Sector", rate: "slow", s: [
+                ["0-1", "Current sector", "u16 ×0.01 s"], ["2-3", "Last sector", "u16 ×0.01 s"],
+                ["4-5", "Theoretical best", "u16 ×0.01 s"], ["6", "Sector number", "1-based"],
+                ["7", "Lap flags", "bitfield"]] },
+            { off: 0x9, name: "Delta", rate: "slow", s: [
+                ["0-1", "Predictive delta", "i16 ×0.01 s"], ["2-3", "Lap distance", "u16 m"],
+                ["7", "Lap flags", "bitfield"]] },
+            { off: 0xE, name: "Command", rate: "in", s: [
+                ["0", "Command", ""], ["1-7", "Arguments", ""]] },
+            { off: 0xF, name: "Response", rate: "out", s: [
+                ["0", "Command", ""], ["1", "Result", ""], ["2", "Bitrate index", ""],
+                ["3-4", "Base ID", "u16"], ["5", "Fast rate", "Hz"], ["6", "Slow rate", "Hz"],
+                ["7", "Hardware rev", ""]] }
         ];
+
+        var GP_LAP_FLAGS = "bit 0 track loaded · 1 timing · 2 delta valid · 3 time trial";
 
         function gpFrameMapHtml() {
             var c = gp.can || {};
@@ -10703,14 +10732,23 @@
             var fast = gpN(c.fast_hz) || 25, slow = gpN(c.slow_hz) || 5;
             var h = "<div class='gp-map'>";
             GP_FRAMES.forEach(function (fr) {
+                var off = fr.rate === "off";
                 var rate = fr.rate === "fast" ? fast + " Hz" : fr.rate === "slow" ? slow + " Hz"
-                         : fr.rate === "off" ? "\u2014" : fr.rate === "in" ? "rx" : "tx";
-                h += "<div class='gp-map-r" + (fr.rate === "off" ? " off" : "") + "'>" +
+                         : off ? "—" : fr.rate === "in" ? "rx" : "tx";
+                h += "<div class='gp-map-f" + (off ? " off" : "") + "'>" +
                      "<span class='id'>" + (base === null ? "+" + fr.off.toString(16).toUpperCase()
                                                           : gpHex(base + fr.off)) + "</span>" +
-                     "<span class='f'><i>" + fr.name + "</i> \u00b7 " + rate + "<br>" + fr.f + "</span></div>";
+                     "<span class='nm'>" + fr.name + "</span>" +
+                     "<span class='hz'>" + rate + "</span></div>";
+                fr.s.forEach(function (sg) {
+                    h += "<div class='gp-map-s" + (off ? " off" : "") + "'>" +
+                         "<span class='by'>" + sg[0] + "</span>" +
+                         "<span class='sg'>" + sg[1] + "</span>" +
+                         "<span class='un'>" + sg[2] + "</span></div>";
+                });
             });
-            return h + "</div>";
+            return h + "</div><div class='gp-set-note'>Little-endian, byte offsets from 0. " +
+                   "Lap flags: " + GP_LAP_FLAGS + ". A lap time of 0xFFFF means no time yet.</div>";
         }
 
         /* Live timing readout + the capture controls, for the Tracks inspector.
