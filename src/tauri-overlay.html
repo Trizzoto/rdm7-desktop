@@ -1031,10 +1031,37 @@
            contract every video editor keeps. */
         .gp-playbar { display: none; align-items: center; gap: 10px; margin: 8px 14px 10px; padding: 6px 10px;
                       background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md);
-                      position: sticky; bottom: 8px; z-index: 60; }
-        .gp-playbar input[type=range] { flex: 1; accent-color: var(--accent); }
-        .gp-playbar select { background: var(--bg); border: 1px solid var(--border); color: var(--text);
-                             border-radius: var(--radius-sm); font-size: 11px; padding: 3px 6px; }
+                      position: sticky; bottom: 8px; z-index: 60;
+                      flex-wrap: wrap; row-gap: 4px; }
+        .gp-sep { width: 1px; height: 16px; background: var(--border); flex: none; }
+        .gp-tbtn { width: 26px; height: 24px; flex: none; display: inline-flex; align-items: center;
+                   justify-content: center; background: none; border: none; border-radius: var(--radius-sm);
+                   color: var(--text-muted); cursor: pointer; padding: 0; }
+        .gp-tbtn svg { width: 12px; height: 12px; fill: currentColor; }
+        .gp-tbtn:hover { color: var(--text); background: var(--panel-elevated); }
+        .gp-tbtn-play { width: 30px; color: var(--text); }
+        /* The timeline: a hairline with the elapsed portion filled and a thin
+           playhead handle — not a browser slider blob. The fill fraction is
+           driven from JS through --p. */
+        .gp-playbar input[type=range] { flex: 1 1 60px; min-width: 60px; -webkit-appearance: none;
+                                        appearance: none; height: 20px; background: transparent; margin: 0; }
+        .gp-playbar input[type=range]::-webkit-slider-runnable-track {
+            height: 3px; border-radius: 0;
+            background: linear-gradient(90deg, #46647c var(--p, 0%), var(--border-light) var(--p, 0%)); }
+        .gp-playbar input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 3px; height: 15px; margin-top: -6px;
+            background: var(--text); border-radius: 1px; }
+        .gp-playbar input[type=range]:hover::-webkit-slider-thumb { background: var(--accent); }
+        .gp-playbar input[type=range]:disabled::-webkit-slider-thumb { background: var(--border-light); }
+        .gp-tc { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text);
+                 flex: none; min-width: 0; text-align: right; white-space: nowrap;
+                 font-variant-numeric: tabular-nums; }
+        .gp-tc em { font-style: normal; color: var(--text-muted); }
+        .gp-tc .d { margin-left: 8px; }
+        .gp-rate { flex: none; background: none; border: none; color: var(--text-muted);
+                   font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 6px;
+                   border-radius: var(--radius-sm); cursor: pointer; min-width: 34px; }
+        .gp-rate:hover { color: var(--text); background: var(--panel-elevated); }
         .gp-playread { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted);
                        min-width: 190px; text-align: right; }
         .gp-playread b { color: var(--text); font-size: 13px; }
@@ -1097,7 +1124,8 @@
         .gp-ghost-pick { width: 100%; box-sizing: border-box; margin: 3px 0 5px;
                          background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
                          border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 6px; }
-        .gp-playbar.idle .gp-mapbtn, .gp-playbar.idle #gpModes, .gp-playbar.idle #gpPlayRate {
+        .gp-playbar.idle .gp-mapbtn, .gp-playbar.idle #gpModes, .gp-playbar.idle #gpPlayRate,
+        .gp-playbar.idle .gp-tbtn, .gp-playbar.idle .gp-tc {
             opacity: 0.45; pointer-events: none; }
         .gp-strip { display: none; width: calc(100% - 28px); margin: 8px 14px 0;
                     background: var(--panel); border: 1px solid var(--border);
@@ -1176,6 +1204,7 @@
             background: rgba(12,14,16,0.80); border: 1px solid var(--border); color: var(--text-muted);
             font-family: 'Sora', sans-serif; font-size: 10px; font-weight: 600;
             border-radius: var(--radius-sm); padding: 4px 10px; cursor: pointer;
+            white-space: nowrap;
         }
         .gp-mapbtn.on { background: rgba(12,14,16,0.80); border-color: var(--border);
                         color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
@@ -1820,8 +1849,26 @@
                         <button data-m="ref" onclick="gpMapModeSet('ref')"
                                 title="Colour the line by time gained or lost against the comparison lap">vs Ref</button>
                     </div>
-                    <button class="gp-mapbtn" id="gpPlayBtn" onclick="gpPlayToggle()">&#9654; Play</button>
                     <button class="gp-mapbtn" id="gpLanesBtn" onclick="gpLanesToggle()"></button>
+                    <span class="gp-sep"></span>
+                    <!-- The transport cluster: the NLE grammar, icon for icon.
+                         SVGs rather than glyphs so the geometry is ours. -->
+                    <button class="gp-tbtn" onclick="gpTransport('start')" title="Jump to start (Home)">
+                        <svg viewBox="0 0 12 12"><path d="M1.5 1.5h1.6v9H1.5zM10.5 1.5v9L4 6z"/></svg></button>
+                    <button class="gp-tbtn" onclick="gpTransport('back')" title="Step back one sample (&larr;)">
+                        <svg viewBox="0 0 12 12"><path d="M9 1.5v9L3 6z"/></svg></button>
+                    <button class="gp-tbtn gp-tbtn-play" id="gpPlayBtn" onclick="gpPlayToggle()" title="Play / pause (Space, K)">
+                        <svg viewBox="0 0 12 12"><path d="M3 1.5 10.5 6 3 10.5z"/></svg></button>
+                    <button class="gp-tbtn" onclick="gpTransport('fwd')" title="Step forward one sample (&rarr;)">
+                        <svg viewBox="0 0 12 12"><path d="M3 1.5v9L9 6z"/></svg></button>
+                    <button class="gp-tbtn" onclick="gpTransport('end')" title="Jump to end (End)">
+                        <svg viewBox="0 0 12 12"><path d="M8.9 1.5h1.6v9H8.9zM1.5 1.5v9L8 6z"/></svg></button>
+                    <input type="range" id="gpScrub" min="0" max="0" value="0" step="1"
+                           oninput="gpScrubTo(this.value)">
+                    <span class="gp-tc" id="gpPlayRead"></span>
+                    <span class="gp-sep"></span>
+                    <button class="gp-rate" id="gpPlayRate" onclick="gpRateCycle()"
+                            title="Playback speed — click to cycle, or J / L">4&times;</button>
                     <i class="gp-lamp info" id="gpKeysLamp" data-tip="<b>Keyboard</b>
                        <span class='k'>Space / K</span> play / pause<br>
                        <span class='k'>J / L</span> slower &middot; faster (editor transport); J at 1&times; jumps back 5 s<br>
@@ -1829,15 +1876,6 @@
                        <span class='k'>Shift + &larr; &rarr;</span> one second<br>
                        <span class='k'>&uarr; &darr;</span> step through the coach findings<br>
                        <span class='k'>Double-click</span> the rack to leave a corner"></i>
-                    <input type="range" id="gpScrub" min="0" max="0" value="0" step="1"
-                           oninput="gpScrubTo(this.value)">
-                    <span class="gp-playread" id="gpPlayRead"></span>
-                    <select id="gpPlayRate" onchange="gpPlayRateSet(this.value)" title="Playback speed">
-                        <option value="1">1&times;</option>
-                        <option value="2">2&times;</option>
-                        <option value="4" selected>4&times;</option>
-                        <option value="10">10&times;</option>
-                    </select>
                 </div>
                 <div class="gp-grid" id="gpStage"></div>
             </div>
@@ -7397,6 +7435,8 @@
         function gpSessionKey(key, shift) {
             var r = gpLapRange();
             if (key === " " || key === "k" || key === "K") { window.gpPlayToggle(); return "play"; }
+            if (key === "Home") { window.gpTransport("start"); return "jump"; }
+            if (key === "End") { window.gpTransport("end"); return "jump"; }
             if (key === "l" || key === "L") {
                 /* L: play; L again: faster. The editor idiom. */
                 if (!gp.playing) { window.gpPlayToggle(); return "play"; }
@@ -8866,6 +8906,7 @@
             sc.max = String(len);
             sc.value = String(Math.max(0, Math.min(len, gp.playIdx - r.from)));
             sc.disabled = len === 0;
+            gpTcUpdate();
         }
 
         function gpDrawPlayhead() {
@@ -8883,25 +8924,71 @@
                 gp.playMarker.setLatLng([s.lat, s.lon]);
                 if (!gp.traceLayer.hasLayer(gp.playMarker)) gp.playMarker.addTo(gp.traceLayer);
             }
-            var read = document.getElementById("gpPlayRead");
-            if (read) {
-                var r = gpLapRange();
-                var tsec = gpSecs(gp.trace, r.from, gp.playIdx);
-                /* Delta at the cursor: scrubbing a corner should answer "and
-                   how far up or down was I here" without a second look. */
-                var dser = gpDeltaSeries(), dtxt = "";
-                if (dser) {
-                    var dv = dser[gp.playIdx - r.from] || 0;
-                    dtxt = " &nbsp; <span style='color:" +
-                           (dv > 0.02 ? "#e05d52" : dv < -0.02 ? "#6FBF73" : "#999") + "'>" +
-                           (dv >= 0 ? "+" : "\u2212") + Math.abs(dv).toFixed(2) + " s</span>";
-                }
-                read.innerHTML = "<b>" + gpSpdN(s.kph).toFixed(0) + "</b> " + gpSpdU() + " &nbsp; " +
-                    "<span style='color:" + gpGColour(s.g, gpGScale()) + "'>" +
-                    (s.g >= 0 ? "+" : "") + s.g.toFixed(2) + " g</span> &nbsp; " +
-                    (tsec >= 0 ? tsec.toFixed(1) + " s" : "") + dtxt;
-            }
+            gpTcUpdate();
         }
+
+        /* Timecode: position / duration of what is playing, plus the delta at
+           the cursor when a reference is set. Speed and g live in the rack
+           header and on the video overlay — the transport reads TIME, like
+           every transport its users already know. */
+        function gpTcFmt(s) {
+            if (!isFinite(s) || s < 0) s = 0;
+            var m = Math.floor(s / 60);
+            return m + ":" + (s - m * 60 < 10 ? "0" : "") + (s - m * 60).toFixed(2);
+        }
+
+        function gpTcUpdate() {
+            var read = document.getElementById("gpPlayRead");
+            var sc = document.getElementById("gpScrub");
+            if (!gp.trace || !gp.trace.length) {
+                if (read) read.innerHTML = "";
+                if (sc) sc.style.setProperty("--p", "0%");
+                return;
+            }
+            var r = gpLapRange();
+            var cur = gpSecs(gp.trace, r.from, gp.playIdx);
+            var tot = gpSecs(gp.trace, r.from, r.to);
+            if (sc) sc.style.setProperty("--p",
+                (tot > 0 ? Math.max(0, Math.min(100, cur / tot * 100)) : 0) + "%");
+            if (!read) return;
+            var dser = gpDeltaSeries(), dtxt = "";
+            if (dser) {
+                var dv = dser[gp.playIdx - r.from] || 0;
+                dtxt = "<span class='d' style='color:" +
+                       (dv > 0.02 ? "#d16358" : dv < -0.02 ? "#7da982" : "var(--text-muted)") + "'>" +
+                       (dv >= 0 ? "+" : "\u2212") + Math.abs(dv).toFixed(2) + "</span>";
+            }
+            read.innerHTML = gpTcFmt(cur) + " <em>/ " + gpTcFmt(tot) + "</em>" + dtxt;
+        }
+
+        var GP_SVG_PLAY = "<svg viewBox='0 0 12 12'><path d='M3 1.5 10.5 6 3 10.5z'/></svg>";
+        var GP_SVG_PAUSE = "<svg viewBox='0 0 12 12'><path d='M2.5 1.5h2.6v9H2.5zM6.9 1.5h2.6v9H6.9z'/></svg>";
+
+        function gpPlayIcon(playing) {
+            var b = document.getElementById("gpPlayBtn");
+            if (b) b.innerHTML = playing ? GP_SVG_PAUSE : GP_SVG_PLAY;
+        }
+
+        /* Step and jump — the four buttons around Play. Stepping pauses first,
+           the same contract as the arrow keys: you cannot inspect a sample
+           while the playhead is running away from it. */
+        window.gpTransport = function (what) {
+            if (!gp.trace || !gp.trace.length) return;
+            var r = gpLapRange();
+            gpPlayStop();
+            if (what === "start") gp.playIdx = r.from;
+            else if (what === "end") gp.playIdx = r.to;
+            else if (what === "back") gp.playIdx = Math.max(r.from, gp.playIdx - 1);
+            else if (what === "fwd") gp.playIdx = Math.min(r.to, gp.playIdx + 1);
+            gpSyncScrub();
+            gpDrawPlayhead();
+        };
+
+        var GP_RATES = [1, 2, 4, 10];
+        window.gpRateCycle = function () {
+            var i = GP_RATES.indexOf(gp.playRate);
+            window.gpPlayRateSet(String(GP_RATES[(i + 1) % GP_RATES.length]));
+        };
 
         window.gpScrubTo = function (v) {
             var r = gpLapRange();
@@ -8912,8 +8999,8 @@
             gp.playRate = parseFloat(v) || 1;
             var el = document.getElementById("gpVideo");
             if (el && !el.paused) el.playbackRate = gp.playRate;
-            var sel = document.getElementById("gpPlayRate");
-            if (sel && sel.value !== String(gp.playRate)) sel.value = String(gp.playRate);
+            var btn = document.getElementById("gpPlayRate");
+            if (btn) btn.innerHTML = gp.playRate + "&times;";
         };
 
         function gpPlayStop() {
@@ -8921,8 +9008,7 @@
             var el = document.getElementById("gpVideo");
             if (el && !el.paused) { try { el.pause(); } catch (e) { } }
             gp.playing = false;
-            var b = document.getElementById("gpPlayBtn");
-            if (b) b.innerHTML = "&#9654; Play";
+            gpPlayIcon(false);
         }
 
         window.gpPlayToggle = function () {
@@ -8931,8 +9017,7 @@
             var r = gpLapRange();
             if (gp.playIdx >= r.to) gp.playIdx = r.from;
             gp.playing = true;
-            var b = document.getElementById("gpPlayBtn");
-            if (b) b.innerHTML = "&#10073;&#10073; Pause";
+            gpPlayIcon(true);
             /* With a synced video open, the VIDEO is the transport: it plays
                at the chosen rate and drives the timeline through timeupdate.
                Real frames at real speed, instead of a 20 fps index ticker
@@ -8950,8 +9035,7 @@
 
         function gpPlayResumeTicker() {
             gp.playing = true;
-            var b = document.getElementById("gpPlayBtn");
-            if (b) b.innerHTML = "&#10073;&#10073; Pause";
+            gpPlayIcon(true);
             /* 20 real fps; advance by whatever the chosen rate implies so the
                playback clock matches the recording clock at 1x. */
             gp.playTimer = setInterval(function () {
@@ -9279,8 +9363,7 @@
                 if (gp.playTimer) { clearInterval(gp.playTimer); gp.playTimer = null; }
                 if (!gp.playing && gp.video && gp.video.follow) {
                     gp.playing = true;
-                    var b = document.getElementById("gpPlayBtn");
-                    if (b) b.innerHTML = "&#10073;&#10073; Pause";
+                    gpPlayIcon(true);
                 }
             });
             el.addEventListener("ended", function () {
