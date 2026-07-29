@@ -1076,6 +1076,13 @@
         .gp-ses-n .undated { color: #FF9F0A; }
         .gp-ses-act { display: flex; gap: 6px; margin: 5px 2px 2px; }
         .gp-ses-act button { flex: 1; }
+        .gp-ses-field { flex: 1; min-width: 0; box-sizing: border-box;
+                        background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
+                        border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 8px; }
+        .gp-ses-field:focus { outline: none; border-color: #4a90d9; }
+        .gp-ghost-pick { width: 100%; box-sizing: border-box; margin: 3px 0 5px;
+                         background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
+                         border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 6px; }
         .gp-strip { display: none; width: calc(100% - 28px); margin: 8px 14px 0;
                     background: var(--panel); border: 1px solid var(--border);
                     border-radius: var(--radius-md); cursor: crosshair; }
@@ -5714,6 +5721,8 @@
             tracks: null,               /* the library (see gpTracksLoad) */
             sessions: null,             /* stored recordings; null = not read yet */
             sessionId: null,            /* which stored recording is loaded */
+            ghostFence: null,           /* gp.trace length before the ghost was appended */
+            ghostSrc: null,             /* { sesId, rows, laps, meta, cur } for the ghost's session */
             selGate: "sf",   /* "sf" | a sector index */
             editLayer: null, _gateViews: {},
             info: null,        /* device.info result */
@@ -6843,6 +6852,11 @@
                      "<div class='gp-ses-n'>" + bits.join(" \u00b7 ") + "</div></button>";
                 if (on) {
                     h += "<div class='gp-ses-act'>" +
+                         "<input type='text' class='gp-ses-field' placeholder='Car' maxlength='24' value='" +
+                         gpEsc(s.car || "") + "' data-gp-ses-car='" + gpEsc(s.id) + "'>" +
+                         "<input type='text' class='gp-ses-field' placeholder='Driver' maxlength='24' value='" +
+                         gpEsc(s.driver || "") + "' data-gp-ses-driver='" + gpEsc(s.id) + "'></div>";
+                    h += "<div class='gp-ses-act'>" +
                          "<button class='ws-btn-line' data-gp-ses-ren='" + gpEsc(s.id) + "'>Rename</button>" +
                          "<button class='ws-btn-line' data-gp-ses-csv='" + gpEsc(s.id) + "' title='one row per sample, for Excel / i2 / RaceRender'>CSV</button>" +
                          "<button class='ws-btn-line' data-gp-ses-file='" + gpEsc(s.id) + "' title='the whole recording as one file, for another PC running Studio'>Export</button>" +
@@ -6861,7 +6875,24 @@
             };
             bind("data-gp-lap", function (v) { window.gpSelectLap(v); });
             bind("data-gp-cmp", function (v) { window.gpCompareLap(v); });
+            bind("data-gp-ghost", function (v) { window.gpCompareGhost(v); });
+            Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-ghost-lap]"), function (sel) {
+                sel.addEventListener("change", function () { window.gpGhostLap(sel.value); });
+            });
             bind("data-gp-ses-ren", function (v) { window.gpSessionRename(v); });
+            var field = function (attr, key) {
+                Array.prototype.forEach.call(rail.querySelectorAll("[" + attr + "]"), function (inp) {
+                    inp.addEventListener("click", function (e) { e.stopPropagation(); });
+                    inp.addEventListener("change", function () {
+                        var cur = (gp.sessions || []).filter(function (s) { return s.id === inp.getAttribute(attr); })[0];
+                        if (!cur) return;
+                        cur[key] = String(inp.value || "").trim().slice(0, 24);
+                        gpStore.putMeta(cur);
+                    });
+                });
+            };
+            field("data-gp-ses-car", "car");
+            field("data-gp-ses-driver", "driver");
             bind("data-gp-ses-csv", function (v) { window.gpSessionExportCsv(v); });
             bind("data-gp-ses-file", function (v) { window.gpSessionExportFile(v); });
             bind("data-gp-ses-del", function (v) { window.gpSessionDelete(v); });
@@ -6893,10 +6924,12 @@
             var word = gpRunWord(true);
             var bestLap = -1, bestT = Infinity;
             gp.traceLaps.forEach(function (l, i) {
+                if (l.ghost) return;
                 var s = gpSecs(gp.trace, l.from, l.to);
                 if (s < bestT) { bestT = s; bestLap = i; }
             });
             gp.traceLaps.forEach(function (l, i) {
+                if (l.ghost) return;
                 var secs = gpSecs(gp.trace, l.from, l.to);
                 h += "<button class='ws-item" + (gp.selLap === i ? " on" : "") + "' data-gp-lap='" + i + "'>" +
                      "<span class='st" + (gp.cmpLap === i ? " on" : "") + "'></span>" + word + " " + (i + 1) +
@@ -6920,15 +6953,44 @@
                          return (u.length > 1 ? "s " : " ") + u.join(", ");
                      })() + "</div></div>";
             }
-            if (gp.traceLaps.length > 1) {
+            var realLaps = gp.traceLaps.filter(function (l) { return !l.ghost; }).length;
+            if (realLaps > 0) {
                 h += "<div class='ws-rail-title'>Compare against</div>";
                 h += "<button class='ws-item" + (gp.cmpLap < 0 ? " on" : "") + "' data-gp-cmp='-1'>" +
                      "<span class='st'></span>None</button>";
                 gp.traceLaps.forEach(function (l, i) {
+                    if (l.ghost) return;
                     h += "<button class='ws-item" + (gp.cmpLap === i ? " on" : "") + "' data-gp-cmp='" + i + "'>" +
                          "<span class='st'></span>" + word + " " + (i + 1) +
                          "<span class='tag'>" + gpLapTime(gpSecs(gp.trace, l.from, l.to)) + "</span></button>";
                 });
+                /* Other saved days on the same track: pick one and its best lap
+                   arrives as the reference; a dropdown then offers its other
+                   laps. Loading the day's rows happens on click, not here. */
+                var meNow = (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0];
+                var days = (gp.sessions || []).filter(function (s) {
+                    return meNow && s.id !== meNow.id && s.trackId === meNow.trackId && s.lapCount > 0;
+                });
+                if (days.length) {
+                    h += "<div class='ws-rail-title'>From another day</div>";
+                    days.forEach(function (s) {
+                        var on = gp.ghostSrc && gp.ghostSrc.sesId === s.id;
+                        var who = [s.car, s.driver].filter(Boolean).join(" \u00b7 ");
+                        h += "<button class='ws-item" + (on ? " on" : "") + "' data-gp-ghost='" + gpEsc(s.id) + "'>" +
+                             "<span class='st" + (on ? " on" : "") + "'></span>" + gpEsc(gpSesDay(s.recordedAt)) +
+                             "<span class='tag'>" + (s.bestLapS ? gpLapTime(s.bestLapS) : s.lapCount + " laps") + "</span>" +
+                             (who ? "<div class='gp-ses-n'>" + gpEsc(who) + "</div>" : "") + "</button>";
+                        if (on) {
+                            h += "<select class='gp-ghost-pick' data-gp-ghost-lap>";
+                            gp.ghostSrc.laps.forEach(function (l, li) {
+                                h += "<option value='" + li + "'" + (li === gp.ghostSrc.cur ? " selected" : "") + ">" +
+                                     gpRunWord(true) + " " + (li + 1) + " \u2014 " +
+                                     gpLapTime(gpSecs(gp.ghostSrc.rows, l.from, l.to)) + "</option>";
+                            });
+                            h += "</select>";
+                        }
+                    });
+                }
             }
             rail.innerHTML = h;
             gpBindSessionRail(rail);
@@ -6976,7 +7038,7 @@
                 var mmode = gpEffectiveMapMode(), i;
                 h += "<div class='ws-grp'><div class='ws-gt'>" +
                      (mmode === "speed" ? "Speed" :
-                      mmode === "ref" ? "Time against " + gpRunWord() + " " + (gp.cmpLap + 1) :
+                      mmode === "ref" ? "Time against " + gpRefName() :
                       "Braking &amp; acceleration") +
                      "<i class='gp-lamp info' data-tip=\"" + (
                        mmode === "speed"
@@ -7081,11 +7143,12 @@
 
         function gpSessionSectors() {
             var trk = gpActiveTrack();
-            var key = gp.traceLaps.length + ":" + ((trk && trk.sectors) || []).length +
+            var key = gp.traceLaps.length + ":" + (gp.ghostFence === null ? "" : "g") + ":" +
+                      ((trk && trk.sectors) || []).length +
                       ":" + (trk ? (trk.name || "") : "");
             if (gp.secKey === key) return gp.sectors;
 
-            var per = gp.traceLaps.map(function (l) { return gpSectorTimes(l); });
+            var per = gp.traceLaps.map(function (l) { return l.ghost ? null : gpSectorTimes(l); });
             var best = null, owner = null;
             per.forEach(function (row, li) {
                 if (!row) return;
@@ -7184,10 +7247,11 @@
            best, how consistent the session was, and how much the ideal-sector
            lap says is still on the table. */
         function gpGlanceHtml() {
-            if (!gp.traceLaps || gp.traceLaps.length < 2) return "";
-            var n = gp.traceLaps.length, best = Infinity, bi = 0, sum = 0, worst = 0, i, tl;
+            var laps = (gp.traceLaps || []).filter(function (l) { return !l.ghost; });
+            if (laps.length < 2) return "";
+            var n = laps.length, best = Infinity, bi = 0, sum = 0, worst = 0, i, tl;
             for (i = 0; i < n; i++) {
-                tl = gpSecs(gp.trace, gp.traceLaps[i].from, gp.traceLaps[i].to);
+                tl = gpSecs(gp.trace, laps[i].from, laps[i].to);
                 sum += tl;
                 if (tl < best) { best = tl; bi = i; }
                 if (tl > worst) worst = tl;
@@ -7973,8 +8037,8 @@
             var selT = gpSecs(gp.trace, gp.traceLaps[gp.selLap].from, gp.traceLaps[gp.selLap].to);
             var refT = gpSecs(gp.trace, gp.traceLaps[gp.cmpLap].from, gp.traceLaps[gp.cmpLap].to);
             var h = "<div class='ws-grp'><div class='ws-gt'>Coach</div>";
-            h += "<div class='gp-coach-hd'>" + gpRunWord(true) + " " + (gp.selLap + 1) + " against " + gpRunWord() + " " +
-                 (gp.cmpLap + 1) + "<b class='" + (selT > refT ? "bad" : "ok") + "'>" +
+            h += "<div class='gp-coach-hd'>" + gpRunWord(true) + " " + (gp.selLap + 1) + " against " +
+                 gpRefName() + "<b class='" + (selT > refT ? "bad" : "ok") + "'>" +
                  gpSigned(selT - refT, 2, " s") + "</b></div>";
 
             var all = gpCoachInsights() || [];
@@ -8239,20 +8303,15 @@
             return { along: east * de + north * dn, lateral: east * dn - north * de };
         }
 
-        function gpSplitLaps() {
-            gp.traceLaps = [];
-            /* Everything derived from lap indices is stale the moment the lap
-               set changes — the caches are keyed on (selLap, cmpLap), and those
-               indices mean different laps after a re-download or track change. */
-            gp.coach = null; gp.delta = null; gp.deltaKey = "";
-            gp.stripCache = null; gp.stripZoom = null; gp.sectors = null; gp.secKey = "";
-            gp.rate = null; gp.rateKey = ""; gp.insightCursor = -1;
-            gp.chan = null; gp.chanKey = "";
+        /* The crossing logic on ANY rows, no state touched — the ghost loader
+           needs to split a second recording with the same geometry the loaded
+           one was split with. */
+        function gpSplitRows(rows) {
+            var out = [];
             var trk = gpActiveTrack();
             var sf = trk && trk.start_finish;
-            var fin = trk && trk.finish;      /* time trial: runs end on their own line */
-            var rows = gp.trace || [];
-            if (!sf || rows.length < 2) return;
+            var fin = trk && trk.finish;
+            if (!sf || !rows || rows.length < 2) return out;
             var hwS = gpN(sf.half_width_m) || 15;
             var hwF = fin ? (gpN(fin.half_width_m) || 15) : 0;
             var prevS = gpSignedDist(sf, rows[0].lat, rows[0].lon).along;
@@ -8261,24 +8320,37 @@
             for (var i = 1; i < rows.length; i++) {
                 var s = gpSignedDist(sf, rows[i].lat, rows[i].lon);
                 var f = fin ? gpSignedDist(fin, rows[i].lat, rows[i].lon) : null;
-                /* Same rule as the engine, and in the same order: a sign change
-                   from before to on/past, inside the gate's half-width, start
-                   line resolved before finish line. */
                 if (prevS < 0 && s.along >= 0 && Math.abs(s.lateral) <= hwS) {
-                    /* On a circuit one crossing closes a lap and opens the next.
-                       On a time trial it can only open one — a run that never
-                       reached the finish was abandoned, not a slow result, and
-                       lap_core.c restarts it for exactly that reason. */
-                    if (!fin && start >= 0) gp.traceLaps.push({ from: start, to: i });
+                    if (!fin && start >= 0) out.push({ from: start, to: i });
                     start = i;
                 }
                 if (fin && start >= 0 && prevF < 0 && f.along >= 0 && Math.abs(f.lateral) <= hwF) {
-                    gp.traceLaps.push({ from: start, to: i });
-                    start = -1;              /* disarmed until the next start */
+                    out.push({ from: start, to: i });
+                    start = -1;
                 }
                 prevS = s.along;
                 if (fin) prevF = f.along;
             }
+            return out;
+        }
+
+        function gpSplitLaps() {
+            /* A re-split means the session, the track or the download changed —
+               a ghost from before any of that is stale geometry. It goes first,
+               so the crossing scan below only ever sees real samples. */
+            if (gp.ghostFence !== null) {
+                if (gp.trace) gp.trace.length = gp.ghostFence;
+                gp.ghostFence = null; gp.ghostSrc = null;
+            }
+            gp.traceLaps = [];
+            /* Everything derived from lap indices is stale the moment the lap
+               set changes — the caches are keyed on (selLap, cmpLap), and those
+               indices mean different laps after a re-download or track change. */
+            gp.coach = null; gp.delta = null; gp.deltaKey = "";
+            gp.stripCache = null; gp.stripZoom = null; gp.sectors = null; gp.secKey = "";
+            gp.rate = null; gp.rateKey = ""; gp.insightCursor = -1;
+            gp.chan = null; gp.chanKey = "";
+            gp.traceLaps = gpSplitRows(gp.trace || []);
             /* Circuit Tools auto-selects the fastest lap as the reference and
                nobody has ever complained: it is what you compare against nearly
                every time. Only when the lap set itself changes — never behind
@@ -8297,7 +8369,8 @@
         function gpLapRange() {
             if (gp.selLap >= 0 && gp.traceLaps[gp.selLap])
                 return gp.traceLaps[gp.selLap];
-            return { from: 0, to: (gp.trace ? gp.trace.length - 1 : 0) };
+            var end = gp.ghostFence !== null ? gp.ghostFence : (gp.trace ? gp.trace.length : 1);
+            return { from: 0, to: end - 1 };
         }
 
         /* ══════════════════════════════════════════════════════════════════
@@ -8764,9 +8837,93 @@
             gpDrawTrace(); gpFitTrace(); gpRenderInspector();
         };
         window.gpCompareLap = function (i) {
+            gpGhostDrop();                    /* a real reference replaces the ghost */
             gp.cmpLap = parseInt(i, 10);
-            gpDrawTrace(); gpDrawStrip(); gpRenderInspector();
+            gpDrawTrace(); gpDrawStrip(); gpBuildRail(); gpRenderInspector();
         };
+
+        /* ---- comparing against another day --------------------------------
+         * The whole comparison stack — delta, coach, phases, lanes — works on
+         * ONE rows array holding two index ranges. So a lap from another
+         * recording is brought in on those terms: its samples are appended
+         * behind a fence and registered as one extra range tagged `ghost`.
+         * Every surface then works unchanged, and everything that iterates
+         * SESSION laps skips the tag. The fence comes down (and the samples
+         * with it) the moment anything re-splits. */
+        function gpGhostCaches() {
+            gp.delta = null; gp.deltaKey = ""; gp.coach = null;
+            gp.chan = null; gp.chanKey = "";
+            gp.sectors = null; gp.secKey = "";
+        }
+
+        function gpGhostDrop() {
+            if (gp.ghostFence === null) { gp.ghostSrc = null; return; }
+            gp.trace.length = gp.ghostFence;
+            gp.traceLaps = gp.traceLaps.filter(function (l) { return !l.ghost; });
+            gp.ghostFence = null; gp.ghostSrc = null;
+            if (gp.cmpLap >= gp.traceLaps.length) gp.cmpLap = -1;
+            gpGhostCaches();
+        }
+
+        function gpGhostShow(li) {
+            var src = gp.ghostSrc;
+            if (!src || !src.laps[li]) return;
+            if (gp.ghostFence !== null) {
+                gp.trace.length = gp.ghostFence;
+                gp.traceLaps = gp.traceLaps.filter(function (l) { return !l.ghost; });
+            } else {
+                gp.ghostFence = gp.trace.length;
+            }
+            var l = src.laps[li];
+            var base = gp.trace.length;
+            for (var k = l.from; k <= l.to; k++) gp.trace.push(src.rows[k]);
+            gp.traceLaps.push({ from: base, to: gp.trace.length - 1, ghost: true });
+            src.cur = li;
+            gp.cmpLap = gp.traceLaps.length - 1;
+            /* The ghost can land on the same lap INDEX as what it replaced, so
+               index-keyed caches would serve the old rows. Cleared, always. */
+            gpGhostCaches();
+            gpDrawTrace(); gpDrawStrip(); gpBuildRail(); gpRenderInspector();
+        }
+
+        window.gpGhostLap = function (li) { gpGhostShow(parseInt(li, 10)); };
+
+        window.gpCompareGhost = function (sesId) {
+            if (gp.ghostSrc && gp.ghostSrc.sesId === sesId) return;
+            var meta = (gp.sessions || []).filter(function (s) { return s.id === sesId; })[0];
+            if (!meta) return;
+            gpStore.rows(sesId).then(function (pk) {
+                var rows = gpRowsUnpack(pk);
+                if (!rows.length) throw new Error("the samples for that recording are missing");
+                gpComputeG(rows);
+                var laps = gpSplitRows(rows);
+                if (!laps.length)
+                    throw new Error("no " + gpRunWord() + "s cross this track's line in that recording");
+                var bi = 0, bt = Infinity;
+                laps.forEach(function (l, i) {
+                    var s = gpSecs(rows, l.from, l.to);
+                    if (s > 0 && s < bt) { bt = s; bi = i; }
+                });
+                gpGhostDrop();
+                gp.ghostSrc = { sesId: sesId, rows: rows, laps: laps, meta: meta, cur: bi };
+                gpGhostShow(bi);
+            }).catch(function (e) {
+                gpSetMsg("gpTraceMsg", "Could not open that day: " + (e && e.message ? e.message : e), "bad");
+                gpRenderInspector();
+            });
+        };
+
+        /* What the coach header and the map legend call the reference. */
+        function gpRefName() {
+            var l = gp.traceLaps[gp.cmpLap];
+            if (l && l.ghost && gp.ghostSrc) {
+                var m = gp.ghostSrc.meta;
+                var who = [m.car, m.driver].filter(Boolean).join(" \u00b7 ");
+                return gpSesDay(m.recordedAt) + " " + gpRunWord() + " " +
+                       (gp.ghostSrc.cur + 1) + (who ? " (" + who + ")" : "");
+            }
+            return gpRunWord() + " " + (gp.cmpLap + 1);
+        }
 
         /* ---- lap timing (the DASH's engine, over its own link) -------------
          * Studio owns this UI; the dash owns the track and the arithmetic.
