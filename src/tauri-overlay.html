@@ -12332,10 +12332,20 @@
             } else if (settings.mode === 'usb' && settings.portName) {
                 (async () => {
                     try {
-                        await RDM.serialConnect(settings.portName);
-                        document.getElementById('connectionMode').value = 'usb';
-                        _setConnState('var(--text-muted)', settings.portName);
-                        _testConnection();
+                        /* Role-aware, like every other serial bring-up. The raw
+                           serialConnect this used to be treated WHATEVER was on
+                           the stored port as the dash: restore a GPS puck that
+                           way and the app held its port as a failing dash link
+                           while the GPS workspace's own scan couldn't open the
+                           port its own process had — "no device found" with
+                           the device plugged in and held. */
+                        await _bringUpSerialDevice(settings.portName, { quiet: true });
+                        /* The dropdown tracks the PRIMARY link: 'usb' if a dash
+                           answered (setMode ran), unchanged if a puck attached
+                           alongside. Its callers are dropdown-driven and never
+                           need this; a boot restore does. */
+                        const sel = document.getElementById('connectionMode');
+                        if (sel) sel.value = RDM.mode;
                     } catch (e) {
                         console.warn('USB auto-reconnect failed:', e);
                         _updateConnectionUI();
