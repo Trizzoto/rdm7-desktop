@@ -1059,11 +1059,13 @@
         .gp-set .ws-slider { width: 144px; }
         .gp-set .ws-slider input[type=range] { min-width: 0; }
         .gp-set .ws-slider .val { min-width: 32px; flex: none; }
-        /* The signal map: what every frame carries, byte for byte. */
         /* The frame map reads like the analyser's decoded list: a frame
            header, then one row per signal with its byte span. Prose wrapped
            across three lines was unreadable; a byte column you can run an eye
            down is not. */
+        .gp-map-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+        .gp-map-hd > .l { font-size: 11px; color: var(--text-muted); flex: none; }
+        .gp-map-hd .ws-seg { flex: 1; }
         .gp-map { border: 1px solid var(--border); border-radius: var(--radius-sm);
                   overflow: hidden; margin-top: 6px;
                   font-family: 'JetBrains Mono', monospace; font-size: 10px; }
@@ -1080,6 +1082,9 @@
         .gp-map-s > .by { color: var(--text-muted); }
         .gp-map-s > .sg { color: var(--text); }
         .gp-map-s > .un { color: var(--text-muted); }
+        /* The scale is the decode instruction — everything else on the row is
+           context. Bold and full brightness, not a new colour (ADR-0014). */
+        .gp-map-s > .un .sc { color: var(--text); font-weight: 700; }
         .gp-map-f.off, .gp-map-s.off { opacity: 0.45; }
         .gp-set-v, .gp-set-na { font-family: 'JetBrains Mono', monospace; font-size: 11px;
                                 color: var(--text); width: 144px; display: inline-block; }
@@ -5862,6 +5867,7 @@
             video: null,                /* { name, url, t0, autoT0, offsetMs, follow } */
             viewFocus: null,            /* null = side by side; 'map' | 'video' = that tile solo */
             cam: null,                  /* camera defaults, this PC (gpCamLoad) */
+            canEdit: null,              /* staged CAN edit — base_id/bitrate_idx/fast_hz/slow_hz, committed on Save */
             ghostSrc: null,             /* { sesId, rows, laps, meta, cur } for the ghost's session */
             selGate: "sf",   /* "sf" | a sector index */
             editLayer: null, _gateViews: {},
@@ -10726,8 +10732,20 @@
 
         var GP_LAP_FLAGS = "bit 0 track loaded · 1 timing · 2 delta valid · 3 time trial";
 
+        /* The decode-critical half of a unit string — "u16 ×0.01 km/h" is a
+           raw type nobody needs to double-check and a scale nobody can guess.
+           Splitting them lets the scale carry full weight and colour while
+           the raw type stays out of the way, without restructuring every row
+           in GP_FRAMES to say the same thing two different ways. */
+        function gpMapUnitHtml(un) {
+            var m = /^(.*?)\s*(×.*)$/.exec(un || "");
+            if (!m) return "<span class='un'>" + gpEsc(un || "") + "</span>";
+            return "<span class='un'>" + (m[1] ? gpEsc(m[1]) + " " : "") +
+                   "<b class='sc'>" + gpEsc(m[2]) + "</b></span>";
+        }
+
         function gpFrameMapHtml() {
-            var c = gp.can || {};
+            var c = gp.canEdit || {};
             var base = gpN(c.base_id);
             var fast = gpN(c.fast_hz) || 25, slow = gpN(c.slow_hz) || 5;
             var h = "<div class='gp-map'>";
@@ -10744,7 +10762,7 @@
                     h += "<div class='gp-map-s" + (off ? " off" : "") + "'>" +
                          "<span class='by'>" + sg[0] + "</span>" +
                          "<span class='sg'>" + sg[1] + "</span>" +
-                         "<span class='un'>" + sg[2] + "</span></div>";
+                         gpMapUnitHtml(sg[2]) + "</div>";
                 });
             });
             return h + "</div><div class='gp-set-note'>Little-endian, byte offsets from 0. " +
@@ -10955,58 +10973,98 @@
            already be using either, and an id collision on CAN is silent and
            destructive rather than an error anyone sees. */
         var GP_BITRATES = [["0", "125 kbps"], ["1", "250 kbps"], ["2", "500 kbps"], ["3", "1 Mbps"]];
+        /* The complete set of legal base IDs — not a sample of them. The GPS
+           class is a 4-instance block in the RDM bus-device range (docs/
+           PROTOCOL.md §2): base_id must be 16-aligned and inside 0x400-0x430,
+           and those two rules together admit EXACTLY these four values. A
+           free-text field here would only make it easier to type something
+           the firmware rejects. */
         var GP_BASE_IDS = [[1024, "0x400"], [1040, "0x410"], [1056, "0x420"], [1072, "0x430"]];
+        /* config_store_defaults() in the node firmware, verbatim. */
+        var GP_CAN_DEFAULTS = { base_id: 1024, bitrate_idx: 2, fast_hz: 25, slow_hz: 5 };
 
         function gpHex(n) {
             var v = gpN(n);
             return v === null ? "—" : "0x" + v.toString(16).toUpperCase();
         }
 
+        /* The node's CAN settings, staged for editing. Every control below
+           reads and writes THIS, never gp.can or the DOM directly — one
+           source of truth means a re-render (e.g. clicking a different base)
+           can never snap a slider back to the last-saved value mid-drag, and
+           Save always sends exactly what the screen is showing. */
+        function gpCanEditFrom(c) {
+            return {
+                base_id: gpN(c.base_id),
+                bitrate_idx: gpN(c.bitrate_idx) === null ? GP_CAN_DEFAULTS.bitrate_idx : gpN(c.bitrate_idx),
+                fast_hz: gpN(c.fast_hz) === null ? GP_CAN_DEFAULTS.fast_hz : gpN(c.fast_hz),
+                slow_hz: gpN(c.slow_hz) === null ? GP_CAN_DEFAULTS.slow_hz : gpN(c.slow_hz)
+            };
+        }
+
+        /* Stage one field. Only a base_id change re-renders — it is the only
+           edit anything ELSE on screen (Occupies, every ID in the frame map)
+           needs to reflect live. Re-rendering on every slider tick would tear
+           down the input the user is actively dragging. */
+        window.gpCanEditSet = function (key, val) {
+            if (!gp.canEdit) return;
+            gp.canEdit[key] = val;
+            if (key === "base_id") gpRenderInspector();
+        };
+
+        window.gpCanReset = function () {
+            if (!gp.canEdit) return;
+            if (!window.confirm("Reset the base ID, bitrate and rates to their defaults?\n\nAny unsaved changes here are lost. Nothing on the node changes until you press Save.")) return;
+            gp.canEdit = Object.assign({}, GP_CAN_DEFAULTS);
+            gpRenderInspector();
+        };
+
         function gpCanFormHtml() {
-            var c = gp.can;
+            var c = gp.canEdit;
             if (!c) {
                 return "<div class='ws-note'>" +
                     (gpLinked() ? "Reading the node's CAN settings…"
                                 : "Attach the RDM GPS to see or change its CAN settings.") + "</div>";
             }
-            var base = gpN(c.base_id);
-            var span = gpN(c.id_span) || 16;
-            var sel = "<select id='gpCanBase'>";
-            GP_BASE_IDS.forEach(function (b) {
-                sel += "<option value='" + b[0] + "'" + (base === b[0] ? " selected" : "") + ">" +
-                       b[1] + " (" + b[0] + ")</option>";
-            });
-            var h = gpSetRow("Base ID", sel + "</select>");
-            sel = "<select id='gpCanRate'>";
+            var span = 16;
+            var sel = "<select id='gpCanRate' onchange=\"gpCanEditSet('bitrate_idx', parseInt(this.value,10))\">";
             GP_BITRATES.forEach(function (b) {
                 sel += "<option value='" + b[0] + "'" + (String(c.bitrate_idx) === b[0] ? " selected" : "") + ">" +
                        b[1] + "</option>";
             });
-            h += gpSetRow("Bitrate", sel + "</select>");
-            if (base !== null) {
+            var h = gpSetRow("Bitrate", sel + "</select>");
+            if (c.base_id !== null) {
                 h += gpSetRow("Occupies",
-                    "<span class='gp-set-v'>" + gpHex(base) + " – " + gpHex(base + span - 1) + "</span>");
+                    "<span class='gp-set-v'>" + gpHex(c.base_id) + " – " + gpHex(c.base_id + span - 1) + "</span>");
             }
             return h;
         }
 
-        /* Rates and the frame map: correct to change, rare to change. */
+        /* The base ID, and the rates: correct to change, rare to change. */
         function gpCanAdvancedHtml() {
-            var c = gp.can;
+            var c = gp.canEdit;
             /* The frame map is protocol reference, not live state — it is worth
                reading with no node on the desk, which is exactly when someone
-               is building a DBC or wiring a dash. Only the RATES need a node. */
-            if (!c) return "<div class='gp-set-note'>Attach the node to change its broadcast rates.</div>" +
+               is building a DBC or wiring a dash. Only the EDITOR needs one. */
+            if (!c) return "<div class='gp-set-note'>Attach the node to change its base ID or rates.</div>" +
                            gpFrameMapHtml();
-            var h = gpSetRow("Position, motion",
+            var h = "<div class='gp-map-hd'><span class='l'>Base ID</span><div class='ws-seg'>";
+            GP_BASE_IDS.forEach(function (b) {
+                h += "<button id='gpCanBase" + b[0] + "'" + (c.base_id === b[0] ? " class='on'" : "") +
+                     " onclick='gpCanEditSet(\"base_id\", " + b[0] + ")'>" + b[1] + "</button>";
+            });
+            h += "</div></div>";
+            h += gpSetRow("Position, motion",
                 "<div class='ws-slider'><input type='range' id='gpCanFast' min='1' max='25' step='1' value='" +
-                (gpN(c.fast_hz) || 25) + "' oninput=\"this.nextElementSibling.textContent=this.value+' Hz'\">" +
-                "<span class='val'>" + (gpN(c.fast_hz) || 25) + " Hz</span></div>");
+                c.fast_hz + "' oninput=\"gpCanEditSet('fast_hz', parseInt(this.value,10)); this.nextElementSibling.textContent=this.value+' Hz'\">" +
+                "<span class='val'>" + c.fast_hz + " Hz</span></div>");
             h += gpSetRow("Status, quality",
                 "<div class='ws-slider'><input type='range' id='gpCanSlow' min='1' max='10' step='1' value='" +
-                (gpN(c.slow_hz) || 5) + "' oninput=\"this.nextElementSibling.textContent=this.value+' Hz'\">" +
-                "<span class='val'>" + (gpN(c.slow_hz) || 5) + " Hz</span></div>");
-            h += "<button class='ws-btn-line' id='gpCanBtn' style='margin-top:7px' onclick='gpCanSave()'>Save to the node</button>" +
+                c.slow_hz + "' oninput=\"gpCanEditSet('slow_hz', parseInt(this.value,10)); this.nextElementSibling.textContent=this.value+' Hz'\">" +
+                "<span class='val'>" + c.slow_hz + " Hz</span></div>");
+            h += "<div class='lt-expbtns' style='margin-top:7px'>" +
+                 "<button class='ws-btn-line' id='gpCanBtn' onclick='gpCanSave()'>Save to the node</button>" +
+                 "<button class='ws-btn-line' id='gpCanResetBtn' onclick='gpCanReset()'>Reset to defaults</button></div>" +
                  "<div class='gp-msg' id='gpCanMsg'></div>" +
                  "<div class='gp-set-note'>Applied at boot — power-cycle after saving.</div>";
             h += gpFrameMapHtml();
@@ -11015,22 +11073,29 @@
 
         window.gpCanSave = function () {
             var dev = gpDev();
-            if (!dev || !dev.canConfigSet) return;
-            var base = document.getElementById("gpCanBase");
-            var rate = document.getElementById("gpCanRate");
-            var fast = document.getElementById("gpCanFast");
-            var slow = document.getElementById("gpCanSlow");
-            if (!base || !rate) return;
+            if (!dev || !dev.canConfigSet || !gp.canEdit) return;
             if (!gp.can) {
                 gpSetMsg("gpCanMsg", "Haven't read the node's CAN settings yet — re-reading rather than overwriting them.", "warn");
                 gpRefreshDevice();
                 return;
             }
+            var e = gp.canEdit;
+            /* The specific consequence, not a generic "are you sure": moving
+               the base shifts every ID the node sends, which is a bus-wide
+               change anything ELSE listening (a dash, a DBC, a logger) has to
+               follow too — worth confirming with the actual numbers, not a
+               blanket warning that would say the same thing for a rate tweak. */
+            var baseChanged = gpN(e.base_id) !== gpN(gp.can.base_id);
+            var msg = baseChanged
+                ? "Move this node's CAN block to " + gpHex(e.base_id) + "–" + gpHex(e.base_id + 15) + "?\n\n" +
+                  "Every frame ID it sends shifts with it. Anything else on the bus reading its old IDs — a dash, a DBC, a logger — needs updating too, and the node only applies this at boot."
+                : "Save these CAN settings?\n\nThe node only applies them at boot — power-cycle it afterwards.";
+            if (!window.confirm(msg)) return;
             var body = {
-                base_id: parseInt(base.value, 10),
-                bitrate_idx: parseInt(rate.value, 10),
-                fast_hz: fast ? parseInt(fast.value, 10) : undefined,
-                slow_hz: slow ? parseInt(slow.value, 10) : undefined
+                base_id: gpN(e.base_id),
+                bitrate_idx: gpN(e.bitrate_idx),
+                fast_hz: gpN(e.fast_hz),
+                slow_hz: gpN(e.slow_hz)
             };
             gpSetMsg("gpCanMsg", "Saving…", null);
             dev.canConfigSet(body).then(function (r) {
@@ -11041,9 +11106,9 @@
                     : "Saved.", "ok");
                 return dev.canConfigGet();
             }).then(function (c) {
-                if (c) { gp.can = c; gpRenderInspector(); }
-            }).catch(function (e) {
-                gpSetMsg("gpCanMsg", "Save failed: " + (e && e.message ? e.message : e), "bad");
+                if (c) { gp.can = c; gp.canEdit = gpCanEditFrom(c); gpRenderInspector(); }
+            }).catch(function (e2) {
+                gpSetMsg("gpCanMsg", "Save failed: " + (e2 && e2.message ? e2.message : e2), "bad");
             });
         };
 
@@ -11075,7 +11140,8 @@
         function gpSyncEnabled() {
             var live = gpLinked();
             ["gpIdentBtn", "gpWifiBtn", "gpWifiSsid", "gpWifiPass", "gpWifiEnabled",
-             "gpCanBtn", "gpCanBase", "gpCanRate", "gpCanFast", "gpCanSlow"].forEach(function (id) {
+             "gpCanBtn", "gpCanResetBtn", "gpCanRate", "gpCanFast", "gpCanSlow",
+             "gpCanBase1024", "gpCanBase1040", "gpCanBase1056", "gpCanBase1072"].forEach(function (id) {
                 var el = document.getElementById(id);
                 if (el) el.disabled = !live;
             });
@@ -11275,7 +11341,7 @@
                 gp.wifi = w;
                 return t.canConfigGet ? t.canConfigGet() : null;
             }).then(function (c) {
-                if (c) gp.can = c;
+                if (c) { gp.can = c; gp.canEdit = gpCanEditFrom(c); }
                 gpRenderInspector();
                 gpUpdateChips();
             }).catch(function (e) {
@@ -11303,7 +11369,7 @@
             gp.inFlight = false; gp.lapInFlight = false; gp._epoch = (gp._epoch || 0) + 1;
             gp._msgs = {}; gp._misses = 0;
             /* Identity is the previous NODE's, not this one's. */
-            if (!gpDev()) { gp.info = null; gp.wifi = null; gp.can = null; }
+            if (!gpDev()) { gp.info = null; gp.wifi = null; gp.can = null; gp.canEdit = null; }
             if (info) gp.info = info;
             gp.lap = null; gp.lapErr = null; gp._sortedByFix = false;
             gp.history = null; gp._lapSeen = -1;
