@@ -909,6 +909,20 @@
         }
         .ws-rail-title { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin: 8px 6px 4px; font-weight: 600; }
         .ws-rail-title:first-child { margin-top: 0; }
+        /* Session runs ONE aside instead of a rail plus an inspector. Two
+           columns of chrome around the data was 44% of the window spent on
+           containers; merged, the same content costs 252 px and the traces
+           get the rest. Everything you PICK is at the top, everything you
+           READ follows it, in one scroll. */
+        .ws-rail.gp-onecol { width: 252px; }
+        .gp-sess-aside { margin-top: 4px; }
+        /* The aside's groups are already ruled by .ws-grp; inside the rail
+           they need the rail's own gutter rather than the inspector's. */
+        .gp-sess-aside .ws-grp { padding-left: 6px; padding-right: 6px; }
+        /* The workspace header already says Session, and the lap list above
+           is unmistakably this recording — a second title mid-column is just
+           a row of pixels that is not data. */
+        .gp-sess-aside > h2, .gp-sess-aside > .ws-sub { display: none; }
         .ws-item {
             display: flex; align-items: center; gap: 8px; background: none; border: 1px solid transparent;
             border-radius: var(--radius-md); color: var(--text-muted); font-family: 'Sora', sans-serif;
@@ -1305,6 +1319,12 @@
            rack, with nothing overflowing and therefore nothing to scroll.
            With a floor, the column overflows instead and the stage scrolls. */
         .gp-viewer.tall { flex: 1 0 auto; min-height: 340px; margin-bottom: 0; }
+        /* Session is a PLAYBACK view: the traces are the subject and the map
+           is a position readout beside them, so it takes a fixed slice off the
+           top instead of growing to fill. Tracks still wants the big map — it
+           is a map editor — which is why this is scoped to the one view. */
+        .gp-viewer.tall.gp-sess { flex: 0 0 auto; min-height: 0; height: 188px; }
+        .gp-viewer.tall.gp-sess.has-video { height: 230px; }
         .gp-mapwrap { position: relative; margin: 0; flex: 1 1 58%; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; flex-shrink: 1; }
         .gp-vtile { display: none; position: relative; flex: 1 1 42%; min-width: 0;
                     background: #000; border: 1px solid var(--border);
@@ -1930,7 +1950,7 @@
         </div>
         <div class="ws-body">
             <div class="ws-rail" id="gpRail"></div>
-            <div class="ws-stage">
+            <div class="ws-stage" id="gpStageCol">
                 <div class="gp-hint" id="gpHint"></div>
                 <!-- Live position from the puck, plus the dash's track and
                      start/finish gate. Two devices, one picture — which is the
@@ -7139,8 +7159,9 @@
                      (gp.sessions && gp.sessions.length
                         ? "Pick a recording above, or download a new one from the node."
                         : "Download a recording from the node.") + "</div>";
-                rail.innerHTML = h;
+                rail.innerHTML = h + GP_ASIDE_SLOT;
                 gpBindSessionRail(rail);
+                gpRenderInspector();
                 return;
             }
             var mins = gpSecs(gp.trace, 0, gp.trace.length - 1) / 60;
@@ -7223,9 +7244,15 @@
                     });
                 }
             }
-            rail.innerHTML = h;
+            /* The read-only panels are appended by gpRenderInspector, into a
+               slot that is part of THIS markup — so any gpBuildRail() call
+               refreshes both halves of the aside and they cannot drift. */
+            rail.innerHTML = h + GP_ASIDE_SLOT;
             gpBindSessionRail(rail);
+            gpRenderInspector();
         }
+
+        var GP_ASIDE_SLOT = "<div class='gp-sess-aside' id='gpSessAside'></div>";
 
         /* ---- Session inspector -------------------------------------------- */
         function gpRenderSessionInspector(box) {
@@ -7777,6 +7804,46 @@
            instead of channels. Contiguous lanes (gap 0) also buy back the
            vertical space the gaps were spending on nothing. */
         var GP_LANE_H = 46, GP_LANE_GAP = 0, GP_LANE_LBL = 116, GP_AXIS_H = 15;
+        /* Lane height is not a constant, it is what is left. The rack takes
+           the stage height the map and the transport do not use and divides
+           it by however many lanes are showing, so the traces are as tall as
+           the window allows instead of leaving a band of empty canvas under
+           them. Below the floor the rack overflows and the stage scrolls —
+           squeezing nine channels into 20 px each would be worse than a
+           scrollbar. The ceiling stops five lanes ballooning on a tall
+           monitor into something that reads as a poster rather than an
+           instrument. */
+        var GP_LANE_MIN = 34, GP_LANE_MAX = 92;
+
+        function gpLaneH() { return gp.laneH || GP_LANE_H; }
+
+        function gpFitLaneH(rows) {
+            if (!rows) return GP_LANE_H;
+            var stage = document.getElementById("gpStageCol");
+            var cv = document.getElementById("gpStrip");
+            if (!stage || !stage.clientHeight || !cv || !stage.children) return GP_LANE_H;
+            /* Measure EVERY sibling rather than naming the map and the
+               transport: the stage also carries the hint banner, which comes
+               and goes with the receiver, and a fixed allowance for it meant
+               the axis row slid under the sticky transport the moment it
+               appeared. Whatever else is in the column, the rack gets what is
+               left over. */
+            var cs = window.getComputedStyle;
+            var box = function (el) {
+                var m = cs ? cs(el) : null;
+                return el.offsetHeight +
+                       (m ? (parseFloat(m.marginTop) || 0) + (parseFloat(m.marginBottom) || 0) : 0);
+            };
+            var used = 0, i, el;
+            for (i = 0; i < stage.children.length; i++) {
+                el = stage.children[i];
+                if (el === cv || !el.offsetHeight) continue;
+                used += box(el);
+            }
+            used += cs ? box(cv) - cv.offsetHeight : 8;   /* the strip's own margins */
+            var avail = stage.clientHeight - used - 4 - GP_AXIS_H;
+            return Math.max(GP_LANE_MIN, Math.min(GP_LANE_MAX, Math.floor(avail / rows)));
+        }
 
         /* Round tick intervals only. A "timeline" whose gridlines land on
            7.3 s tells you nothing; 1/2/5/10/15/30 s and their minute multiples
@@ -7810,7 +7877,7 @@
 
         function gpRackHeight() {
             var rows = gpLaneRows();
-            return rows.length * (GP_LANE_H + GP_LANE_GAP) + 4 + GP_AXIS_H;
+            return rows.length * (gpLaneH() + GP_LANE_GAP) + 4 + GP_AXIS_H;
         }
 
         /* Min/max over the visible window, padded so a flat trace is not a line
@@ -7910,7 +7977,8 @@
                what loads here, not a blank. */
             var noData = !gp.trace || !gp.trace.length || n < 2;
             var ticks = noData ? [] : gpAxisTicks(rng, plotW);
-            var rackBottom = 2 + rows.length * (GP_LANE_H + GP_LANE_GAP);
+            var laneH = gpLaneH();
+            var rackBottom = 2 + rows.length * (laneH + GP_LANE_GAP);
 
             /* The plot well: one dark field for the whole rack, drawn once.
                Sinking the data below the chrome is what every analysis package
@@ -7934,7 +8002,7 @@
             g.strokeStyle = "rgba(255,255,255,0.07)";
             g.beginPath();
             for (var sep = 1; sep < rows.length; sep++) {
-                var ly = snapY(2 + sep * (GP_LANE_H + GP_LANE_GAP));
+                var ly = snapY(2 + sep * (laneH + GP_LANE_GAP));
                 g.moveTo(6, ly); g.lineTo(plotX + plotW, ly);
             }
             g.stroke();
@@ -7951,8 +8019,8 @@
             g.stroke();
 
             rows.forEach(function (lane, li) {
-                var top = 2 + li * (GP_LANE_H + GP_LANE_GAP);
-                var mid = top + GP_LANE_H / 2;
+                var top = 2 + li * (laneH + GP_LANE_GAP);
+                var mid = top + laneH / 2;
                 var absent = lane.pending || noData || (lane.absent && lane.absent());
 
                 /* Name, unit, and — for a channel that needs hardware we do
@@ -7992,8 +8060,8 @@
                 var sc = gpLaneScale(lane, rng);
                 if (!sc) return;
                 var y = function (v) {
-                    return top + GP_LANE_H - 3 -
-                           ((v - sc.lo) / (sc.hi - sc.lo)) * (GP_LANE_H - 6);
+                    return top + laneH - 3 -
+                           ((v - sc.lo) / (sc.hi - sc.lo)) * (laneH - 6);
                 };
 
                 if (lane.zero) {
@@ -8057,7 +8125,7 @@
                 g.font = "8.5px 'JetBrains Mono', monospace";
                 var shi = sc.hi.toFixed(lane.dp), slo = sc.lo.toFixed(lane.dp);
                 g.fillText(shi, plotX - 7 - g.measureText(shi).width, snapT(top + 14));
-                g.fillText(slo, plotX - 7 - g.measureText(slo).width, snapT(top + GP_LANE_H - 6));
+                g.fillText(slo, plotX - 7 - g.measureText(slo).width, snapT(top + laneH - 6));
             });
 
             /* Axis labels below the stack. The first is anchored left and the
@@ -8115,6 +8183,9 @@
             if (!show) return;
             gpSyncLanesBtn();
 
+            /* Measure before sizing: how tall a lane gets is whatever the map
+               and the transport leave behind. */
+            gp.laneH = gpFitLaneH(gpLaneRows().length);
             var h = gpRackHeight();
             cv.style.height = h + "px";
             var dpr = window.devicePixelRatio || 1;
@@ -8173,7 +8244,7 @@
                     if (lane.pending) return;
                     var v = lane.get(pi);
                     if (v === null || v === undefined || !isFinite(v)) return;
-                    var top = 2 + li * (GP_LANE_H + GP_LANE_GAP);
+                    var top = 2 + li * (gpLaneH() + GP_LANE_GAP);
                     var txt = (lane.zero && v >= 0 ? "+" : "") + v.toFixed(lane.dp);
                     g.font = "11px 'JetBrains Mono', monospace";
                     var tw = g.measureText(txt).width;
@@ -10333,9 +10404,17 @@
             var viewer = document.getElementById("gpViewer");
             if (viewer) {
                 viewer.classList.toggle("tall", big);
+                /* Session caps the map instead of letting it grow. */
+                viewer.classList.toggle("gp-sess", gp.view === "session");
                 /* Setup has no use for a map at all. */
                 viewer.style.display = gp.view === "setup" ? "none" : "";
             }
+            /* Session collapses to a single aside: the rail widens to carry
+               what the inspector used to, and the inspector column goes. */
+            var railEl = document.getElementById("gpRail");
+            if (railEl) railEl.classList.toggle("gp-onecol", gp.view === "session");
+            var insp = document.getElementById("gpInspector");
+            if (insp) insp.style.display = gp.view === "session" ? "none" : "";
             gpViewerSync();
             var su = document.getElementById("gpSetupWrap");
             if (su) su.style.display = gp.view === "setup" ? "flex" : "none";
@@ -10746,6 +10825,17 @@
         /* ---- inspector: identity + Identify + WiFi ---- */
         function gpRenderInspector() {
             var box = document.getElementById("gpInspector");
+            if (gp.view === "session") {
+                /* Session has no right-hand inspector: its panels live at the
+                   foot of the single aside. Clear the old column so the ids
+                   inside it cannot shadow the live ones. */
+                var aside = document.getElementById("gpSessAside");
+                if (aside) {
+                    if (box && box.innerHTML) box.innerHTML = "";
+                    gpRenderSessionInspector(aside);
+                    return;
+                }
+            }
             if (!box) return;
             if (gp.view === "session") { gpRenderSessionInspector(box); return; }
             if (gp.view === "tracks") { gpRenderTrackInspector(box); return; }
