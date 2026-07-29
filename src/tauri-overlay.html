@@ -1064,6 +1064,9 @@
         .gp-units button { min-width: 44px; }
         .gp-ideal-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; }
         .gp-ses-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; width: 100%; }
+        .gp-hist-svg { width: 100%; height: 44px; display: block; margin: 6px 0 4px; }
+        .gp-hist-cor { font-size: 9px; color: var(--text-muted); text-transform: uppercase;
+                       letter-spacing: 0.06em; margin: 8px 0 3px; }
         .gp-ses-n .undated { color: #FF9F0A; }
         .gp-ses-act { display: flex; gap: 6px; margin: 5px 2px 2px; }
         .gp-ses-act button { flex: 1; }
@@ -6453,11 +6456,28 @@
             var when = gpSampleDate(anchor, rows.length ? rows[0].t : undefined);
             var dated = when ? "gps" : "download";
             if (!when) when = Date.now();
-            var best = null;
-            (gp.traceLaps || []).forEach(function (l) {
-                var s = gpSecs(rows, l.from, l.to);
-                if (s > 0 && (best === null || s < best)) best = s;
+            /* Per-lap times and the best lap's corner fingerprint travel in
+               the metadata, so history can trend a year of sessions without
+               deserialising a single recording. A corner is summarised by its
+               apex position (for cross-session matching, same 40 m rule as
+               gpCompareLaps), apex speed, and entry-to-exit seconds. */
+            var lapTimes = (gp.traceLaps || []).map(function (l) {
+                return Math.round(gpSecs(rows, l.from, l.to) * 1000) / 1000;
             });
+            var best = null, bestIdx = -1;
+            lapTimes.forEach(function (s, i) {
+                if (s > 0 && (best === null || s < best)) { best = s; bestIdx = i; }
+            });
+            var corners = [];
+            if (bestIdx >= 0) {
+                var bl = gp.traceLaps[bestIdx];
+                corners = gpFindCorners(rows, bl.from, bl.to).map(function (c) {
+                    var apex = rows[c.apex];
+                    return { lat: apex.lat, lon: apex.lon,
+                             kph: Math.round(apex.kph * 10) / 10,
+                             s: Math.round(gpSecs(rows, c.entry, c.exit) * 1000) / 1000 };
+                });
+            }
             return {
                 id: id || gpSesUid(),
                 name: (trk ? trk.name : "Recording") + " — " + gpSesDate(when).split(" ").slice(0, 3).join(" "),
@@ -6470,8 +6490,143 @@
                 durationS: gpSecs(rows, 0, Math.max(0, rows.length - 1)),
                 lapCount: (gp.traceLaps || []).length,
                 bestLapS: best,
+                lapTimesS: lapTimes,
+                corners: corners,
                 car: "", driver: ""            /* stage 6 fills these in */
             };
+        }
+
+        /* ---- history ------------------------------------------------------
+         * "Am I quicker at Mallala than I was in March?" is the question every
+         * track-day driver asks and no incumbent screen answers — Garmin shows
+         * you the session, not the year. Everything here reads session
+         * METADATA only, so it costs the same with two sessions or two
+         * hundred. */
+        function gpHistoryFor(trackId) {
+            if (!trackId) return [];
+            return (gp.sessions || []).filter(function (s) {
+                return s.trackId === trackId && gpN(s.bestLapS) !== null;
+            }).sort(function (a, b) { return (a.recordedAt || 0) - (b.recordedAt || 0); });
+        }
+
+        /* Corners matched by apex position, 40 m — the same rule and the same
+           reasoning as lap-to-lap matching: track position is the only name a
+           corner keeps across sessions. */
+        function gpCornerTrend(cur, ref) {
+            var out = [];
+            (cur || []).forEach(function (c, i) {
+                var best = null, bd = 40;
+                (ref || []).forEach(function (r) {
+                    var d = gpMetres(c, r);
+                    if (d < bd) { bd = d; best = r; }
+                });
+                if (best) out.push({ n: i + 1, d: c.s - best.s, kph_d: c.kph - best.kph });
+            });
+            return out;
+        }
+
+        function gpSesDay(ms) {
+            if (!ms) return "";
+            return new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+        }
+
+        /* The sparkline is SVG rather than canvas so it needs no post-render
+           hook: the inspector sets innerHTML and it simply exists. */
+        function gpHistSpark(hist, curId) {
+            if (hist.length < 2) return "";
+            var lo = Infinity, hi = -Infinity, t0 = Infinity, t1 = -Infinity;
+            hist.forEach(function (s) {
+                if (s.bestLapS < lo) lo = s.bestLapS;
+                if (s.bestLapS > hi) hi = s.bestLapS;
+                if (s.recordedAt < t0) t0 = s.recordedAt;
+                if (s.recordedAt > t1) t1 = s.recordedAt;
+            });
+            var X = function (s) { return t1 === t0 ? 120 : 8 + (s.recordedAt - t0) / (t1 - t0) * 224; };
+            var Y = function (s) { return hi === lo ? 22 : 8 + (s.bestLapS - lo) / (hi - lo) * 28; };
+            var pts = hist.map(function (s) { return X(s).toFixed(1) + "," + Y(s).toFixed(1); }).join(" ");
+            var h = "<svg class='gp-hist-svg' viewBox='0 0 240 44' preserveAspectRatio='none'>" +
+                    "<polyline points='" + pts + "' fill='none' stroke='#3a4048' stroke-width='1'/>";
+            hist.forEach(function (s) {
+                var on = s.id === curId;
+                h += "<circle cx='" + X(s).toFixed(1) + "' cy='" + Y(s).toFixed(1) +
+                     "' r='" + (on ? 3.2 : 2.2) + "' fill='" + (on ? "#6FBF73" : "#9ecbff") + "'>" +
+                     "<title>" + gpEsc(gpSesDay(s.recordedAt)) + " \u2014 " + gpLapTime(s.bestLapS) + "</title></circle>";
+            });
+            return h + "</svg>";
+        }
+
+        function gpHistoryHtml() {
+            var meta = (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0];
+            if (!meta || !meta.trackId || gpN(meta.bestLapS) === null) return "";
+            var hist = gpHistoryFor(meta.trackId);
+            var here = gpEsc(meta.trackName || "this track");
+            var h = "<div class='ws-grp'><div class='ws-gt'>History at " + here +
+                    "<i class='gp-lamp info' data-tip=\"<b>Across your sessions here</b>" +
+                    "Best lap per saved session, oldest to newest \u2014 the green dot is this one. " +
+                    "Corner deltas compare this session's best lap with the previous visit's, matched " +
+                    "by position on track. It reads only saved recordings on THIS track, so deleting " +
+                    "one removes it from the trend.\"></i></div>";
+            if (hist.length < 2) {
+                h += "<div class='ws-note'>This is the first saved session at " + here +
+                     ". The trend builds here as you save more days.</div></div>";
+                return h;
+            }
+
+            var word = meta.trial ? "run" : "lap";
+            var pb = hist.reduce(function (a, b) { return b.bestLapS < a.bestLapS ? b : a; });
+            var off = meta.bestLapS - pb.bestLapS;
+            h += gpHistSpark(hist, meta.id);
+            h += "<div class='gp-rows'>";
+            h += "<div class='gp-row'><span class='k'>Personal best</span><span class='v'>" +
+                 gpLapTime(pb.bestLapS) + "</span><span class='s'>" + gpEsc(gpSesDay(pb.recordedAt)) + "</span></div>";
+            h += "<div class='gp-row'><span class='k'>This session</span><span class='v " +
+                 (off <= 0 ? "ok" : "") + "'>" +
+                 (pb.id === meta.id ? "your best day here"
+                                    : gpSigned(off, 2, " s") + " off") + "</span><span class='s'>best " +
+                 gpLapTime(meta.bestLapS) + "</span></div>";
+
+            /* Consistency: the spread of this session's laps against the
+               median spread of every other session here. */
+            var spread = function (m) {
+                var ts = m.lapTimesS || [];
+                if (ts.length < 2) return null;
+                return Math.max.apply(null, ts) - Math.min.apply(null, ts);
+            };
+            var mine = spread(meta);
+            var others = hist.filter(function (s) { return s.id !== meta.id; })
+                             .map(spread).filter(function (v) { return v !== null; })
+                             .sort(function (a, b) { return a - b; });
+            if (mine !== null && others.length) {
+                var med = others[Math.floor(others.length / 2)];
+                h += "<div class='gp-row'><span class='k'>Consistency</span><span class='v'>" +
+                     mine.toFixed(2) + " s</span><span class='s'>" + word + " spread \u00b7 typically " +
+                     med.toFixed(2) + " s here</span></div>";
+            }
+            h += "</div>";
+
+            /* Corner deltas against the previous visit — "since last time",
+               which is the question, rather than against the PB day, which can
+               be years stale. */
+            var prev = null;
+            hist.forEach(function (s) {
+                if (s.id === meta.id) return;
+                if (s.recordedAt < meta.recordedAt && (!prev || s.recordedAt > prev.recordedAt)) prev = s;
+            });
+            if (prev && (meta.corners || []).length && (prev.corners || []).length) {
+                var tr = gpCornerTrend(meta.corners, prev.corners);
+                tr.sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); });
+                var say = tr.slice(0, 3).filter(function (c) { return Math.abs(c.d) >= 0.05; });
+                if (say.length) {
+                    h += "<div class='gp-hist-cor'>vs last visit (" + gpEsc(gpSesDay(prev.recordedAt)) + ")</div>";
+                    say.forEach(function (c) {
+                        h += "<div class='gp-row'><span class='k'>Corner " + c.n + "</span><span class='v " +
+                             (c.d < 0 ? "ok" : "bad") + "'>" + gpSigned(c.d, 2, " s") + "</span><span class='s'>" +
+                             (c.d < 0 ? "quicker" : "slower") + " through it</span></div>";
+                    });
+                }
+            }
+            h += "</div>";
+            return h;
         }
 
         function gpSessionsRefresh() {
@@ -6723,7 +6878,7 @@
                     h += "<div class='gp-glegend'>";
                     for (i = 0; i <= 12; i++)
                         h += "<i style='background:" + gpSpeedColour(i / 12) + "'></i>";
-                    h += "</div><div class='gp-glegend-lab'><span>" + Math.round(slo) +
+                    h += "</div><div class='gp-glegend-lab'><span>" + Math.round(gpSpdN(slo)) +
                          " " + gpSpdU() + "</span><span></span><span>" + Math.round(gpSpdN(shi)) +
                          " " + gpSpdU() + "</span></div>";
                 } else if (mmode === "ref") {
@@ -6757,7 +6912,7 @@
                 h += "";
                 h += "</div>";
 
-                h = gpGlanceHtml() + gpRenderCoach() + h;
+                h = gpGlanceHtml() + gpHistoryHtml() + gpRenderCoach() + h;
             }
             box.innerHTML = head + h;
             Array.prototype.forEach.call(box.querySelectorAll('[data-gp-focus]'), function (b) {
