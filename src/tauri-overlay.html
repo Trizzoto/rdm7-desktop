@@ -1083,6 +1083,7 @@
                           display: flex; align-items: baseline; gap: 8px; }
         .gp-map-t > .fr > .id { color: var(--accent-hover); font-weight: 600; }
         .gp-map-t > .fr > .nm { color: var(--text); flex: 1; }
+        .gp-map-t > .fr > .dl { color: var(--text-muted); }
         .gp-map-t > .fr > .hz { color: var(--text-muted); }
         .gp-map-t > .by { color: var(--text-muted); }
         .gp-map-t > .sg { color: var(--text); }
@@ -10742,6 +10743,15 @@
                 return (gpSatU16(gpDivRound(c.s[field], den)) / 100).toFixed(2);
             };
         }
+        /* The IMU driver already reports milli-g and centi-deg/s — the wire
+           units exactly — so the only step the node takes is the i16 clamp,
+           and the only step here is the decode divide. */
+        function gpImuRow(field, den, dp) {
+            return function (c) {
+                var v = c.s && c.s.imu ? gpN(c.s.imu[field]) : null;
+                return v === null ? null : (gpSatI16(v) / den).toFixed(dp);
+            };
+        }
         function gpUtcSlice(a, b) {
             return function (c) { return (c.s && c.s.utc) ? c.s.utc.slice(a, b) : null; };
         }
@@ -10908,10 +10918,17 @@
                       if (!c.s || gpN(c.s.nano) === null) return null;
                       return String(gpSatU8(Math.trunc(c.s.nano / 10000000)));
                   } }] },
-            { off: 0x5, name: "Accel", rate: "off", s: [
-                { b: "0-7", n: "Reserved", note: "rev B IMU" }] },
-            { off: 0x6, name: "Gyro", rate: "off", s: [
-                { b: "0-7", n: "Reserved", note: "rev B IMU" }] },
+            { off: 0x5, name: "Accel", rate: "fast", dlc: 6, needs: "imu", s: [
+                { b: "0-1", n: "Accel X", t: "i16", sc: "×0.001", u: "g",
+                  note: "board axes \u2014 no mounting rotation applied", live: gpImuRow("ax_mg", 1000, 3) },
+                { b: "2-3", n: "Accel Y", t: "i16", sc: "×0.001", u: "g", live: gpImuRow("ay_mg", 1000, 3) },
+                { b: "4-5", n: "Accel Z", t: "i16", sc: "×0.001", u: "g",
+                  note: "about +1 g with the puck flat", live: gpImuRow("az_mg", 1000, 3) }] },
+            { off: 0x6, name: "Gyro", rate: "fast", dlc: 6, needs: "imu", s: [
+                { b: "0-1", n: "Gyro X", t: "i16", sc: "×0.01", u: "°/s", live: gpImuRow("gx_cdps", 100, 2) },
+                { b: "2-3", n: "Gyro Y", t: "i16", sc: "×0.01", u: "°/s", live: gpImuRow("gy_cdps", 100, 2) },
+                { b: "4-5", n: "Gyro Z", t: "i16", sc: "×0.01", u: "°/s",
+                  note: "yaw rate when the puck is flat", live: gpImuRow("gz_cdps", 100, 2) }] },
             { off: 0x7, name: "Lap", rate: "slow", s: [
                 { b: "0-1", n: "Current lap", t: "u16", sc: "×0.01", u: "s",
                   note: "0xFFFF means no time yet", live: gpCsRow("lap_time_current") },
@@ -11020,13 +11037,17 @@
                     "<span class='hd'>Type</span><span class='hd'>Scale</span>" +
                     "<span class='hd'>Unit</span><span class='hd'>Live value</span>";
             GP_FRAMES.forEach(function (fr) {
-                var dim = fr.rate === "off";
-                var rate = fr.rate === "fast" ? fast + " Hz" : fr.rate === "slow" ? slow + " Hz"
-                         : dim ? "not sent" : fr.rate === "in" ? "on receive" : "on request";
+                /* A frame the node will not transmit says so plainly, rather
+                   than advertising a rate it never meets. */
+                var dim = fr.needs === "imu" && gp.info && gp.info.imu_present === false;
+                var rate = dim ? "no IMU fitted"
+                         : fr.rate === "fast" ? fast + " Hz" : fr.rate === "slow" ? slow + " Hz"
+                         : fr.rate === "in" ? "on receive" : "on request";
                 h += "<div class='fr" + (dim ? " dim" : "") + "'>" +
                      "<span class='id'>" + (base === null ? "+" + fr.off.toString(16).toUpperCase()
                                                           : gpHex(base + fr.off)) + "</span>" +
                      "<span class='nm'>" + fr.name + "</span>" +
+                     "<span class='dl'>" + (fr.dlc || 8) + " bytes</span>" +
                      "<span class='hz'>" + rate + "</span></div>";
                 fr.s.forEach(function (sg, idx) {
                     h += gpMapCell(sg, fr.off + "_" + idx, dim, ctx, false);
