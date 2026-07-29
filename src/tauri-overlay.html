@@ -8407,13 +8407,17 @@
             if (!t) return [];
             var out = [];
             var trial = gpIsTrial(t);
+            /* Driving order: start, the splits in the order you cross them,
+               then the finish. The same order the gate list uses, because a
+               list that disagrees with the lap is a list you have to think
+               about. */
             if (t.start_finish) out.push({ key: "sf", line: t.start_finish,
                 label: trial ? "Start" : "Start / finish",
                 color: trial ? "#6FBF73" : "#F5F7FA" });
-            if (trial) out.push({ key: "fin", line: t.finish, label: "Finish", color: "#F5F7FA" });
             (t.sectors || []).forEach(function (s, i) {
                 out.push({ key: i, line: s, label: "Split " + (i + 1), color: "#FF9F0A" });
             });
+            if (trial) out.push({ key: "fin", line: t.finish, label: "Finish", color: "#F5F7FA" });
             return out;
         }
 
@@ -9017,22 +9021,22 @@
                  "<i style='background:" + (trial ? "#6FBF73" : "#F5F7FA") + "'></i>" +
                  (trial ? "Start" : "Start / finish") +
                  (t.start_finish ? "" : " <em>— not placed</em>") + "</button>";
-            if (trial) {
-                h += "<button class='gp-gate" + (gp.selGate === "fin" ? " on" : "") + "' onclick=\"gpSelectGate('fin')\">" +
-                     "<i style='background:#F5F7FA'></i>Finish</button>";
-            }
             secs.forEach(function (s, i) {
                 h += "<button class='gp-gate" + (String(gp.selGate) === String(i) ? " on" : "") + "' onclick='gpSelectGate(" + i + ")'>" +
                      "<i style='background:#FF9F0A'></i>Split " + (i + 1) + "</button>";
             });
+            if (trial) {
+                h += "<button class='gp-gate" + (gp.selGate === "fin" ? " on" : "") + "' onclick=\"gpSelectGate('fin')\">" +
+                     "<i style='background:#F5F7FA'></i>Finish</button>";
+            }
             h += "</div>";
             h += "<div class='lt-expbtns' style='margin-top:7px'>" +
                  "<button class='ws-btn-line' onclick=\"gpPlaceGate('sf')\">" +
                  (t.start_finish ? "Re-place " : "Place ") + (trial ? "start" : "start/finish") + "</button>" +
-                 "<button class='ws-btn-line' onclick=\"gpPlaceGate('fin')\">" +
-                 (trial ? "Re-place finish" : "+ Finish line") + "</button>" +
                  "<button class='ws-btn-line' onclick=\"gpPlaceGate('sector')\"" +
-                 (secs.length >= GP_MAX_SECTORS ? " disabled" : "") + ">+ Split</button></div>";
+                 (secs.length >= GP_MAX_SECTORS ? " disabled" : "") + ">+ Split</button>" +
+                 "<button class='ws-btn-line' onclick=\"gpPlaceGate('fin')\">" +
+                 (trial ? "Re-place finish" : "+ Finish line") + "</button></div>";
             h += "<div class='ws-note'>Drop a gate at the centre of the map, drag it onto the line, then drag its <b>end</b> to aim it the way the car travels and set how wide it is. " +
                  "The dash counts a crossing only inside that width.</div>";
             h += "</div>";
