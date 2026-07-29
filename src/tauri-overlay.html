@@ -1059,43 +1059,51 @@
         .gp-set .ws-slider { width: 144px; }
         .gp-set .ws-slider input[type=range] { min-width: 0; }
         .gp-set .ws-slider .val { min-width: 32px; flex: none; }
-        /* The frame map reads like the analyser's decoded list: a frame
-           header, then one row per signal with its byte span. Prose wrapped
-           across three lines was unreadable; a byte column you can run an eye
-           down is not. */
+        /* The frame map is a decode table, so it is built like one. ONE grid
+           for the whole map rather than a grid per row: columns then line up
+           the entire way down, which is the only reason a table like this is
+           readable at all. Frame headers span all six. */
         .gp-map-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
         .gp-map-hd > .l { font-size: 11px; color: var(--text-muted); flex: none; }
         .gp-map-hd .ws-seg { flex: 1; }
         .gp-map { border: 1px solid var(--border); border-radius: var(--radius-sm);
-                  overflow: hidden; margin-top: 6px;
+                  margin-top: 6px; overflow-x: auto;
                   font-family: 'JetBrains Mono', monospace; font-size: 10px; }
-        .gp-map-f { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px;
-                    padding: 4px 8px; background: var(--panel-elevated);
-                    border-top: 1px solid var(--border); }
-        .gp-map > .gp-map-f:first-child { border-top: none; }
-        .gp-map-f > .id { color: var(--accent-hover); font-weight: 600; }
-        .gp-map-f > .nm { color: var(--text); }
-        .gp-map-f > .hz { color: var(--text-muted); }
-        .gp-map-s { display: grid; grid-template-columns: 44px 1fr auto auto; gap: 8px;
-                    padding: 2px 8px; align-items: baseline; }
-        .gp-map-s:last-child { padding-bottom: 4px; }
-        .gp-map-s > .by { color: var(--text-muted); }
-        .gp-map-s > .sg { color: var(--text); }
-        .gp-map-s > .un { color: var(--text-muted); }
-        /* The scale is the decode instruction — everything else on the row is
-           context. Bold and full brightness, not a new colour (ADR-0014). */
-        .gp-map-s > .un .sc { color: var(--text); font-weight: 700; }
-        /* The live value is the actual answer to "what should my dash show" —
-           right-aligned tabular numerals, same bold/full-bright treatment as
-           the scale, so the row reads left to right as structure, meaning,
-           then current state. "—" (no source) drops to the muted colour;
-           there is nothing to cross-check there. */
-        .gp-map-s > .lv { color: var(--text); font-weight: 700; text-align: right;
-                          font-variant-numeric: tabular-nums; white-space: nowrap; }
-        /* "—": no USB source for this signal, not merely no reading yet.
-           Muted and regular weight, same as every other empty state. */
-        .gp-map-s > .lv.na { color: var(--text-muted); font-weight: 400; }
-        .gp-map-f.off, .gp-map-s.off { opacity: 0.45; }
+        .gp-map-t { display: grid; min-width: 540px;
+                    grid-template-columns: 46px minmax(120px, 1.5fr) 106px 52px 46px minmax(76px, 1fr); }
+        .gp-map-t > * { padding: 3px 7px; border-top: 1px solid var(--border);
+                        border-left: 1px solid var(--border); min-width: 0; }
+        .gp-map-t > .k1, .gp-map-t > .fr { border-left: none; }
+        /* Column headings: the whole point of the rework — say what each
+           column IS, once, instead of leaving it to be inferred. */
+        .gp-map-t > .hd { background: var(--panel-elevated); color: var(--text-muted);
+                          border-top: none; text-transform: uppercase;
+                          letter-spacing: 0.05em; font-size: 9px; }
+        .gp-map-t > .fr { grid-column: 1 / -1; background: var(--panel-elevated);
+                          display: flex; align-items: baseline; gap: 8px; }
+        .gp-map-t > .fr > .id { color: var(--accent-hover); font-weight: 600; }
+        .gp-map-t > .fr > .nm { color: var(--text); flex: 1; }
+        .gp-map-t > .fr > .hz { color: var(--text-muted); }
+        .gp-map-t > .by { color: var(--text-muted); }
+        .gp-map-t > .sg { color: var(--text); }
+        .gp-map-t > .sg > i { display: block; font-style: normal; font-size: 9px;
+                              color: var(--text-muted); margin-top: 1px; }
+        /* An expanded flag bit is a child of the byte above it, and reads as
+           one: indented, and named rather than numbered. */
+        .gp-map-t > .sg.bit { padding-left: 20px; color: var(--text-muted); }
+        .gp-map-t > .ty { color: var(--text-muted); }
+        /* Scale and unit are the decode instruction — the two things a reader
+           cannot guess. Full brightness, not a new colour (ADR-0014). */
+        .gp-map-t > .sc, .gp-map-t > .un { color: var(--text); font-weight: 700; }
+        /* The live value answers "what should my dash show". Right-aligned
+           tabular numerals so the column reads as a column. */
+        .gp-map-t > .lv { color: var(--text); font-weight: 700; text-align: right;
+                          font-variant-numeric: tabular-nums; white-space: nowrap;
+                          overflow: hidden; text-overflow: ellipsis; }
+        /* "—": no USB source for this signal, not merely no reading yet. */
+        .gp-map-t > .lv.na, .gp-map-t > .sc.na, .gp-map-t > .un.na, .gp-map-t > .ty.na {
+            color: var(--text-muted); font-weight: 400; }
+        .gp-map-t > .dim { opacity: 0.45; }
         .gp-set-v, .gp-set-na { font-family: 'JetBrains Mono', monospace; font-size: 11px;
                                 color: var(--text); width: 144px; display: inline-block; }
         .gp-set-na { color: var(--text-muted); }
@@ -10373,7 +10381,8 @@
             if (gp.view === "setup") {
                 rail.innerHTML = "<div class='ws-rail-title'>Setup</div>" +
                     [["Display", "d"], ["Camera", "c"], ["CAN bus", "b"],
-                     ["Network", "n"], ["Advanced", "a"], ["Device", "v"]].map(function (s, i) {
+                     ["Network", "n"], ["Advanced", "a"], ["Device", "v"],
+                     ["Frame map", "f"]].map(function (s, i) {
                         return "<button class='ws-item' data-gp-set='" + i + "'>" +
                                "<span class='st'></span>" + s[0] + "</button>";
                     }).join("");
@@ -10649,6 +10658,12 @@
                  "<div class='gp-msg' id='gpIdentMsg'></div></div>";
 
             h += "</div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>CAN frame map" +
+                 gpTip("Every signal on the bus",
+                       "One row per signal: which bytes carry it, whether it is signed, " +
+                       "what to multiply the raw value by, and what Studio reads there " +
+                       "right now. Flag bytes are expanded a bit at a time.") + "</div>" +
+                 gpFrameMapHtml() + "</div>";
             box.innerHTML = h;
             gpSyncUnitBtns();
             gpFillWifiForm();
@@ -10715,6 +10730,21 @@
            lying around from a higher-resolution source. Where no source
            exists over USB at all, the live function is simply absent — a "—"
            is honest; a guessed number is not. */
+        function gpFwByte(idx) {
+            return function (c) {
+                var f = c.info && c.info.firmware ? String(c.info.firmware).split(".") : null;
+                return f && f[idx] !== undefined ? String(parseInt(f[idx], 10)) : null;
+            };
+        }
+        function gpAccRow(field, den) {
+            return function (c) {
+                if (!c.s || gpN(c.s[field]) === null) return null;
+                return (gpSatU16(gpDivRound(c.s[field], den)) / 100).toFixed(2);
+            };
+        }
+        function gpUtcSlice(a, b) {
+            return function (c) { return (c.s && c.s.utc) ? c.s.utc.slice(a, b) : null; };
+        }
         function gpDivRound(num, den) {
             var h = Math.trunc(den / 2);
             return num >= 0 ? Math.trunc((num + h) / den) : Math.trunc((num - h) / den);
@@ -10729,7 +10759,7 @@
             var cs = gpDivRound(Math.trunc(s * 1000), 10);
             return cs >= 65535 ? 65534 : cs;
         }
-        function gpCsSecs(cs) { return cs === null ? null : (cs / 100).toFixed(2) + " s"; }
+        function gpCsSecs(cs) { return cs === null ? null : (cs / 100).toFixed(2); }
         /* The delta frame has no sentinel — 0.00 s is a real result (dead
            level with the reference), so validity rides on the flags bit
            alone, never on the number. */
@@ -10750,167 +10780,275 @@
             return f === null ? null : "0x" + f.toString(16).toUpperCase().padStart(2, "0");
         }
 
+        /* One row per signal, in byte order. Fields:
+             b     byte span, or byte.bit once a flag byte is expanded
+             n     signal name
+             t     key into GP_TYPE — signed vs unsigned, spelled out in words
+             sc    what to multiply the raw value by
+             u     the unit the scaled value is in
+             note  one short line where the number alone cannot be read
+             live  what Studio has right now, quantised exactly as the node
+                   packs it — so the dash decoding the same frame agrees
+             bits  expands a flag byte into one row per bit */
+        var GP_TYPE = {
+            u8: "Unsigned 8-bit", u16: "Unsigned 16-bit", u32: "Unsigned 32-bit",
+            i16: "Signed 16-bit", i32: "Signed 32-bit",
+            flags: "Flag byte", bit: "Single bit"
+        };
+
+        /* Bit n of the node's own status flag byte. The node reports the byte
+           it puts on the wire verbatim, so every bit here is the real one —
+           TIME_VALID in particular cannot be inferred from anything else
+           Studio can see. */
+        function gpFlagBit(n) {
+            return function (c) {
+                var f = c.s ? gpN(c.s.can_flags) : null;
+                return f === null ? null : String((f >> n) & 1);
+            };
+        }
+        function gpLapBit(n) {
+            return function (c) {
+                var f = gpLapFlagsByte(c.lap);
+                return f === null ? null : String((f >> n) & 1);
+            };
+        }
+        function gpCsRow(field) {
+            return function (c) {
+                return c.lap && c.lap.timing ? gpCsSecs(gpCsFromS(c.lap.timing[field])) : null;
+            };
+        }
+        function gpCfgRow(field) {
+            return function (c) {
+                var v = c.can ? gpN(c.can[field]) : null;
+                return v === null ? null : String(v);
+            };
+        }
+
         var GP_FRAMES = [
             { off: 0x0, name: "Status", rate: "slow", s: [
-                ["0", "Device type", ""],
-                ["1", "Fix type", "0-4", function (s) { return s ? String(s.fix_type) : null; }],
-                ["2", "Satellites", "", function (s) { return s ? String(s.sats) : null; }],
-                ["3", "Flags", "bitfield"],
-                ["4", "pDOP", "×0.1", function (s) {
-                    if (!s || gpN(s.pdop_1e2) === null) return null;
-                    return (gpSatU8(gpDivRound(s.pdop_1e2, 10)) / 10).toFixed(1);
-                }],
-                ["5-7", "Firmware", "maj.min.patch", function (s, lap, info) {
-                    return (info && info.firmware) ? info.firmware : null;
-                }]] },
+                { b: "0", n: "Device type", t: "u8", sc: "×1", note: "0x02 is a GPS node",
+                  live: function (c) {
+                      var v = c.info ? gpN(c.info.device_class) : null;
+                      return v === null ? null : "0x" + v.toString(16).toUpperCase().padStart(2, "0");
+                  } },
+                { b: "1", n: "Fix type", t: "u8", sc: "×1",
+                  note: "0 none · 2 2D · 3 3D · 5 time only",
+                  live: function (c) { return c.s ? String(c.s.fix_type) : null; } },
+                { b: "2", n: "Satellites", t: "u8", sc: "×1",
+                  live: function (c) { return c.s ? String(c.s.sats) : null; } },
+                { b: "3", n: "Status flags", t: "flags", note: "one bit per condition",
+                  live: function (c) {
+                      var f = c.s ? gpN(c.s.can_flags) : null;
+                      return f === null ? null : "0x" + f.toString(16).toUpperCase().padStart(2, "0");
+                  },
+                  bitLive: gpFlagBit,
+                  bits: [[0, "Fix usable"], [1, "Differential (SBAS)"], [2, "Time valid"],
+                         [3, "Receiver link up"], [4, "IMU fitted"], [5, "Configured"]] },
+                { b: "4", n: "pDOP", t: "u8", sc: "×0.1",
+                  live: function (c) {
+                      if (!c.s || gpN(c.s.pdop_1e2) === null) return null;
+                      return (gpSatU8(gpDivRound(c.s.pdop_1e2, 10)) / 10).toFixed(1);
+                  } },
+                { b: "5", n: "Firmware major", t: "u8", sc: "×1", live: gpFwByte(0) },
+                { b: "6", n: "Firmware minor", t: "u8", sc: "×1", live: gpFwByte(1) },
+                { b: "7", n: "Firmware patch", t: "u8", sc: "×1", live: gpFwByte(2) }] },
             { off: 0x1, name: "Position", rate: "fast", s: [
-                ["0-3", "Latitude", "i32 ×1e-7°", function (s) {
-                    return (s && gpN(s.lat_1e7) !== null) ? (s.lat_1e7 / 1e7).toFixed(7) + "°" : null;
-                }],
-                ["4-7", "Longitude", "i32 ×1e-7°", function (s) {
-                    return (s && gpN(s.lon_1e7) !== null) ? (s.lon_1e7 / 1e7).toFixed(7) + "°" : null;
-                }]] },
+                { b: "0-3", n: "Latitude", t: "i32", sc: "×1e-7", u: "°",
+                  live: function (c) {
+                      return (c.s && gpN(c.s.lat_1e7) !== null) ? (c.s.lat_1e7 / 1e7).toFixed(7) : null;
+                  } },
+                { b: "4-7", n: "Longitude", t: "i32", sc: "×1e-7", u: "°",
+                  live: function (c) {
+                      return (c.s && gpN(c.s.lon_1e7) !== null) ? (c.s.lon_1e7 / 1e7).toFixed(7) : null;
+                  } }] },
             { off: 0x2, name: "Motion", rate: "fast", s: [
-                ["0-1", "Speed", "u16 ×0.01 km/h", function (s) {
-                    if (!s || gpN(s.gspeed_mm_s) === null) return null;
-                    return (gpSatU16(gpDivRound(s.gspeed_mm_s * 36, 100)) / 100).toFixed(2) + " km/h";
-                }],
-                ["2-3", "Heading", "u16 ×0.01°", function (s) {
-                    if (!s || gpN(s.head_1e5) === null) return null;
-                    var h = s.head_1e5 % 36000000; if (h < 0) h += 36000000;
-                    var w = gpDivRound(h, 1000); if (w >= 36000) w -= 36000;
-                    return (w / 100).toFixed(2) + "°";
-                }],
-                ["4-5", "Altitude", "i16 ×0.1 m", function (s) {
-                    if (!s || gpN(s.alt_mm) === null) return null;
-                    return (gpSatI16(gpDivRound(s.alt_mm, 100)) / 10).toFixed(1) + " m";
-                }],
-                ["6-7", "Climb rate", "i16 ×0.01 m/s", function (s) {
-                    if (!s || gpN(s.veld_mm_s) === null) return null;
-                    return (gpSatI16(gpDivRound(-s.veld_mm_s, 10)) / 100).toFixed(2) + " m/s";
-                }]] },
+                { b: "0-1", n: "Speed", t: "u16", sc: "×0.01", u: "km/h",
+                  live: function (c) {
+                      if (!c.s || gpN(c.s.gspeed_mm_s) === null) return null;
+                      return (gpSatU16(gpDivRound(c.s.gspeed_mm_s * 36, 100)) / 100).toFixed(2);
+                  } },
+                { b: "2-3", n: "Heading", t: "u16", sc: "×0.01", u: "°",
+                  note: "course over ground, 0 is north",
+                  live: function (c) {
+                      if (!c.s || gpN(c.s.head_1e5) === null) return null;
+                      var h = c.s.head_1e5 % 36000000; if (h < 0) h += 36000000;
+                      var w = gpDivRound(h, 1000); if (w >= 36000) w -= 36000;
+                      return (w / 100).toFixed(2);
+                  } },
+                { b: "4-5", n: "Altitude", t: "i16", sc: "×0.1", u: "m",
+                  note: "above mean sea level",
+                  live: function (c) {
+                      if (!c.s || gpN(c.s.alt_mm) === null) return null;
+                      return (gpSatI16(gpDivRound(c.s.alt_mm, 100)) / 10).toFixed(1);
+                  } },
+                { b: "6-7", n: "Climb rate", t: "i16", sc: "×0.01", u: "m/s",
+                  note: "positive is climbing",
+                  live: function (c) {
+                      if (!c.s || gpN(c.s.veld_mm_s) === null) return null;
+                      return (gpSatI16(gpDivRound(-c.s.veld_mm_s, 10)) / 100).toFixed(2);
+                  } }] },
             { off: 0x3, name: "Quality", rate: "slow", s: [
-                ["0-1", "Horiz accuracy", "u16 ×0.01 m", function (s) {
-                    if (!s || gpN(s.hacc_mm) === null) return null;
-                    return (gpSatU16(gpDivRound(s.hacc_mm, 10)) / 100).toFixed(2) + " m";
-                }],
-                ["2-3", "Vert accuracy", "u16 ×0.01 m", function (s) {
-                    if (!s || gpN(s.vacc_mm) === null) return null;
-                    return (gpSatU16(gpDivRound(s.vacc_mm, 10)) / 100).toFixed(2) + " m";
-                }],
-                ["4-5", "Speed accuracy", "u16 ×0.01 m/s", function (s) {
-                    if (!s || gpN(s.sacc_mm_s) === null) return null;
-                    return (gpSatU16(gpDivRound(s.sacc_mm_s, 10)) / 100).toFixed(2) + " m/s";
-                }],
-                ["6-7", "Heading accuracy", "u16 ×0.01°", function (s) {
-                    if (!s || gpN(s.headacc_1e5) === null) return null;
-                    return (gpSatU16(gpDivRound(s.headacc_1e5, 1000)) / 100).toFixed(2) + "°";
-                }]] },
+                { b: "0-1", n: "Horizontal accuracy", t: "u16", sc: "×0.01", u: "m",
+                  live: gpAccRow("hacc_mm", 10) },
+                { b: "2-3", n: "Vertical accuracy", t: "u16", sc: "×0.01", u: "m",
+                  live: gpAccRow("vacc_mm", 10) },
+                { b: "4-5", n: "Speed accuracy", t: "u16", sc: "×0.01", u: "m/s",
+                  live: gpAccRow("sacc_mm_s", 10) },
+                { b: "6-7", n: "Heading accuracy", t: "u16", sc: "×0.01", u: "°",
+                  live: gpAccRow("headacc_1e5", 1000) }] },
             { off: 0x4, name: "Time (UTC)", rate: "slow", s: [
-                ["0-1", "Year", "u16", function (s) { return (s && s.utc) ? s.utc.slice(0, 4) : null; }],
-                ["2", "Month", "", function (s) { return (s && s.utc) ? String(parseInt(s.utc.slice(5, 7), 10)) : null; }],
-                ["3", "Day", "", function (s) { return (s && s.utc) ? String(parseInt(s.utc.slice(8, 10), 10)) : null; }],
-                ["4", "Hour", "", function (s) { return (s && s.utc) ? s.utc.slice(11, 13) : null; }],
-                ["5", "Minute", "", function (s) { return (s && s.utc) ? s.utc.slice(14, 16) : null; }],
-                ["6", "Second", "", function (s) { return (s && s.utc) ? s.utc.slice(17, 19) : null; }],
-                ["7", "Sub-second", "×10 ms"]] },
-            { off: 0x5, name: "Accel", rate: "off", s: [["—", "Reserved", "rev B IMU"]] },
-            { off: 0x6, name: "Gyro", rate: "off", s: [["—", "Reserved", "rev B IMU"]] },
+                { b: "0-1", n: "Year", t: "u16", sc: "×1", live: gpUtcSlice(0, 4) },
+                { b: "2", n: "Month", t: "u8", sc: "×1", live: gpUtcSlice(5, 7) },
+                { b: "3", n: "Day", t: "u8", sc: "×1", live: gpUtcSlice(8, 10) },
+                { b: "4", n: "Hour", t: "u8", sc: "×1", live: gpUtcSlice(11, 13) },
+                { b: "5", n: "Minute", t: "u8", sc: "×1", live: gpUtcSlice(14, 16) },
+                { b: "6", n: "Second", t: "u8", sc: "×1", live: gpUtcSlice(17, 19) },
+                { b: "7", n: "Sub-second", t: "u8", sc: "×10", u: "ms",
+                  live: function (c) {
+                      if (!c.s || gpN(c.s.nano) === null) return null;
+                      return String(gpSatU8(Math.trunc(c.s.nano / 10000000)));
+                  } }] },
+            { off: 0x5, name: "Accel", rate: "off", s: [
+                { b: "0-7", n: "Reserved", note: "rev B IMU" }] },
+            { off: 0x6, name: "Gyro", rate: "off", s: [
+                { b: "0-7", n: "Reserved", note: "rev B IMU" }] },
             { off: 0x7, name: "Lap", rate: "slow", s: [
-                ["0-1", "Current lap", "u16 ×0.01 s", function (s, lap) {
-                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.lap_time_current)) : null;
-                }],
-                ["2-3", "Last lap", "u16 ×0.01 s", function (s, lap) {
-                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.lap_time_last)) : null;
-                }],
-                ["4-5", "Best lap", "u16 ×0.01 s", function (s, lap) {
-                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.lap_time_best)) : null;
-                }],
-                ["6", "Lap number", "", function (s, lap) {
-                    return lap && lap.timing ? String((gpN(lap.timing.lap_number) || 0) & 0xFF) : null;
-                }],
-                ["7", "Lap flags", "bitfield", function (s, lap) { return gpLapFlagsHex(lap); }]] },
+                { b: "0-1", n: "Current lap", t: "u16", sc: "×0.01", u: "s",
+                  note: "0xFFFF means no time yet", live: gpCsRow("lap_time_current") },
+                { b: "2-3", n: "Last lap", t: "u16", sc: "×0.01", u: "s",
+                  live: gpCsRow("lap_time_last") },
+                { b: "4-5", n: "Best lap", t: "u16", sc: "×0.01", u: "s",
+                  live: gpCsRow("lap_time_best") },
+                { b: "6", n: "Lap number", t: "u8", sc: "×1", note: "wraps at 255",
+                  live: function (c) {
+                      return c.lap && c.lap.timing
+                          ? String((gpN(c.lap.timing.lap_number) || 0) & 0xFF) : null;
+                  } },
+                { b: "7", n: "Lap flags", t: "flags", note: "one bit per condition",
+                  live: function (c) { return gpLapFlagsHex(c.lap); }, bitLive: gpLapBit,
+                  bits: [[0, "Track loaded"], [1, "Timing a lap"],
+                         [2, "Delta valid"], [3, "Time trial"]] }] },
             { off: 0x8, name: "Sector", rate: "slow", s: [
-                ["0-1", "Current sector", "u16 ×0.01 s", function (s, lap) {
-                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.sector_time_current)) : null;
-                }],
-                ["2-3", "Last sector", "u16 ×0.01 s", function (s, lap) {
-                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.sector_time_last)) : null;
-                }],
-                ["4-5", "Theoretical best", "u16 ×0.01 s", function (s, lap) {
-                    return lap && lap.timing ? gpCsSecs(gpCsFromS(lap.timing.lap_time_theoretical)) : null;
-                }],
-                ["6", "Sector number", "1-based", function (s, lap) {
-                    return lap && lap.timing ? String(gpN(lap.timing.sector_number) || 0) : null;
-                }],
-                ["7", "Lap flags", "bitfield", function (s, lap) { return gpLapFlagsHex(lap); }]] },
+                { b: "0-1", n: "Current sector", t: "u16", sc: "×0.01", u: "s",
+                  live: gpCsRow("sector_time_current") },
+                { b: "2-3", n: "Last sector", t: "u16", sc: "×0.01", u: "s",
+                  live: gpCsRow("sector_time_last") },
+                { b: "4-5", n: "Theoretical best", t: "u16", sc: "×0.01", u: "s",
+                  note: "sum of the best sectors", live: gpCsRow("lap_time_theoretical") },
+                { b: "6", n: "Sector number", t: "u8", sc: "×1", note: "1 is the first sector",
+                  live: function (c) {
+                      return c.lap && c.lap.timing ? String(gpN(c.lap.timing.sector_number) || 0) : null;
+                  } },
+                { b: "7", n: "Lap flags", t: "flags", note: "same byte as the Lap frame",
+                  live: function (c) { return gpLapFlagsHex(c.lap); }, bitLive: gpLapBit,
+                  bits: [[0, "Track loaded"], [1, "Timing a lap"],
+                         [2, "Delta valid"], [3, "Time trial"]] }] },
             { off: 0x9, name: "Delta", rate: "slow", s: [
-                ["0-1", "Predictive delta", "i16 ×0.01 s", function (s, lap) {
-                    if (!lap || !lap.timing || !("lap_delta" in lap.timing)) return null;
-                    return (gpDeltaCs(lap.timing.lap_delta) / 100).toFixed(2) + " s";
-                }],
-                ["2-3", "Lap distance", "u16 m", function (s, lap) {
-                    return (lap && lap.timing && gpN(lap.timing.distance_m) !== null)
-                        ? String(Math.round(lap.timing.distance_m)) + " m" : null;
-                }],
-                ["7", "Lap flags", "bitfield", function (s, lap) { return gpLapFlagsHex(lap); }]] },
+                { b: "0-1", n: "Predictive delta", t: "i16", sc: "×0.01", u: "s",
+                  note: "negative is ahead of the reference",
+                  live: function (c) {
+                      if (!c.lap || !c.lap.timing || !("lap_delta" in c.lap.timing)) return null;
+                      return (gpDeltaCs(c.lap.timing.lap_delta) / 100).toFixed(2);
+                  } },
+                { b: "2-3", n: "Lap distance", t: "u16", sc: "×1", u: "m",
+                  live: function (c) {
+                      return (c.lap && c.lap.timing && gpN(c.lap.timing.distance_m) !== null)
+                          ? String(Math.round(c.lap.timing.distance_m)) : null;
+                  } },
+                { b: "4-6", n: "Unused", note: "always zero" },
+                { b: "7", n: "Lap flags", t: "flags", note: "same byte as the Lap frame",
+                  live: function (c) { return gpLapFlagsHex(c.lap); }, bitLive: gpLapBit,
+                  bits: [[0, "Track loaded"], [1, "Timing a lap"],
+                         [2, "Delta valid"], [3, "Time trial"]] }] },
             { off: 0xE, name: "Command", rate: "in", s: [
-                ["0", "Command", ""], ["1-7", "Arguments", ""]] },
+                { b: "0", n: "Command", t: "u8", sc: "×1",
+                  note: "0x01 bitrate · 0x02 base ID · 0x03 rate · 0x04 identify · " +
+                        "0x05 save · 0x06 reboot · 0x07 factory reset · 0x10 read config" },
+                { b: "1-7", n: "Arguments", note: "depends on the command" }] },
             { off: 0xF, name: "Response", rate: "out", s: [
-                ["0", "Command", ""], ["1", "Result", ""], ["2", "Bitrate index", ""],
-                ["3-4", "Base ID", "u16"], ["5", "Fast rate", "Hz"], ["6", "Slow rate", "Hz"],
-                ["7", "Hardware rev", ""]] }
+                { b: "0", n: "Command", t: "u8", sc: "×1", note: "echoes the command sent" },
+                { b: "1", n: "Result", t: "u8", sc: "×1",
+                  note: "0 ok · 1 bad parameter · 2 unknown · 3 busy · 4 not supported" },
+                { b: "2", n: "Bitrate index", t: "u8", sc: "×1",
+                  note: "0 125k · 1 250k · 2 500k · 3 1M", live: gpCfgRow("bitrate_idx") },
+                { b: "3-4", n: "Base ID", t: "u16", sc: "×1",
+                  live: function (c) {
+                      var v = c.can ? gpN(c.can.base_id) : null;
+                      return v === null ? null : gpHex(v);
+                  } },
+                { b: "5", n: "Fast rate", t: "u8", sc: "×1", u: "Hz", live: gpCfgRow("fast_hz") },
+                { b: "6", n: "Slow rate", t: "u8", sc: "×1", u: "Hz", live: gpCfgRow("slow_hz") },
+                { b: "7", n: "Hardware rev", t: "u8", sc: "×1",
+                  live: function (c) {
+                      var v = c.info ? gpN(c.info.hw_rev) : null;
+                      return v === null ? null : String(v);
+                  } }] }
         ];
-
-        var GP_LAP_FLAGS = "bit 0 track loaded · 1 timing · 2 delta valid · 3 time trial";
-
-        /* The decode-critical half of a unit string — "u16 ×0.01 km/h" is a
-           raw type nobody needs to double-check and a scale nobody can guess.
-           Splitting them lets the scale carry full weight and colour while
-           the raw type stays out of the way, without restructuring every row
-           in GP_FRAMES to say the same thing two different ways. */
-        function gpMapUnitHtml(un) {
-            var m = /^(.*?)\s*(×.*)$/.exec(un || "");
-            if (!m) return "<span class='un'>" + gpEsc(un || "") + "</span>";
-            return "<span class='un'>" + (m[1] ? gpEsc(m[1]) + " " : "") +
-                   "<b class='sc'>" + gpEsc(m[2]) + "</b></span>";
-        }
 
         /* A live() throwing must not take the whole map down with it — one
            wrong field in one row would otherwise blank every row after it. */
-        function gpMapLiveSafe(fn, s, lap, info) {
-            try { return fn(s, lap, info); } catch (e) { return null; }
+        function gpMapLiveSafe(fn, ctx) {
+            try { return fn(ctx); } catch (e) { return null; }
+        }
+
+        function gpMapCell(sg, key, dim, ctx, isBit) {
+            var val = sg.live ? gpMapLiveSafe(sg.live, ctx) : null;
+            var d = dim ? " dim" : "";
+            var cell = function (cls, txt) {
+                return "<span class='" + cls + d + (txt ? "" : " na") + "'>" +
+                       (txt ? gpEsc(txt) : "—") + "</span>";
+            };
+            return "<span class='by k1" + d + "'>" + gpEsc(sg.b) + "</span>" +
+                   "<span class='sg" + d + (isBit ? " bit" : "") + "'>" + gpEsc(sg.n) +
+                   (sg.note ? "<i>" + gpEsc(sg.note) + "</i>" : "") + "</span>" +
+                   cell("ty", GP_TYPE[sg.t]) + cell("sc", sg.sc) + cell("un", sg.u) +
+                   "<span class='lv" + d + (val === null ? " na" : "") + "' id='gpMapLv_" + key + "'>" +
+                   (val === null ? "—" : gpEsc(val)) + "</span>";
+        }
+
+        function gpMapCtx() {
+            return { s: gp.status, lap: gp.lap, info: gp.info, can: gp.can };
         }
 
         function gpFrameMapHtml() {
-            var c = gp.canEdit || {};
+            var c = gp.canEdit || gp.can || {};
             var base = gpN(c.base_id);
             var fast = gpN(c.fast_hz) || 25, slow = gpN(c.slow_hz) || 5;
-            var s = gp.status, lap = gp.lap, info = gp.info;
-            var h = "<div class='gp-map'>";
+            var ctx = gpMapCtx();
+            var h = "<div class='gp-map'><div class='gp-map-t'>" +
+                    "<span class='hd k1'>Byte</span><span class='hd'>Signal</span>" +
+                    "<span class='hd'>Type</span><span class='hd'>Scale</span>" +
+                    "<span class='hd'>Unit</span><span class='hd'>Live value</span>";
             GP_FRAMES.forEach(function (fr) {
-                var off = fr.rate === "off";
+                var dim = fr.rate === "off";
                 var rate = fr.rate === "fast" ? fast + " Hz" : fr.rate === "slow" ? slow + " Hz"
-                         : off ? "—" : fr.rate === "in" ? "rx" : "tx";
-                h += "<div class='gp-map-f" + (off ? " off" : "") + "'>" +
+                         : dim ? "not sent" : fr.rate === "in" ? "on receive" : "on request";
+                h += "<div class='fr" + (dim ? " dim" : "") + "'>" +
                      "<span class='id'>" + (base === null ? "+" + fr.off.toString(16).toUpperCase()
                                                           : gpHex(base + fr.off)) + "</span>" +
                      "<span class='nm'>" + fr.name + "</span>" +
                      "<span class='hz'>" + rate + "</span></div>";
                 fr.s.forEach(function (sg, idx) {
-                    var val = sg[3] ? gpMapLiveSafe(sg[3], s, lap, info) : null;
-                    h += "<div class='gp-map-s" + (off ? " off" : "") + "'>" +
-                         "<span class='by'>" + sg[0] + "</span>" +
-                         "<span class='sg'>" + sg[1] + "</span>" +
-                         gpMapUnitHtml(sg[2]) +
-                         "<span class='lv" + (val === null ? " na" : "") + "' id='gpMapLv_" + fr.off + "_" + idx + "'>" +
-                         (val === null ? "—" : gpEsc(val)) + "</span></div>";
+                    h += gpMapCell(sg, fr.off + "_" + idx, dim, ctx, false);
+                    (sg.bits || []).forEach(function (bit) {
+                        h += gpMapCell(gpBitRow(sg, bit),
+                                       fr.off + "_" + idx + "b" + bit[0], dim, ctx, true);
+                    });
                 });
             });
-            return h + "</div><div class='gp-set-note'>Little-endian, byte offsets from 0. " +
-                   "Lap flags: " + GP_LAP_FLAGS + ". A lap time of 0xFFFF means no time yet. " +
-                   "The live column is what Studio currently reads over USB, quantised the same " +
-                   "way the node packs it — your dash should decode the same number.</div>";
+            return h + "</div></div><div class='gp-set-note'>" +
+                   "Little-endian, byte offsets from 0. Live values are what Studio reads over " +
+                   "USB right now, rounded the same way the node rounds them before sending — " +
+                   "your dash should decode the same number.</div>";
+        }
+
+        /* A flag byte's bits are rows in their own right: byte.bit notation in
+           the Byte column, the condition as the name, 1 or 0 as the value.
+           A paragraph listing "bit 0 track loaded · 1 timing" under the table
+           was the thing nobody could read. */
+        function gpBitRow(parent, bit) {
+            return { b: String(parent.b).split("-")[0] + "." + bit[0], n: bit[1], t: "bit",
+                     live: parent.bitLive(bit[0]) };
         }
 
         /* Patches the live cells in place, without touching anything else in
@@ -10920,16 +11058,22 @@
            Setup is not the visible view. */
         function gpCanLiveUpdate() {
             if (gp.view !== "setup") return;
-            var s = gp.status, lap = gp.lap, info = gp.info;
+            var ctx = gpMapCtx();
+            var patch = function (sg, key) {
+                if (!sg.live) return;
+                var el = document.getElementById("gpMapLv_" + key);
+                if (!el) return;
+                var val = gpMapLiveSafe(sg.live, ctx);
+                var txt = val === null ? "—" : val;
+                if (el.textContent !== txt) el.textContent = txt;
+                el.classList.toggle("na", val === null);
+            };
             GP_FRAMES.forEach(function (fr) {
                 fr.s.forEach(function (sg, idx) {
-                    if (!sg[3]) return;
-                    var el = document.getElementById("gpMapLv_" + fr.off + "_" + idx);
-                    if (!el) return;
-                    var val = gpMapLiveSafe(sg[3], s, lap, info);
-                    var txt = val === null ? "—" : val;
-                    if (el.textContent !== txt) el.textContent = txt;
-                    el.classList.toggle("na", val === null);
+                    patch(sg, fr.off + "_" + idx);
+                    (sg.bits || []).forEach(function (bit) {
+                        patch(gpBitRow(sg, bit), fr.off + "_" + idx + "b" + bit[0]);
+                    });
                 });
             });
         }
@@ -11211,8 +11355,7 @@
             /* The frame map is protocol reference, not live state — it is worth
                reading with no node on the desk, which is exactly when someone
                is building a DBC or wiring a dash. Only the EDITOR needs one. */
-            if (!c) return "<div class='gp-set-note'>Attach the node to change its base ID or rates.</div>" +
-                           gpFrameMapHtml();
+            if (!c) return "<div class='gp-set-note'>Attach the node to change its base ID or rates.</div>";
             var h = "<div class='gp-map-hd'><span class='l'>Base ID</span><div class='ws-seg'>";
             GP_BASE_IDS.forEach(function (b) {
                 h += "<button id='gpCanBase" + b[0] + "'" + (c.base_id === b[0] ? " class='on'" : "") +
@@ -11232,7 +11375,6 @@
                  "<button class='ws-btn-line' id='gpCanResetBtn' onclick='gpCanReset()'>Reset to defaults</button></div>" +
                  "<div class='gp-msg' id='gpCanMsg'></div>" +
                  "<div class='gp-set-note'>Applied at boot — power-cycle after saving.</div>";
-            h += gpFrameMapHtml();
             return h;
         }
 
