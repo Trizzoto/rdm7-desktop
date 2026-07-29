@@ -1061,6 +1061,10 @@
         .ws-item .tag.gp-best { color: #c98ae0; }
         .gp-ideal { cursor: default; opacity: 0.9; }
         .gp-ideal-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; }
+        .gp-ses-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; width: 100%; }
+        .gp-ses-n .undated { color: #FF9F0A; }
+        .gp-ses-act { display: flex; gap: 6px; margin: 5px 2px 2px; }
+        .gp-ses-act button { flex: 1; }
         .gp-strip { display: none; width: calc(100% - 28px); margin: 8px 14px 0;
                     background: var(--panel); border: 1px solid var(--border);
                     border-radius: var(--radius-md); cursor: crosshair; }
@@ -5692,6 +5696,8 @@
             coachAll: false,      /* three things, or the full teardown */
             view: "monitor",            /* monitor | tracks */
             tracks: null,               /* the library (see gpTracksLoad) */
+            sessions: null,             /* stored recordings; null = not read yet */
+            sessionId: null,            /* which stored recording is loaded */
             selGate: "sf",   /* "sf" | a sector index */
             editLayer: null, _gateViews: {},
             info: null,        /* device.info result */
@@ -6074,12 +6080,298 @@
             return s;
         }
 
+        /* ---- stored recordings --------------------------------------------
+         * A downloaded recording used to live in gp.trace and nowhere else, so
+         * quitting Studio threw it away and the only copy left was the node's
+         * ring — which wraps at ~370 minutes and then loses it for good. Every
+         * competitor in this market, down to a $9 phone app, keeps sessions.
+         *
+         * IndexedDB, in two stores: small metadata rows that the rail can list
+         * without deserialising anything large, and the samples keyed by the
+         * same id. Mirrors the imageStore pattern already in this file rather
+         * than introducing a second way of doing the same thing. */
+        var gpStore = (function () {
+            var DB = "rdm7_sessions_db", META = "meta", DATA = "data", _db = null;
+
+            function open() {
+                if (_db) return Promise.resolve(_db);
+                if (typeof indexedDB === "undefined")
+                    return Promise.reject(new Error("this browser has no local storage for recordings"));
+                return new Promise(function (res, rej) {
+                    var q = indexedDB.open(DB, 1);
+                    q.onupgradeneeded = function () {
+                        var db = q.result;
+                        if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: "id" });
+                        if (!db.objectStoreNames.contains(DATA)) db.createObjectStore(DATA);
+                    };
+                    q.onsuccess = function () { _db = q.result; res(_db); };
+                    q.onerror = function () { rej(q.error); };
+                });
+            }
+            function read(store, key) {
+                return open().then(function (db) {
+                    return new Promise(function (res, rej) {
+                        var os = db.transaction(store, "readonly").objectStore(store);
+                        var q = key === undefined ? os.getAll() : os.get(key);
+                        q.onsuccess = function () { res(q.result); };
+                        q.onerror = function () { rej(q.error); };
+                    });
+                });
+            }
+            function write(fn) {
+                return open().then(function (db) {
+                    return new Promise(function (res, rej) {
+                        var tx = db.transaction([META, DATA], "readwrite");
+                        fn(tx.objectStore(META), tx.objectStore(DATA));
+                        tx.oncomplete = function () { res(); };
+                        tx.onerror = function () { rej(tx.error); };
+                        tx.onabort = function () { rej(tx.error); };
+                    });
+                });
+            }
+            return {
+                list: function () { return read(META).then(function (r) { return r || []; }); },
+                meta: function (id) { return read(META, id); },
+                rows: function (id) { return read(DATA, id); },
+                put: function (meta, packed) {
+                    return write(function (m, d) {
+                        m.put(meta);
+                        if (packed) d.put(packed, meta.id);
+                    });
+                },
+                /* Metadata only — renaming must not rewrite four megabytes. */
+                putMeta: function (meta) { return write(function (m) { m.put(meta); }); },
+                remove: function (id) { return write(function (m, d) { m.delete(id); d.delete(id); }); }
+            };
+        })();
+
+        /* A sample is 12 bytes on the wire and becomes an object in memory,
+           which is right for working with and ruinous for storing: a full ring
+           is ~555,000 of them. Parallel typed arrays are what the wire already
+           holds — every field is an integer at heart — so this round-trips
+           bit-exactly for anything that came off a node, structured-clones
+           natively, and costs 16 B a sample (~8.9 MB for a full ring).
+           `g` is not stored: gpComputeG derives it, and recomputing is both
+           cheaper than storing and immune to drifting out of step with it. */
+        var GP_NO_T = 4294967295;        /* a recording made before timestamps */
+
+        function gpRowsPack(rows) {
+            var n = rows.length;
+            var pk = { v: 1, n: n, lat: new Int32Array(n), lon: new Int32Array(n),
+                       kph: new Uint16Array(n), hdg: new Uint16Array(n), t: new Uint32Array(n) };
+            for (var i = 0; i < n; i++) {
+                var r = rows[i];
+                pk.lat[i] = Math.round(r.lat * 1e7);
+                pk.lon[i] = Math.round(r.lon * 1e7);
+                pk.kph[i] = Math.round(r.kph * 100);
+                pk.hdg[i] = Math.round(r.hdg * 100);
+                pk.t[i] = r.t === undefined ? GP_NO_T : r.t;
+            }
+            return pk;
+        }
+
+        function gpRowsUnpack(pk) {
+            if (!pk || !pk.lat) return [];
+            var n = pk.n === undefined ? pk.lat.length : pk.n, rows = new Array(n);
+            for (var i = 0; i < n; i++) {
+                rows[i] = { lat: pk.lat[i] / 1e7, lon: pk.lon[i] / 1e7,
+                            kph: pk.kph[i] / 100, hdg: pk.hdg[i] / 100,
+                            t: pk.t[i] === GP_NO_T ? undefined : pk.t[i], g: 0 };
+            }
+            return rows;
+        }
+
+        /* iTOW dates a sample to the second but only within its GPS week. The
+           node reports UTC and iTOW from the SAME fix, which pins the week
+           exactly; with no fix at download time there is nothing to anchor to,
+           and a session dated by when it was downloaded says so rather than
+           pretending to know. */
+        var GP_WEEK_MS = 604800000;
+
+        function gpTraceAnchor() {
+            var s = gp.status;
+            if (!s || !s.utc || gpN(s.itow_ms) === null) return null;
+            var ms = Date.parse(s.utc);
+            return isFinite(ms) ? { utc: ms, itow: gpN(s.itow_ms) } : null;
+        }
+
+        function gpSampleDate(anchor, itow) {
+            if (!anchor || itow === undefined || itow === null) return null;
+            var d = itow - anchor.itow;
+            if (d > GP_WEEK_MS / 2) d -= GP_WEEK_MS;         /* straddles a rollover */
+            if (d < -GP_WEEK_MS / 2) d += GP_WEEK_MS;
+            return anchor.utc + d;
+        }
+
+        function gpSesDate(ms) {
+            if (!ms) return "";
+            var d = new Date(ms);
+            return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) +
+                   " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+        }
+
+        function gpSesUid() {
+            return "ses_" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+        }
+
+        /* Built AFTER gpSplitLaps, so the lap count and best lap are the ones
+           the rail is about to show rather than a second opinion. */
+        function gpSessionMeta(rows, id) {
+            var trk = gpActiveTrack();
+            var anchor = gpTraceAnchor();
+            var when = gpSampleDate(anchor, rows.length ? rows[0].t : undefined);
+            var dated = when ? "gps" : "download";
+            if (!when) when = Date.now();
+            var best = null;
+            (gp.traceLaps || []).forEach(function (l) {
+                var s = gpSecs(rows, l.from, l.to);
+                if (s > 0 && (best === null || s < best)) best = s;
+            });
+            return {
+                id: id || gpSesUid(),
+                name: (trk ? trk.name : "Recording") + " — " + gpSesDate(when).split(" ").slice(0, 3).join(" "),
+                trackId: trk ? trk.id : null,
+                trackName: trk ? trk.name : null,
+                trial: gpIsTrial(trk),
+                recordedAt: when, dated: dated, savedAt: Date.now(),
+                device: (gp.info && (gp.info.model || gp.info.name)) || null,
+                samples: rows.length,
+                durationS: gpSecs(rows, 0, Math.max(0, rows.length - 1)),
+                lapCount: (gp.traceLaps || []).length,
+                bestLapS: best,
+                car: "", driver: ""            /* stage 6 fills these in */
+            };
+        }
+
+        function gpSessionsRefresh() {
+            return gpStore.list().then(function (l) {
+                l.sort(function (a, b) { return (b.recordedAt || 0) - (a.recordedAt || 0); });
+                gp.sessions = l;
+                return l;
+            }).catch(function () { gp.sessions = []; return []; });
+        }
+
+        /* Saving is automatic and silent on success: a "did you remember to
+           save" step would move the hole rather than close it. A FAILURE is
+           loud, because the alternative is believing you have a copy. */
+        function gpSessionSave(rows) {
+            var meta = gpSessionMeta(rows, null);
+            return gpStore.put(meta, gpRowsPack(rows)).then(function () {
+                gp.sessionId = meta.id;
+                return gpSessionsRefresh().then(function () { gpBuildRail(); });
+            }).catch(function (e) {
+                gpSetMsg("gpTraceMsg", "Downloaded, but could not be saved to this PC: " +
+                         (e && e.message ? e.message : e) + " — it will be lost when Studio closes.", "bad");
+            });
+        }
+
+        window.gpSessionLoad = function (id) {
+            if (gp.traceBusy) return;
+            Promise.all([gpStore.meta(id), gpStore.rows(id)]).then(function (r) {
+                var meta = r[0], rows = gpRowsUnpack(r[1]);
+                if (!meta || !rows.length) throw new Error("the samples for this recording are missing");
+                /* Load the track it was recorded against, or the laps come out
+                   of different geometry than the ones that were saved. */
+                if (meta.trackId && gp.tracks && gpTrackById(meta.trackId))
+                    gp.tracks.active = meta.trackId;
+                gp.trace = rows;
+                gp.traceInfo = { used_samples: rows.length };
+                gp.sessionId = id;
+                gpComputeG(gp.trace);
+                gp.cmpLap = -1;
+                gpSplitLaps();
+                gp.selLap = gp.traceLaps.length ? 0 : -1;
+                gp.playIdx = 0;
+                gpDrawTrace(); gpFitTrace();
+                gpBuildRail(); gpRenderInspector();
+            }).catch(function (e) {
+                gpSetMsg("gpTraceMsg", "Could not open that recording: " + (e && e.message ? e.message : e), "bad");
+                gpRenderInspector();
+            });
+        };
+
+        window.gpSessionRename = function (id) {
+            var cur = (gp.sessions || []).filter(function (s) { return s.id === id; })[0];
+            if (!cur) return;
+            var v = window.prompt("Name this recording", cur.name);
+            if (v === null) return;
+            v = String(v).trim().slice(0, 60);
+            if (!v) return;
+            cur.name = v;
+            gpStore.putMeta(cur).then(function () { return gpSessionsRefresh(); })
+                   .then(function () { gpBuildRail(); });
+        };
+
+        window.gpSessionDelete = function (id) {
+            var cur = (gp.sessions || []).filter(function (s) { return s.id === id; })[0];
+            if (!cur) return;
+            if (!window.confirm("Delete “" + cur.name + "”?\n\nThis removes it from this PC. If the node has already overwritten it, there is no other copy.")) return;
+            gpStore.remove(id).then(function () {
+                if (gp.sessionId === id) gp.sessionId = null;
+                return gpSessionsRefresh();
+            }).then(function () { gpBuildRail(); });
+        };
+
+        function gpRecordingsHtml() {
+            var h = "<div class='ws-rail-title'>Recordings</div>";
+            if (gp.sessions === null) return h + "<div class='ws-note'>Reading\u2026</div>";
+            /* A trace on screen with nothing backing it: you deleted the saved
+               copy, or the save failed. Either way the list must not claim
+               nothing is loaded while a session is plainly showing below it. */
+            var orphan = gp.trace && gp.trace.length && !gp.sessionId
+                ? "<div class='ws-note' style='border-left-color:#FF9F0A'>The recording on screen is " +
+                  "<b>not saved</b> \u2014 it will be gone when Studio closes.</div>"
+                : "";
+            if (!gp.sessions.length) {
+                return h + orphan + "<div class='ws-none' style='padding:14px 6px'>Nothing saved yet.<br>" +
+                       "Downloads are kept here automatically.</div>";
+            }
+            h += orphan;
+            gp.sessions.forEach(function (s) {
+                var on = s.id === gp.sessionId;
+                var bits = [];
+                if (s.dated === "gps") bits.push(gpEsc(gpSesDate(s.recordedAt)));
+                else bits.push("<span class='undated' title='the node had no fix when this was downloaded, so this is when it arrived'>" +
+                               gpEsc(gpSesDate(s.recordedAt)) + " (downloaded)</span>");
+                bits.push((s.durationS / 60).toFixed(1) + " min");
+                if (s.bestLapS) bits.push("best " + gpLapTime(s.bestLapS));
+                h += "<button class='ws-item" + (on ? " on" : "") + "' data-gp-ses='" + gpEsc(s.id) + "'>" +
+                     "<span class='st" + (on ? " on" : "") + "'></span>" + gpEsc(s.name) +
+                     "<span class='tag'>" + (s.lapCount || 0) + (s.trial ? " run" : " lap") + (s.lapCount === 1 ? "" : "s") + "</span>" +
+                     "<div class='gp-ses-n'>" + bits.join(" \u00b7 ") + "</div></button>";
+                if (on) {
+                    h += "<div class='gp-ses-act'>" +
+                         "<button class='ws-btn-line' data-gp-ses-ren='" + gpEsc(s.id) + "'>Rename</button>" +
+                         "<button class='ws-btn-line' data-gp-ses-del='" + gpEsc(s.id) + "'>Delete</button></div>";
+                }
+            });
+            return h;
+        }
+
+        function gpBindSessionRail(rail) {
+            var bind = function (attr, fn) {
+                Array.prototype.forEach.call(rail.querySelectorAll("[" + attr + "]"), function (b) {
+                    b.addEventListener("click", function (e) { e.stopPropagation(); fn(b.getAttribute(attr)); });
+                });
+            };
+            bind("data-gp-lap", function (v) { window.gpSelectLap(v); });
+            bind("data-gp-cmp", function (v) { window.gpCompareLap(v); });
+            bind("data-gp-ses-ren", function (v) { window.gpSessionRename(v); });
+            bind("data-gp-ses-del", function (v) { window.gpSessionDelete(v); });
+            bind("data-gp-ses", function (v) { if (v !== gp.sessionId) window.gpSessionLoad(v); });
+        }
+
         /* ---- Session rail: the laps in the recording ---------------------- */
         function gpBuildSessionRail(rail) {
-            var h = "<div class='ws-rail-title'>Session</div>";
+            var h = gpRecordingsHtml();
+            h += "<div class='ws-rail-title'>Session</div>";
             if (!gp.trace || !gp.trace.length) {
-                h += "<div class='ws-none' style='padding:14px 6px'>Nothing loaded.<br>Download a recording from the node.</div>";
+                h += "<div class='ws-none' style='padding:14px 6px'>Nothing loaded.<br>" +
+                     (gp.sessions && gp.sessions.length
+                        ? "Pick a recording above, or download a new one from the node."
+                        : "Download a recording from the node.") + "</div>";
                 rail.innerHTML = h;
+                gpBindSessionRail(rail);
                 return;
             }
             var mins = gpSecs(gp.trace, 0, gp.trace.length - 1) / 60;
@@ -6132,12 +6424,7 @@
                 });
             }
             rail.innerHTML = h;
-            Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-lap]"), function (b) {
-                b.addEventListener("click", function () { window.gpSelectLap(b.getAttribute("data-gp-lap")); });
-            });
-            Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-cmp]"), function (b) {
-                b.addEventListener("click", function () { window.gpCompareLap(b.getAttribute("data-gp-cmp")); });
-            });
+            gpBindSessionRail(rail);
         }
 
         /* ---- Session inspector -------------------------------------------- */
@@ -7406,15 +7693,20 @@
                 };
                 return step().then(function () { gp.trace = rows; });
             }).then(function () {
+                var saved = null;
                 if (gp.trace && gp.trace.length) {
                     gpComputeG(gp.trace);
                     gpSplitLaps();
                     gp.selLap = gp.traceLaps.length ? 0 : -1;
                     gp.playIdx = 0;
+                    saved = gpSessionSave(gp.trace);
                 }
                 gp.traceBusy = false;
+                return saved;
+            }).then(function () {
                 gpDrawTrace();
                 gpFitTrace();
+                gpBuildRail();
                 gpRenderInspector();
                 window.gpSetView("session");
             }).catch(function (e) {
@@ -9452,12 +9744,14 @@
             gp.lap = null; gp.lapErr = null; gp._sortedByFix = false;
             gp.history = null; gp._lapSeen = -1;
             gp.trace = null; gp.traceInfo = null; gp.traceLaps = [];
+            gp.sessionId = null;      /* the LIBRARY stays — it is this PC's, not the node's */
             gp.selLap = -1; gp.cmpLap = -1; gp.playIdx = 0; gp.tracePct = 0;
             gp.coach = null; gp.coachAll = false;
             gp.delta = null; gp.deltaKey = ""; gp.stripZoom = null;
             gp.rate = null; gp.rateKey = ""; gp.insightCursor = -1;
             gp.sectors = null; gp.secKey = "";
             gp.chan = null; gp.chanKey = "";
+            if (gp.sessions === null) gpSessionsRefresh().then(function () { gpBuildRail(); });
             if (!gp.tracks) {
                 gp.tracks = gpTracksLoad();
                 /* Persist immediately: a migration that is never written back
