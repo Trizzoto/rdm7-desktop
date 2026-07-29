@@ -1725,7 +1725,8 @@
                             <div class="s">OPEN CONFIGURATOR &#8594;</div>
                         </div>
                     </div>
-<div class="sh-card sh-small" tabindex="0" role="button" onclick="_ioOpen()" onkeydown="if(event.key==='Enter')_ioOpen()">
+
+<div class="sh-card sh-small" tabindex="0" role="button" onclick="_ioOpen()" onkeydown="if(event.key==='Enter')_ioOpen()">
                         <div class="sh-visual">
                             <svg viewBox="0 0 130 85" aria-hidden="true">
                                 <defs>
@@ -7675,14 +7676,21 @@
            the lane is `pending` — a frame with no line, and a plain statement
            of what has to happen before it fills. Drawing a flat zero for a
            channel nobody is recording would be a lie with a grid behind it. */
+        /* Trace colours are chosen against the near-black well, not against a
+           panel: on the old pale-grey lane backgrounds these had to stay
+           washed out to be readable, and they carried that pastel cast onto
+           the dark field where it just looked faded. Saturated and luminous
+           per channel is the i2 idiom exactly (ADR-0014: data keeps its
+           colour), and hue spacing is wide enough to tell four stacked traces
+           apart at a glance. */
         var GP_LANES = [
-            { id: "speed", label: "Speed", unit: function () { return gpSpdU(); }, dp: 0, colour: "#9ecbff",
+            { id: "speed", label: "Speed", unit: function () { return gpSpdU(); }, dp: 0, colour: "#4FB3FF",
               get: function (i) { return gpSpdN(gp.trace[i].kph); }, zero: false },
-            { id: "glong", label: "Braking / accel", unit: "g", dp: 2, colour: "#e0a24e",
+            { id: "glong", label: "Braking / accel", unit: "g", dp: 2, colour: "#FFA23A",
               get: function (i) { return gp.trace[i].g; }, zero: true },
-            { id: "glat", label: "Lateral", unit: "g", dp: 2, colour: "#c98ae0",
+            { id: "glat", label: "Lateral", unit: "g", dp: 2, colour: "#CE86F5",
               get: function (i) { var c = gpChannels(); return c ? c.glat[i] : 0; }, zero: true },
-            { id: "yaw", label: "Yaw rate", unit: "\u00b0/s", dp: 0, colour: "#6FBF73",
+            { id: "yaw", label: "Yaw rate", unit: "\u00b0/s", dp: 0, colour: "#57D267",
               get: function (i) { var c = gpChannels(); return c ? c.yaw[i] : 0; }, zero: true },
             { id: "delta", label: "Delta", unit: "s", dp: 2, colour: "#7CC0FF", zero: true,
               get: function (i) {
@@ -7860,13 +7868,41 @@
             return out;
         }
 
-        function gpRackStatic(w, h, rng) {
-            var key = [gp.selLap, gp.cmpLap, rng.from, rng.to, w, h, gp.lanesOpen].join(":");
+        /* The cached layer is built at DEVICE resolution and blitted back 1:1.
+           It used to be built at CSS size and drawn into a devicePixelRatio-
+           scaled context, which bilinearly upscaled the entire rack — every
+           glyph, every rule, every trace — by whatever the display scale was.
+           At 125% that is a 1.25x resample of the only part of the workspace
+           that is a picture rather than DOM text, which is exactly why it
+           read as soft next to everything around it.
+
+           `sx`/`sy` are the real CSS->device scales rather than dpr itself:
+           the backing store has to be a whole number of pixels, so the honest
+           scale is (rounded device size / css size). Using dpr here instead
+           leaves the last column a fraction of a pixel out, which is the
+           difference between a hairline and a grey smear. */
+        function gpRackStatic(w, h, rng, dpr) {
+            var key = [gp.selLap, gp.cmpLap, rng.from, rng.to, w, h, dpr, gp.lanesOpen].join(":");
             if (gp.stripCache && gp.stripCache.key === key) return gp.stripCache.cv;
 
             var off = document.createElement("canvas");
-            off.width = w; off.height = h;
+            var wDev = Math.max(1, Math.round(w * dpr)), hDev = Math.max(1, Math.round(h * dpr));
+            off.width = wDev; off.height = hDev;
             var g = off.getContext("2d");
+            var sx = wDev / w, sy = hDev / h;
+            g.setTransform(sx, 0, 0, sy, 0, 0);
+            /* A 1 px CSS line at 125% covers 1.25 device pixels, so it can
+               never be crisp: it always bleeds a partial-alpha row into its
+               neighbour. Draw structure ONE DEVICE PIXEL wide, centred on a
+               device-pixel boundary, and it is exact at any scale. */
+            var hair = 1 / sy, hairV = 1 / sx;
+            var snapX = function (v) { return (Math.round(v * sx) + 0.5) / sx; };
+            var snapY = function (v) { return (Math.round(v * sy) + 0.5) / sy; };
+            /* Text wants the opposite of a line: a baseline ON a device pixel,
+               not between two. Unsnapped, a lane starting at an odd multiple
+               of 46 css px puts its label on a half pixel and that row of
+               labels renders a shade blurrier than the one above it. */
+            var snapT = function (v) { return Math.round(v * sy) / sy; };
             var rows = gpLaneRows(), n = rng.to - rng.from + 1;
             var plotX = GP_LANE_LBL, plotW = w - GP_LANE_LBL - 6;
             /* No recording yet: the structure still renders — the names, the
@@ -7879,33 +7915,37 @@
             /* The plot well: one dark field for the whole rack, drawn once.
                Sinking the data below the chrome is what every analysis package
                does, and it is the reason a trace reads as the subject rather
-               than as one more thing inside a box. */
-            g.fillStyle = "rgba(0,0,0,0.34)";
+               than as one more thing inside a box. Near-black rather than a
+               shade of the panel — a trace is only luminous if the thing
+               behind it is not. */
+            g.fillStyle = "rgba(0,0,0,0.62)";
             g.fillRect(plotX, 2, plotW, rackBottom - 2);
 
             /* Structure: the rule dividing names from traces, then a hairline
                between lanes, run across BOTH columns so the rack reads as one
                table rather than a list beside a chart. */
-            g.lineWidth = 1;
-            g.strokeStyle = "rgba(255,255,255,0.11)";
+            g.lineWidth = hairV;
+            g.strokeStyle = "rgba(255,255,255,0.13)";
             g.beginPath();
-            g.moveTo(plotX - 0.5, 2); g.lineTo(plotX - 0.5, rackBottom);
+            g.moveTo(snapX(plotX), 2); g.lineTo(snapX(plotX), rackBottom);
             g.stroke();
 
-            g.strokeStyle = "rgba(255,255,255,0.06)";
+            g.lineWidth = hair;
+            g.strokeStyle = "rgba(255,255,255,0.07)";
             g.beginPath();
             for (var sep = 1; sep < rows.length; sep++) {
-                var sy = 2 + sep * (GP_LANE_H + GP_LANE_GAP) + 0.5;
-                g.moveTo(6, sy); g.lineTo(plotX + plotW, sy);
+                var ly = snapY(2 + sep * (GP_LANE_H + GP_LANE_GAP));
+                g.moveTo(6, ly); g.lineTo(plotX + plotW, ly);
             }
             g.stroke();
 
             /* Gridlines under every trace, so the eye can run a tick straight
                down the stack. Only where there is a time axis to grid. */
-            g.strokeStyle = "rgba(255,255,255,0.07)";
+            g.lineWidth = hairV;
+            g.strokeStyle = "rgba(255,255,255,0.08)";
             g.beginPath();
             ticks.forEach(function (tk) {
-                var tx = Math.round(plotX + tk.frac * plotW) + 0.5;
+                var tx = snapX(plotX + tk.frac * plotW);
                 g.moveTo(tx, 2); g.lineTo(tx, rackBottom);
             });
             g.stroke();
@@ -7921,17 +7961,17 @@
                    goes inside the well. */
                 g.fillStyle = absent ? "rgba(255,255,255,0.40)" : "rgba(255,255,255,0.74)";
                 g.font = "10px system-ui";
-                g.fillText(lane.label.replace(/&amp;/g, "&"), 6, top + 14);
+                g.fillText(lane.label.replace(/&amp;/g, "&"), 6, snapT(top + 14));
                 g.fillStyle = "rgba(255,255,255,0.28)";
                 g.font = "9px system-ui";
                 var lu = typeof lane.unit === "function" ? lane.unit() : lane.unit;
-                if (lu) g.fillText(lu, 6, top + 27);
+                if (lu) g.fillText(lu, 6, snapT(top + 27));
 
                 if (lane.pending) {
                     var tag = "needs " + lane.pending;
                     g.font = "8.5px 'JetBrains Mono', monospace";
                     g.fillStyle = "rgba(255,255,255,0.30)";
-                    g.fillText(tag, plotX - 7 - g.measureText(tag).width, top + 27);
+                    g.fillText(tag, plotX - 7 - g.measureText(tag).width, snapT(top + 27));
                 }
 
                 if (absent) {
@@ -7944,7 +7984,7 @@
                     if (!noData && !lane.pending && lane.absentSay) {
                         g.fillStyle = "rgba(255,255,255,0.30)";
                         g.font = "10px system-ui";
-                        g.fillText(lane.absentSay, plotX + 9, mid + 3);
+                        g.fillText(lane.absentSay, plotX + 9, snapT(mid + 3));
                     }
                     return;
                 }
@@ -7957,31 +7997,45 @@
                 };
 
                 if (lane.zero) {
-                    g.strokeStyle = "rgba(255,255,255,0.16)";
+                    g.lineWidth = hair;
+                    g.strokeStyle = "rgba(255,255,255,0.17)";
                     g.beginPath();
-                    g.moveTo(plotX, Math.round(y(0)) + 0.5);
-                    g.lineTo(plotX + plotW, Math.round(y(0)) + 0.5);
+                    g.moveTo(plotX, snapY(y(0)));
+                    g.lineTo(plotX + plotW, snapY(y(0)));
                     g.stroke();
                 }
 
-                var env = gpDecimate(lane, rng, Math.max(1, Math.floor(plotW)));
+                /* One envelope column per DEVICE pixel, not per CSS pixel. At
+                   125% the old version drew 1.25 device pixels apart, so the
+                   band alternated bright and dim all the way across — moire
+                   on the densest, most important thing in the view. Columns a
+                   device pixel wide, a device pixel apart, tile exactly. */
+                var env = gpDecimate(lane, rng, Math.max(1, Math.round(plotW * sx)));
                 g.strokeStyle = lane.colour;
-                /* The one thing on this canvas allowed to be emphatic. */
-                g.lineWidth = 1.5;
                 if (env) {
-                    /* One vertical per column, spanning that column's range.
-                       Half-pixel offsets keep a 1 px line crisp instead of
-                       smeared across two rows of pixels. */
+                    g.lineWidth = hairV;
+                    /* Butt caps, or every column grows half a stroke at each
+                       end and the envelope reads taller than the data. The
+                       curve branch below sets round caps, and this loop runs
+                       after it for the next lane. */
+                    g.lineCap = "butt"; g.lineJoin = "miter";
                     g.beginPath();
                     for (var c = 0; c < env.length; c++) {
                         if (!env[c]) continue;
-                        var ex = Math.floor(plotX + c) + 0.5;
+                        var ex = snapX(plotX + c / sx);
                         var y0 = y(env[c].hi), y1 = y(env[c].lo);
-                        if (Math.abs(y1 - y0) < 1) y1 = y0 + 1;
+                        if (Math.abs(y1 - y0) < hair) y1 = y0 + hair;
                         g.moveTo(ex, y0); g.lineTo(ex, y1);
                     }
                     g.stroke();
                 } else {
+                    /* Few enough samples to draw honestly: a real curve, so it
+                       gets a real stroke weight and the antialiasing that goes
+                       with it. This is the one mark on the canvas allowed to
+                       be emphatic. */
+                    g.lineWidth = 1.4;
+                    g.lineJoin = "round";
+                    g.lineCap = "round";
                     g.beginPath();
                     for (var i = rng.from; i <= rng.to; i++) {
                         var v = lane.get(i);
@@ -8002,8 +8056,8 @@
                 g.fillStyle = "rgba(255,255,255,0.34)";
                 g.font = "8.5px 'JetBrains Mono', monospace";
                 var shi = sc.hi.toFixed(lane.dp), slo = sc.lo.toFixed(lane.dp);
-                g.fillText(shi, plotX - 7 - g.measureText(shi).width, top + 14);
-                g.fillText(slo, plotX - 7 - g.measureText(slo).width, top + GP_LANE_H - 6);
+                g.fillText(shi, plotX - 7 - g.measureText(shi).width, snapT(top + 14));
+                g.fillText(slo, plotX - 7 - g.measureText(slo).width, snapT(top + GP_LANE_H - 6));
             });
 
             /* Axis labels below the stack. The first is anchored left and the
@@ -8018,7 +8072,7 @@
                 var lx = tx - wpx / 2;
                 if (ti === 0) lx = tx;
                 if (ti === ticks.length - 1 && tx + wpx / 2 > plotX + plotW) lx = tx - wpx;
-                g.fillText(lab, lx, rackBottom + 11);
+                g.fillText(lab, lx, snapT(rackBottom + 11));
             });
             /* The axis-scope word describes a time axis. With no recording
                there is no axis to describe, so this slot carries the one
@@ -8028,7 +8082,7 @@
             g.fillStyle = "rgba(255,255,255,0.30)";
             g.font = "9px system-ui";
             g.fillText(noData ? "no recording loaded" : (gp.stripZoom ? "corner" : "lap"),
-                       6, rackBottom + 11);
+                       6, snapT(rackBottom + 11));
 
             gp.stripCache = { key: key, cv: off };
             return off;
@@ -8064,17 +8118,22 @@
             var h = gpRackHeight();
             cv.style.height = h + "px";
             var dpr = window.devicePixelRatio || 1;
-            var w = Math.round(cv.clientWidth || 600);
+            /* The BOX width, not clientWidth: the element is sized by a
+               percentage, so its real width is fractional and rounding it
+               first puts the backing store a fraction of a pixel out of step
+               with the box the browser scales it into. */
+            var w = (cv.getBoundingClientRect().width || cv.clientWidth || 600);
             if (w < 2) return;
-            if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
-                cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-            }
+            var wDev = Math.round(w * dpr), hDev = Math.round(h * dpr);
+            if (cv.width !== wDev || cv.height !== hDev) { cv.width = wDev; cv.height = hDev; }
             var g = cv.getContext("2d");
-            g.setTransform(dpr, 0, 0, dpr, 0, 0);
+            /* Same scales gpRackStatic uses, so the cached layer lands on the
+               device grid one-for-one instead of being resampled. */
+            g.setTransform(wDev / w, 0, 0, hDev / h, 0, 0);
             g.clearRect(0, 0, w, h);
 
             if (noData) {
-                g.drawImage(gpRackStatic(w, h, { from: 0, to: 0 }), 0, 0);
+                g.drawImage(gpRackStatic(w, h, { from: 0, to: 0 }, dpr), 0, 0, w, h);
                 return;                     /* no playhead over an empty rack */
             }
 
@@ -8082,7 +8141,7 @@
             var n = rng.to - rng.from + 1;
             if (n < 2) return;
 
-            g.drawImage(gpRackStatic(w, h, rng), 0, 0);
+            g.drawImage(gpRackStatic(w, h, rng, dpr), 0, 0, w, h);
 
             /* Playhead through every lane, with the value at the cursor printed
                on each — the reason to have them stacked at all. */
@@ -8090,9 +8149,13 @@
             if (pi >= rng.from && pi <= rng.to) {
                 var plotX = GP_LANE_LBL, plotW = w - GP_LANE_LBL - 6;
                 var px = plotX + (pi - rng.from) / (n - 1) * plotW;
-                g.strokeStyle = "rgba(124,192,255,0.85)";
-                g.lineWidth = 1;
-                g.beginPath(); g.moveTo(px + 0.5, 2); g.lineTo(px + 0.5, h - GP_AXIS_H); g.stroke();
+                /* Snapped to the device grid like the rack's own rules — a
+                   playhead that straddles two pixel columns reads as a soft
+                   blue band rather than a cursor. */
+                var pxs = (Math.round(px * wDev / w) + 0.5) / (wDev / w);
+                g.strokeStyle = "rgba(124,192,255,0.92)";
+                g.lineWidth = w / wDev;
+                g.beginPath(); g.moveTo(pxs, 2); g.lineTo(pxs, h - GP_AXIS_H); g.stroke();
 
                 /* Elapsed time at the cursor, pinned to the axis line — the
                    thing you actually want when scrubbing a timeline. */
@@ -8152,6 +8215,17 @@
             /* A resized window changes the pixel width, which invalidates the
                cached layer — without this the strip stretches a stale bitmap. */
             window.addEventListener("resize", function () { gpDrawStrip(); });
+            /* Sora and JetBrains Mono arrive over the network. Canvas text does
+               not re-flow when a webfont lands the way DOM text does — it just
+               draws in whatever was available at the time and keeps it, so a
+               rack painted early is stuck in a fallback face for the life of
+               the cached layer. Drop the layer and repaint once they are in. */
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(function () {
+                    gp.stripCache = null;
+                    gpDrawStrip();
+                }).catch(function () { });
+            }
         }
 
         /* ---- Coach ---------------------------------------------------------
