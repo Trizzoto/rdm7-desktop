@@ -6136,18 +6136,28 @@
                 { label: "Heading accuracy", v: function (s) { return gpDeg(s.headacc_1e5, 1e5, 2); },
                     sub: function (s) { return gpRaw(s.headacc_1e5, "×1e-5°"); } }
             ], note: "Speed accuracy is the one to watch. The crossing instant is interpolated between two fixes, so lap-time error tracks how well the receiver knows velocity across that 40 ms — not horizontal accuracy, which is a slow bias that largely cancels between laps of the same session." },
-            { id: "link", title: "Link health", ok: function (s) { return !!s.link && !s.ck_err && !s.fr_err; }, rows: [
-                { label: "Receiver link", v: function (s) { return s.link ? "up" : "down"; },
+            /* "Link health" was one card reporting two unrelated links — the
+               puck's own satellite receiver and the CAN wire out to the car —
+               under a heading that named neither, in words (UBX, checksum,
+               framing) nobody outside the protocol would know. Asked straight
+               out what "Receiver link" meant, the true answer was "not the
+               thing you are probably picturing", which is the definition of a
+               label that has to go. One card per link, each named for the link
+               it reports, and every row in words a driver already owns. */
+            { id: "recv", title: "Satellite receiver",
+              ok: function (s) { return !!s.link && !s.ck_err && !s.fr_err; }, rows: [
+                { label: "Receiver answering", v: function (s) { return s.link ? "yes" : "no"; },
                     tone: function (s) { return s.link ? "ok" : "bad"; } },
-                { label: "Receiver configured", v: function (s) { return s.configured ? "yes" : "no"; },
+                { label: "Settings applied", v: function (s) { return s.configured ? "yes" : "no"; },
                     tone: function (s) { return s.configured ? "ok" : "warn"; } },
-                { label: "UBX messages", v: function (s) { return gpInt(s.ubx); }, rate: "ubx" },
-                { label: "Checksum errors", v: function (s) { return gpInt(s.ck_err); },
+                { label: "Messages received", v: function (s) { return gpInt(s.ubx); }, rate: "ubx" },
+                { label: "Messages corrupted", v: function (s) { return gpInt(s.ck_err); },
+                    sub: function () { return "since power-on"; },
                     tone: function (s) { return s.ck_err ? "bad" : "ok"; } },
-                { label: "Framing errors", v: function (s) { return gpInt(s.fr_err); },
-                    tone: function (s) { return s.fr_err ? "bad" : "ok"; } },
-                { label: "CAN frames sent", v: function (s) { return gpInt(s.can_tx); }, rate: "can_tx" }
-            ], note: "A CAN counter frozen at a low number with no bus attached is correct, not a fault: nothing ACKs, the transmit error counter climbs to 255 and the controller goes bus-off." },
+                { label: "Messages incomplete", v: function (s) { return gpInt(s.fr_err); },
+                    sub: function () { return "since power-on"; },
+                    tone: function (s) { return s.fr_err ? "bad" : "ok"; } }
+            ], note: "The satellite receiver is a separate chip inside the puck, and these count what it hands to the puck's processor. Nothing you plug into the car changes them — corrupted or incomplete messages mean the fault is inside the unit." },
             { id: "imu", title: "IMU", ok: function (s) { return !!s.imu; }, rows: [
                 { label: "Accel X", v: function (s) { return gpImu(s, "ax_mg", " mg"); } },
                 { label: "Accel Y", v: function (s) { return gpImu(s, "ay_mg", " mg"); } },
@@ -6156,8 +6166,26 @@
                 { label: "Gyro X", v: function (s) { return gpGyro(s, "gx_cdps"); }, sub: function (s) { return gpRaw(s.imu && s.imu.gx_cdps, "cdps"); } },
                 { label: "Gyro Y", v: function (s) { return gpGyro(s, "gy_cdps"); }, sub: function (s) { return gpRaw(s.imu && s.imu.gy_cdps, "cdps"); } },
                 { label: "Gyro Z", v: function (s) { return gpGyro(s, "gz_cdps"); }, sub: function (s) { return gpRaw(s.imu && s.imu.gz_cdps, "cdps"); } }
-            ], note: "mg and cdps are the DBC's own LSB units — the driver emits exactly what the CAN frames carry, so these numbers need no conversion to compare against the bus." }
+            ], note: "mg and cdps are the DBC's own LSB units — the driver emits exactly what the CAN frames carry, so these numbers need no conversion to compare against the bus." },
+            /* Last, because it is the only card about what LEAVES the puck.
+               One row (a frame counter) answered "is it sending" but never
+               "is it sending what my dash is listening for", so the two
+               settings that decide that are on the same card as the count. */
+            { id: "canout", title: "CAN output",
+              ok: function () { return gpN(gp.rates.can_tx) > 0; }, rows: [
+                { label: "Frames sent", v: function (s) { return gpInt(s.can_tx); }, rate: "can_tx" },
+                { label: "Bitrate", v: function () { return gpDevCfg().bitrate || "—"; },
+                    sub: function () { return "must match the car"; } },
+                { label: "First message ID", v: function () {
+                    var b = gpN(gpDevCfg().base_id);
+                    return b === null ? "—" : "0x" + b.toString(16).toUpperCase();
+                }, sub: function () { return "puck's block starts here"; } }
+            ], note: "A frame count frozen at a low number with no bus attached is correct, not a fault: nothing acknowledges the frames, the error counter climbs to its limit and the controller stops transmitting. The lamp is lit only while frames are actually going out." }
         ];
+
+        /* device.info is read once on connect; the CAN settings are re-read
+           after every write, so where the two overlap the fresh read wins. */
+        function gpDevCfg() { return Object.assign({}, gp.info || {}, gp.can || {}); }
 
         /* device.info, same table-driven treatment. */
         var GP_IDENTITY = [
@@ -10843,12 +10871,12 @@
                 gpRenderSetup();
                 /* the inspector itself shows the device at a glance */
             }
-            /* device.info is fetched once on connect; the CAN settings are
-               re-read after every write. Reading the CAN fields out of the
-               stale copy had this panel insisting the base was 0x500 while the
-               frame map two feet away — freshly read from the same node —
-               said 0x400. gp.can wins wherever the two overlap. */
-            var d = Object.assign({}, gp.info || {}, gp.can || {});
+            /* Reading the CAN fields out of the stale device.info copy had
+               this panel insisting the base was 0x500 while the frame map two
+               feet away — freshly read from the same node — said 0x400. The
+               merge rule lives in gpDevCfg so the Monitor card and this panel
+               cannot disagree about it. */
+            var d = gpDevCfg();
 
             var h = "<h2>" + gpEsc((gp.info && gp.info.name) || "RDM GPS") + "</h2>" +
                 "<div class='ws-sub'>" + gpEsc(d.serial || "not connected") + "</div>";
@@ -11345,8 +11373,12 @@
                       return f === null ? null : "0x" + f.toString(16).toUpperCase().padStart(2, "0");
                   },
                   bitLive: gpFlagBit,
+                  /* Same words as the Monitor card that reports these, so a
+                     bit on the bus and a row on screen are recognisably the
+                     same fact. */
                   bits: [[0, "Fix usable"], [1, "Differential (SBAS)"], [2, "Time valid"],
-                         [3, "Receiver link up"], [4, "IMU fitted"], [5, "Configured"]] },
+                         [3, "Satellite receiver answering"], [4, "IMU fitted"],
+                         [5, "Receiver settings applied"]] },
                 { b: "4", n: "pDOP", t: "u8", sc: "×0.1",
                   live: function (c) {
                       if (!c.s || gpN(c.s.pdop_1e2) === null) return null;
