@@ -45,9 +45,9 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
     'gpMetres', 'gpSecs', 'gpStep', 'gpSignedDist', 'gpSplitRows',
     'gpTrackById', 'gpActiveTrack', 'gpIsTrial', 'gpRunWord', 'gpTrackUid', 'gpTracksSave',
     'gpTraceHome', 'gpKmBetween', 'gpMatchTrack', 'gpHeadingAt', 'gpAngleDiff',
-    'gpLoopClosure', 'gpProposeLine', 'gpAutoLine', 'gpAutoSetUp'];
+    'gpLoopClosure', 'gpProposeLine', 'gpAutoLine', 'gpAutoSetUp', 'gpStints'];
 const NEEDED_VAR = ['GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
-    'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES'];
+    'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S'];
 
 let code = '';
 NEEDED_VAR.forEach(v => { code += grabVar(v) + '\n'; });
@@ -55,11 +55,19 @@ NEEDED_FN.forEach(f => { code += grab(f) + '\n'; });
 
 /* ---- environment the extracted code expects --------------------------- */
 const env = { gp: null, localStorage: { getItem: () => null, setItem: () => {} } };
-const run = new Function('env', code + '\n; return {' + NEEDED_FN.join(',') + ',GP_PLACES};');
+const run = new Function('env', code + '\n; return {' + NEEDED_FN.concat(NEEDED_VAR).join(',') + '};');
 /* `gp` is a free variable inside the extracted code — give it a real global. */
 global.gp = null;
 global.localStorage = env.localStorage;
 const F = run(env);
+
+/* Every export has to be a real value. An assertion written against an
+   undefined constant compares undefined to a number and passes quietly —
+   which is exactly how the threshold checks below passed while testing
+   nothing at all. */
+Object.keys(F).forEach(k => {
+    if (F[k] === undefined) throw new Error('extracted "' + k + '" is undefined — the harness is lying');
+});
 
 /* ---- a synthetic drive ------------------------------------------------ */
 /* Winton, from GP_PLACES. Centre the loop on it so the matcher has to find it. */
@@ -197,6 +205,45 @@ ok('Winton keeps the line it had', JSON.stringify(F.gpActiveTrack().start_finish
 ok('no track was invented for the far drive', global.gp.tracks.tracks.length === 1,
     global.gp.tracks.tracks.length + ' tracks');
 ok('it names the mismatch', /was not driven at Winton/.test(said || ''), JSON.stringify(said));
+
+console.log('\none download, three runs, two long stops');
+/* Glue three drives together with the gaps the node's idle-skip leaves. */
+function withGap(segs, gapS) {
+    const out = [];
+    let t = 0;
+    segs.forEach((seg, n) => {
+        if (n) t += gapS[n - 1] * 1000;
+        seg.forEach(r => { out.push(Object.assign({}, r, { t: t })); t += 40; });
+    });
+    return out;
+}
+const day = withGap([drive(WINTON.center, 4, {}), drive(WINTON.center, 3, {}), drive(WINTON.center, 5, {})],
+                    [22 * 60, 47 * 60]);
+let stints = F.gpStints(day);
+ok('three runs come out', stints.length === 3, stints.length + ' found');
+ok('they are in order and do not overlap',
+    stints.every((s, i) => s.from <= s.to && (i === 0 || s.from > stints[i - 1].to)));
+ok('every sample is accounted for', stints[0].from === 0 && stints[2].to === day.length - 1);
+console.log('  run lengths: ' + stints.map(s => (s.secs / 60).toFixed(1) + ' min').join(', '));
+
+console.log('\na pit-lane shuffle is not a session');
+const shuffle = drive(WINTON.center, 4, {}).slice(0, 25 * 20);      /* 20 s of moving */
+const mixed = withGap([drive(WINTON.center, 4, {}), shuffle], [10 * 60]);
+stints = F.gpStints(mixed);
+ok('the raw cut still finds both', stints.length === 2, stints.length + ' found');
+ok('the short one is under the keep threshold',
+    stints[1].secs < F.GP_STINT_MIN_S && stints[0].secs >= F.GP_STINT_MIN_S,
+    stints.map(s => s.secs.toFixed(0) + 's').join(', '));
+
+console.log('\na short stop is not a new run');
+const brief = withGap([drive(WINTON.center, 3, {}), drive(WINTON.center, 3, {})], [45]);
+ok('45 seconds stopped stays one run', F.gpStints(brief).length === 1,
+    F.gpStints(brief).length + ' found');
+
+console.log('\na recording with no clock at all (pre-timestamp node)');
+const noClock = drive(WINTON.center, 3, {}).map(r => { const c = Object.assign({}, r); delete c.t; return c; });
+ok('never split on a clock that is not there', F.gpStints(noClock).length === 1,
+    F.gpStints(noClock).length + ' found');
 
 console.log('\nthe readiness panel says what is actually true');
 /* Nothing plugged in, nothing known. */

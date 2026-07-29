@@ -7071,6 +7071,66 @@
             });
         }
 
+        /* ---- one download, however many runs are in it ---------------------
+         * The node's ring is continuous. A whole track day comes down as one
+         * block with the paddock in the middle of it, and the Recordings list
+         * gets a single 300-minute row called "Winton". Nobody thinks in ring
+         * buffers; they think "my second session".
+         *
+         * The gaps are already in the data and need no firmware change to
+         * read. The recorder skips anything under 3 km/h and closes its page
+         * on the way down, stamping the resume time — so half an hour in the
+         * pits is half an hour of missing clock between two adjacent samples.
+         * Cut there and each run becomes its own recording, with its own
+         * laps, its own best and its own place in the history trend. */
+        var GP_STINT_GAP_S = 180;   /* three minutes stopped ends a run */
+        var GP_STINT_MIN_S = 90;    /* shorter than this is a shuffle, not a session */
+
+        function gpStints(rows) {
+            var cuts = [0], out = [], i;
+            for (i = 0; i + 1 < rows.length; i++)
+                if (gpSecs(rows, i, i + 1) > GP_STINT_GAP_S) cuts.push(i + 1);
+            cuts.push(rows.length);
+            for (i = 0; i + 1 < cuts.length; i++) {
+                var a = cuts[i], b = cuts[i + 1] - 1;
+                if (b - a < 1) continue;
+                out.push({ from: a, to: b, secs: gpSecs(rows, a, b) });
+            }
+            return out;
+        }
+
+        /* Save every run in the download, and leave the most recent one open —
+           that is the one you just drove and the one you want to look at. */
+        function gpSaveStints(rows) {
+            var all = gpStints(rows);
+            var keep = all.filter(function (s) { return s.secs >= GP_STINT_MIN_S; });
+            var short = all.length - keep.length;
+            /* A single short run is still the run. Only discard the scraps
+               when there is something longer to discard them in favour of. */
+            if (!keep.length) keep = all.length ? all.slice(-1) : [{ from: 0, to: rows.length - 1 }];
+
+            var said = [], chain = Promise.resolve();
+            keep.forEach(function (st) {
+                chain = chain.then(function () {
+                    var seg = rows.slice(st.from, st.to + 1);
+                    gp.trace = seg;
+                    gpComputeG(seg);
+                    var s = gpSplitLapsAuto();
+                    if (s && said.indexOf(s) < 0) said.push(s);
+                    gp.selLap = gp.traceLaps.length ? 0 : -1;
+                    gp.playIdx = 0;
+                    return gpSessionSave(seg);
+                });
+            });
+            return chain.then(function () {
+                var lead = keep.length > 1
+                    ? "Split into " + keep.length + " runs at the stops" +
+                      (short ? " — " + short + " too short to keep" : "") + "."
+                    : "";
+                gp.autoSaid = [lead].concat(said).filter(Boolean).join(" ") || null;
+            });
+        }
+
         window.gpSessionLoad = function (id) {
             if (gp.traceBusy) return;
             /* Opening a recording is the end of streaming: one rack cannot be
@@ -8897,13 +8957,7 @@
             }).then(function () {
                 var saved = null;
                 gp.autoSaid = null;
-                if (gp.trace && gp.trace.length) {
-                    gpComputeG(gp.trace);
-                    gp.autoSaid = gpSplitLapsAuto();
-                    gp.selLap = gp.traceLaps.length ? 0 : -1;
-                    gp.playIdx = 0;
-                    saved = gpSessionSave(gp.trace);
-                }
+                if (gp.trace && gp.trace.length) saved = gpSaveStints(gp.trace);
                 gp.traceBusy = false;
                 return saved;
             }).then(function () {
