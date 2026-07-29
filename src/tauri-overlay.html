@@ -1034,9 +1034,47 @@
                       position: sticky; bottom: 8px; z-index: 60;
                       flex-wrap: wrap; row-gap: 4px; }
         .gp-setup { display: none; flex: 1; min-height: 0; overflow-y: auto;
-                    justify-content: center; padding: 18px 16px 24px; }
-        .gp-setup-col { width: min(560px, 100%); }
-        .gp-setup-col .ws-grp:first-child { border-top: none; margin-top: 0; }
+                    justify-content: center; padding: 16px 16px 24px; }
+        .gp-setup-col { width: min(1080px, 100%); }
+        /* Two columns where there is room. Settings are short rows; a single
+           560px column left two thirds of a 1400px window empty and pushed
+           WiFi below the fold. */
+        .gp-setup-grid { columns: 262px; column-gap: 22px; }
+        .gp-setup-grid > .ws-grp { break-inside: avoid; -webkit-column-break-inside: avoid; }
+        .gp-setup-col .ws-grp { border-top: none; padding: 0 0 16px; margin: 0; }
+        .gp-setup-col .ws-gt { border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+        /* A settings row: label left, control right, on one line. */
+        .gp-set { display: grid; grid-template-columns: 1fr auto; align-items: center;
+                  gap: 12px; padding: 5px 0; }
+        .gp-set > .l { font-size: 11px; color: var(--text-muted); }
+        .gp-set > .l b { color: var(--text); font-weight: 400; display: block; }
+        .gp-set .ws-seg { width: 144px; }
+        .gp-set .ws-seg button { padding: 5px 4px; }
+        .gp-set select, .gp-set input[type=text], .gp-set input[type=password] {
+            width: 144px; box-sizing: border-box; background: var(--bg);
+            border: 1px solid var(--border); color: var(--text);
+            border-radius: var(--radius-md); padding: 4px 7px;
+            font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+        .gp-set select:focus, .gp-set input:focus { outline: none; border-color: var(--accent); }
+        .gp-set .ws-slider { width: 144px; }
+        .gp-set .ws-slider input[type=range] { min-width: 0; }
+        .gp-set .ws-slider .val { min-width: 32px; flex: none; }
+        /* The signal map: what every frame carries, byte for byte. */
+        .gp-map { border: 1px solid var(--border); border-radius: var(--radius-sm);
+                  overflow: hidden; margin-top: 4px; }
+        .gp-map-r { display: grid; grid-template-columns: 52px 1fr; gap: 10px;
+                    padding: 5px 8px; border-bottom: 1px solid var(--border);
+                    font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+        .gp-map-r:last-child { border-bottom: none; }
+        .gp-map-r > .id { color: var(--text); }
+        .gp-map-r > .f { color: var(--text-muted); line-height: 1.55; }
+        .gp-map-r > .f i { font-style: normal; color: var(--text); }
+        .gp-map-r.hd { background: var(--panel-elevated); color: var(--text-muted); }
+        .gp-map-r.off { opacity: 0.5; }
+        .gp-set-v, .gp-set-na { font-family: 'JetBrains Mono', monospace; font-size: 11px;
+                                color: var(--text); width: 144px; display: inline-block; }
+        .gp-set-na { color: var(--text-muted); }
+        .gp-set-note { font-size: 10px; color: var(--text-muted); margin-top: 5px; }
         .gp-sep { width: 1px; height: 16px; background: var(--border); flex: none; }
         .gp-tbtn { width: 26px; height: 24px; flex: none; display: inline-flex; align-items: center;
                    justify-content: center; background: none; border: none; border-radius: var(--radius-sm);
@@ -5813,6 +5851,7 @@
             ghostFence: null,           /* gp.trace length before the ghost was appended */
             video: null,                /* { name, url, t0, autoT0, offsetMs, follow } */
             viewFocus: null,            /* null = side by side; 'map' | 'video' = that tile solo */
+            cam: null,                  /* camera defaults, this PC (gpCamLoad) */
             ghostSrc: null,             /* { sesId, rows, laps, meta, cur } for the ghost's session */
             selGate: "sf",   /* "sf" | a sector index */
             editLayer: null, _gateViews: {},
@@ -9190,9 +9229,10 @@
             if (!f) return;
             if (gp.video && gp.video.url) { try { URL.revokeObjectURL(gp.video.url); } catch (e) { } }
             var meta = gpCurSessionMeta();
+            if (!gp.cam) gp.cam = gpCamLoad();
             gp.video = { name: f.name, url: URL.createObjectURL(f),
                          t0: meta ? meta.recordedAt : null,   /* aligned to session start until probed */
-                         autoT0: null, offsetMs: 0, follow: true, probing: true };
+                         autoT0: null, offsetMs: 0, follow: gp.cam.follow, probing: true };
             input.value = "";
             var el = document.getElementById("gpVideo");
             if (el) el.src = gp.video.url;
@@ -9206,7 +9246,7 @@
                 /* Auto-sync only means something when the session itself is
                    GPS-dated — against a download-dated anchor the camera clock
                    is comparing apples to a guess. */
-                if (ms !== null && meta && meta.dated === "gps") gp.video.t0 = ms;
+                if (ms !== null && meta && meta.dated === "gps" && gp.cam.auto) gp.video.t0 = ms;
                 gpRenderInspector();
             });
         };
@@ -9287,6 +9327,12 @@
             if (!el || !cv || !gp.trace || !gp.trace.length) return;
             var w = el.clientWidth, h = 46;
             if (!w) return;
+            if (gp.cam && !gp.cam.overlay) {
+                var c0 = cv.getContext("2d");
+                c0.setTransform(1, 0, 0, 1, 0, 0);
+                c0.clearRect(0, 0, cv.width, cv.height);
+                return;
+            }
             if (cv.width !== w * 2) { cv.width = w * 2; cv.height = h * 2; }
             cv.style.width = w + "px"; cv.style.height = h + "px";
             var g = cv.getContext("2d");
@@ -10299,8 +10345,8 @@
             if (gp.view === "session") { gpBuildSessionRail(rail); return; }
             if (gp.view === "setup") {
                 rail.innerHTML = "<div class='ws-rail-title'>Setup</div>" +
-                    [["Reading units", "units"], ["CAN bus", "can"],
-                     ["WiFi", "wifi"], ["Identify", "ident"]].map(function (s, i) {
+                    [["Display", "d"], ["Camera", "c"], ["CAN bus", "b"],
+                     ["Network", "n"], ["Advanced", "a"], ["Device", "v"]].map(function (s, i) {
                         return "<button class='ws-item' data-gp-set='" + i + "'>" +
                                "<span class='st'></span>" + s[0] + "</button>";
                     }).join("");
@@ -10513,46 +10559,158 @@
             var d = gp.info || {};
             var revA = gpN(d.hw_rev) === 0;
             var h = "<h2>Setup</h2><div class='ws-sub'>" +
-                    gpEsc(d.serial ? (d.name || "RDM GPS") + " · " + d.serial : "this PC, and the node when attached") +
-                    "</div>";
+                    gpEsc(d.serial ? (d.name || "RDM GPS") + " \u00b7 " + d.serial : "this PC \u00b7 no node attached") +
+                    "</div><div class='gp-setup-grid'>";
 
-            h += "<div class='ws-grp'><div class='ws-gt'>Reading units" +
-                 "<i class='gp-lamp info' data-tip=\"<b>A reading preference</b>" +
-                 "The device always stores metric — the wire carries millimetres and " +
-                 "mm/s, and the lap engine works in metres. This changes what YOU read, " +
-                 "converted at the last moment, so nothing sent to a device or stored in " +
-                 "a recording ever changes. Switching back is lossless.\"></i></div>" +
-                 "<div class='ws-seg'>" +
-                 "<button id='gpBtnMetric' onclick=\"gpUnitsSet('metric')\">km/h · m</button>" +
-                 "<button id='gpBtnImperial' onclick=\"gpUnitsSet('imperial')\">mph · ft</button>" +
-                 "</div></div>";
+            /* ---- column content. Each group is short rows, label left,
+                    control right — the shape every professional config screen
+                    uses, and the reason two fit side by side. ---- */
+            h += "<div class='ws-grp'><div class='ws-gt'>Display" +
+                 gpTip("Reading units",
+                       "The device always stores metric \u2014 the wire carries millimetres and " +
+                       "mm/s, and the lap engine works in metres. This converts at the last " +
+                       "moment, so nothing sent to a device or stored in a recording changes. " +
+                       "Switching back is lossless.") + "</div>" +
+                 gpSetRow("Units",
+                     "<div class='ws-seg'>" +
+                     "<button id='gpBtnMetric' onclick=\"gpUnitsSet('metric')\">km/h \u00b7 m</button>" +
+                     "<button id='gpBtnImperial' onclick=\"gpUnitsSet('imperial')\">mph \u00b7 ft</button>" +
+                     "</div>") +
+                 "</div>";
 
-            /* CAN bus. The defaults are fine on an empty bus, but a car may
-               already use this block or run a different bitrate, and a
-               collision is silent — so make it movable rather than telling
-               the user to live with it. */
-            h += "<div class='ws-grp'><div class='ws-gt'>CAN bus</div>" + gpCanFormHtml() + "</div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>Camera" +
+                 gpTip("Link and sync",
+                       "Footage is aligned from the camera's own clock against the session's " +
+                       "GPS time \u2014 no clapper, no manual offset. These are the defaults " +
+                       "applied when a video is opened; the Session panel still has a nudge " +
+                       "for a camera clock a second or two adrift.") + "</div>" +
+                 gpSetRow("Sync source",
+                     "<select onchange='gpCamSet(\"auto\", this.value)'>" +
+                     "<option value='1'" + (gp.cam.auto ? " selected" : "") + ">Camera clock</option>" +
+                     "<option value='0'" + (gp.cam.auto ? "" : " selected") + ">Session start</option></select>") +
+                 gpSetRow("Follow timeline",
+                     gpToggleHtml("gpCamSet('follow', %V%)", gp.cam.follow)) +
+                 gpSetRow("Data overlay",
+                     gpToggleHtml("gpCamSet('overlay', %V%)", gp.cam.overlay)) +
+                 gpSetRow("<b>Wireless link</b>GoPro / DJI",
+                     "<span class='gp-set-na'>no camera paired</span>") +
+                 "</div>";
 
-            h += "<div class='ws-grp'><div class='ws-gt'>WiFi</div>" + gpWifiFormHtml() + "</div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>CAN bus" +
+                 gpTip("Where the node broadcasts",
+                       "Move the block if something on your bus already uses it — an ID " +
+                       "collision is silent. The DBC export follows whatever is set here. " +
+                       "Applied at boot.") + "</div>" + gpCanFormHtml() + "</div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>Network" +
+                 gpTip("WiFi on the node",
+                       "The node never sends its stored password back, so the box starts " +
+                       "empty and leaving it empty KEEPS the saved key. Applied at boot — " +
+                       "power-cycle after saving.") + "</div>" + gpWifiFormHtml() + "</div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>Advanced" +
+                 gpTip("Broadcast rates and the frame map",
+                       "Rates trade bus load against resolution: 25 Hz position is what lap " +
+                       "timing needs, status can idle at 5. The map below is what each frame " +
+                       "carries \u2014 little-endian, byte offsets from 0.") + "</div>" +
+                 gpCanAdvancedHtml() + "</div>";
 
-            h += "<div class='ws-grp'><div class='ws-gt'>Identify</div>" +
-                "<button class='ws-btn-line' id='gpIdentBtn' onclick='gpIdentify()'>Flash the status LED</button>" +
-                "<div class='gp-msg' id='gpIdentMsg'></div>";
-            /* Warn BEFORE the click, not after. On rev A the pixel is fitted
-               180° out (REV_A_ERRATA E7): it has never had power and its data
-               input is wired to nothing, so no firmware result can make it
-               light. `led_healthy` reports the RMT channel, which stays true
-               throughout — presenting that as success would be a lie. */
-            if (revA) {
-                h += "<div class='ws-note'><b>Rev A board:</b> LED1 is fitted 180° out (errata E7) — it has never had power and its data pin is unconnected, so it <b>cannot light</b>, whatever the firmware reports. Identify still exercises the driver; expect to see nothing.</div>";
-            }
+            h += "<div class='ws-grp'><div class='ws-gt'>Device</div>" +
+                 gpSetRow("Identify",
+                     "<button class='ws-btn-line' id='gpIdentBtn' style='width:144px' onclick='gpIdentify()'>" +
+                     "Flash the LED</button>") +
+                 (revA ? gpSetRow("<b>LED1</b>rev A, errata E7",
+                     "<span class='gp-set-na' title='Fitted 180\u00b0 out with its data pin unconnected \u2014 it cannot light, whatever the firmware reports. Identify still exercises the driver.'>cannot light</span>") : "") +
+                 "<div class='gp-msg' id='gpIdentMsg'></div></div>";
+
             h += "</div>";
-
             box.innerHTML = h;
             gpSyncUnitBtns();
             gpFillWifiForm();
             gpSyncEnabled();
             gpRestoreMsgs();
+        }
+
+        /* One row: label (with an optional second line) on the left, the
+           control on the right. */
+        function gpSetRow(label, control) {
+            return "<div class='gp-set'><span class='l'>" + label + "</span>" + control + "</div>";
+        }
+        function gpTip(title, body) {
+            return "<i class='gp-lamp info' data-tip=\"<b>" + title + "</b>" + body + "\"></i>";
+        }
+        function gpToggleHtml(call, on) {
+            var mk = function (v, txt) {
+                return "<button class='" + (!!on === !!v ? "on" : "") + "' onclick=\"" +
+                       call.replace("%V%", v ? "1" : "0") + "\">" + txt + "</button>";
+            };
+            return "<div class='ws-seg'>" + mk(1, "On") + mk(0, "Off") + "</div>";
+        }
+
+        /* Camera defaults live on this PC, like the units preference. They are
+           applied when a video is opened; changing one re-applies immediately
+           to a video already open, because a setting that needs a reload to
+           take effect is a setting people stop trusting. */
+        var GP_CAM_LS = "rdm7_camera";
+        function gpCamLoad() {
+            var s = null;
+            try { s = JSON.parse(window.localStorage.getItem(GP_CAM_LS) || "null"); } catch (e) { }
+            return { auto: !s || s.auto !== false,
+                     follow: !s || s.follow !== false,
+                     overlay: !s || s.overlay !== false };
+        }
+        window.gpCamSet = function (k, v) {
+            v = (v === "1" || v === 1 || v === true);
+            gp.cam[k] = v;
+            try { window.localStorage.setItem(GP_CAM_LS, JSON.stringify(gp.cam)); } catch (e) { }
+            if (gp.video) {
+                if (k === "follow") gp.video.follow = v;
+                if (k === "auto") {
+                    var meta = gpCurSessionMeta();
+                    if (v && gp.video.autoT0 !== null && meta && meta.dated === "gps")
+                        gp.video.t0 = gp.video.autoT0;
+                    else if (!v && meta) gp.video.t0 = meta.recordedAt;
+                    gp.video.offsetMs = 0;
+                }
+                gpVideoDrawOverlay();
+            }
+            gpRenderSetup();
+        };
+
+        /* The frame map, straight out of rdm_gps_proto.h/.c — every byte of
+           every frame the node broadcasts. A tuner checking against their own
+           DBC should not have to read our firmware to do it. */
+        var GP_FRAMES = [
+            { off: 0x0, name: "Status", rate: "slow",
+              f: "0 <i>device type</i> \u00b7 1 <i>fix type</i> \u00b7 2 <i>sats</i> \u00b7 3 <i>flags</i> \u00b7 4 <i>pDOP \u00d70.1</i> \u00b7 5-7 <i>firmware</i>" },
+            { off: 0x1, name: "Position", rate: "fast",
+              f: "0-3 <i>lat i32 \u00d71e-7\u00b0</i> \u00b7 4-7 <i>lon i32 \u00d71e-7\u00b0</i>" },
+            { off: 0x2, name: "Motion", rate: "fast",
+              f: "0-1 <i>speed u16 \u00d70.01 km/h</i> \u00b7 2-3 <i>heading u16 \u00d70.01\u00b0</i> \u00b7 4-5 <i>altitude i16 \u00d70.1 m</i> \u00b7 6-7 <i>climb i16 \u00d70.01 m/s</i>" },
+            { off: 0x3, name: "Quality", rate: "slow",
+              f: "0-1 <i>hAcc \u00d70.01 m</i> \u00b7 2-3 <i>vAcc \u00d70.01 m</i> \u00b7 4-5 <i>sAcc \u00d70.01 m/s</i> \u00b7 6-7 <i>headAcc \u00d70.01\u00b0</i>" },
+            { off: 0x4, name: "Time", rate: "slow",
+              f: "0-1 <i>year u16</i> \u00b7 2 <i>month</i> \u00b7 3 <i>day</i> \u00b7 4 <i>hour</i> \u00b7 5 <i>min</i> \u00b7 6 <i>sec</i> \u00b7 7 <i>\u00d710 ms</i>" },
+            { off: 0x5, name: "Accel", rate: "off", f: "reserved \u2014 rev B IMU" },
+            { off: 0x6, name: "Gyro", rate: "off", f: "reserved \u2014 rev B IMU" },
+            { off: 0xE, name: "Command", rate: "in",
+              f: "bus \u2192 node \u00b7 0 <i>cmd</i> \u00b7 1-7 <i>args</i>" },
+            { off: 0xF, name: "Response", rate: "out",
+              f: "0 <i>cmd</i> \u00b7 1 <i>result</i> \u00b7 2 <i>bitrate</i> \u00b7 3-4 <i>base id</i> \u00b7 5 <i>fast Hz</i> \u00b7 6 <i>slow Hz</i> \u00b7 7 <i>hw rev</i>" }
+        ];
+
+        function gpFrameMapHtml() {
+            var c = gp.can || {};
+            var base = gpN(c.base_id);
+            var fast = gpN(c.fast_hz) || 25, slow = gpN(c.slow_hz) || 5;
+            var h = "<div class='gp-map'>";
+            GP_FRAMES.forEach(function (fr) {
+                var rate = fr.rate === "fast" ? fast + " Hz" : fr.rate === "slow" ? slow + " Hz"
+                         : fr.rate === "off" ? "\u2014" : fr.rate === "in" ? "rx" : "tx";
+                h += "<div class='gp-map-r" + (fr.rate === "off" ? " off" : "") + "'>" +
+                     "<span class='id'>" + (base === null ? "+" + fr.off.toString(16).toUpperCase()
+                                                          : gpHex(base + fr.off)) + "</span>" +
+                     "<span class='f'><i>" + fr.name + "</i> \u00b7 " + rate + "<br>" + fr.f + "</span></div>";
+            });
+            return h + "</div>";
         }
 
         /* Live timing readout + the capture controls, for the Tracks inspector.
@@ -10775,36 +10933,45 @@
             }
             var base = gpN(c.base_id);
             var span = gpN(c.id_span) || 16;
-            var h = "<div class='ws-field'><label>Base CAN ID</label><select id='gpCanBase'>";
+            var sel = "<select id='gpCanBase'>";
             GP_BASE_IDS.forEach(function (b) {
-                h += "<option value='" + b[0] + "'" + (base === b[0] ? " selected" : "") + ">" +
-                     b[1] + " (" + b[0] + ")</option>";
+                sel += "<option value='" + b[0] + "'" + (base === b[0] ? " selected" : "") + ">" +
+                       b[1] + " (" + b[0] + ")</option>";
             });
-            h += "</select></div>";
-            h += "<div class='ws-field'><label>Bitrate</label><select id='gpCanRate'>";
+            var h = gpSetRow("Base ID", sel + "</select>");
+            sel = "<select id='gpCanRate'>";
             GP_BITRATES.forEach(function (b) {
-                h += "<option value='" + b[0] + "'" + (String(c.bitrate_idx) === b[0] ? " selected" : "") + ">" +
-                     b[1] + "</option>";
+                sel += "<option value='" + b[0] + "'" + (String(c.bitrate_idx) === b[0] ? " selected" : "") + ">" +
+                       b[1] + "</option>";
             });
-            h += "</select></div>";
-            h += "<div class='ws-field'><label>Fast frames (position, motion)</label>" +
-                 "<div class='ws-slider'><input type='range' id='gpCanFast' min='1' max='50' step='1' value='" +
-                 (gpN(c.fast_hz) || 25) + "' oninput=\"this.nextElementSibling.textContent=this.value+' Hz'\">" +
-                 "<span class='val'>" + (gpN(c.fast_hz) || 25) + " Hz</span></div></div>";
-            h += "<div class='ws-field'><label>Slow frames (status, quality, time)</label>" +
-                 "<div class='ws-slider'><input type='range' id='gpCanSlow' min='1' max='25' step='1' value='" +
-                 (gpN(c.slow_hz) || 5) + "' oninput=\"this.nextElementSibling.textContent=this.value+' Hz'\">" +
-                 "<span class='val'>" + (gpN(c.slow_hz) || 5) + " Hz</span></div></div>";
-            /* Show the actual frame ids — the alternative is making the user do
-               hex arithmetic to check against their own bus. */
+            h += gpSetRow("Bitrate", sel + "</select>");
             if (base !== null) {
-                h += "<div class='gp-rows'><div class='gp-row'><span class='k'>Frames occupy</span>" +
-                     "<span class='v'>" + gpHex(base) + " – " + gpHex(base + span - 1) + "</span></div></div>";
+                h += gpSetRow("Occupies",
+                    "<span class='gp-set-v'>" + gpHex(base) + " – " + gpHex(base + span - 1) + "</span>");
             }
-            h += "<button class='ws-btn-line' id='gpCanBtn' style='margin-top:9px' onclick='gpCanSave()'>Save CAN settings</button>" +
+            return h;
+        }
+
+        /* Rates and the frame map: correct to change, rare to change. */
+        function gpCanAdvancedHtml() {
+            var c = gp.can;
+            /* The frame map is protocol reference, not live state — it is worth
+               reading with no node on the desk, which is exactly when someone
+               is building a DBC or wiring a dash. Only the RATES need a node. */
+            if (!c) return "<div class='gp-set-note'>Attach the node to change its broadcast rates.</div>" +
+                           gpFrameMapHtml();
+            var h = gpSetRow("Position, motion",
+                "<div class='ws-slider'><input type='range' id='gpCanFast' min='1' max='25' step='1' value='" +
+                (gpN(c.fast_hz) || 25) + "' oninput=\"this.nextElementSibling.textContent=this.value+' Hz'\">" +
+                "<span class='val'>" + (gpN(c.fast_hz) || 25) + " Hz</span></div>");
+            h += gpSetRow("Status, quality",
+                "<div class='ws-slider'><input type='range' id='gpCanSlow' min='1' max='10' step='1' value='" +
+                (gpN(c.slow_hz) || 5) + "' oninput=\"this.nextElementSibling.textContent=this.value+' Hz'\">" +
+                "<span class='val'>" + (gpN(c.slow_hz) || 5) + " Hz</span></div>");
+            h += "<button class='ws-btn-line' id='gpCanBtn' style='margin-top:7px' onclick='gpCanSave()'>Save to the node</button>" +
                  "<div class='gp-msg' id='gpCanMsg'></div>" +
-                 "<div class='ws-note'>The node applies these at boot, so a change needs a power cycle. " +
-                 "Move the block if something else on your bus already uses it — the DBC export follows whatever you set here.</div>";
+                 "<div class='gp-set-note'>Applied at boot — power-cycle after saving.</div>";
+            h += gpFrameMapHtml();
             return h;
         }
 
@@ -10844,15 +11011,16 @@
 
         function gpWifiFormHtml() {
             var has = !!(gp.wifi && gp.wifi.has_password);
-            return "<div class='ws-field'><label>Network (SSID)</label>" +
-                "<input type='text' id='gpWifiSsid' autocomplete='off' spellcheck='false'></div>" +
-                "<div class='ws-field'><label>Password</label>" +
-                "<input type='password' id='gpWifiPass' autocomplete='new-password' placeholder='" +
-                (has ? "unchanged — blank keeps the saved key" : "none saved") + "'></div>" +
-                "<label class='gp-chk'><input type='checkbox' id='gpWifiEnabled'> Enable WiFi on this node</label>" +
-                "<button class='ws-btn-line' id='gpWifiBtn' style='margin-top:9px' onclick='gpWifiSave()'>Save WiFi settings</button>" +
+            return gpSetRow("Network",
+                    "<input type='text' id='gpWifiSsid' autocomplete='off' spellcheck='false'>") +
+                gpSetRow("Password",
+                    "<input type='password' id='gpWifiPass' autocomplete='new-password' placeholder='" +
+                    (has ? "unchanged" : "none saved") + "'>") +
+                gpSetRow("WiFi radio",
+                    "<label class='gp-chk' style='width:144px'><input type='checkbox' id='gpWifiEnabled'> Enabled</label>") +
+                "<button class='ws-btn-line' id='gpWifiBtn' style='margin-top:7px' onclick='gpWifiSave()'>Save to the node</button>" +
                 "<div class='gp-msg' id='gpWifiMsg'></div>" +
-                "<div class='ws-note'>The node never sends its stored password back, so this box always starts empty — and leaving it empty <b>keeps</b> the saved key rather than clearing it. WiFi is off by default and only applied at boot, so a change needs a power cycle. Note the node stores these credentials but <b>does not yet bring a station up</b>: provisioning landed ahead of the radio itself.</div>";
+                "<div class='gp-set-note'>Stored, not yet used — the radio itself is not up in this firmware.</div>";
         }
 
         function gpFillWifiForm() {
@@ -11109,6 +11277,7 @@
             gp.rate = null; gp.rateKey = ""; gp.insightCursor = -1;
             gp.sectors = null; gp.secKey = "";
             gp.chan = null; gp.chanKey = "";
+            if (!gp.cam) gp.cam = gpCamLoad();
             if (gp.sessions === null) gpSessionsRefresh().then(function () { gpBuildRail(); });
             if (!gp.tracks) {
                 gp.tracks = gpTracksLoad();
