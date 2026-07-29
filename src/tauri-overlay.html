@@ -1263,6 +1263,15 @@
         .gp-ghost-pick { width: 100%; box-sizing: border-box; margin: 3px 0 5px;
                          background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
                          border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 6px; }
+        /* Streaming: nothing to transport to, so the buttons and the timeline
+           go rather than sit there dimmed pretending to be options. The
+           readout takes their place and states the rate it is really
+           achieving. Recording red is state, not decoration (ADR-0014). */
+        .gp-playbar.live .gp-tgroup, .gp-playbar.live #gpScrub { display: none; }
+        .gp-playbar.live .gp-tc { min-width: 0; margin-right: auto; color: var(--text); }
+        .gp-playbar.live .gp-tc .dot {
+            display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+            background: #d16358; margin-right: 7px; vertical-align: baseline; }
         /* Idle = nothing to play. Everything that acts on a recording goes
            dim and dead; the lanes toggle does NOT, because it acts on the
            rack, and the rack is worth arranging before a recording lands. */
@@ -5976,6 +5985,9 @@
             wasLinked: false,  /* a puck has been attached at least once */
             relinking: false,  /* an automatic re-attach is in flight */
             _relinkAt: 0,      /* throttle for those attempts */
+            liveMode: false,   /* the rack is streaming, not playing back */
+            _pollAt: 0,        /* when the current poll went out */
+            _pollHz: 0,        /* smoothed rate actually being achieved */
             sel: "fix",
             wifi: null         /* wifi.config.get result (never carries a password) */
         };
@@ -7052,6 +7064,9 @@
 
         window.gpSessionLoad = function (id) {
             if (gp.traceBusy) return;
+            /* Opening a recording is the end of streaming: one rack cannot be
+               both the last minute of now and a lap you drove on Tuesday. */
+            gpLiveStop();
             Promise.all([gpStore.meta(id), gpStore.rows(id)]).then(function (r) {
                 var meta = r[0], rows = gpRowsUnpack(r[1]);
                 if (!meta || !rows.length) throw new Error("the samples for this recording are missing");
@@ -8154,7 +8169,11 @@
                    off the same edges they describe. */
                 g.fillStyle = "rgba(255,255,255,0.34)";
                 g.font = "8.5px 'JetBrains Mono', monospace";
-                var shi = sc.hi.toFixed(lane.dp), slo = sc.lo.toFixed(lane.dp);
+                /* toFixed keeps the sign of a negative zero, so a stationary
+                   car labels its speed lane "0" over "-0". */
+                var nz = function (v) { return v === 0 ? 0 : v; };
+                var shi = nz(+sc.hi.toFixed(lane.dp)).toFixed(lane.dp);
+                var slo = nz(+sc.lo.toFixed(lane.dp)).toFixed(lane.dp);
                 g.fillText(shi, plotX - 7 - g.measureText(shi).width, snapT(top + 14));
                 g.fillText(slo, plotX - 7 - g.measureText(slo).width, snapT(top + laneH - 6));
             });
@@ -8180,7 +8199,9 @@
                repeated into every lane. */
             g.fillStyle = "rgba(255,255,255,0.30)";
             g.font = "9px system-ui";
-            g.fillText(noData ? "no recording loaded" : (gp.stripZoom ? "corner" : "lap"),
+            g.fillText(noData ? "no recording loaded"
+                              : gp.liveMode ? "live · last " + GP_LIVE_SECS + " s"
+                              : (gp.stripZoom ? "corner" : "lap"),
                        6, snapT(rackBottom + 11));
 
             gp.stripCache = { key: key, cv: off };
@@ -8211,6 +8232,16 @@
                the view and came back. */
             var pbar = document.getElementById("gpPlaybar");
             if (pbar) pbar.classList.toggle("idle", noData);
+            /* Streaming: there is no timeline to scrub, so the transport steps
+               aside and the readout says what it is and how fast it is
+               arriving. A rate on screen is the only honest way to promise
+               "live" — 10 Hz asked for is not 10 Hz delivered. */
+            if (pbar) pbar.classList.toggle("live", !!gp.liveMode);
+            if (gp.liveMode) {
+                var lr = document.getElementById("gpPlayRead");
+                if (lr) lr.innerHTML = "<i class='dot'></i>LIVE <em>" +
+                    (gp._pollHz ? gp._pollHz.toFixed(1) : "—") + " Hz</em>";
+            }
             if (!show) return;
             gpSyncLanesBtn();
 
@@ -8599,7 +8630,14 @@
             var dev = gpDev();
             if (!dev || !dev.traceRecord) return;
             dev.traceRecord(on).then(function () {
-                gpSetMsg("gpTraceMsg", on ? "Recording." : "Recording stopped.", "ok");
+                /* Pressing Record starts EVERYTHING: the node's own log and
+                   the live view on this PC. Before, it started the node and
+                   left the screen exactly as it was, so the only way to see
+                   what you were recording was to stop and download it. */
+                if (on) { gpLiveStart(); if (gp.view !== "session") gpSetView("session"); }
+                else gpLiveStop();
+                gpDrawStrip();
+                gpSetMsg("gpTraceMsg", on ? "Recording — live below." : "Recording stopped.", "ok");
                 return dev.traceInfo();
             }).then(function (i) { gp.traceInfo = i; gpRenderInspector(); })
               .catch(function (e) { gpSetMsg("gpTraceMsg", "Failed: " + (e && e.message ? e.message : e), "bad"); });
@@ -9299,6 +9337,8 @@
         }
 
         function gpTcUpdate() {
+            /* The live readout owns this slot while streaming. */
+            if (gp.liveMode) return;
             var read = document.getElementById("gpPlayRead");
             var sc = document.getElementById("gpScrub");
             if (!gp.trace || !gp.trace.length) {
@@ -12299,6 +12339,88 @@
         }
 
         /* ---- polling ---- */
+        /* ---- Poll rate -----------------------------------------------------
+           500 ms is fine for a chip that says "15 sats"; it is useless for
+           watching a car. The node samples at 25 Hz internally, so the limit
+           on screen is the USB round trip, not the sensor.
+
+           Only the views you actually WATCH get the fast rate. Polling at
+           10 Hz while you drag a gate around the Tracks map buys nothing and
+           shares one serial port with the trace download. */
+        var GP_LIVE_MS = 100;                  /* 10 Hz target */
+        var GP_LIVE_SECS = 60;                 /* rolling window kept on screen */
+
+        function gpPollTarget() {
+            if (!gpLinked()) return GP_POLL_MS;
+            return (gp.view === "monitor" || gp.view === "session") ? GP_LIVE_MS : GP_POLL_MS;
+        }
+
+        /* Self-clocking: the next request goes out when the last REPLY lands,
+           so the loop runs at whatever the serial round trip can sustain and
+           never queues behind itself.
+
+           setInterval could not do this. Serial is one request at a time, so
+           every tick that fired while the port was busy hit the `inFlight`
+           guard and was DROPPED — asking for 10 Hz got you whatever survived,
+           with nothing on screen to say so. Hence gp._pollHz: if the link can
+           only manage 6 Hz, the app says 6 Hz rather than implying 10. */
+        function gpPollSchedule() {
+            if (!gp.open) return;
+            if (gp.timer) { clearTimeout(gp.timer); gp.timer = null; }
+            var wait = Math.max(0, gpPollTarget() - (Date.now() - (gp._pollAt || 0)));
+            gp.timer = setTimeout(function () { gp.timer = null; gpTick(); }, wait);
+        }
+
+        /* ---- Live telemetry ------------------------------------------------
+           A live sample is built in exactly the shape a downloaded recording
+           uses, and pushed into gp.trace. That is the whole trick: the lane
+           rack, the decimator, the axis, the map colouring and the channel
+           maths then draw live data with no special case in any of them. */
+        function gpLiveStart() {
+            gp.liveMode = true;
+            gp.sessionId = null;
+            gp.trace = []; gp.traceLaps = [];
+            gp.selLap = -1; gp.cmpLap = -1;
+            gp.chan = null; gp.chanKey = "";
+            gp.delta = null; gp.deltaKey = "";
+            gp.stripZoom = null; gp.stripCache = null;
+            gp.playIdx = 0;
+        }
+
+        function gpLiveStop() {
+            if (!gp.liveMode) return;
+            gp.liveMode = false;
+            gp.stripCache = null;
+        }
+
+        function gpLiveAppend(s) {
+            if (!gp.liveMode || !s) return;
+            /* No fix means no position; a row of zeroes would draw a car
+               parked at Null Island and a speed trace that never happened. */
+            if (gpN(s.lat_1e7) === null || gpN(s.lon_1e7) === null ||
+                gpN(s.gspeed_mm_s) === null) return;
+            var rows = gp.trace;
+            rows.push({
+                lat: s.lat_1e7 / 1e7,
+                lon: s.lon_1e7 / 1e7,
+                kph: s.gspeed_mm_s * 3.6 / 1000,
+                hdg: gpN(s.head_1e5) === null ? 0 : s.head_1e5 / 1e5,
+                /* Arrival time on this PC. It is the honest clock for a live
+                   view — the sample is as fresh as the link made it — and the
+                   axis only ever shows the last minute of it. */
+                t: Date.now(),
+                g: 0
+            });
+            var cap = Math.max(60, Math.round(GP_LIVE_SECS * 1000 / gpPollTarget()));
+            if (rows.length > cap) rows.splice(0, rows.length - cap);
+            /* Both derived channels are windowed, so they are recomputed over
+               the buffer rather than extended — 600 samples at 10 Hz is noise
+               next to one canvas repaint. */
+            gpComputeG(rows);
+            gp.chan = null; gp.chanKey = "";
+            gp.playIdx = rows.length - 1;
+        }
+
         /* Past this much unbroken silence the node is not slow, it is GONE.
            Expressed in time rather than in poll counts so changing the poll
            rate cannot quietly turn a 3 s grace period into 300 ms. */
@@ -12357,7 +12479,18 @@
 
         function gpTick() {
             if (!gp.open || gp.inFlight) return;
-            if (!gpLinked()) { gpRelink(); gpUpdateChips(); return; }
+            /* Stamped before the request goes out, so the interval measured on
+               the way back is a true round trip. */
+            var sentAt = Date.now();
+            /* iv can be 0 — two replies inside one millisecond — and 1000/0 is
+               Infinity, which would go straight onto the screen as the rate. */
+            var iv = gp._pollAt ? sentAt - gp._pollAt : 0;
+            if (iv > 0) {
+                var hz = Math.min(1000, 1000 / iv);
+                gp._pollHz = gp._pollHz ? gp._pollHz * 0.75 + hz * 0.25 : hz;
+            }
+            gp._pollAt = sentAt;
+            if (!gpLinked()) { gpRelink(); gpUpdateChips(); gpPollSchedule(); return; }
             var epoch = gp._epoch;
             /* Serial is single-threaded — one request in flight at a time, or
                replies interleave and the frame parser sees garbage. */
@@ -12365,7 +12498,7 @@
             RDM.gpsStatus().then(function (s) {
                 if (epoch !== gp._epoch) return;
                 gp.err = null;
-                if (s) { gpTrackRates(s); gp.status = s; }
+                if (s) { gpTrackRates(s); gp.status = s; gpLiveAppend(s); }
             }).catch(function (e) {
                 if (epoch !== gp._epoch) return;
                 gp.err = (e && e.message) ? e.message : String(e);
@@ -12381,10 +12514,15 @@
                 if (epoch !== gp._epoch) return;
                 gp._misses = gp.err ? gp._misses : 0;
                 gp.inFlight = false;
+                /* Re-arm FIRST: whatever the reply was, the loop has to keep
+                   running, and nothing below here is allowed to stop it. */
+                gpPollSchedule();
                 gpUpdateStage();
                 gpUpdateChips();
                 gpMapUpdate();
                 gpCanLiveUpdate();
+                /* Streaming: the rack redraws on every sample. */
+                if (gp.liveMode) gpDrawStrip();
                 /* The first usable fix changes the track list's ORDER, so the
                    rail has to be rebuilt once — but only once, not every 500 ms,
                    or clicking an entry would race the redraw. */
@@ -12473,8 +12611,8 @@
             if (gp.map) setTimeout(function () { if (gp.map) gp.map.invalidateSize(); }, 60);
             window.gpClearTrail();
             window.gpSetView(gp.view);
-            if (gp.timer) clearInterval(gp.timer);
-            gp.timer = setInterval(gpTick, GP_POLL_MS);
+            if (gp.timer) clearTimeout(gp.timer);
+            gp.timer = null;
             if (gp.lapTimer) clearInterval(gp.lapTimer);
             gp.lapTimer = setInterval(gpLapPoll, GP_LAP_POLL_MS);
             gpLapPoll();
@@ -12490,7 +12628,8 @@
 
         window._gpClose = function () {
             gp.open = false;
-            if (gp.timer) { clearInterval(gp.timer); gp.timer = null; }
+            gpLiveStop();
+            if (gp.timer) { clearTimeout(gp.timer); gp.timer = null; }
             if (gp.lapTimer) { clearInterval(gp.lapTimer); gp.lapTimer = null; }
             var ws = document.getElementById("gpWorkspace");
             if (ws) ws.style.display = "none";
