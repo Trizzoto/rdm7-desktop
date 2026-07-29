@@ -7617,6 +7617,7 @@
                                   { v: 1, l: "Flashing" }
                               ] },
                             { name: "flash_speed", label: "Flash Speed (ms)", type: "stepper", def: 200, cat: "appearance", group: "Behaviour", help: "How fast it flashes (smaller = faster), in milliseconds.", min: 50, max: 1000, step: 50, enabledBy: "flash_mode=1" },
+                            { name: "lamp_on", label: "Lamp Lit", type: "checkbox", def: true, cat: "appearance", group: "Behaviour", help: "Force the light on or off. Normally the light comes on whenever the channel reads anything other than zero — use this in a rule to keep it dark until a reading matters, e.g. off below 90.", ruleOnly: true },
                             { name: "is_momentary", label: "Momentary", type: "checkbox", def: true, cat: "appearance", group: "Behaviour", help: "Only stay on while the signal is active, instead of latching on." },
                             { name: "invert_toggle", label: "Invert State", type: "checkbox", def: false, cat: "appearance", group: "Behaviour", help: "Flip it - the warning shows when the signal is OFF." }
                         ]
@@ -8110,6 +8111,28 @@
                             { name: "tick_label_divisor", label: "Number Divisor", type: "number", def: 1, cat: "data", group: "Numbers", help: "Shrink the numbers by dividing them (1000 shows 7000 as '7').", min: 1, max: 100000, enabledBy: "show_labels" },
                             { name: "smoothing_ms", label: "Smoothing (ms)", type: "slider", def: 20, cat: "data", group: "Behaviour", help: "Smooths out jumpy readings. Higher is smoother but slower to react; 0 shows the raw value.", min: 0, max: 500, step: 10 }
                         ]
+                    },
+                    /* EXPERIMENTAL signal-driven image sequence. Frames are uploaded as
+                     * prefix_0..prefix_N-1 .rdmimg files and pre-loaded into PSRAM; the bound
+                     * channel picks which frame shows. Firmware module is gated by
+                     * RDM_WIDGET_ANIM_ENABLED — see tools/WIDGET_ANIM_README.md before removing. */
+                    "anim": {
+                        displayName: "Animation", defW: 200, defH: 200,
+                        fields: [
+                            { name: "anim_upload", label: "Animation", type: "anim_frames", def: "", cat: "data", group: "Frames", help: "Upload a GIF, short video clip, or a set of still images. The editor slices it into frames, converts them and sends them to the dash." },
+                            { name: "frame_prefix", label: "Frame Prefix", type: "text", def: "", cat: "data", group: "Frames", help: "Name prefix of the frame set on the device (frames are stored as prefix_0, prefix_1, ...). Set automatically when you upload an animation." },
+                            { name: "frame_count", label: "Frames", type: "stepper", def: 8, cat: "data", group: "Frames", help: "How many frames are in the set. Set automatically by the upload; lower it to trim the end of the animation.", min: 1, max: 16 },
+                            { name: "mode", label: "Mode", type: "select", def: 0, cat: "data", group: "Behaviour", help: "Follow value: the frame tracks the reading across the range, like a needle. Loop: sits on frame 1 until the reading passes the threshold, then plays all frames on repeat.",
+                              options: [
+                                  { v: 0, l: "Follow value (scrub)" },
+                                  { v: 1, l: "Loop above threshold" }
+                              ] },
+                            { name: "range_min", label: "Range Min", type: "number", def: 0, cat: "data", group: "Behaviour", help: "Follow-value mode: the reading that shows the first frame." },
+                            { name: "range_max", label: "Range Max", type: "number", def: 8000, cat: "data", group: "Behaviour", help: "Follow-value mode: the reading that shows the last frame." },
+                            { name: "threshold", label: "Threshold", type: "number", def: 6000, cat: "data", group: "Behaviour", help: "Loop mode: the animation plays while the reading is at or above this value." },
+                            { name: "loop_fps", label: "Loop Speed (fps)", type: "stepper", def: 12, cat: "data", group: "Behaviour", help: "Loop mode: how fast the frames play, in frames per second.", min: 1, max: 30 },
+                            { name: "hyst_pct", label: "Hysteresis %", type: "slider", def: 2, cat: "data", group: "Behaviour", help: "Stops the animation flickering when the reading sits right on a frame boundary or the threshold. Raise it if the frame chatters.", min: 0, max: 10, step: 1 }
+                        ]
                     }
                 };
         // AUTO-GENERATED END: WIDGET_DEFS
@@ -8334,7 +8357,8 @@
             button:      '<svg viewBox="0 0 20 16"><rect x="2" y="4" width="16" height="8" rx="2" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.2"/><text x="5" y="11" font-size="6" fill="currentColor" opacity="0.7">OK</text></svg>',
             shift_light: '<svg viewBox="0 0 20 16"><rect x="1" y="5" width="3" height="6" rx="0.5" fill="currentColor" opacity="0.7"/><rect x="5" y="5" width="3" height="6" rx="0.5" fill="currentColor" opacity="0.7"/><rect x="9" y="5" width="3" height="6" rx="0.5" fill="currentColor" opacity="0.7"/><rect x="13" y="5" width="3" height="6" rx="0.5" fill="currentColor" opacity="0.2"/></svg>',
             banner:      '<svg viewBox="0 0 20 16"><rect x="1" y="11" width="18" height="4" rx="0.6" fill="currentColor" opacity="0.5"/><text x="3" y="14.3" font-size="3.5" font-weight="bold" fill="#000">WARNING</text></svg>',
-            pathbar:     '<svg viewBox="0 0 20 16"><path d="M4,14 L4,7 Q4,4 7,4 L17,4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity="0.25"/><path d="M4,14 L4,7 Q4,4 7,4 L11,4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>'
+            pathbar:     '<svg viewBox="0 0 20 16"><path d="M4,14 L4,7 Q4,4 7,4 L17,4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity="0.25"/><path d="M4,14 L4,7 Q4,4 7,4 L11,4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+            anim:        '<svg viewBox="0 0 20 16"><rect x="2" y="2" width="16" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="3.5" y="3.5" width="2" height="2" fill="currentColor" opacity="0.5"/><rect x="3.5" y="7" width="2" height="2" fill="currentColor" opacity="0.5"/><rect x="3.5" y="10.5" width="2" height="2" fill="currentColor" opacity="0.5"/><rect x="14.5" y="3.5" width="2" height="2" fill="currentColor" opacity="0.5"/><rect x="14.5" y="7" width="2" height="2" fill="currentColor" opacity="0.5"/><rect x="14.5" y="10.5" width="2" height="2" fill="currentColor" opacity="0.5"/><polygon points="8.5,5.5 12.5,8 8.5,10.5" fill="currentColor" opacity="0.7"/></svg>'
         };
 
         function setSplashUIVisibility(isSplash) {
@@ -9208,6 +9232,30 @@
             return s;
         }
 
+        /* Animation widget: the studio can't fetch the device's .rdmimg frames,
+         * so draw a film-strip placeholder. The frame strip along the bottom
+         * tracks the live/sim value in scrub mode so you can see which frame
+         * the device would be showing. */
+        function _pvAnim(w, c){
+            const p = devToWeb(w.x, w.y), left = p.x - w.w / 2, top = p.y - w.h / 2;
+            const n = Math.max(1, Math.min(16, _pvNum(c.frame_count, 8)));
+            const mn = _pvNum(c.range_min, 0), mx = _pvNum(c.range_max, 8000);
+            const val = _pvScene(w, c, mn, mx);
+            const frac = _pvClamp((val - mn) / ((mx - mn) || 1), 0, 1);
+            const cur = Math.round(frac * (n - 1));
+            let s = `<rect x="${left.toFixed(1)}" y="${top.toFixed(1)}" width="${w.w}" height="${w.h}" rx="4" fill="#1b1b1b" fill-opacity="0.5" stroke="#555" stroke-width="1" stroke-dasharray="4 3"/>`;
+            s += `<text x="${p.x}" y="${p.y - 6}" fill="#9aa" font-family="'Segoe UI',sans-serif" font-size="${Math.max(8, Math.min(13, w.h * 0.18))}" text-anchor="middle" dominant-baseline="central">${_pvEsc(c.frame_prefix || 'animation')} · ${n}f</text>`;
+            /* Frame strip */
+            const cell = Math.min(10, Math.max(3, (w.w - 12) / n - 2));
+            const stripW = n * (cell + 2) - 2;
+            const sx0 = p.x - stripW / 2, sy0 = top + w.h - cell - 5;
+            for (let i = 0; i < n; i++) {
+                const on = i === cur;
+                s += `<rect x="${(sx0 + i * (cell + 2)).toFixed(1)}" y="${sy0.toFixed(1)}" width="${cell.toFixed(1)}" height="${cell.toFixed(1)}" rx="1" fill="${on ? 'hsl(120,80%,55%)' : '#444'}" fill-opacity="${on ? 0.9 : 0.6}"/>`;
+            }
+            return s;
+        }
+
         function _pvLine(w, c){
             const p = devToWeb(w.x, w.y);
             const col = _pvColor(c.line_color, '#FFF'), lw = _pvNum(c.line_width, 4);
@@ -9502,6 +9550,7 @@
                 case 'shift_light': return _pvShiftLight(w, c);
                 case 'toggle': case 'button': return _pvButton(w, c);
                 case 'pathbar':     return _pvPathbar(w, c);
+                case 'anim':        return _pvAnim(w, c);
                 default:            return '';
             }
         }
@@ -11601,6 +11650,22 @@
                            "
                            ${disabledAttr} style="flex:1;">
                 </div>`;
+            } else if (f.type === 'anim_frames') {
+                /* Animation frame-set uploader: file input feeds the slicer
+                 * dialog, which converts + uploads N frames and then writes
+                 * frame_prefix / frame_count on this widget. NOTE: no `w` in
+                 * renderFieldHTML scope — read the selected widget directly. */
+                const _afW = (selectedIndex >= 0 && currentLayout.widgets[selectedIndex]) || null;
+                const _afPrefix = (_afW && _afW.config && _afW.config.frame_prefix) || '';
+                const _afCount = (_afW && _afW.config && _afW.config.frame_count) || 0;
+                const _afSummary = _afPrefix
+                    ? `<span style="color:#9aa;font-size:11px;">${_afPrefix}_0 … ${_afPrefix}_${Math.max(0, _afCount - 1)}</span>`
+                    : `<span style="color:#777;font-size:11px;">No frames uploaded yet</span>`;
+                html += `<div style="display:flex;gap:8px;align-items:center;">
+                    <button type="button" class="btn btn-secondary" style="padding:4px 10px;cursor:pointer;" onclick="document.getElementById('animUploadInput').click()" ${disabledAttr}>&#x1F39E; Upload animation…</button>
+                    ${_afSummary}
+                    <input type="file" id="animUploadInput" accept="image/gif,video/mp4,video/webm,image/png,image/jpeg" multiple style="display:none" onchange="openAnimUploadDialog(this)">
+                </div>`;
             } else if (f.type === 'image_picker') {
                 html += `<div class="image-picker-wrap">
                     <select id="imgsel_${f.name}" onchange="updateWidgetConfigField('${f.name}', this.value, false)" ${disabledAttr}>
@@ -12151,16 +12216,21 @@
              * with ruleOverridable=true (e.g. the image widget's image_name,
              * which conceptually belongs under Data) can opt in explicitly. */
             const appearFields = def.fields.filter(f => f.cat === 'appearance' || f.ruleOverridable === true);
-            if (appearFields.length) {
-                const changedCount = appearFields.filter(f => {
+            /* ruleOnly fields (e.g. warning.lamp_on) are offered as rule targets
+             * below but are NOT static settings — a checkbox for "force the lamp
+             * on" means nothing outside an IF condition. Keep them out of the
+             * Appearance accordion and its badge count. */
+            const appearStatic = appearFields.filter(f => !f.ruleOnly);
+            if (appearStatic.length) {
+                const changedCount = appearStatic.filter(f => {
                     const val = w.config[f.name] !== undefined ? w.config[f.name] : f.def;
                     return val !== f.def;
                 }).length;
                 const badgeHtml = changedCount > 0 ? `<span class="badge">${changedCount}</span>` : '';
                 html += `<details class="inspector-accordion" open><summary>Appearance${badgeHtml}</summary><div class="accordion-body">`;
-                const _appMulti = new Set(appearFields.map(f => f.group || '')).size > 1;
+                const _appMulti = new Set(appearStatic.map(f => f.group || '')).size > 1;
                 let _appG = null;
-                appearFields.forEach(f => {
+                appearStatic.forEach(f => {
                     const val = w.config[f.name] !== undefined ? w.config[f.name] : f.def;
                     if (_enabledByHidden(f.enabledBy, k => w.config[k] !== undefined ? w.config[k] : _fieldDefault(w.type, k))) return;
                     if (_appMulti && f.group && f.group !== _appG) {
@@ -12229,7 +12299,7 @@
              * that is just 'pathbar'. meter and indicator DO implement
              * apply_overrides (widget_meter.c / widget_indicator.c) and are
              * intentionally NOT excluded — earlier code wrongly listed them. */
-            const NO_RULES_TYPES = new Set(['pathbar']);
+            const NO_RULES_TYPES = new Set(['pathbar', 'anim']);
             const rules = w.config.rules || [];
             /* Rules authoring UI. Set to false to hide the add/edit surface
              * (the firmware rules engine still honours any rules already saved
@@ -12292,6 +12362,17 @@
                 const RULE_TARGET_EXCLUDE = {
                     meter: new Set(['needle_color']),
                     bar:   new Set(['bar_in_range_color', 'fill_edge_color']),
+                    /* warning's _warning_apply_overrides honours colour, border,
+                     * flash and lamp_on only. The rest are geometry/asset/
+                     * behaviour fields it never reads, so offering them as rule
+                     * targets is a control that silently does nothing. Wiring any
+                     * of them up means adding a branch there first, then removing
+                     * the name here. */
+                    warning: new Set(['active_opa', 'inactive_opa', 'radius',
+                                      'image_name', 'image_scale', 'show_label',
+                                      'label_font', 'label_y_offset',
+                                      'label_text_align', 'is_momentary',
+                                      'invert_toggle']),
                 };
                 const _ruleExcluded = RULE_TARGET_EXCLUDE[w.type];
                 appearFields.forEach(f => {
@@ -13930,6 +14011,255 @@
                 u8[off++] = a;
             }
             return buf;
+        }
+
+        /* ─── Animation frame slicer (anim widget) ─────────────────────────────
+         * All the heavy lifting happens in the browser: GIF/video/stills are
+         * decoded to canvases here, resized, converted to .rdmimg and uploaded
+         * as <prefix>_0 … <prefix>_N-1 through the normal image upload
+         * endpoint. The device only ever sees plain RDMIMG frames. */
+
+        const ANIM_MAX_FRAMES = 16;             /* matches ANIM_MAX_FRAMES in widget_anim.h */
+        const ANIM_FRAME_WARN_BYTES = 450 * 1024;  /* PSRAM decode comfort ceiling per image */
+        const ANIM_TOTAL_WARN_BYTES = 3 * 1024 * 1024;
+
+        /* Decode every frame of a GIF via WebCodecs ImageDecoder (Chromium). */
+        async function _animFramesFromGif(file) {
+            if (typeof ImageDecoder === 'undefined')
+                throw new Error('GIF decoding needs a Chromium browser (Chrome/Edge) — or upload a video or a set of stills instead');
+            const dec = new ImageDecoder({ data: await file.arrayBuffer(), type: 'image/gif' });
+            await dec.tracks.ready;
+            const n = Math.min(dec.tracks.selectedTrack.frameCount, 64);
+            const frames = [];
+            for (let i = 0; i < n; i++) {
+                const { image } = await dec.decode({ frameIndex: i });
+                const cvs = document.createElement('canvas');
+                cvs.width = image.displayWidth; cvs.height = image.displayHeight;
+                cvs.getContext('2d').drawImage(image, 0, 0);
+                image.close();
+                frames.push(cvs);
+            }
+            if (dec.close) dec.close();
+            return frames;
+        }
+
+        /* Grab ANIM_MAX_FRAMES evenly-spaced stills from a video file. */
+        async function _animFramesFromVideo(file) {
+            const url = URL.createObjectURL(file);
+            const v = document.createElement('video');
+            v.muted = true; v.preload = 'auto'; v.src = url;
+            try {
+                await new Promise((res, rej) => {
+                    v.onloadedmetadata = res;
+                    v.onerror = () => rej(new Error('Cannot decode this video'));
+                });
+                const dur = v.duration;
+                if (!isFinite(dur) || dur <= 0) throw new Error('Video has no duration');
+                const frames = [];
+                for (let i = 0; i < ANIM_MAX_FRAMES; i++) {
+                    /* Sample the middle of each i-th slice; never seek to the
+                     * exact end — some codecs stall there. */
+                    const t = Math.min(dur * (i + 0.5) / ANIM_MAX_FRAMES, Math.max(0, dur - 0.05));
+                    await new Promise((res, rej) => {
+                        v.onseeked = res;
+                        v.onerror = () => rej(new Error('Video seek failed'));
+                        v.currentTime = t;
+                    });
+                    const cvs = document.createElement('canvas');
+                    cvs.width = v.videoWidth; cvs.height = v.videoHeight;
+                    cvs.getContext('2d').drawImage(v, 0, 0);
+                    frames.push(cvs);
+                }
+                return frames;
+            } finally {
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        /* One frame per still image, in filename order. */
+        async function _animFramesFromStills(files) {
+            const sorted = Array.from(files).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+            const frames = [];
+            for (const f of sorted.slice(0, ANIM_MAX_FRAMES)) {
+                const bmp = await createImageBitmap(f);
+                const cvs = document.createElement('canvas');
+                cvs.width = bmp.width; cvs.height = bmp.height;
+                cvs.getContext('2d').drawImage(bmp, 0, 0);
+                bmp.close();
+                frames.push(cvs);
+            }
+            return frames;
+        }
+
+        async function openAnimUploadDialog(input) {
+            const files = Array.from(input.files || []);
+            input.value = '';
+            if (!files.length) return;
+
+            const statusEl = document.createElement('div');
+            statusEl.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#e0e0e0;padding:8px 16px;border-radius:6px;z-index:10000;border:1px solid var(--border);';
+            statusEl.textContent = 'Decoding frames…';
+            document.body.appendChild(statusEl);
+
+            let srcFrames;
+            try {
+                if (files.length > 1) {
+                    srcFrames = await _animFramesFromStills(files);
+                } else if (files[0].type === 'image/gif') {
+                    srcFrames = await _animFramesFromGif(files[0]);
+                } else if (files[0].type.startsWith('video/')) {
+                    srcFrames = await _animFramesFromVideo(files[0]);
+                } else {
+                    throw new Error('Pick a GIF, a short video, or select several stills at once');
+                }
+                if (!srcFrames || srcFrames.length < 2)
+                    throw new Error('Need at least 2 frames for an animation');
+            } catch (e) {
+                statusEl.textContent = 'Decode failed: ' + e.message;
+                statusEl.style.borderColor = '#f44';
+                setTimeout(() => statusEl.remove(), 3500);
+                return;
+            }
+            statusEl.remove();
+
+            const origW = srcFrames[0].width, origH = srcFrames[0].height;
+            const suggestedName = files[0].name.replace(/\.[^.]+$/, '')
+                .replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 20) || 'anim';
+            /* Default scale: fit a 240px box — big enough for most overlay
+             * animations, small enough that 10 frames ≈ 1.7 MB PSRAM. */
+            const fitPct = Math.min(100, Math.floor(Math.min(240 / origW, 240 / origH) * 100)) || 100;
+            const defCount = Math.min(10, srcFrames.length);
+
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(3px);display:flex;flex-direction:column;font-family:inherit;';
+            overlay.innerHTML = `
+                <div id="afr-stage" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:24px 24px 12px;">
+                    <canvas id="afr-preview" style="max-width:80%;max-height:100%;border:1px solid rgba(255,255,255,0.18);border-radius:3px;background:#000;box-shadow:0 16px 56px rgba(0,0,0,0.8);image-rendering:pixelated;"></canvas>
+                </div>
+                <div style="background:rgba(12,12,20,0.97);border-top:1px solid rgba(255,255,255,0.08);padding:12px 20px 16px;display:flex;flex-direction:column;gap:10px;">
+                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                        <span style="color:#888;font-size:12px;width:52px;flex-shrink:0;">Name</span>
+                        <input id="afr-name" type="text" value="${suggestedName}" maxlength="20"
+                            style="width:160px;padding:5px 8px;background:#1a1a2e;border:1px solid #444;border-radius:4px;color:#fff;font-size:13px;">
+                        <span style="margin-left:auto;color:#555;font-size:11px;white-space:nowrap;">${origW} × ${origH} · ${srcFrames.length} source frames</span>
+                    </div>
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <span style="color:#888;font-size:12px;width:52px;flex-shrink:0;">Preview</span>
+                        <input id="afr-scrub" type="range" min="0" max="${srcFrames.length - 1}" value="0" style="flex:1;cursor:pointer;accent-color:#2979ff;">
+                        <span id="afr-scrub-lbl" style="color:#bbb;font-size:12px;width:56px;text-align:right;font-family:monospace;"></span>
+                    </div>
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <span style="color:#888;font-size:12px;width:52px;flex-shrink:0;">Frames</span>
+                        <input id="afr-count" type="range" min="2" max="${Math.min(ANIM_MAX_FRAMES, srcFrames.length)}" value="${defCount}" style="flex:1;cursor:pointer;accent-color:#2979ff;">
+                        <span id="afr-count-lbl" style="color:#bbb;font-size:12px;width:24px;text-align:right;font-family:monospace;"></span>
+                        <span style="color:#444;font-size:12px;">·</span>
+                        <span style="color:#888;font-size:12px;width:38px;flex-shrink:0;">Scale</span>
+                        <input id="afr-scale" type="range" min="5" max="100" value="${fitPct}" style="flex:1;cursor:pointer;accent-color:#2979ff;">
+                        <span id="afr-dims" style="color:#bbb;font-size:12px;width:88px;flex-shrink:0;text-align:right;font-family:monospace;"></span>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;">
+                        <span id="afr-size" style="margin-right:auto;font-size:12px;font-family:monospace;"></span>
+                        <button id="afr-cancel" style="padding:7px 18px;cursor:pointer;background:transparent;border:1px solid #555;border-radius:4px;color:#ccc;font-size:13px;">Cancel</button>
+                        <button id="afr-upload" style="padding:7px 22px;cursor:pointer;background:#2979ff;border:none;border-radius:4px;color:#fff;font-size:13px;font-weight:600;">Upload</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+
+            const preview  = document.getElementById('afr-preview');
+            const scrub    = document.getElementById('afr-scrub');
+            const scrubLbl = document.getElementById('afr-scrub-lbl');
+            const countEl  = document.getElementById('afr-count');
+            const countLbl = document.getElementById('afr-count-lbl');
+            const scaleEl  = document.getElementById('afr-scale');
+            const dimsEl   = document.getElementById('afr-dims');
+            const sizeEl   = document.getElementById('afr-size');
+
+            preview.width = origW; preview.height = origH;
+            const pctx = preview.getContext('2d');
+
+            function targetDims() {
+                const pct = parseInt(scaleEl.value);
+                /* Cap at device screen — rdm_image_load rejects larger. */
+                let tw = Math.max(1, Math.round(origW * pct / 100));
+                let th = Math.max(1, Math.round(origH * pct / 100));
+                if (tw > 800 || th > 480) {
+                    const fit = Math.min(800 / tw, 480 / th);
+                    tw = Math.max(1, Math.floor(tw * fit));
+                    th = Math.max(1, Math.floor(th * fit));
+                }
+                return { tw, th };
+            }
+            function refresh() {
+                const i = parseInt(scrub.value);
+                pctx.clearRect(0, 0, origW, origH);
+                pctx.drawImage(srcFrames[i], 0, 0);
+                scrubLbl.textContent = `${i + 1}/${srcFrames.length}`;
+                const n = parseInt(countEl.value);
+                countLbl.textContent = n;
+                const { tw, th } = targetDims();
+                dimsEl.textContent = `${tw} × ${th} px`;
+                const perFrame = tw * th * 3 + 12;
+                const total = perFrame * n;
+                const warn = perFrame > ANIM_FRAME_WARN_BYTES || total > ANIM_TOTAL_WARN_BYTES;
+                sizeEl.style.color = warn ? 'hsl(30,90%,60%)' : '#8a9';
+                sizeEl.textContent = `${(perFrame / 1024).toFixed(0)} KB/frame · ${(total / 1048576).toFixed(2)} MB total (flash + PSRAM)`
+                    + (warn ? ' — big! consider fewer frames or a smaller scale' : '');
+            }
+            scrub.oninput = refresh;
+            countEl.oninput = refresh;
+            scaleEl.oninput = refresh;
+            refresh();
+
+            function closeOverlay() { overlay.remove(); document.removeEventListener('keydown', onKey); }
+            const onKey = e => { if (e.key === 'Escape') closeOverlay(); };
+            document.addEventListener('keydown', onKey);
+            document.getElementById('afr-cancel').onclick = closeOverlay;
+
+            document.getElementById('afr-upload').onclick = async () => {
+                const n = parseInt(countEl.value);
+                const { tw, th } = targetDims();
+                const prefix = (document.getElementById('afr-name').value || suggestedName)
+                    .replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 20) || 'anim';
+                closeOverlay();
+                await _animUploadFrames(srcFrames, n, tw, th, prefix);
+            };
+        }
+
+        async function _animUploadFrames(srcFrames, n, tw, th, prefix) {
+            const statusEl = document.createElement('div');
+            statusEl.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#e0e0e0;padding:8px 16px;border-radius:6px;z-index:10000;border:1px solid var(--border);';
+            document.body.appendChild(statusEl);
+            try {
+                for (let i = 0; i < n; i++) {
+                    /* Even resample of the source frames across the target count. */
+                    const srcIdx = n === 1 ? 0 : Math.round(i * (srcFrames.length - 1) / (n - 1));
+                    const name = `${prefix}_${i}`;
+                    statusEl.textContent = `Uploading frame ${i + 1}/${n} (${name})…`;
+                    const rdmimg = convertImageToRDMIMG(srcFrames[srcIdx], tw, th);
+                    try { await fetch(`/api/image/delete?name=${encodeURIComponent(name)}`, { method: 'POST' }); } catch (e) {}
+                    const resp = await fetch(`/api/image/upload?name=${encodeURIComponent(name)}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/octet-stream' },
+                        body: rdmimg
+                    });
+                    if (!resp.ok) throw new Error(`frame ${i}: ` + await resp.text());
+                }
+                /* Clear leftovers from a previous, longer frame set so they
+                 * don't waste flash (delete is a no-op if absent). */
+                for (let i = n; i < ANIM_MAX_FRAMES; i++) {
+                    try { await fetch(`/api/image/delete?name=${encodeURIComponent(prefix + '_' + i)}`, { method: 'POST' }); } catch (e) {}
+                }
+                statusEl.textContent = `Uploaded ${n} frames as ${prefix}_0…${prefix}_${n - 1}`;
+                updateWidgetConfigField('frame_prefix', prefix, false);
+                updateWidgetConfigField('frame_count', n, false);
+                _refreshImageList();
+                refreshStorageInfo();
+                updateInspector();
+            } catch (e) {
+                statusEl.textContent = 'Upload failed: ' + e.message;
+                statusEl.style.borderColor = '#f44';
+            }
+            setTimeout(() => statusEl.remove(), 3000);
         }
 
         /* ─── Font management ──────────────────────────────────────────────── */
@@ -16655,6 +16985,14 @@
             const fontFamilies = new Set();
             (currentLayout.widgets || []).forEach(w => {
                 if (!w.config || !w.type) return;
+                /* Animation frames are named prefix_0..N-1, not held in an
+                 * image_picker field — enumerate them here or the bundle
+                 * ships without its animation (missing frames are skipped
+                 * with the same warning as any other unfetchable image). */
+                if (w.type === 'anim' && w.config.frame_prefix && w.config.frame_count) {
+                    for (let i = 0; i < Math.min(ANIM_MAX_FRAMES, w.config.frame_count); i++)
+                        imageNames.add(`${w.config.frame_prefix}_${i}`);
+                }
                 const def = WIDGET_DEFS[w.type];
                 if (!def || !def.fields) return;
                 def.fields.forEach(f => {

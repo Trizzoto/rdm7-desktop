@@ -191,10 +191,11 @@
                     style="background:transparent; color:var(--text); border:none; height:100%; padding:0 2px 0 10px; font-size:10.5px; font-family:'JetBrains Mono',monospace; cursor:pointer;">
                     <option value="local">Offline (Local)</option>
                     <option value="wifi">WiFi</option>
-                    <option value="hotspot">ESP32 Hotspot</option>
+                    <option value="hotspot">Hotspot</option>
                     <option value="usb">USB Serial</option>
                 </select>
-                <span id="connModeLabel" style="display:inline-flex; align-items:center; padding:0 10px 0 4px; font-size:10.5px; color:var(--text-muted); font-family:'JetBrains Mono',monospace; white-space:nowrap;">Local</span>
+                <span id="connDot" style="width:7px; height:7px; border-radius:50%; background:#555; align-self:center; margin-left:4px; flex:none;"></span>
+                <span id="connModeLabel" style="display:inline-flex; align-items:center; padding:0 10px 0 6px; font-size:10.5px; color:var(--text-muted); font-family:'JetBrains Mono',monospace; white-space:nowrap;">Local</span>
                 <button id="scanDevicesBtn" onclick="_scanForDevices()"
                     style="display:none; align-items:center; border:none; border-left:1px solid var(--border); background:transparent; color:var(--text-muted); padding:0 10px; font-size:10px; font-family:'JetBrains Mono',monospace; cursor:pointer;" title="Scan for RDM-7 devices on network">Scan</button>
             </div>
@@ -287,6 +288,27 @@
 ##[ replace-with ]##
             const show = _previewEnabled && !_haveLiveFrame &&
                 !(typeof _wasmBackdropActive === 'function' && _wasmBackdropActive());
+##[ end ]##
+
+#! On the device-served editor there is always a dash to mirror; on desktop
+#! the loop must idle while Offline/disconnected — it was hammering the local
+#! router's /api/screenshot catch-all and console-erroring on every tick
+#! trying to decode a JSON reply as a JPEG.
+##[ block live-preview-requires-device ]##
+##[ anchor ]##
+                if (document.hidden || _liveControlOn || _layoutPushBusy ||
+                    isDragging || isResizing) {
+                    await new Promise(r => setTimeout(r, 400));
+                    continue;
+                }
+##[ replace-with ]##
+                const noDevice = (typeof RDM !== 'undefined' && RDM.mode === 'local') ||
+                                 (typeof _connectionOk !== 'undefined' && !_connectionOk);
+                if (noDevice || document.hidden || _liveControlOn || _layoutPushBusy ||
+                    isDragging || isResizing) {
+                    await new Promise(r => setTimeout(r, 400));
+                    continue;
+                }
 ##[ end ]##
 
 #! WiFi device picker — discovered dashes + recent devices + manual IP entry
@@ -986,6 +1008,33 @@
         .ca-dec .v { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent-hover); float: right; }
         .ca-dec .m { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted); }
 
+        /* ---- analyzer: live-link banner ----
+           There is no demo traffic in this workspace, so an empty table has to
+           account for itself: offline, USB, device simulator, or a quiet bus —
+           each with the one action that fixes it. */
+        .ca-banner {
+            display: none; align-items: center; gap: 12px; flex-shrink: 0;
+            font-size: 11px; line-height: 1.5; color: var(--text-muted);
+            background: var(--bg); border-bottom: 1px solid var(--border);
+            border-left: 3px solid var(--border-light); padding: 9px 14px;
+        }
+        .ca-banner.show { display: flex; }
+        .ca-banner b { color: var(--text); }
+        .ca-banner code { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--accent-hover); }
+        .ca-banner .sp { flex: 1; min-width: 0; }
+        .ca-banner.warn { background: rgba(255,159,10,0.07); border-left-color: #FF9F0A; }
+        .ca-banner.warn b { color: #FFB84D; }
+        .ca-banner.bad { background: rgba(224,93,82,0.07); border-left-color: #e05d52; }
+        .ca-banner.bad b { color: #EF8279; }
+        .ca-banner button {
+            flex-shrink: 0; background: var(--bg-toolbar); border: 1px solid var(--border-light);
+            border-radius: var(--radius-md); color: var(--text); font-family: 'Sora', sans-serif;
+            font-size: 10.5px; font-weight: 600; padding: 5px 12px; cursor: pointer; white-space: nowrap;
+        }
+        .ca-banner button:hover { border-color: var(--accent); color: var(--accent-hover); }
+        .ca-emptyrow { color: var(--text-muted); font-size: 11px; text-align: center; padding: 26px 8px !important; white-space: normal !important; }
+        .ca-emptyrow b { color: var(--text); }
+
         /* ---- analyzer: multi-bit signal probe ---- */
         .ca-probe-tools { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; margin-bottom: 8px; }
         .ca-probe-tools .ws-seg { flex: 0 0 auto; }
@@ -1039,6 +1088,16 @@
         .ca-pinbtn { font-size: 10.5px; padding: 4px 12px; width: auto; flex: 0 0 auto; }
 
         /* ---- analyzer: OBD ↔ CAN match ---- */
+        /* Live OBD2 poll health at the top of the reference rail */
+        .cm-obdstat {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted);
+            background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+            padding: 4px 8px; margin: 0 2px 7px; text-align: center;
+        }
+        .cm-obdstat b { color: var(--text); font-weight: 600; }
+        .cm-obdstat .sim { color: #FFB84D; }
+        /* answered-but-stale reference — visible, not silently dropped */
+        .ws-item .st.stale { background: #FF9F0A; }
         .cm-recbar { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; }
         .cm-rec {
             flex: 1; background: var(--accent); border: none; border-radius: var(--radius-md); color: #fff;
@@ -1081,14 +1140,19 @@
         .cm-kv b { color: var(--text); font-weight: 600; }
         .cm-badge { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--border); color: var(--text-muted); vertical-align: 1px; }
 
-        /* ---- IO expander stage ---- */
+        /* ---- IO expander stage (the real board, top-down) ---- */
         .io-stage-pad { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 24px 16px; }
-        .io-stage-pad svg { max-width: 840px; width: 100%; height: auto; }
+        .io-stage-pad svg { max-width: 800px; width: 100%; height: auto; }
         #ioStageSvg { width: 100%; display: flex; justify-content: center; }
         .io-hint { color: var(--text-muted); font-size: 11px; margin-top: 14px; text-align: center; }
-        .io-pin { cursor: pointer; }
-        .io-pin:hover .io-pin-body { stroke: var(--border-light); }
-        .io-pin.sel .io-pin-body { stroke: #2d8ceb; stroke-width: 1.6; }
+        .io-pad { cursor: pointer; }
+        .io-pad:hover .io-pad-body { filter: brightness(1.25); }
+        .io-pad.sel .io-pad-body { stroke: #7CC0FF; stroke-width: 1.8; filter: brightness(1.12); }
+        .io-pad.sel .io-pad-lbl { fill: #7CC0FF; }
+        .io-dev { cursor: pointer; }
+        .io-dev:hover { filter: brightness(1.15); }
+        .ws-kv { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); padding: 3px 0; line-height: 1.45; }
+        .ws-kv i { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 
         /* ---- lap timer stage (real map) ---- */
         #ltMap { position: absolute; inset: 0; background: #0B0D0F; }
@@ -1351,19 +1415,23 @@
                         <div class="sh-visual">
                             <svg viewBox="0 0 130 85" aria-hidden="true">
                                 <defs>
-                                    <linearGradient id="shvBox" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A2D31"/><stop offset="1" stop-color="#141618"/></linearGradient>
+                                    <linearGradient id="shvPcb" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#2A3BCE"/><stop offset="0.5" stop-color="#1D2BAB"/><stop offset="1" stop-color="#152093"/></linearGradient>
                                 </defs>
-                                <ellipse cx="65" cy="70" rx="42" ry="6" fill="#000" opacity="0.35"/>
-                                <rect x="25" y="24" width="80" height="42" rx="6" fill="url(#shvBox)" stroke="#000" stroke-width="1.2"/>
-                                <path d="M 31 25 H 99" stroke="#3A3F45" stroke-width="1" opacity="0.5"/>
-                                <rect x="10" y="34" width="16" height="22" rx="2.5" fill="#101214" stroke="#000" stroke-width="1"/>
-                                <circle cx="18" cy="39.5" r="1.6" fill="#4A5057"/><circle cx="18" cy="45" r="1.6" fill="#4A5057"/><circle cx="18" cy="50.5" r="1.6" fill="#4A5057"/>
-                                <rect x="38" y="40" width="9" height="7" rx="1.5" fill="#0C0E10" stroke="#2d8ceb" stroke-width="0.8"/>
-                                <rect x="50" y="40" width="9" height="7" rx="1.5" fill="#0C0E10" stroke="#FF9F0A" stroke-width="0.8"/>
-                                <rect x="62" y="40" width="9" height="7" rx="1.5" fill="#0C0E10" stroke="#A8E05F" stroke-width="0.8"/>
-                                <rect x="74" y="40" width="9" height="7" rx="1.5" fill="#0C0E10" stroke="#AF52DE" stroke-width="0.8"/>
-                                <rect x="86" y="40" width="9" height="7" rx="1.5" fill="#0C0E10" stroke="#FF2E23" stroke-width="0.8"/>
-                                <circle cx="31" cy="60" r="2.2" fill="#101214"/><circle cx="99" cy="60" r="2.2" fill="#101214"/>
+                                <ellipse cx="65" cy="76" rx="34" ry="4.5" fill="#000" opacity="0.35"/>
+                                <path d="M 41 11 L 81 11 L 97 27 L 97 61 Q 97 67 91 67 L 53 67 L 33 47 L 33 19 Q 33 11 41 11 Z" fill="url(#shvPcb)" stroke="#0C1554" stroke-width="1.2"/>
+                                <g fill="#F2C83E">
+                                    <rect x="34" y="24" width="7" height="3.2" rx="1.4"/><rect x="34" y="29.5" width="7" height="3.2" rx="1.4"/><rect x="34" y="35" width="7" height="3.2" rx="1.4"/><rect x="34" y="40.5" width="7" height="3.2" rx="1.4"/><rect x="34" y="46" width="7" height="3.2" rx="1.4"/>
+                                    <rect x="89" y="28" width="7" height="3.2" rx="1.4"/><rect x="89" y="33.5" width="7" height="3.2" rx="1.4"/><rect x="89" y="39" width="7" height="3.2" rx="1.4"/><rect x="89" y="44.5" width="7" height="3.2" rx="1.4"/><rect x="89" y="50" width="7" height="3.2" rx="1.4"/>
+                                    <rect x="44" y="12" width="3.2" height="7" rx="1.4"/><rect x="49.5" y="12" width="3.2" height="7" rx="1.4"/><rect x="55" y="12" width="3.2" height="7" rx="1.4"/><rect x="60.5" y="12" width="3.2" height="7" rx="1.4"/><rect x="66" y="12" width="3.2" height="7" rx="1.4"/>
+                                </g>
+                                <rect x="46" y="22" width="6" height="5" rx="0.8" fill="#1B1D21"/><rect x="54" y="22" width="6" height="5" rx="0.8" fill="#1B1D21"/><rect x="62" y="22" width="6" height="5" rx="0.8" fill="#1B1D21"/>
+                                <rect x="52" y="48" width="12" height="7" rx="1" fill="#17181C"/>
+                                <g transform="translate(85,24) rotate(45)"><rect x="-8" y="-12" width="16" height="6" fill="#0E0F12"/><rect x="-8" y="-6" width="16" height="17" rx="1.5" fill="#2C2F34" stroke="#0A0B0D" stroke-width="0.8"/></g>
+                                <g transform="translate(41,60) rotate(45)"><rect x="-6.5" y="-4.5" width="13" height="9" rx="3.5" fill="#C6CBD1" stroke="#7A7F86" stroke-width="0.7"/></g>
+                                <rect x="61.5" y="35" width="7" height="5.6" rx="1" fill="#EDE9DB"/><circle cx="65" cy="37.8" r="1.7" fill="#FFFFFF"/>
+                                <circle cx="40" cy="19.5" r="2.6" fill="none" stroke="#D9A92B" stroke-width="1.7"/>
+                                <circle cx="89" cy="60" r="2.6" fill="none" stroke="#D9A92B" stroke-width="1.7"/>
+                                <text x="76" y="63.5" font-family="Sora, sans-serif" font-weight="800" font-size="6" fill="#F2F4F9" letter-spacing="0.3">RDM</text>
                             </svg>
                         </div>
                         <div class="sh-info">
@@ -1445,7 +1513,7 @@
         <div class="ws-topbar">
             <button class="btn btn-secondary" style="font-size:13px; padding:0 10px;" onclick="_caClose()" title="Home (Esc)">&#8962;</button>
             <span class="ws-brand" id="caBrand"></span>
-            <span class="ws-chip" id="caChipBus">no dash link &#8212; demo traffic</span>
+            <span class="ws-chip" id="caChipBus">connecting&#8230;</span>
             <div class="ws-modes" role="group" aria-label="View" style="margin-left:auto;">
                 <button id="caModeMonitor" class="on" onclick="caSetMode('monitor')">Monitor</button>
                 <button id="caModeMatch" onclick="caSetMode('match')">Match&#160;OBD</button>
@@ -1460,6 +1528,9 @@
             <!-- Match reference rail (match mode only) -->
             <div class="ws-rail" id="caMatchRail" style="display:none;"></div>
             <div class="ws-stage">
+                <!-- Live-link banner: an empty analyzer always says why (offline,
+                     USB, device simulator, quiet bus) and offers the fix. -->
+                <div class="ca-banner" id="caBanner"></div>
                 <!-- Monitor: live frame table -->
                 <div id="caMonitorStage" style="display:flex; flex-direction:column; flex:1; min-height:0;">
                     <div class="ca-strip">
@@ -1508,7 +1579,7 @@
         <div class="ws-topbar">
             <button class="btn btn-secondary" style="font-size:13px; padding:0 10px;" onclick="_ioClose()" title="Home (Esc)">&#8962;</button>
             <span class="ws-brand" id="ioBrand"></span>
-            <span class="ws-chip">RDM IO-22 &#183; 8 AI &#183; 4 TC &#183; 4 DI &#183; 4 PWM &#183; 2 HS</span>
+            <span class="ws-chip">CAN IO Expander v0.1 &#183; 8 DIN &#183; 8 AIN &#183; 4 DOUT &#183; CAN 2.0B</span>
             <span class="ws-chip" id="ioChipLink">no device link &#8212; saves to this PC</span>
             <div class="ws-modes" role="group" aria-label="Mode">
                 <button id="ioBtnDesign" class="on" onclick="_ioSetLive(false)">Design</button>
@@ -1520,7 +1591,7 @@
             <div class="ws-rail" id="ioRail"></div>
             <div class="ws-stage"><div class="io-stage-pad">
                 <div id="ioStageSvg"></div>
-                <div class="io-hint" id="ioHint">Click any pin to configure it &#8212; inputs become channels on the bus.</div>
+                <div class="io-hint" id="ioHint">Click any pad to configure it &#8212; inputs become CAN channels, outputs follow rules.</div>
             </div></div>
             <div class="ws-insp" id="ioInspector"><div class="ws-none">Select a pin to configure it</div></div>
         </div>
@@ -3439,9 +3510,13 @@
             return raw;
         }
 
-        /* ============ CAN Bus Analyzer ============ */
+        /* ============ CAN Bus Analyzer ============
+         * Reads the REAL bus through the dash — there is no synthetic traffic
+         * anywhere in this workspace. Everything that can stop frames arriving
+         * is reported as itself (see ca.link), so an empty table always says
+         * why it is empty instead of quietly showing nothing. */
         var ca = {
-            paused: false, sel: null, sort: "id", demo: false, mode: "monitor",
+            paused: false, sel: null, sort: "id", mode: "monitor",
             hidden: {},        /* id -> true : IDs the user unticked (SavvyCAN declutter) */
             dimIdle: false,    /* fade (not hide) IDs whose payload hasn't changed recently */
             markRef: null,     /* id -> snapshot bytes[] : "freeze & compare" reference */
@@ -3464,10 +3539,36 @@
                 obd: {},       /* live OBD2 values by signal name (from /api/signals/values) */
                 results: [],   /* ranked candidates */
                 sel: null,     /* selected candidate key */
-                lastRank: 0
+                lastRank: 0,
+                obdMeta: {}    /* name -> {stale,seen} from /api/signals/values */
+            },
+            /* ---- live link ----
+             *   offline  Local/offline mode — nothing to read
+             *   usb      serial link: the firmware has no can.monitor RPC (the
+             *            tracker dump is HTTP-only), so the bus needs WiFi
+             *   nolink   a dash is configured but the health check is failing
+             *   error    /api/can/monitor itself is erroring
+             *   sim      the dash's signal simulator is running — can_manager
+             *            skips the entire rx drain (tracker included) while it
+             *            is active, so NO frame ever reaches us
+             *   silent   linked, tracker empty — wiring / ignition / bitrate
+             *   live     frames flowing
+             * obdSim rides alongside any state: the firmware's virtual ECU
+             * answers OBD2 requests itself, so a Match run against it just
+             * correlates the dash with its own synthesizer. Has to be visible. */
+            link: {
+                state: "offline", fails: 0,
+                simActive: false,        /* firmware signal simulator */
+                obdSim: false,           /* firmware virtual ECU (synthetic OBD2) */
+                obdPids: null,           /* PIDs the dash is actually polling */
+                obdCount: 0,             /* live OBD2 signals seen */
+                capacity: 64,
+                simT: 0, obdSimT: 0, bitrateRead: false
             }
         };
-        var _caTimer = null, _caDemoState = null;
+        var _caTimer = null;
+        /* Device CAN bitrate indices (can_manager.c _bitrate_to_timing) */
+        var CA_BITRATES = [125000, 250000, 500000, 1000000];
         /* Palette for pinned probe traces (kept off pure-blue to read on the grid) */
         var CA_TRACE_COLORS = ["#2d8ceb", "#FF9F0A", "#6FBF73", "#c77dff", "#e05d52", "#3ad1c9"];
         /* Support/debug handle for analyzer state (mirrors window.__ltMap). */
@@ -3507,63 +3608,128 @@
             if (any) r._lastChg = now;
         }
 
-        /* Demo traffic so the workspace demos without a dash on the bench.
-         * Models a coherent "car": four physical quantities driven smoothly,
-         * broadcast fast on proprietary CAN IDs (various scales/endians, a
-         * touch of noise) AND surfaced slowly as OBD2 PID values. That lets
-         * BOTH the multi-bit probe and the OBD↔CAN match demo realistically —
-         * the match engine rediscovers each CAN field's scale/offset from the
-         * slow OBD reference. */
-        var lo16 = function (v) { return [v & 255, (v >> 8) & 255]; };            /* intel */
-        var be16 = function (v) { return [(v >> 8) & 255, v & 255]; };            /* motorola */
-        function caDemoPhys(t) {
-            return {
-                rpm:   Math.round(800 + 2900 * (0.5 + 0.5 * Math.sin(t / 2.4)) + 700 * (0.5 + 0.5 * Math.sin(t / 0.7))), /* 800–4400, never negative */
-                tps:   Math.max(0, Math.min(100, Math.round(48 + 46 * Math.sin(t / 2.4 + 0.35)))),
-                clt:   Math.round(86 + 8 * Math.sin(t / 17)),                     /* °C */
-                vspd:  Math.max(0, Math.round(55 + 52 * Math.sin(t / 3.3 - 0.5))) /* km/h */
-            };
+        /* ── live link: what the analyzer can actually see right now ────────── */
+
+        /* Transport-level verdict, before any device state is considered. */
+        function _caLinkMode() {
+            if (typeof RDM === "undefined" || RDM.mode === "local") return "offline";
+            if (RDM.mode === "usb") return "usb";
+            if (typeof _connectionOk === "undefined" || !_connectionOk) return "nolink";
+            return "http";
         }
-        function caDemoTick() {
-            if (!_caDemoState) _caDemoState = { t: 0, count: {} };
-            var st = _caDemoState;
-            st.t += 0.25;
-            var p = caDemoPhys(st.t);
-            var nz = function (a) { return (Math.random() - 0.5) * a; };          /* sensor jitter */
-            /* Fast broadcast frames — this is what a real ECU spews. */
-            var frames = [
-                { id: 0x0C8, dlc: 8, hz: 100, bytes: lo16(Math.round(p.rpm * 4 + nz(3)))     /* B0-1 rpm ×0.25 intel */
-                    .concat([Math.round(p.tps * 2 + nz(1)) & 255, 0, 0, 0, 0, 0]) },          /* B2 tps ×0.5 */
-                { id: 0x1F0, dlc: 8, hz: 50, bytes: be16(Math.round(p.vspd * 100 + nz(20)))   /* B0-1 vspd ×0.01 motorola */
-                    .concat([0, (p.clt + 40) & 255, 0, 0, 0, 0]) },                           /* B3 coolant offset -40 */
-                { id: 0x3E8, dlc: 8, hz: 20, bytes: [0, 0].concat(lo16(Math.round(1385 + 8 * Math.sin(st.t / 5))))
-                    .concat([Math.round(st.t * 10) & 255, 0xAA, 0x55, 1]) },                  /* battery ×0.01 + counter */
-                /* 0x200 B0-1 = 12-bit throttle ×0.025 motorola (bits 0-11), B2 coolant.
-                   Exercises the non-byte-width / nibble sweep. */
-                (function () { var v = Math.round(p.tps * 40 + nz(4)) & 0xFFF;
-                    return { id: 0x200, dlc: 4, hz: 10, bytes: [(v >> 4) & 255, (v & 0xF) << 4, (p.clt + 40) & 255, 0] }; })()
-            ];
-            frames.forEach(function (s) {
-                var r = ca.rows[s.id] || { id: s.id, ext: false, dlc: s.dlc, count: 0 };
-                r.dlc = s.dlc;
-                var ob = r.bytes;
-                r.bytes = s.bytes.slice(); while (r.bytes.length < 8) r.bytes.push(0);
-                _caTrackChange(r, ob);
-                r.count += Math.round(s.hz * 0.25);
-                r.age = 0;
-                ca.rows[s.id] = r;
-            });
-            /* Slow OBD2 poll surface — one decimal place, standard PID scaling. */
-            ca.match.obd = {
-                rpm:               p.rpm,
-                throttle_position: p.tps,
-                coolant_temp:      p.clt,
-                vehicle_speed:     p.vspd
-            };
-            ca.match._obdDemo = true;
-            caComputeRates();
-            caMatchSample();
-            caRender();
+        function _caIsLive() { return ca.link.state === "live" || ca.link.state === "silent"; }
+
+        /* Each state carries the chip text, the banner copy, and the one action
+           that fixes it — an empty analyzer should always be actionable. */
+        function _caLinkInfo() {
+            var L = ca.link;
+            switch (L.state) {
+                case "offline": return { chip: "offline &#8212; no dash", cls: "",
+                    msg: "<b>Offline.</b> The analyzer reads the live bus through your dash — connect one over WiFi to see traffic.",
+                    act: "Connect over WiFi", fn: "caConnect" };
+                case "usb": return { chip: "USB link &#8212; monitor needs WiFi", cls: "warn",
+                    msg: "<b>Connected over USB.</b> The dash serves its per-ID bus tracker over HTTP only, so the analyzer needs the WiFi link. Everything else (layouts, channels) still works over USB.",
+                    act: "Connect over WiFi", fn: "caConnect" };
+                case "nolink": return { chip: "dash unreachable", cls: "bad",
+                    msg: "<b>No answer from the dash.</b> It may be off, out of range, or on a different network.",
+                    act: "Reconnect", fn: "caConnect" };
+                case "error": return { chip: "bus read failing", cls: "bad",
+                    msg: "<b>The dash stopped answering <code>/api/can/monitor</code>.</b> It is still on the network but not serving the bus tracker — a reboot usually clears it.",
+                    act: "Reconnect", fn: "caConnect" };
+                case "sim": return { chip: "device simulator on", cls: "warn",
+                    msg: "<b>The dash's signal simulator is running.</b> While it is on the dash ignores its CAN receiver entirely, so no real frame reaches the analyzer.",
+                    act: "Turn simulator off", fn: "caStopSim" };
+                case "silent": return { chip: "linked &#183; <b>bus quiet</b>", cls: "warn",
+                    msg: "<b>Linked, but nothing is on the bus.</b> Check the ignition is on, CAN-H/CAN-L are the right way round, and the dash bitrate (" +
+                         (ca.bitrate / 1000) + "k) matches the car.", act: "", fn: "" };
+                default: return { chip: "via RDM-7 &#183; <b>" + L.ids + "</b> / " + L.capacity + " IDs", cls: "", msg: "", act: "", fn: "" };
+            }
+        }
+
+        /* Chip + banner. The virtual-ECU warning outranks a healthy bus: OBD
+           readings that the dash generated itself must never look like a car. */
+        function _caRenderLink() {
+            var info = _caLinkInfo();
+            var chip = document.getElementById("caChipBus");
+            if (chip) chip.innerHTML = ca.paused ? "paused" : info.chip;
+            var b = document.getElementById("caBanner");
+            if (!b) return;
+            var msg = info.msg, cls = info.cls, act = info.act, fn = info.fn;
+            if (!msg && ca.link.obdSim) {
+                msg = "<b>Virtual ECU is on.</b> The dash is answering its own OBD2 requests with synthetic values — fine for a bench test, but a Match run against it just correlates the dash with itself.";
+                cls = "warn"; act = "Turn virtual ECU off"; fn = "caStopObdSim";
+            }
+            if (ca.link.ids >= ca.link.capacity && !msg) {
+                msg = "<b>ID table full (" + ca.link.capacity + ").</b> The dash tracks the first " + ca.link.capacity +
+                      " IDs it sees; anything after that is not reported. Reboot the dash to re-seed the table.";
+                cls = "warn";
+            }
+            b.className = "ca-banner" + (msg ? " show" : "") + (cls ? " " + cls : "");
+            b.innerHTML = msg ? ("<span class='sp'>" + msg + "</span>" +
+                (act ? "<button onclick='" + fn + "()'>" + act + "</button>" : "")) : "";
+        }
+
+        window.caConnect = function () { if (window._openWifiPicker) window._openWifiPicker(); };
+        window.caStopSim = function () {
+            fetch("/api/signal/simulate", { method: "POST", headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ enabled: false }) })
+                .then(function () { ca.link.simActive = false; ca.link.simT = 0; showToast("Simulator off — reading the real bus", "success"); })
+                .catch(function () { showToast("Couldn't reach the dash", "error"); });
+        };
+        window.caStopObdSim = function () {
+            fetch("/api/obd2/sim?on=0", { method: "POST" })
+                .then(function () { ca.link.obdSim = false; ca.link.obdSimT = 0; showToast("Virtual ECU off — OBD2 now comes from the car", "success"); _caRenderLink(); })
+                .catch(function () { showToast("Couldn't reach the dash", "error"); });
+        };
+
+        /* Device-state poll, alongside the frame poll.
+           - /api/signal/simulate is lock-free on the device, so 2 s is cheap.
+           - /api/obd2/sim takes the LVGL lock, so it goes slower (6 s); one
+             call reports the virtual ECU AND how many PIDs are being polled.
+           - the bitrate is read once per session so the bus-load figure is the
+             dash's real bitrate rather than a guess. */
+        function _caPollDeviceState() {
+            var now = performance.now(), L = ca.link;
+            if (now - L.simT > 2000) {
+                L.simT = now;
+                fetch("/api/signal/simulate")
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (j) {
+                        if (!j || j.enabled === undefined) return;
+                        var was = L.simActive;
+                        L.simActive = !!j.enabled;
+                        if (was !== L.simActive) _caRenderLink();
+                    })
+                    .catch(function () {});
+            }
+            if (now - L.obdSimT > 6000) {
+                L.obdSimT = now;
+                fetch("/api/obd2/sim")
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (j) {
+                        if (!j) return;
+                        L.obdSim = !!j.sim;
+                        if (j.pids_polled !== undefined) L.obdPids = j.pids_polled;
+                        _caRenderLink();
+                        if (ca.mode === "match") caMatchRenderRail();
+                    })
+                    .catch(function () {});
+            }
+            if (!L.bitrateRead) {
+                L.bitrateRead = true;
+                fetch("/api/can/config")
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (j) {
+                        if (!j || j.bitrate === undefined || ca._bitrateManual) return;
+                        var hz = CA_BITRATES[j.bitrate | 0];
+                        if (!hz) return;
+                        ca.bitrate = hz;
+                        var sel = document.getElementById("caBitrate");
+                        if (sel) { sel.value = String(hz); sel.title = "bitrate read from the dash"; }
+                        caComputeRates();
+                    })
+                    .catch(function () { L.bitrateRead = false; });
+            }
         }
 
         function caComputeRates() {
@@ -3594,22 +3760,25 @@
             ca.lastPollT = now;
         }
 
-        function _caIsConnected() {
-            return typeof RDM !== "undefined" && RDM.mode !== "local" &&
-                   typeof _connectionOk !== "undefined" && _connectionOk;
-        }
         var _caBusy = false, _caLastObd = 0;
         function _caPoll() {
-            if (ca.paused) return;
-            var connected = _caIsConnected();
-            var chip = document.getElementById("caChipBus");
-            if (!connected) {
-                ca.demo = true;
-                if (chip) chip.innerHTML = "no dash link &#8212; <b>demo traffic</b>";
-                caDemoTick();
+            var mode = _caLinkMode();
+            if (mode !== "http") {
+                /* Nothing to read: drop whatever is on screen rather than leave a
+                   frozen last-good table looking live. */
+                if (ca.link.state !== mode) {
+                    ca.link.state = mode; ca.link.ids = 0; ca.link.fails = 0;
+                    ca.link.bitrateRead = false;
+                    ca.rows = {}; ca.prev = {}; ca.lastCounts = {}; ca.fps = 0; ca.busLoad = 0;
+                    ca.match.obd = {}; ca.match.obdMeta = {}; ca.link.obdCount = 0;
+                    ca.link.simActive = false; ca.link.obdSim = false; ca.link.obdPids = null;
+                    _caRenderLink(); caRender();
+                    if (ca.mode === "match") caMatchRenderRail();
+                }
                 return;
             }
-            if (ca.demo) { ca.demo = false; ca.rows = {}; ca.prev = {}; ca.lastCounts = {}; _caDemoState = null; ca.match._obdDemo = false; ca.match.obd = {}; }
+            if (ca.paused) { _caRenderLink(); return; }
+            _caPollDeviceState();
             /* Frame poll — guarded so a slow WiFi round-trip can't stack requests
                when Match is recording at 10 Hz (in-flight tick is simply skipped). */
             if (!_caBusy) {
@@ -3617,24 +3786,30 @@
                 fetch("/api/can/monitor")
                     .then(function (r) { return r.ok ? r.json() : null; })
                     .then(function (j) {
-                        if (j && Array.isArray(j.ids)) {
-                            j.ids.forEach(function (e) {
-                                var r = ca.rows[e.id] || { id: e.id, count: 0 };
-                                r.ext = !!e.ext; r.dlc = e.dlc;
-                                var ob = r.bytes;
-                                r.bytes = caParseHex(e.data || "");
-                                while (r.bytes.length < 8) r.bytes.push(0);
-                                _caTrackChange(r, ob);
-                                r.count = e.count; r.age = e.age_ms;
-                                ca.rows[e.id] = r;
-                            });
-                            if (chip) chip.innerHTML = "via RDM-7 &#183; <b>" + j.ids.length + "</b> / " + (j.capacity || 64) + " IDs";
-                            caComputeRates();
-                            caMatchSample();
-                            if (ca.mode !== "match") caRender();   /* table is hidden in match */
-                        }
+                        if (!j || !Array.isArray(j.ids)) { _caPollFailed(); return; }
+                        ca.link.fails = 0;
+                        j.ids.forEach(function (e) {
+                            var r = ca.rows[e.id] || { id: e.id, count: 0 };
+                            r.ext = !!e.ext; r.dlc = e.dlc;
+                            var ob = r.bytes;
+                            r.bytes = caParseHex(e.data || "");
+                            while (r.bytes.length < 8) r.bytes.push(0);
+                            _caTrackChange(r, ob);
+                            r.count = e.count; r.age = e.age_ms;
+                            ca.rows[e.id] = r;
+                        });
+                        ca.link.ids = j.ids.length;
+                        ca.link.capacity = j.capacity || 64;
+                        /* The simulator wins the label: while it runs the dash
+                           never drains its rx queue, so any IDs still listed are
+                           the last pre-simulator snapshot, not live traffic. */
+                        ca.link.state = ca.link.simActive ? "sim" : (j.ids.length ? "live" : "silent");
+                        _caRenderLink();
+                        caComputeRates();
+                        caMatchSample();
+                        if (ca.mode !== "match") caRender();   /* table is hidden in match */
                     })
-                    .catch(function () {})
+                    .catch(function () { _caPollFailed(); })
                     .then(function () { _caBusy = false; });
             }
             /* OBD2 reference set — throttled to ~4 Hz even while frames poll at
@@ -3646,22 +3821,35 @@
                     .then(function (r) { return r.ok ? r.json() : null; })
                     .then(function (j) {
                         if (!j || !Array.isArray(j.signals)) return;
-                        var obd = {};
+                        var obd = {}, meta = {}, n = 0;
                         j.signals.forEach(function (s) {
-                            if (s.source === "obd2" && s.seen && !s.stale) obd[s.name] = s.value;
+                            if (s.source !== "obd2") return;
+                            n++;
+                            /* Keep stale readings — the rail marks them instead of
+                               dropping them, so a PID that answers slowly doesn't
+                               make the reference list flicker in and out. */
+                            meta[s.name] = { seen: !!s.seen, stale: !!s.stale };
+                            if (s.seen) obd[s.name] = s.value;
                         });
                         ca.match.obd = obd;
-                        ca.match._obdDemo = false;
+                        ca.match.obdMeta = meta;
+                        ca.link.obdCount = n;
                         if (ca.mode === "match") caMatchRenderRail();
                     })
                     .catch(function () {});
             }
         }
+        /* Two consecutive failures before crying wolf — a single dropped poll on
+           a busy WiFi link is normal and shouldn't flash a red banner. */
+        function _caPollFailed() {
+            if (++ca.link.fails < 2) return;
+            if (ca.link.state !== "error") { ca.link.state = "error"; _caRenderLink(); }
+        }
         /* Adaptive cadence: 10 Hz while a live Match recording is running (sharper
            transient capture + faster convergence), 4 Hz otherwise. */
         function _caTick() {
             _caPoll();
-            var fast = _caIsConnected() && ca.mode === "match" && ca.match.recording;
+            var fast = _caIsLive() && ca.mode === "match" && ca.match.recording;
             _caTimer = setTimeout(_caTick, fast ? 100 : 250);
         }
 
@@ -3680,7 +3868,13 @@
         };
         window.caShowAll = function () { ca.hidden = {}; caRender(); };
         window.caSetDimIdle = function (v) { ca.dimIdle = !!v; caRender(); };
-        window.caSetBitrate = function (v) { ca.bitrate = parseInt(v, 10) || 500000; caComputeRates(); caRender(); };
+        /* Manual pick sticks — don't let the next device read overwrite it. */
+        window.caSetBitrate = function (v) {
+            ca._bitrateManual = true;
+            ca.bitrate = parseInt(v, 10) || 500000;
+            var sel = document.getElementById("caBitrate"); if (sel) sel.title = "assumed CAN bitrate (for the bus-load estimate)";
+            caComputeRates(); caRender(); _caRenderLink();
+        };
         /* right-click: isolate one ID (hide all others) or hide/show */
         function caCtxClose() { var m = document.getElementById("caCtxMenu"); if (m) m.style.display = "none"; }
         window.caCtxClose = caCtxClose;
@@ -3789,11 +3983,24 @@
                 if (chgFadeQueue.indexOf(r.id) < 0 && prev.length) chgFadeQueue.push(r.id);
                 ca.prev[r.id] = r.bytes.slice();
             });
-            /* drop rows for IDs that vanished (reset/demo swap) */
+            /* drop rows for IDs that vanished (clear / link change) */
             Array.prototype.slice.call(tbody.children).forEach(function (tr) {
                 if (!seen[tr.id]) tr.remove();
             });
             var nHidden = allRows.filter(function (r) { return ca.hidden[r.id]; }).length;
+            /* An empty table always explains itself. Link problems are covered by
+               the banner above; this covers the user's own filter/declutter. */
+            if (!list.length) {
+                var emsg = filter ? "No captured ID matches &ldquo;" + filter + "&rdquo;."
+                         : nHidden ? "Every ID is hidden &mdash; use <b>Show all</b> to bring them back."
+                         : _caIsLive() ? "Waiting for the first frame&hellip;" : "";
+                if (emsg) {
+                    var etr = document.createElement("tr");
+                    etr.id = "caEmptyRow";
+                    etr.innerHTML = "<td colspan='6' class='ca-emptyrow'>" + emsg + "</td>";
+                    tbody.appendChild(etr);
+                }
+            }
             var si = document.getElementById("caStatIds");
             if (si) si.textContent = list.length + (nHidden ? " (" + nHidden + " hidden)" : "");
             var sf = document.getElementById("caStatFps"); if (sf) sf.textContent = ca.fps;
@@ -4151,47 +4358,68 @@
          * rediscover the fast native decode (id/bits/endian/scale/offset) that
          * carries the same physical quantity — so a widget can read RPM at
          * 100 Hz off raw CAN instead of waiting on OBD2 request/response. */
-        var CA_OBD_DEMO = {
-            rpm:               { label: "Engine RPM",       units: "rpm" },
-            throttle_position: { label: "Throttle",         units: "%" },
-            coolant_temp:      { label: "Coolant temp",     units: "°C" },
-            vehicle_speed:     { label: "Vehicle speed",    units: "km/h" }
-        };
-
+        /* Reference list = whatever the dash is ACTUALLY receiving over OBD2,
+           straight from /api/signals/values (source:"obd2"). Channels only
+           supply the pretty label/units when one happens to bind the signal —
+           an OBD2 PID that is polled but not yet mapped to a channel is still a
+           perfectly good reference, and used to be invisible here. */
         function caMatchRefList() {
             var m = ca.match, out = [];
-            if (_wsChannels && _wsChannels.length) {
-                _wsChannels.forEach(function (c) {
-                    if (c.source !== "obd2" || !c.signal) return;
-                    out.push({ name: c.signal, label: c.label || c.signal, chId: c.id,
-                               units: c.units_display || c.units_native || "",
-                               val: (m.obd && m.obd[c.signal] !== undefined) ? m.obd[c.signal] : null });
+            var byName = {};
+            (_wsChannels || []).forEach(function (c) {
+                if (c.source === "obd2" && c.signal && !byName[c.signal]) byName[c.signal] = c;
+            });
+            Object.keys(m.obdMeta || {}).forEach(function (name) {
+                var c = byName[name], md = m.obdMeta[name] || {};
+                out.push({
+                    name: name,
+                    label: (c && c.label) || _caPrettySignal(name),
+                    chId: (c && c.id) || name,
+                    units: c ? (c.units_display || c.units_native || "") : "",
+                    val: m.obd && m.obd[name] !== undefined ? m.obd[name] : null,
+                    seen: !!md.seen, stale: !!md.stale
                 });
-            }
-            /* demo / offline: synthesize from the demo OBD surface */
-            if (!out.length && m.obd) {
-                Object.keys(m.obd).forEach(function (name) {
-                    var d = CA_OBD_DEMO[name] || { label: name, units: "" };
-                    out.push({ name: name, label: d.label, chId: name, units: d.units, val: m.obd[name] });
-                });
-            }
+            });
+            out.sort(function (a, b) {
+                if (a.seen !== b.seen) return a.seen ? -1 : 1;   /* answering PIDs first */
+                return a.label.localeCompare(b.label);
+            });
             return out;
+        }
+        /* rpm -> "Rpm", coolant_temp -> "Coolant temp" — only used when no
+           channel binds the signal and there is no authored label to show. */
+        function _caPrettySignal(n) {
+            var s = String(n).replace(/_/g, " ").trim();
+            return s.charAt(0).toUpperCase() + s.slice(1);
         }
 
         function caMatchRenderRail() {
             var rail = document.getElementById("caMatchRail");
             if (!rail) return;
-            var m = ca.match, refs = caMatchRefList();
+            var m = ca.match, refs = caMatchRefList(), L = ca.link;
             var h = "<div class='ws-rail-title'>Reference · OBD2</div>";
+            /* Live OBD2 health — "no readings" has several very different causes
+               and the fix differs for each, so name the one that applies. */
+            h += "<div class='cm-obdstat'>" +
+                 (L.obdPids === null ? "poll state unknown"
+                  : L.obdPids ? ("<b>" + L.obdPids + "</b> PID" + (L.obdPids === 1 ? "" : "s") + " polled")
+                  : "<b>no PIDs polled</b>") +
+                 (L.obdSim ? " &#183; <span class='sim'>virtual ECU</span>" : "") + "</div>";
             if (!refs.length) {
-                h += "<div class='cm-none' style='padding:14px 6px;'>No OBD2 readings yet.<br><br>Enable OBD2 polling on the dash (<b>Channels ▸ Source ▸ OBD2</b>) so a slow reference is available — then the analyzer can find the fast CAN copy.</div>";
+                h += "<div class='cm-none' style='padding:14px 6px;'>" +
+                     (!_caIsLive() ? "No dash link &mdash; connect over WiFi to read the car's OBD2 values."
+                      : L.obdPids ? "The dash is polling, but no ECU has answered yet.<br><br>Check the ignition is on and the car actually supports the requested PIDs (<b>Diagnostics &#9656; OBD2</b> on the dash runs a scan)."
+                      : "OBD2 polling is off.<br><br>Add a channel with <b>Source &#9656; OBD2</b> in the dash editor's <b>Channels</b> tab &mdash; that starts the poll and gives the analyzer a slow reference to hunt the fast CAN copy with.") +
+                     "</div>";
                 rail.innerHTML = h; return;
             }
             refs.forEach(function (rf) {
                 var on = m.ref && m.ref.name === rf.name;
                 var vtxt = rf.val === null || rf.val === undefined ? "—" : (Math.abs(rf.val) < 100 ? (+rf.val).toFixed(1) : Math.round(rf.val));
-                h += "<button class='ws-item" + (on ? " on" : "") + "' onclick='caMatchPickRef(\"" + rf.name + "\")'>" +
-                     "<span class='st" + (rf.val !== null && rf.val !== undefined ? " on" : "") + "'></span>" +
+                var dot = !rf.seen ? "" : (rf.stale ? " stale" : " on");
+                h += "<button class='ws-item" + (on ? " on" : "") + "' onclick='caMatchPickRef(\"" + rf.name + "\")'" +
+                     " title='" + rf.name + (rf.seen ? (rf.stale ? " — last value is stale" : " — updating") : " — never answered") + "'>" +
+                     "<span class='st" + dot + "'></span>" +
                      "<span>" + rf.label + "</span><span class='tag'>" + vtxt + (rf.units ? " " + rf.units : "") + "</span></button>";
             });
             var recording = m.recording;
@@ -4201,10 +4429,14 @@
                  "<button class='ws-btn-line' style='width:auto;padding:7px 12px;' onclick='caMatchClear()'>Clear</button></div>";
             var secs = m.buf.length ? ((m.buf[m.buf.length - 1].t - m.buf[0].t) / 1000) : 0;
             var refVar = m.buf.length >= 4 ? _caVar(m.buf.map(function (s) { return s.ref; })) : 0;
+            /* A reference that has never answered records nothing at all — say
+               that outright rather than leave "recording…" up forever. */
+            var refMeta = m.ref ? (m.obdMeta || {})[m.ref.name] : null;
             h += "<div class='cm-meta'>" + m.buf.length + " samples · " + secs.toFixed(0) + "s<br>" +
-                 (m.ref ? (refVar < 1e-6 && recording ? "reference not moving — rev / drive so it changes" :
-                          (recording ? "recording — vary the reading across its range" : "ready — press Record")) :
-                  "pick a signal above") + "</div>";
+                 (!m.ref ? "pick a signal above" :
+                  (refMeta && !refMeta.seen) ? "this PID has never answered — pick one that is updating" :
+                  (refVar < 1e-6 && recording) ? "reference not moving — rev / drive so it changes" :
+                  recording ? "recording — vary the reading across its range" : "ready — press Record") + "</div>";
             h += "<div class='ws-note' style='margin-top:10px;'><b>How:</b> pick the OBD2 reading you want faster, Record, then sweep it (rev the engine, warm it up, accelerate). RDM ranks every CAN field that moves with it and recovers its scale &amp; offset.</div>";
             rail.innerHTML = h;
         }
@@ -4235,6 +4467,12 @@
             if (!m.recording || !m.ref) return;
             var ref = m.obd ? m.obd[m.ref.name] : undefined;
             if (ref === undefined || ref === null || !isFinite(ref)) return;
+            /* A stale reading is the LAST value, frozen (the dash marks a signal
+               stale after ~2 s without an answer). Recording it would feed the
+               correlator a flat run that never happened on the car, so skip the
+               tick — the rail still shows the value, amber, so it isn't lost. */
+            var rm = (m.obdMeta || {})[m.ref.name];
+            if (rm && rm.stale) return;
             var frames = {};
             Object.keys(ca.rows).forEach(function (k) { var r = ca.rows[k]; if (r && r.bytes) frames[r.id] = r.bytes.slice(); });
             m.buf.push({ t: performance.now(), ref: ref, frames: frames });
@@ -4382,6 +4620,15 @@
             if (!st) return;
             var m = ca.match;
             var h = "<div class='cm-hint'>Correlate a slow <b>OBD2</b> reading against the raw bus to find the <b>fast native CAN</b> field carrying the same value — then map it in the dash <b>Channels</b> tab to stop polling.</div>";
+            /* Both halves of a Match run have to be real: the OBD reference AND
+               the raw frames it is correlated against. Say so when either isn't. */
+            if (!_caIsLive()) {
+                h += "<div class='cm-warn'><b>No live bus.</b> " + _caLinkInfo().msg.replace(/<\/?b>/g, "") + "</div>";
+            } else if (ca.link.obdSim) {
+                h += "<div class='cm-warn'><b>Virtual ECU is on.</b> The OBD2 reference below is synthesized by the dash, not read from the car — a match found against it is meaningless. Turn it off in the banner above before recording.</div>";
+            } else if (ca.link.state === "silent") {
+                h += "<div class='cm-warn'><b>The bus is quiet.</b> There are no CAN frames to correlate the reference against yet.</div>";
+            }
             /* Recording status: is this capture actually usable? Sweep quality
                tells the user WHY nothing is matching before they lose faith. */
             if (m.ref) {
@@ -4590,6 +4837,7 @@
             var l = document.getElementById("caBtnLive"), pz = document.getElementById("caBtnPause");
             if (l) l.className = p ? "" : "on";
             if (pz) pz.className = p ? "on" : "";
+            _caRenderLink();
         };
 
         window._caExportCsv = function () {
@@ -4609,9 +4857,13 @@
 
         window._caOpen = function () {
             _wsCloseAll("caWorkspace");
-            _wsLoadChannels(function () { caBuildDecodeMap(); });
+            _wsLoadChannels(function () { caBuildDecodeMap(); if (ca.mode === "match") caMatchRenderRail(); });
             var ws = document.getElementById("caWorkspace");
             if (ws) ws.style.display = "flex";
+            /* Re-read the dash's bitrate and simulator state on every open — any
+               of it may have changed since the workspace was last closed. */
+            ca.link.bitrateRead = false; ca.link.simT = 0; ca.link.obdSimT = 0;
+            _caRenderLink();
             if (!_caTimer) _caTick(); else _caPoll();
         };
         window._caClose = function () {
@@ -4621,16 +4873,16 @@
             window._suiteHomeShow();
         };
 
-        /* ============ RDM IO Expander ============ */
-        var IO_LS = "rdm7_io_v1";
+        /* ============ RDM CAN IO Expander v0.1 ============ */
+        /* Models the real board: 8 DIN + 8 AIN + 4 DOUT on gold edge headers,
+           CANH/CANL, 5VSENS out, ESP32 across the chamfered corner, USB-C. */
+        var IO_LS = "rdm7_io_v2";
         var IO_GROUPS = [
-            { key: "ai", label: "Analog in · 0–5 V", n: 8, color: "#2d8ceb" },
-            { key: "tc", label: "Thermocouple · K", n: 4, color: "#FF9F0A" },
-            { key: "di", label: "Digital / freq", n: 4, color: "#A8E05F" },
-            { key: "pwm", label: "PWM out · 2 A low-side", n: 4, color: "#AF52DE" },
-            { key: "hs", label: "High-side out · 8 A", n: 2, color: "#FF2E23" }
+            { key: "din",  label: "Digital in · DIN1–8",  n: 8, color: "#A8E05F" },
+            { key: "ain",  label: "Analog in · AIN1–8",   n: 8, color: "#5AA7F0" },
+            { key: "dout", label: "Outputs · DOUT1–4",    n: 4, color: "#FF9F0A" }
         ];
-        var io = { sel: null, live: false, cfg: {}, simT: 0, simVals: {}, outState: {} };
+        var io = { sel: null, live: false, cfg: {}, simT: 0, simVals: {}, simRaw: {}, outState: {}, outDuty: {} };
         var _ioSimTimer = null;
 
         function ioPinList() {
@@ -4642,11 +4894,9 @@
         }
         function ioDefCfg(pin) {
             var t = pin.group.key;
-            if (t === "ai")  return { name: "", mode: "0-5v", units: "", vLo: 0, vHi: 5, sLo: 0, sHi: 100, dec: 1, channel: "" };
-            if (t === "tc")  return { name: "", units: "°C", channel: "" };
-            if (t === "di")  return { name: "", mode: "switch_low", channel: "" };
-            if (t === "pwm") return { name: "", src: "", mode: "thresh", op: ">", thr: 90, hyst: 5, mapLo: 70, mapHi: 100, dutyLo: 30, dutyHi: 100, freq: 100 };
-            return { name: "", src: "", op: ">", thr: 90, hyst: 5, invert: false };
+            if (t === "ain") return { name: "", mode: "0-5v", units: "", vLo: 0, vHi: 5, sLo: 0, sHi: 100, dec: 1, channel: "" };
+            if (t === "din") return { name: "", mode: "switch_low", channel: "" };
+            return { name: "", src: "", mode: "thresh", op: ">", thr: 90, hyst: 5, mapLo: 70, mapHi: 100, dutyLo: 30, dutyHi: 100, freq: 100 };
         }
         function ioCfg(id) {
             if (!io.cfg[id]) {
@@ -4656,7 +4906,21 @@
             return io.cfg[id];
         }
         function ioLoad() {
-            try { io.cfg = JSON.parse(localStorage.getItem(IO_LS) || "{}").pins || {}; } catch (e) { io.cfg = {}; }
+            io.cfg = null;
+            try { io.cfg = (JSON.parse(localStorage.getItem(IO_LS) || "null") || {}).pins || null; } catch (e) {}
+            if (!io.cfg) {
+                /* first run on v2 — carry over what maps from the old IO-22 preview */
+                io.cfg = {};
+                try {
+                    var old = (JSON.parse(localStorage.getItem("rdm7_io_v1") || "null") || {}).pins || {};
+                    Object.keys(old).forEach(function (k) {
+                        var nk = k.replace(/^ai(\d)$/, "ain$1").replace(/^di(\d)$/, "din$1").replace(/^pwm(\d)$/, "dout$1");
+                        if (!/^(ain|din|dout)\d$/.test(nk)) return;
+                        io.cfg[nk] = old[k];
+                        if (io.cfg[nk].mode === "vr") io.cfg[nk].mode = "freq";
+                    });
+                } catch (e) {}
+            }
         }
         function ioSave() {
             try { localStorage.setItem(IO_LS, JSON.stringify({ pins: io.cfg, v: 1 })); } catch (e) {}
@@ -4689,14 +4953,16 @@
                 }
             });
             var t2 = document.createElement("div");
-            t2.className = "ws-rail-title"; t2.textContent = "Broadcast";
+            t2.className = "ws-rail-title"; t2.textContent = "Device";
             rail.appendChild(t2);
-            var cb = document.createElement("button");
-            cb.className = "ws-item" + (io.sel === "_can" ? " on" : "");
-            cb.id = "ioItem__can";
-            cb.innerHTML = "<span class='st'></span>CAN &amp; DBC<span class='tag'>0x6C0</span>";
-            cb.addEventListener("click", function () { ioSelect("_can"); });
-            rail.appendChild(cb);
+            [["_can", "CAN &amp; DBC", "0x6C0"], ["_dev", "Board &amp; status", "v0.1"]].forEach(function (d) {
+                var cb = document.createElement("button");
+                cb.className = "ws-item" + (io.sel === d[0] ? " on" : "");
+                cb.id = "ioItem_" + d[0];
+                cb.innerHTML = "<span class='st'></span>" + d[1] + "<span class='tag'>" + d[2] + "</span>";
+                cb.addEventListener("click", function () { ioSelect(d[0]); });
+                rail.appendChild(cb);
+            });
         }
 
         function ioSelect(id) {
@@ -4707,64 +4973,257 @@
             ioRenderStage(); ioRenderInspector();
         }
 
-        /* Product face — top-down: alloy case, DTM12 connector, two pin rows. */
+        /* Product face — the real board, top-down: blue PCB, gold edge pads on
+           three sides, ESP32 across the chamfered corner, USB-C on the other,
+           status LED dead centre. Every pad is clickable. */
+        function ioOutValTxt(id) {
+            if (!io.outState[id]) return "off";
+            return ioCfg(id).mode === "map" ? Math.round(io.outDuty[id] || 0) + "%" : "ON";
+        }
         function ioRenderStage() {
             var host = document.getElementById("ioStageSvg");
             if (!host) return;
-            var pins = ioPinList();
-            var s = "<svg viewBox='0 0 660 330' xmlns='http://www.w3.org/2000/svg'>";
+            var live = io.live;
+            var blinkOn = live && (Math.floor(io.simT * 2) % 2 === 0);
+            var i;
+
+            /* the three headers — exactly the silkscreen on the physical board */
+            function pd(txt, kind, key) { return { txt: txt, kind: kind, key: key || null }; }
+            var topPads = [pd("+12V", "pwr"), pd("GND", "gnd"), pd("CANH", "can"), pd("CANL", "can"),
+                           pd("DOUT1", "io", "dout1"), pd("DOUT2", "io", "dout2"), pd("DOUT3", "io", "dout3"), pd("DOUT4", "io", "dout4"),
+                           pd("5VSENS", "5v"), pd("GND", "gnd")];
+            var leftPads = [pd("GND", "gnd")], rightPads = [pd("GND", "gnd")];
+            for (i = 1; i <= 8; i++) leftPads.push(pd("DIN" + i, "io", "din" + i));
+            for (i = 1; i <= 8; i++) rightPads.push(pd("AIN" + i, "io", "ain" + i));
+            [leftPads, rightPads].forEach(function (r) { r.push(pd("5VSENS", "5v"), pd("+12V", "pwr"), pd("GND", "gnd")); });
+            var TPX0 = 245, TPP = 22, LY0 = 185, RY0 = 210, SPP = 20;
+
+            var s = "<svg viewBox='0 0 780 590' xmlns='http://www.w3.org/2000/svg'>";
             s += "<defs>" +
-                 "<linearGradient id='ioCase' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#2E3136'/><stop offset='0.14' stop-color='#202226'/><stop offset='0.8' stop-color='#141618'/><stop offset='1' stop-color='#0E1012'/></linearGradient>" +
-                 "<linearGradient id='ioRim' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#828A93' stop-opacity='0.45'/><stop offset='0.25' stop-color='#4A5057' stop-opacity='0.12'/><stop offset='1' stop-color='#000' stop-opacity='0.4'/></linearGradient>" +
+                 "<linearGradient id='ioPcb' x1='0' y1='0' x2='0.4' y2='1'><stop offset='0' stop-color='#2C3ED4'/><stop offset='0.5' stop-color='#1E2DB2'/><stop offset='1' stop-color='#16229A'/></linearGradient>" +
+                 "<radialGradient id='ioSheen' cx='0.42' cy='0.38' r='0.75'><stop offset='0' stop-color='#FFFFFF' stop-opacity='0.10'/><stop offset='0.5' stop-color='#FFFFFF' stop-opacity='0.035'/><stop offset='1' stop-color='#FFFFFF' stop-opacity='0'/></radialGradient>" +
+                 "<linearGradient id='ioGold' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#FFEC96'/><stop offset='0.55' stop-color='#F6CF49'/><stop offset='1' stop-color='#DCAD2C'/></linearGradient>" +
+                 "<linearGradient id='ioShield' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#43474E'/><stop offset='0.5' stop-color='#2C2F34'/><stop offset='1' stop-color='#1C1E22'/></linearGradient>" +
+                 "<linearGradient id='ioSteel' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#E7EAEE'/><stop offset='0.5' stop-color='#B7BCC3'/><stop offset='1' stop-color='#8F959C'/></linearGradient>" +
                  "<filter id='ioGlow' x='-80%' y='-80%' width='260%' height='260%'><feGaussianBlur stdDeviation='3'/></filter>" +
+                 "<filter id='ioGlow6' x='-120%' y='-120%' width='340%' height='340%'><feGaussianBlur stdDeviation='6'/></filter>" +
                  "<radialGradient id='ioFloor' cx='0.5' cy='0.5' r='0.5'><stop offset='0' stop-color='#000' stop-opacity='0.45'/><stop offset='1' stop-color='#000' stop-opacity='0'/></radialGradient>" +
+                 "<g id='ioR'><rect width='9' height='4' rx='0.8' fill='#2B2E33'/><rect width='2.2' height='4' fill='#B9BDC4'/><rect x='6.8' width='2.2' height='4' fill='#B9BDC4'/></g>" +
+                 "<g id='ioC'><rect width='9' height='4.6' rx='0.8' fill='#8B6F58'/><rect width='2.2' height='4.6' fill='#C9CDD3'/><rect x='6.8' width='2.2' height='4.6' fill='#C9CDD3'/></g>" +
                  "</defs>";
-            s += "<ellipse cx='330' cy='312' rx='250' ry='12' fill='url(#ioFloor)'/>";
-            s += "<rect x='70' y='30' width='520' height='268' rx='16' fill='#000' opacity='0.5' filter='url(#ioGlow)' transform='translate(0,4)'/>";
-            s += "<rect x='70' y='30' width='520' height='268' rx='16' fill='url(#ioCase)'/>";
-            s += "<rect x='71' y='31' width='518' height='266' rx='15.4' fill='none' stroke='url(#ioRim)' stroke-width='1.6'/>";
-            /* cooling ribs */
-            for (var rx = 100; rx <= 560; rx += 24) s += "<rect x='" + rx + "' y='42' width='10' height='58' rx='4' fill='#0F1113' opacity='0.55'/>";
-            /* mounting ears */
-            s += "<circle cx='84' cy='44' r='5.5' fill='#0A0C0E' stroke='#33383E' stroke-width='1'/><circle cx='576' cy='44' r='5.5' fill='#0A0C0E' stroke='#33383E' stroke-width='1'/>" +
-                 "<circle cx='84' cy='284' r='5.5' fill='#0A0C0E' stroke='#33383E' stroke-width='1'/><circle cx='576' cy='284' r='5.5' fill='#0A0C0E' stroke='#33383E' stroke-width='1'/>";
-            /* DTM connector, left */
-            s += "<rect x='40' y='120' width='34' height='88' rx='5' fill='#101214' stroke='#000' stroke-width='1.4'/>";
-            for (var cy = 134; cy <= 194; cy += 15) s += "<circle cx='57' cy='" + cy + "' r='3' fill='#33383E'/>";
-            s += "<rect x='36' y='150' width='8' height='28' rx='2' fill='#17191C' stroke='#000' stroke-width='1'/>";
-            /* wordmark */
-            s += "<text x='330' y='128' text-anchor='middle' font-family='Sora, sans-serif' font-weight='700' font-size='21' fill='#E8EDF2' letter-spacing='2'>RDM <tspan fill='#7C8590' font-weight='400'>IO-22</tspan></text>";
-            s += "<text x='330' y='146' text-anchor='middle' font-family='JetBrains Mono, monospace' font-size='8.5' fill='#5A6068' letter-spacing='1.5'>CAN I/O EXPANDER · 8AI · 4TC · 4DI · 4PWM · 2HS</text>";
-            /* pin rows: inputs on the upper row, outputs on the lower */
-            var inputs = pins.filter(function (p) { return ["ai", "tc", "di"].indexOf(p.group.key) >= 0; });
-            var outputs = pins.filter(function (p) { return ["pwm", "hs"].indexOf(p.group.key) >= 0; });
-            function pinRow(list, y) {
-                var w = 24, gap = 6.5;
-                var total = list.length * w + (list.length - 1) * gap;
-                var x0 = 330 - total / 2;
-                list.forEach(function (p, i) {
-                    var x = x0 + i * (w + gap);
-                    var col = p.group.color;
-                    var sel = io.sel === p.id;
-                    var on = io.live && io.outState[p.id];
-                    var isOut = ["pwm", "hs"].indexOf(p.group.key) >= 0;
-                    s += "<g class='io-pin" + (sel ? " sel" : "") + "' onclick='ioSelect(\"" + p.id + "\")'>";
-                    if (on) s += "<rect x='" + (x - 3) + "' y='" + (y - 3) + "' width='" + (w + 6) + "' height='30' rx='6' fill='" + col + "' opacity='0.55' filter='url(#ioGlow)'/>";
-                    s += "<rect class='io-pin-body' x='" + x + "' y='" + y + "' width='" + w + "' height='24' rx='4' fill='#0C0E10' stroke='" + (sel ? "#2d8ceb" : "#26292D") + "' stroke-width='1.2'/>";
-                    s += "<rect x='" + (x + 3) + "' y='" + (y + 3) + "' width='" + (w - 6) + "' height='5' rx='2' fill='" + col + "' opacity='" + (io.live && !isOut ? "0.9" : on ? "1" : "0.45") + "'/>";
-                    s += "<text x='" + (x + w / 2) + "' y='" + (y + 18.5) + "' text-anchor='middle' font-family='JetBrains Mono, monospace' font-size='7.5' fill='#7C8590'>" + p.id.toUpperCase() + "</text>";
-                    if (io.live && !isOut && io.simVals[p.id] !== undefined)
-                        s += "<text x='" + (x + w / 2) + "' y='" + (y + 36) + "' text-anchor='middle' font-family='JetBrains Mono, monospace' font-size='7.5' fill='#AEB6BF'>" + io.simVals[p.id] + "</text>";
-                    s += "</g>";
-                });
+
+            /* board + shadow */
+            var BOARD = "M 176 50 L 520 50 L 630 160 L 630 504 Q 630 530 604 530 L 266 530 L 150 414 L 150 76 Q 150 50 176 50 Z";
+            s += "<ellipse cx='390' cy='558' rx='265' ry='14' fill='url(#ioFloor)'/>";
+            s += "<path d='" + BOARD + "' transform='translate(0,6)' fill='#000' opacity='0.45' filter='url(#ioGlow6)'/>";
+            s += "<path d='" + BOARD + "' fill='url(#ioPcb)' stroke='#0C1554' stroke-width='2.5'/>";
+            s += "<path d='" + BOARD + "' fill='url(#ioSheen)'/>";
+            s += "<polygon points='210,50 330,50 235,530 190,485' fill='#FFFFFF' opacity='0.02'/>";
+
+            /* copper under the mask — routed traces */
+            s += "<g stroke='#3D52E8' stroke-width='1.8' fill='none' opacity='0.42'>";
+            s += "<path d='M 289 82 V 148 H 452 V 196'/><path d='M 311 82 V 156 H 462 V 196'/>";
+            for (i = 0; i < 4; i++) s += "<path d='M " + (333 + i * 22) + " 82 V 110 L " + (333 + i * 36) + " 128'/>";
+            for (i = 1; i <= 8; i++) s += "<path d='M 182 " + (LY0 + i * SPP) + " H 280'/>";
+            for (i = 1; i <= 8; i++) s += "<path d='M 598 " + (RY0 + i * SPP) + " H 522'/>";
+            s += "<path d='M 500 176 V 290 H 472'/><path d='M 331 250 V 300'/><path d='M 337 350 V 390'/>";
+            s += "<path d='M 245 82 V 106'/><path d='M 267 82 V 100'/><path d='M 421 82 V 118 H 448'/>";
+            s += "<path d='M 385 311 V 338 H 362'/><path d='M 434 300 H 400'/><path d='M 429 438 H 380 V 423'/>";
+            s += "</g>";
+            var vias = [[240, 95], [300, 100], [420, 100], [456, 148], [210, 150], [250, 205], [250, 300], [250, 390], [300, 350],
+                        [360, 355], [300, 470], [360, 470], [430, 470], [500, 430], [545, 330], [560, 250], [512, 222], [400, 250], [340, 220], [480, 390],
+                        [290, 140], [350, 120], [385, 340], [420, 205], [232, 255], [232, 352], [560, 390], [588, 300], [452, 340], [330, 300], [268, 100], [406, 470]];
+            s += "<g fill='#101B72'>";
+            vias.forEach(function (v) { s += "<circle cx='" + v[0] + "' cy='" + v[1] + "' r='1.6'/>"; });
+            s += "</g>";
+
+            /* D-PAK drivers — reverse-battery FET by +12V, then one per DOUT */
+            function dpak(cx, cy, on) {
+                var g = "<g>";
+                g += "<rect x='" + (cx - 17) + "' y='" + (cy - 20) + "' width='34' height='41' rx='1.5' fill='none' stroke='#E7EBF6' stroke-width='0.9' opacity='0.35'/>";
+                g += "<rect x='" + (cx - 13) + "' y='" + (cy - 13) + "' width='28' height='32' fill='#000' opacity='0.3' filter='url(#ioGlow)'/>";
+                if (on) g += "<rect x='" + (cx - 22) + "' y='" + (cy - 24) + "' width='44' height='50' rx='8' fill='#FFB84D' opacity='0.85' filter='url(#ioGlow6)'/>";
+                g += "<rect x='" + (cx - 15) + "' y='" + (cy - 17) + "' width='30' height='9' fill='#6E737A'/>" +
+                     "<rect x='" + (cx - 15) + "' y='" + (cy - 17) + "' width='30' height='3' fill='#8A9098'/>" +
+                     "<rect x='" + (cx - 15) + "' y='" + (cy - 9) + "' width='30' height='21' rx='1.5' fill='#22252A'/>" +
+                     "<rect x='" + (cx - 15) + "' y='" + (cy - 9) + "' width='30' height='5' fill='#33373D'/>" +
+                     "<rect x='" + (cx - 10) + "' y='" + (cy + 12) + "' width='5' height='6' fill='#B9BDC4'/>" +
+                     "<rect x='" + (cx + 5) + "' y='" + (cy + 12) + "' width='5' height='6' fill='#B9BDC4'/></g>";
+                return g;
             }
-            pinRow(inputs, 172);
-            pinRow(outputs, 232);
-            s += "<text x='108' y='188' text-anchor='end' font-family='JetBrains Mono, monospace' font-size='8' fill='#5A6068' letter-spacing='1'>IN</text>";
-            s += "<text x='108' y='248' text-anchor='end' font-family='JetBrains Mono, monospace' font-size='8' fill='#5A6068' letter-spacing='1'>OUT</text>";
-            /* status LED */
-            s += "<circle cx='560' cy='270' r='4' fill='" + (io.live ? "#6FBF73" : "#26292D") + "'" + (io.live ? " filter='url(#ioGlow)'" : "") + "/>";
-            s += "<text x='548' y='273.5' text-anchor='end' font-family='JetBrains Mono, monospace' font-size='7.5' fill='#5A6068'>BUS</text>";
+            s += dpak(226, 128, false);
+            for (i = 0; i < 4; i++) s += dpak(333 + i * 36, 150, live && io.outState["dout" + (i + 1)]);
+
+            /* buck inductors + LDO */
+            [[286, 235], [331, 235]].forEach(function (p) {
+                s += "<rect x='" + (p[0] - 15.5) + "' y='" + (p[1] - 15.5) + "' width='31' height='31' rx='2' fill='none' stroke='#E7EBF6' stroke-width='0.9' opacity='0.32'/>" +
+                     "<rect x='" + (p[0] - 11) + "' y='" + (p[1] - 10) + "' width='24' height='24' fill='#000' opacity='0.3' filter='url(#ioGlow)'/>" +
+                     "<rect x='" + (p[0] - 13) + "' y='" + (p[1] - 13) + "' width='26' height='26' rx='5' fill='#54585E' stroke='#3A3E43' stroke-width='1'/>" +
+                     "<rect x='" + (p[0] - 13) + "' y='" + (p[1] - 13) + "' width='26' height='7' rx='3.5' fill='#65696F'/>" +
+                     "<circle cx='" + p[0] + "' cy='" + p[1] + "' r='8.5' fill='#63676D'/>" +
+                     "<circle cx='" + p[0] + "' cy='" + p[1] + "' r='3.6' fill='#4E5257'/>";
+            });
+            s += "<rect x='306' y='312' width='24' height='16' rx='1.5' fill='#22252A'/><rect x='306' y='312' width='24' height='4.5' fill='#33373D'/><rect x='312' y='306' width='12' height='6' fill='#6E737A'/>" +
+                 "<rect x='309' y='328' width='4' height='5' fill='#B9BDC4'/><rect x='316' y='328' width='4' height='5' fill='#B9BDC4'/><rect x='323' y='328' width='4' height='5' fill='#B9BDC4'/>";
+            /* SOT-23 sprinkle */
+            [[525, 252], [300, 182], [408, 362]].forEach(function (p) {
+                s += "<rect x='" + (p[0] - 2.6) + "' y='" + (p[1] - 7) + "' width='5.2' height='3' fill='#B9BDC4'/>" +
+                     "<rect x='" + (p[0] - 6.5) + "' y='" + (p[1] + 4) + "' width='4' height='3' fill='#B9BDC4'/>" +
+                     "<rect x='" + (p[0] + 2.5) + "' y='" + (p[1] + 4) + "' width='4' height='3' fill='#B9BDC4'/>" +
+                     "<rect x='" + (p[0] - 5.5) + "' y='" + (p[1] - 4.5) + "' width='11' height='9' rx='1' fill='#26292E'/>" +
+                     "<rect x='" + (p[0] - 5.5) + "' y='" + (p[1] - 4.5) + "' width='11' height='3' rx='1' fill='#34383F'/>";
+            });
+
+            /* SOIC bodies: CAN transceiver, input expander, AIN op-amps, EEPROM */
+            function soic(cx, cy, w, h, np) {
+                var g = "<rect x='" + (cx - w / 2 - 3) + "' y='" + (cy - h / 2 - 6) + "' width='" + (w + 6) + "' height='" + (h + 12) + "' rx='1.5' fill='none' stroke='#E7EBF6' stroke-width='0.9' opacity='0.32'/>" +
+                        "<rect x='" + (cx - w / 2 + 1) + "' y='" + (cy - h / 2 + 3) + "' width='" + (w - 2) + "' height='" + h + "' fill='#000' opacity='0.3' filter='url(#ioGlow)'/>";
+                var pw = 4.4, gap = (w - 8) / (np - 1);
+                for (var k = 0; k < np; k++) {
+                    var px = cx - w / 2 + 4 + k * gap;
+                    g += "<rect x='" + (px - pw / 2) + "' y='" + (cy - h / 2 - 3.5) + "' width='" + pw + "' height='4' fill='#B9BDC4'/>" +
+                         "<rect x='" + (px - pw / 2) + "' y='" + (cy + h / 2 - 0.5) + "' width='" + pw + "' height='4' fill='#B9BDC4'/>";
+                }
+                g += "<rect x='" + (cx - w / 2) + "' y='" + (cy - h / 2) + "' width='" + w + "' height='" + h + "' rx='2' fill='#23262B'/>" +
+                     "<rect x='" + (cx - w / 2) + "' y='" + (cy - h / 2) + "' width='" + w + "' height='" + (h * 0.32) + "' rx='2' fill='#34383F'/>" +
+                     "<circle cx='" + (cx - w / 2 + 5) + "' cy='" + (cy - h / 2 + 5) + "' r='1.5' fill='#4A4E55'/>";
+                return g;
+            }
+            s += soic(462, 210, 28, 20, 4) + soic(337, 408, 62, 30, 14) + soic(452, 300, 36, 19, 7) + soic(447, 438, 36, 19, 7) + soic(252, 462, 24, 17, 4);
+
+            /* input conditioning — one RC row per DIN / AIN channel */
+            for (i = 1; i <= 8; i++) {
+                var y1 = LY0 + i * SPP - 2;
+                s += "<use href='#ioR' x='238' y='" + y1 + "'/><use href='#io" + (i % 2 ? "C" : "R") + "' x='253' y='" + y1 + "'/>";
+                if (i % 2) s += "<use href='#ioR' x='268' y='" + y1 + "'/>";
+                var y2 = RY0 + i * SPP - 2;
+                s += "<use href='#ioR' x='533' y='" + y2 + "'/><use href='#io" + (i % 2 ? "C" : "R") + "' x='518' y='" + y2 + "'/>";
+                if (i % 2 === 0) s += "<use href='#ioC' x='503' y='" + y2 + "'/>";
+            }
+            [[446, 118], [462, 118], [478, 118], [286, 260], [306, 260], [326, 260], [402, 300], [402, 312], [402, 324], [376, 355]].forEach(function (p, k) {
+                s += "<use href='#io" + (k % 2 ? "R" : "C") + "' x='" + p[0] + "' y='" + p[1] + "'/>";
+            });
+
+            /* mounting holes — gold annular ring with via stitching */
+            function mount(cx, cy) {
+                var g = "<circle cx='" + cx + "' cy='" + cy + "' r='13' fill='none' stroke='url(#ioGold)' stroke-width='6'/>" +
+                        "<circle cx='" + cx + "' cy='" + cy + "' r='7' fill='#0B0E28'/>";
+                for (var k = 0; k < 8; k++) {
+                    var a = k * Math.PI / 4;
+                    g += "<circle cx='" + (cx + Math.cos(a) * 13).toFixed(1) + "' cy='" + (cy + Math.sin(a) * 13).toFixed(1) + "' r='1.3' fill='#8A6A14'/>";
+                }
+                return g;
+            }
+            s += mount(187, 87) + mount(585, 468);
+
+            /* ESP32 module at 45° — antenna overhangs the chamfered corner */
+            s += "<g class='io-dev' onclick='ioSelect(\"_dev\")' transform='translate(529,133) rotate(45)'>" +
+                 "<title>ESP32-S3 module — click for board info</title>" +
+                 "<rect x='-36' y='-60' width='76' height='100' fill='#000' opacity='0.32' filter='url(#ioGlow)'/>" +
+                 "<rect x='-37' y='-64' width='74' height='27' rx='2' fill='#0E0F12'/>" +
+                 "<path d='M -26 -44 v -12 h 10 v 9 h 10 v -9 h 10 v 9 h 10 v -9 h 12' fill='none' stroke='#D9BE6A' stroke-width='1.7'/>" +
+                 "<rect x='-37' y='-38' width='74' height='76' fill='#131519'/>";
+            for (i = 0; i < 9; i++) {
+                var py = -32 + i * 8.4;
+                s += "<rect x='-40.5' y='" + py + "' width='5' height='4.2' rx='1' fill='#B9BDC4'/><rect x='35.5' y='" + py + "' width='5' height='4.2' rx='1' fill='#B9BDC4'/>";
+            }
+            for (i = 0; i < 7; i++) s += "<rect x='" + (-26 + i * 8.4) + "' y='35' width='4.2' height='5' rx='1' fill='#B9BDC4'/>";
+            s += "<rect x='-31' y='-33' width='62' height='66' rx='3' fill='url(#ioShield)' stroke='#0A0B0D' stroke-width='1'/>" +
+                 "<rect x='-31' y='-33' width='62' height='10' rx='3' fill='#4A4E55' opacity='0.5'/>" +
+                 "<rect x='-27' y='-29' width='54' height='58' rx='2' fill='none' stroke='#565B62' stroke-width='0.7' opacity='0.55'/>" +
+                 "<rect x='-22' y='-22' width='44' height='24' rx='2' fill='#FFFFFF' opacity='0.055'/>" +
+                 "<circle cx='-20' cy='22' r='1.6' fill='#585C63'/></g>";
+
+            /* USB-C at 45° on the opposite corner */
+            s += "<g class='io-dev' onclick='ioSelect(\"_dev\")' transform='translate(210,481) rotate(45)'>" +
+                 "<title>USB-C — setup &amp; firmware</title>" +
+                 "<rect x='-24' y='-12' width='48' height='32' rx='10' fill='#000' opacity='0.32' filter='url(#ioGlow)'/>" +
+                 "<rect x='-23' y='-16' width='46' height='32' rx='10' fill='url(#ioSteel)' stroke='#6E7278' stroke-width='1'/>" +
+                 "<rect x='-21' y='-14.5' width='42' height='8' rx='4' fill='#F2F4F7' opacity='0.5'/>" +
+                 "<rect x='-16' y='-10' width='32' height='20' rx='7' fill='#9AA0A7'/>" +
+                 "<rect x='-13' y='-7' width='26' height='14' rx='6' fill='#22252A'/>" +
+                 "<rect x='-9' y='-2.5' width='18' height='5' rx='2.5' fill='#0E1013'/></g>";
+
+            /* status LED, dead centre — softly lit like the product render, blinks green in Live */
+            s += "<g class='io-dev' onclick='ioSelect(\"_dev\")'><title>Status LED — click for the blink codes</title>";
+            if (blinkOn) s += "<circle cx='385' cy='302' r='17' fill='#B8F58A' opacity='0.85' filter='url(#ioGlow6)'/>";
+            else if (!live) s += "<circle cx='385' cy='302' r='14' fill='#FFF6DE' opacity='0.55' filter='url(#ioGlow6)'/>";
+            s += "<rect x='374' y='294' width='22' height='17' rx='2' fill='#EDE9DA' stroke='#B9B4A2' stroke-width='1'/>" +
+                 "<rect x='378' y='297' width='14' height='11' rx='1.5' fill='" + (blinkOn ? "#F4FFE2" : (live ? "#FBFAF3" : "#FFFEF6")) + "'/>" +
+                 (blinkOn ? "<circle cx='385' cy='302.5' r='4' fill='#FFFFFF'/>" : (live ? "" : "<circle cx='385' cy='302.5' r='3.2' fill='#FFFFFF'/>")) +
+                 "<text x='385' y='323' text-anchor='middle' font-family='JetBrains Mono, monospace' font-size='8' fill='#DDE3F2' letter-spacing='0.8'>STATUS</text></g>";
+
+            /* +5V rail LED — always powered, brighter in Live */
+            s += "<circle cx='232' cy='162.5' r='" + (live ? 9 : 6.5) + "' fill='#7CF08A' opacity='" + (live ? "0.8" : "0.5") + "' filter='url(#ioGlow)'/>";
+            s += "<rect x='227' y='159' width='10' height='7' rx='1' fill='#D8FFE0' stroke='#B9B4A2' stroke-width='0.8'/>" +
+                 "<text x='222' y='166' text-anchor='end' font-family='JetBrains Mono, monospace' font-size='7.5' fill='#DDE3F2'>+5V LED</text>";
+
+            /* silkscreen */
+            s += "<g fill='none' stroke='#E7EBF6' stroke-width='1' opacity='0.4'>" +
+                 "<rect x='233' y='50.8' width='224' height='36' rx='3'/>" +
+                 "<rect x='150.8' y='173' width='36' height='239' rx='3'/>" +
+                 "<rect x='593.2' y='198' width='36' height='239' rx='3'/></g>";
+            s += "<text x='368' y='500' text-anchor='middle' font-family='JetBrains Mono, monospace' font-weight='700' font-size='17.5' fill='#EEF1F8' letter-spacing='1.5'>CAN IO Expander v0.1</text>";
+            s += "<text x='520' y='452' text-anchor='middle' font-family='Sora, sans-serif' font-weight='800' font-size='23' fill='#F2F4F9' letter-spacing='1'>RDM</text>" +
+                 "<text x='520' y='461' text-anchor='middle' font-family='Sora, sans-serif' font-size='4.6' fill='#C9D2EC' letter-spacing='0.6'>REALTIME DATA MONITORING</text>";
+
+            /* headers — gold plated-through pads, all clickable */
+            function padSel(p) { return p.key ? io.sel === p.key : (p.kind === "can" && io.sel === "_can"); }
+            function padCls(p) {
+                var cls = (p.key || p.kind === "can") ? "io-pad" : "";
+                return cls + (padSel(p) ? " sel" : "");
+            }
+            function padClick(p) {
+                if (p.key) return " onclick='ioSelect(\"" + p.key + "\")'";
+                if (p.kind === "can") return " onclick='ioSelect(\"_can\")'";
+                return "";
+            }
+            function padTitle(p) {
+                if (p.kind === "gnd") return "<title>Ground</title>";
+                if (p.kind === "pwr") return "<title>+12 V supply in</title>";
+                if (p.kind === "5v") return "<title>5 V sensor supply out</title>";
+                return "";
+            }
+            topPads.forEach(function (p, k) {
+                var cx = TPX0 + k * TPP;
+                var on = live && p.key && io.outState[p.key];
+                s += "<g class='" + padCls(p) + "'" + padClick(p) + ">" + padTitle(p);
+                if (on) s += "<rect x='" + (cx - 10) + "' y='49' width='20' height='36' rx='7' fill='#FF9F0A' opacity='0.55' filter='url(#ioGlow)'/>";
+                s += "<rect class='io-pad-body' x='" + (cx - 7) + "' y='52' width='14' height='30' rx='6' fill='url(#ioGold)' stroke='#8A6A14' stroke-width='0.8'/>";
+                s += "<rect x='" + (cx - 5) + "' y='54' width='3' height='26' rx='1.5' fill='#FFF6C8' opacity='0.5'/>";
+                s += "<circle cx='" + cx + "' cy='63' r='3.4' fill='#9C7A1E'/><circle cx='" + cx + "' cy='63' r='1.9' fill='#20265C'/>";
+                s += "<text class='io-pad-lbl' transform='rotate(-90 " + (cx + 3) + " 90)' x='" + (cx + 3) + "' y='90' text-anchor='end' font-family='JetBrains Mono, monospace' font-size='9.5' fill='#F2F5FA'>" + p.txt + "</text>";
+                if (live && p.key)
+                    s += "<text transform='rotate(-90 " + (cx + 3.5) + " 44)' x='" + (cx + 3.5) + "' y='44' font-family='JetBrains Mono, monospace' font-size='9' fill='" + (on ? "#FFB84D" : "#5A6270") + "'>" + ioOutValTxt(p.key) + "</text>";
+                s += "</g>";
+            });
+            leftPads.forEach(function (p, k) {
+                var cy = LY0 + k * SPP;
+                var lit = live && p.key && !!io.simRaw[p.key];
+                s += "<g class='" + padCls(p) + "'" + padClick(p) + ">" + padTitle(p);
+                if (live && p.key && io.simRaw[p.key] === 1)
+                    s += "<rect x='149' y='" + (cy - 10) + "' width='36' height='20' rx='7' fill='#A8E05F' opacity='0.5' filter='url(#ioGlow)'/>";
+                s += "<rect class='io-pad-body' x='152' y='" + (cy - 7) + "' width='30' height='14' rx='6' fill='url(#ioGold)' stroke='#8A6A14' stroke-width='0.8'/>";
+                s += "<rect x='154' y='" + (cy - 5) + "' width='26' height='3' rx='1.5' fill='#FFF6C8' opacity='0.5'/>";
+                s += "<circle cx='163' cy='" + cy + "' r='3.4' fill='#9C7A1E'/><circle cx='163' cy='" + cy + "' r='1.9' fill='#20265C'/>";
+                s += "<text class='io-pad-lbl' x='190' y='" + (cy + 3.5) + "' font-family='JetBrains Mono, monospace' font-size='9.5' fill='#F2F5FA'>" + p.txt + "</text>";
+                if (live && p.key)
+                    s += "<text x='140' y='" + (cy + 3) + "' text-anchor='end' font-family='JetBrains Mono, monospace' font-size='9.5' fill='" + (lit ? "#A8E05F" : "#4A5260") + "'>" + (io.simVals[p.key] || "&#8212;") + "</text>";
+                s += "</g>";
+            });
+            rightPads.forEach(function (p, k) {
+                var cy = RY0 + k * SPP;
+                s += "<g class='" + padCls(p) + "'" + padClick(p) + ">" + padTitle(p);
+                s += "<rect class='io-pad-body' x='598' y='" + (cy - 7) + "' width='30' height='14' rx='6' fill='url(#ioGold)' stroke='#8A6A14' stroke-width='0.8'/>";
+                s += "<rect x='600' y='" + (cy - 5) + "' width='26' height='3' rx='1.5' fill='#FFF6C8' opacity='0.5'/>";
+                s += "<circle cx='617' cy='" + cy + "' r='3.4' fill='#9C7A1E'/><circle cx='617' cy='" + cy + "' r='1.9' fill='#20265C'/>";
+                var rl = /^AIN[1-4]$/.test(p.txt) ? "<tspan fill='#F6CF49'>&#9670;</tspan>&#8202;" + p.txt : p.txt;
+                s += "<text class='io-pad-lbl' x='590' y='" + (cy + 3.5) + "' text-anchor='end' font-family='JetBrains Mono, monospace' font-size='9.5' fill='#F2F5FA'>" + rl + "</text>";
+                if (live && p.key && io.simVals[p.key] !== undefined)
+                    s += "<text x='638' y='" + (cy + 3) + "' font-family='JetBrains Mono, monospace' font-size='9.5' fill='#6FB2F5'>" + io.simVals[p.key] + "</text>";
+                s += "</g>";
+            });
+
             s += "</svg>";
             host.innerHTML = s;
         }
@@ -4781,7 +5240,7 @@
         function ioSrcOptions(cur) {
             var opts = "<option value=''>— select source —</option><optgroup label='This unit&#8217;s inputs'>";
             ioPinList().forEach(function (p) {
-                if (["ai", "tc", "di"].indexOf(p.group.key) < 0) return;
+                if (["din", "ain"].indexOf(p.group.key) < 0) return;
                 var nm = ioPinLabel(p.id);
                 opts += ioOpt(p.id, p.id.toUpperCase() + (nm ? " · " + nm : ""), cur);
             });
@@ -4817,21 +5276,27 @@
         function ioRenderInspector() {
             var insp = document.getElementById("ioInspector");
             if (!insp) return;
-            if (!io.sel) { insp.innerHTML = "<div class='ws-none'>Select a pin to configure it</div>"; return; }
+            if (!io.sel) { insp.innerHTML = "<div class='ws-none'>Select a pad to configure it</div>"; return; }
             if (io.sel === "_can") { ioRenderCanInspector(insp); return; }
+            if (io.sel === "_dev") { ioRenderDevInspector(insp); return; }
             var pin = ioPinList().filter(function (p) { return p.id === io.sel; })[0];
+            if (!pin) { insp.innerHTML = "<div class='ws-none'>Select a pad to configure it</div>"; return; }
             var c = ioCfg(io.sel);
             var t = pin.group.key;
             var h = "<h2>" + io.sel.toUpperCase() + " <span style='color:" + pin.group.color + "; font-size:10px;'>&#9679;</span></h2>" +
                     "<div class='ws-sub'>" + pin.group.label + "</div>";
             h += "<div class='ws-grp'><div class='ws-gt'>Identity</div>" +
-                 ioField("Name", ioIn("ioF_name", c.name, t === "ai" ? "e.g. Fuel pressure" : "e.g. Fan 1"));
-            if (t === "ai" || t === "tc" || t === "di")
+                 ioField("Name", ioIn("ioF_name", c.name, t === "ain" ? "e.g. Fuel pressure" : t === "din" ? "e.g. Brake switch" : "e.g. Fan 1"));
+            if (t === "ain" || t === "din")
                 h += ioField("Publish as channel", "<select id='ioF_channel' onchange='ioFld(this)'>" + ioChanOptions(c.channel) + "</select>");
             h += "</div>";
 
-            if (t === "ai") {
+            if (t === "ain") {
+                var ainN = parseInt(io.sel.replace(/\D/g, ""), 10);
                 h += "<div class='ws-grp'><div class='ws-gt'>Input</div>" +
+                     ioField("Class", ainN <= 4
+                        ? "<span style='color:#F6CF49;'>&#9670; Precision</span> &nbsp;16-bit &#916;&#931;, software pull-up"
+                        : "Standard &nbsp;12-bit &#8212; pots, senders, switches") +
                      ioField("Mode", ioSegHtml("mode", c.mode, [["0-5v", "0–5 V"], ["res", "Resistive"]])) +
                      ioField("Units", ioIn("ioF_units", c.units, "kPa / °C / %")) +
                      "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
@@ -4840,18 +5305,18 @@
                      ioField("Reads as (low)", ioNum("ioF_sLo", c.sLo)) +
                      ioField("Reads as (high)", ioNum("ioF_sHi", c.sHi)) + "</div>" +
                      ioField("Decimals", ioNum("ioF_dec", c.dec)) +
+                     (c.mode === "res"
+                        ? "<div class='ws-note'>On-board pull-up to the 5VSENS rail &#8212; wire a temp sender straight between AIN and GND, two wires done.</div>"
+                        : "<div class='ws-note'>Feed 3-wire sensors from the 5VSENS pins &#8212; the reading is ratiometric to the same rail, so it stays put when the battery sags.</div>") +
                      "</div>";
-            } else if (t === "tc") {
-                h += "<div class='ws-grp'><div class='ws-gt'>Thermocouple</div>" +
-                     ioField("Units", ioSegHtml("units", c.units, [["°C", "°C"], ["°F", "°F"]])) +
-                     "<div class='ws-note'>K-type, cold-junction compensated on-board. Reads &#8722;40 to +1,200 °C.</div></div>";
-            } else if (t === "di") {
-                var vr = io.sel === "di1" || io.sel === "di2";
+            } else if (t === "din") {
                 h += "<div class='ws-grp'><div class='ws-gt'>Input</div>" +
-                     ioField("Mode", ioSegHtml("mode", c.mode, [["switch_low", "Sw &#8595;GND"], ["switch_high", "Sw &#8594;12V"], ["freq", "Frequency"]].concat(vr ? [["vr", "VR"]] : []))) +
-                     (vr ? "<div class='ws-note'>DI1/DI2 accept a VR (variable-reluctance) sensor &#8212; wheel-speed rings without a hall conversion.</div>" : "") +
+                     ioField("Mode", ioSegHtml("mode", c.mode, [["switch_low", "Sw &#8595;GND"], ["switch_high", "Sw &#8594;12V"], ["freq", "Frequency"]])) +
+                     (c.mode === "freq"
+                        ? "<div class='ws-note'>Counts pulses to 10&#8201;kHz &#8212; wheel speeds, flow meters, fan tachos. Published in Hz.</div>"
+                        : "<div class='ws-note'>12&#8201;V tolerant with on-board pull-" + (c.mode === "switch_low" ? "up &#8212; closing the switch to ground reads ON." : "down &#8212; 12&#8201;V on the pin reads ON.") + "</div>") +
                      "</div>";
-            } else if (t === "pwm") {
+            } else {
                 h += "<div class='ws-grp'><div class='ws-gt'>Drive</div>" +
                      ioField("Source", "<select id='ioF_src' onchange='ioFld(this)'>" + ioSrcOptions(c.src) + "</select>") +
                      ioField("Behaviour", ioSegHtml("mode", c.mode, [["thresh", "On / off"], ["map", "PWM map"]]));
@@ -4868,29 +5333,36 @@
                          ioField("Max duty %", ioNum("ioF_dutyHi", c.dutyHi)) + "</div>" +
                          ioField("PWM frequency (Hz)", ioNum("ioF_freq", c.freq));
                 }
-                h += "</div>";
-            } else if (t === "hs") {
-                h += "<div class='ws-grp'><div class='ws-gt'>Switch rule</div>" +
-                     ioField("Source", "<select id='ioF_src' onchange='ioFld(this)'>" + ioSrcOptions(c.src) + "</select>") +
-                     "<div style='display:grid; grid-template-columns:1fr 1fr; gap:8px;'>" +
-                     ioField("Turns on " + c.op, ioNum("ioF_thr", c.thr)) +
-                     ioField("Hysteresis", ioNum("ioF_hyst", c.hyst)) + "</div>" +
-                     "<div class='ws-note'>8&#8201;A high-side, short-circuit + thermal protected. Feeds pumps, fans, lights directly &#8212; no relay.</div></div>";
+                h += "<div class='ws-note'>Low-side MOSFET drive &#8212; it switches the load&#8217;s ground, so feed the load +12&#8201;V. Flyback clamped for relays and solenoids.</div></div>";
             }
             insp.innerHTML = h;
+        }
+
+        function ioRenderDevInspector(insp) {
+            insp.innerHTML =
+                "<h2>CAN IO Expander <span style='color:var(--text-muted); font-size:11px; font-weight:400;'>v0.1</span></h2>" +
+                "<div class='ws-sub'>ESP32 &#183; CAN 2.0B &#183; USB-C</div>" +
+                "<div class='ws-grp'><div class='ws-gt'>Board</div>" +
+                "<div class='ws-note' style='margin-top:0;'>8 digital in &#183; 8 analog in &#183; 4 outputs &#183; 5&#8201;V sensor supply out. Runs from 12&#8201;V in the car, or USB-C alone on the bench &#8212; configure it before it&#8217;s wired.</div></div>" +
+                "<div class='ws-grp'><div class='ws-gt'>Status LED</div>" +
+                "<div class='ws-kv'><i style='background:#6FBF73;'></i>slow blink &#8212; running, CAN traffic seen</div>" +
+                "<div class='ws-kv'><i style='background:#FF9F0A;'></i>fast blink &#8212; running, bus silent</div>" +
+                "<div class='ws-kv'><i style='background:#F0F4F8;'></i>solid &#8212; booting / firmware update</div></div>" +
+                "<div class='ws-grp'><div class='ws-gt'>USB-C</div>" +
+                "<div class='ws-note' style='margin-top:0;'>Setup and firmware port &#8212; shows up as a serial device, no drivers. The same config saved here loads over USB or over CAN.</div></div>";
         }
 
         /* CAN broadcast + DBC export */
         function ioFrameMap() {
             var frames = [];
             var base = 0x6C0;
-            frames.push({ id: base, name: "IO_AI_1_4", sigs: ["ai1", "ai2", "ai3", "ai4"].map(function (p, i) { return { pin: p, start: i * 16, len: 16 }; }) });
-            frames.push({ id: base + 1, name: "IO_AI_5_8", sigs: ["ai5", "ai6", "ai7", "ai8"].map(function (p, i) { return { pin: p, start: i * 16, len: 16 }; }) });
-            frames.push({ id: base + 2, name: "IO_TC_1_4", sigs: ["tc1", "tc2", "tc3", "tc4"].map(function (p, i) { return { pin: p, start: i * 16, len: 16 }; }) });
-            var s3 = [{ pin: "di_bits", start: 0, len: 8 }, { pin: "out_bits", start: 8, len: 8 },
-                      { pin: "pwm1", start: 16, len: 8 }, { pin: "pwm2", start: 24, len: 8 },
-                      { pin: "pwm3", start: 32, len: 8 }, { pin: "pwm4", start: 40, len: 8 }];
-            frames.push({ id: base + 3, name: "IO_STATE", sigs: s3 });
+            frames.push({ id: base, name: "IO_AIN_1_4", sigs: ["ain1", "ain2", "ain3", "ain4"].map(function (p, i) { return { pin: p, start: i * 16, len: 16 }; }) });
+            frames.push({ id: base + 1, name: "IO_AIN_5_8", sigs: ["ain5", "ain6", "ain7", "ain8"].map(function (p, i) { return { pin: p, start: i * 16, len: 16 }; }) });
+            frames.push({ id: base + 2, name: "IO_DIGITAL", sigs: [
+                { pin: "din_bits", start: 0, len: 8 }, { pin: "dout_bits", start: 8, len: 8 },
+                { pin: "dout1", start: 16, len: 8 }, { pin: "dout2", start: 24, len: 8 },
+                { pin: "dout3", start: 32, len: 8 }, { pin: "dout4", start: 40, len: 8 },
+                { pin: "vsens_mv", start: 48, len: 16 }] });
             return frames;
         }
 
@@ -4919,7 +5391,7 @@
         }
 
         window.ioExportDbc = function () {
-            var lines = ['VERSION "RDM IO-22 broadcast v1"', "", "BU_: RDM_IO", ""];
+            var lines = ['VERSION "RDM CAN IO Expander v0.1 broadcast"', "", "BU_: RDM_IO", ""];
             ioFrameMap().forEach(function (f) {
                 lines.push("BO_ " + f.id + " " + f.name + ": 8 RDM_IO");
                 f.sigs.forEach(function (sg) {
@@ -4927,15 +5399,16 @@
                     var c = io.cfg[pin] || {};
                     var nm = (c.name || pin).replace(/[^A-Za-z0-9_]/g, "_");
                     var factor = 1, offset = 0, unit = c.units || "";
-                    if (/^ai/.test(pin)) { factor = 0.01; }
-                    if (/^tc/.test(pin)) { factor = 0.1; offset = -40; unit = c.units || "C"; }
+                    if (/^ain/.test(pin)) { factor = 0.01; }
+                    if (/^dout\d/.test(pin)) { unit = "%"; }
+                    if (pin === "vsens_mv") { unit = "mV"; }
                     lines.push(" SG_ " + nm + " : " + sg.start + "|" + sg.len + "@1+ (" + factor + "," + offset + ") [0|0] \"" + unit + "\" Vector__XXX");
                 });
                 lines.push("");
             });
             var a = document.createElement("a");
             a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/plain" }));
-            a.download = "rdm_io22.dbc";
+            a.download = "rdm_can_io_expander.dbc";
             a.click();
             setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
             showToast("DBC exported — import it into any CAN tool", "success");
@@ -4952,30 +5425,41 @@
             io.simRaw = {};
             ioPinList().forEach(function (p, i) {
                 var c = ioCfg(p.id);
-                if (p.group.key === "ai") {
+                if (p.group.key === "ain") {
                     var v = c.sLo + (c.sHi - c.sLo) * (0.5 + 0.5 * Math.sin(io.simT / 3 + i));
                     io.simRaw[p.id] = v;
-                    io.simVals[p.id] = v.toFixed(c.dec !== undefined ? c.dec : 1);
-                } else if (p.group.key === "tc") {
-                    var tv = 80 + 60 * (0.5 + 0.5 * Math.sin(io.simT / 5 + i));
-                    io.simRaw[p.id] = tv;
-                    io.simVals[p.id] = Math.round(tv) + "°";
-                } else if (p.group.key === "di") {
-                    var on = Math.sin(io.simT / 4 + i * 2) > 0.6;
-                    io.simRaw[p.id] = on ? 1 : 0;
-                    io.simVals[p.id] = on ? "ON" : "off";
+                    var u = (c.units || "").length <= 3 ? (c.units || "") : "";
+                    io.simVals[p.id] = v.toFixed(c.dec !== undefined ? c.dec : 1) + (u ? " " + u : "");
+                } else if (p.group.key === "din") {
+                    if (c.mode === "freq") {
+                        var hz = Math.round(600 + 550 * Math.sin(io.simT / 4 + i));
+                        io.simRaw[p.id] = hz;
+                        io.simVals[p.id] = hz + " Hz";
+                    } else {
+                        var on = Math.sin(io.simT / 4 + i * 2) > 0.55;
+                        io.simRaw[p.id] = on ? 1 : 0;
+                        io.simVals[p.id] = on ? "ON" : "&#8212;";
+                    }
                 }
             });
-            ["pwm1", "pwm2", "pwm3", "pwm4", "hs1", "hs2"].forEach(function (id) {
+            ["dout1", "dout2", "dout3", "dout4"].forEach(function (id) {
                 var c = ioCfg(id);
                 var sv = ioSimSrcVal(c.src);
                 var was = !!io.outState[id];
-                var on = false;
+                var on = false, duty = 0;
                 if (sv !== null) {
-                    if (c.mode === "map") on = true;
-                    else on = was ? sv > c.thr - c.hyst : sv > c.thr;
+                    if (c.mode === "map") {
+                        var f = (sv - c.mapLo) / ((c.mapHi - c.mapLo) || 1);
+                        f = Math.max(0, Math.min(1, f));
+                        duty = c.dutyLo + f * (c.dutyHi - c.dutyLo);
+                        on = duty > 0;
+                    } else {
+                        on = was ? sv > c.thr - c.hyst : sv > c.thr;
+                        duty = on ? 100 : 0;
+                    }
                 }
                 io.outState[id] = on;
+                io.outDuty[id] = duty;
                 var dot = document.getElementById("ioSt_" + id);
                 if (dot) dot.className = "st" + (on ? " on" : "");
             });
@@ -4990,8 +5474,8 @@
             if (!live && _ioSimTimer) { clearInterval(_ioSimTimer); _ioSimTimer = null; io.outState = {}; io.simVals = {}; }
             var hint = document.getElementById("ioHint");
             if (hint) hint.textContent = live
-                ? "Simulated senders sweeping — outputs follow their rules. Watch the fan kick on past its threshold."
-                : "Click any pin to configure it — inputs become channels on the bus.";
+                ? "Simulated senders sweeping — the DOUTs follow their rules and their MOSFETs glow when they fire."
+                : "Click any pad to configure it — inputs become CAN channels, outputs follow rules.";
             ioRenderStage();
         };
 
@@ -6424,8 +6908,15 @@
         function _shApplyTitle() { if (document.title !== _suiteTitleWanted) document.title = _suiteTitleWanted; }
 
         function _shConnectedIp() {
-            var mode = document.getElementById("connectionMode");
-            if (!mode || (mode.value !== "wifi" && mode.value !== "hotspot")) return null;
+            /* Trust the transport, not the DOM. This used to infer "a dash is
+             * live" purely from the mode dropdown + an IP-shaped label, so with
+             * the dropdown on WiFi and a dash that is switched OFF it still
+             * returned the address — and _shLiveTick fired a raw Image() at it
+             * every 8 s (bypassing the transport AND the Tauri fetch shim),
+             * which is where the steady ERR_CONNECTION_TIMED_OUT noise came
+             * from. Gate on the real connection state instead. */
+            if (typeof RDM === 'undefined' || (RDM.mode !== 'wifi' && RDM.mode !== 'hotspot')) return null;
+            if (typeof _connectionOk === 'undefined' || !_connectionOk) return null;
             var lbl = document.getElementById("connModeLabel");
             var label = lbl ? lbl.textContent.trim() : "";
             return /^\d{1,3}(\.\d{1,3}){3}$/.test(label) ? label : null;
@@ -6457,15 +6948,29 @@
             var dot = document.getElementById("shDot");
             if (!head || !sub || !dot) return;
             var lbl = document.getElementById("connModeLabel");
-            var mode = document.getElementById("connectionMode");
             var label = lbl ? lbl.textContent.trim() : "";
+            /* Read the state machine, not the DOM. This used to decide "online"
+             * by regex-testing the label TEXT — but _setConnState encodes health
+             * in the label's COLOUR and writes the same IP whether the dash is
+             * live or dead. So a powered-off dash at 192.168.4.66 still lit the
+             * green dot, "Your dash is online.", the transfer actions, and the
+             * window title. (The regex was stale too: it tested "scanning" while
+             * the writers emit "searching..." — so even mid-search it read as
+             * online.)
+             *
+             * The typeof guards are load-bearing, not defensive style:
+             * `let _connectionOk` is declared in a LATER <script> block and
+             * pollConn() is called synchronously before it, so a bare reference
+             * would throw. Same guarded form as _shConnectedIp. */
+            var isLocal = (typeof RDM === "undefined") || RDM.mode === "local";
+            var isLive = !isLocal && (typeof _connectionOk !== "undefined") && _connectionOk;
             var connected = false;
-            if (mode && mode.value === "local") {
+            if (isLocal) {
                 head.textContent = "Working offline.";
                 sub.textContent = "This PC acts as its own dash — everything you build saves here.";
                 dot.className = "sh-dot";
                 _suiteTitleWanted = "RDM Studio — Offline";
-            } else if (label && !/not connected|scanning|connecting|^wifi$|^local$|^usb/i.test(label)) {
+            } else if (isLive) {
                 head.textContent = "Your dash is online.";
                 sub.textContent = label + " — live preview and transfers are ready.";
                 dot.className = "sh-dot ok";
@@ -6652,6 +7157,7 @@
         let _connectionOk = false;
         let _healthInterval = null;
         let _healthFails = 0;
+        let _healthInFlight = false;   /* one probe at a time (see _startHealthCheck) */
         let _wifiRecoverTimer = null;
         let _wifiRecoverTick = 0;
         let _scanInFlight = false;
@@ -6681,6 +7187,16 @@
             if (!label) return;
             if (text !== undefined) label.textContent = text;
             label.style.color = color;
+            /* Mirror the state onto the bar's dot + tooltip: colour alone on
+             * 10px monospace text was too subtle to read as connected-or-not. */
+            const states = {
+                '#4ade80': 'Connected',
+                '#f59e0b': 'Searching for the dash…',
+                '#f44': 'Unreachable',
+            };
+            const dot = document.getElementById('connDot');
+            if (dot) dot.style.background = states[color] ? color : '#555';
+            label.title = states[color] || '';
         }
 
         /* True only for a genuine /api/device/info payload. A real RDM-7
@@ -7038,14 +7554,32 @@
             setInterval(_updateSaveUI, 700);
         })();
 
+        /* Bumped on every user mode switch. In-flight connect attempts capture
+         * it at entry and abandon themselves when it moves on — the async
+         * probe/sweep chain must never drag the app back into a mode the user
+         * has already left (RDM.mode alone can't carry this: during a connect
+         * attempt it still holds the OLD mode until setMode lands). */
+        let _connEpoch = 0;
+
         function _onConnectionModeChange(mode) {
+            _connEpoch++;
             _stopWifiRecovery();
+            /* Stop the previous mode's health tick unconditionally: it probes
+             * the OLD transport, and a success mid-switch would _onReconnected()
+             * straight back into the mode being abandoned. Every connect path
+             * below re-arms it. */
+            _stopHealthCheck();
             if (mode === 'local') {
-                _stopHealthCheck();
                 _connectionOk = false;
                 RDM.setMode('local');
                 _setConnState('var(--text-muted)', 'This PC');
                 _updateConnectionUI();
+                /* Sim is per-target: the device's simulator state means nothing
+                 * offline, and leaving _simActive as-is left a stale "Sim on"
+                 * pill pointing at no device. Re-read it from whatever we just
+                 * switched TO (the local dash reports its own persisted flag),
+                 * which also re-syncs the bench sim via _updateSimButton. */
+                if (typeof _pollSimState === 'function') _pollSimState();
                 /* Local is its own dash — restore its last-open layout (served
                  * by the virtual local-dash router, which reports its own
                  * active), not the device's. Re-render once it's loaded so the
@@ -7055,11 +7589,28 @@
                     if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
                 });
             } else if (mode === 'wifi') {
-                _openWifiPicker();
+                /* WiFi should just connect: probe the remembered dash, then
+                 * sweep the subnet for its serial, then keep hunting in the
+                 * background. The picker is only for the first time (nothing
+                 * remembered yet) — it stays reachable via Scan / the Device
+                 * menu for deliberately switching dashes. */
+                _connectionOk = false;
+                const s = RDM.getConnectionSettings();
+                if (s.ip || s.serial) _autoConnectWifi(s);
+                else _openWifiPicker();
             } else if (mode === 'hotspot') {
+                _connectionOk = false;
                 RDM.setMode('hotspot');
                 _setConnState('var(--text-muted)', '192.168.4.1');
-                _testConnection();
+                _testConnection().then(() => {
+                    if (!_connectionOk && RDM.mode === 'hotspot') {
+                        /* Not reachable yet (PC probably hasn't joined the
+                         * dash's AP) — keep looking instead of giving up. */
+                        _setConnState('#f59e0b', '192.168.4.1');
+                        _startHealthCheck();
+                        _startWifiRecovery();
+                    }
+                });
             } else if (mode === 'usb') {
                 _connectUsb(_connLabel());
             }
@@ -7075,8 +7626,7 @@
                 if (_lastUsbPort) {
                     try {
                         await RDM.serialConnect(_lastUsbPort);
-                        label.textContent = _lastUsbPort;
-                        label.style.color = 'var(--text-muted)';
+                        _setConnState('var(--text-muted)', _lastUsbPort);
                         showToast('Reconnected to ' + _lastUsbPort, 'success');
                         _testConnection();
                         return;
@@ -7087,8 +7637,7 @@
                 if (detected) {
                     _lastUsbPort = detected.name;
                     await RDM.serialConnect(detected.name);
-                    label.textContent = detected.name;
-                    label.style.color = 'var(--text-muted)';
+                    _setConnState('var(--text-muted)', detected.name);
                     showToast('Found RDM-7 on ' + detected.name, 'success');
                     _testConnection();
                     return;
@@ -7108,8 +7657,7 @@
                         try {
                             await RDM.serialConnect(ports[idx].name);
                             _lastUsbPort = ports[idx].name;
-                            label.textContent = ports[idx].name;
-                            label.style.color = 'var(--text-muted)';
+                            _setConnState('var(--text-muted)', ports[idx].name);
                             _testConnection();
                         } catch (e) {
                             showToast('Failed to connect: ' + (e.message || e), 'error');
@@ -7127,9 +7675,18 @@
 
         async function _testConnection(opts) {
             opts = opts || {};
-            updateStatus('Connecting...', false);
+            /* isError=true keeps the header dot OFF — a green dot while still
+             * "Connecting..." is exactly the shows-connected-when-it-isn't lie. */
+            updateStatus('Connecting...', true);
+            /* Remember which dash we set out to talk to: listLayouts() below is
+             * a network round-trip, and the user can pick "Offline (Local)"
+             * while it is in flight. Without this guard we stamped
+             * _connectionOk = true for a mode that no longer exists and then
+             * loaded the DEVICE's layout over the offline editor. */
+            const _modeAtStart = RDM.mode;
             try {
                 const layouts = await RDM.listLayouts();
+                if (RDM.mode !== _modeAtStart) return;   /* user switched mid-flight — abandon */
                 _connectionOk = true;
                 _healthFails = 0;
                 _stopWifiRecovery();
@@ -7161,25 +7718,40 @@
                 setTimeout(_checkFirmwareUpdate, 2000);
             } catch (e) {
                 _connectionOk = false;
+                _stopHealthCheck();
+                /* Same mid-flight switch: don't paint a red "connection failed"
+                 * over a user who has deliberately gone Offline. */
+                if (RDM.mode !== _modeAtStart) return;
                 _setConnState('#f44');
                 _updateConnectionUI();
                 if (!opts.quiet) showToast('Connection failed: ' + e.message, 'error');
-                _stopHealthCheck();
             }
         }
 
         function _startHealthCheck() {
             _stopHealthCheck();
             _healthFails = 0;
+            _healthInFlight = false;
             _healthInterval = setInterval(async () => {
                 if (RDM.mode === 'local') { _stopHealthCheck(); return; }
+                /* The probe below can hang for the transport's full timeout
+                 * (15 s over WiFi), but this interval fires every 4 s — against
+                 * a dash that is off, stalled probes stacked up ~4 deep and
+                 * each one re-armed the recovery loop. One in flight at a time. */
+                if (_healthInFlight) return;
+                _healthInFlight = true;
                 try {
                     /* WifiTransport.getDeviceInfo returns null on failure and
                      * the raw body string on a non-JSON 200 (e.g. a router /
                      * captive-portal page answering the hotspot IP). Only a
                      * real device replies with a JSON object — anything else
-                     * is a miss, not a live dash. */
-                    const info = await RDM.getDeviceInfo();
+                     * is a miss, not a live dash.
+                     * Short timeout: at the transport's default 10 s a dead
+                     * dash stayed painted green for two full probes (~24 s of
+                     * "connected" that wasn't). 3.5 s is still well above the
+                     * dash's worst observed round-trip under load (~1.5 s),
+                     * and the 2-miss debounce absorbs a slow one. */
+                    const info = await RDM.getDeviceInfo({ timeout: 3500 });
                     if (!_isDeviceInfo(info)) throw new Error('not a device response');
                     _healthFails = 0;
                     if (!_connectionOk) await _onReconnected();
@@ -7193,6 +7765,9 @@
                     _updateConnectionUI();
                     showToast('Device connection lost — reconnecting...', 'error');
                     _startWifiRecovery();
+                } finally {
+                    /* finally, not tail-of-try: the catch above returns early. */
+                    _healthInFlight = false;
                 }
             }, 4000);
         }
@@ -7264,8 +7839,20 @@
             if (RDM.mode !== 'wifi' && RDM.mode !== 'hotspot') { _stopWifiRecovery(); return; }
             _wifiRecoverTick++;
             const ip = RDM.mode === 'hotspot' ? '192.168.4.1' : s.ip;
-            const hit = await RDM.probeDevice(ip, 1200);
-            if (hit && (!s.serial || hit.serial === s.serial)) {
+            /* The mode check above happens BEFORE these awaits, and a subnet
+             * sweep takes seconds — long enough for the user to pick "Offline
+             * (Local)" mid-flight. Without re-checking afterwards this resumed
+             * and dragged them straight back onto WiFi, which is the literal
+             * "offline/wifi getting mixed up". Re-assert the mode after every
+             * await before acting on the result. */
+            const hit = await RDM.probeDevice(ip, 3000);
+            if (RDM.mode !== 'wifi' && RDM.mode !== 'hotspot') { _stopWifiRecovery(); return; }
+            /* Hotspot identity IS the address: whatever real dash answers
+             * 192.168.4.1 on its own AP is the one we want, even if the last
+             * WiFi dash's serial is still in settings. (probe_device only
+             * resolves for a genuine /api/device/info payload, so a router
+             * answering that IP can't get here.) */
+            if (hit && (RDM.mode === 'hotspot' || !s.serial || hit.serial === s.serial)) {
                 await _onReconnected();
                 return;
             }
@@ -7275,7 +7862,10 @@
                     const known = RDM.getKnownDevices().map(d => d.ip);
                     const devices = await RDM.discoverDevices([s.ip].concat(known).filter(Boolean));
                     const match = devices.find(d => d.serial === s.serial);
-                    if (match && !_connectionOk) {
+                    /* RDM.mode re-checked here too: the sweep is the slowest
+                     * await in the app, so this is the most likely place to
+                     * clobber a deliberate switch to Offline. */
+                    if (match && !_connectionOk && RDM.mode === 'wifi') {
                         RDM.setMode('wifi', { ip: match.ip, port: match.port, serial: match.serial });
                         _setConnState('#f59e0b', match.ip);
                         await _onReconnected('Device moved to ' + match.ip + ' — reconnected');
@@ -7303,8 +7893,15 @@
             if (importItem) importItem.style.display = isConnected ? '' : 'none';
             if (importSep) importSep.style.display = isConnected ? '' : 'none';
             if (otaItem) otaItem.style.display = isConnected ? '' : 'none';
-            const liveBtn = document.getElementById('screenshotFeedBtn');
-            if (liveBtn) liveBtn.style.display = isConnected ? '' : 'none';
+            /* LIVE / CONTROL mirror the DEVICE's screen, so they are meaningless
+             * offline. This gated 'screenshotFeedBtn' — an id that exists
+             * nowhere in the app, so the lookup was always null and both pills
+             * stayed lit while Offline, offering to mirror a dash that isn't
+             * there. The real ids are pillLive / pillLiveControl. */
+            ['pillLive', 'pillLiveControl'].forEach(function (id) {
+                const el = document.getElementById(id);
+                if (el) el.style.display = isConnected ? '' : 'none';
+            });
             if (!isConnected && typeof stopScreenshotFeed === 'function') stopScreenshotFeed();
             if (typeof _updateWasmCanvasVisibility === 'function') _updateWasmCanvasVisibility();
         }
@@ -7435,6 +8032,15 @@
             const images = new Set(), fonts = new Set();
             for (const w of (layout.widgets || [])) {
                 if (!w.config || !w.type) continue;
+                /* Animation frames are named by prefix+index, not by an
+                 * image_picker field — without this a transferred layout
+                 * arrives frameless and the offline WASM preview has nothing
+                 * to render for the widget. Missing frames are skipped by the
+                 * copier, so an over-stated frame_count is harmless here. */
+                if (w.type === 'anim' && w.config.frame_prefix && w.config.frame_count) {
+                    for (let i = 0; i < Math.min(16, w.config.frame_count); i++)
+                        images.add(w.config.frame_prefix + '_' + i);
+                }
                 const def = defs[w.type];
                 if (!def || !def.fields) continue;
                 for (const f of def.fields) {
@@ -7634,15 +8240,24 @@
          * 2. sweep the subnet for the dash's serial (DHCP churn)
          * 3. keep hunting in the background and connect when it appears */
         async function _autoConnectWifi(s) {
+            /* Abandon this attempt the moment the user switches modes — every
+             * step below is an await, and resuming after one used to yank a
+             * deliberate Offline/Hotspot/USB choice back onto WiFi. */
+            const ep = _connEpoch;
             document.getElementById('connectionMode').value = 'wifi';
             _setConnState('#f59e0b', s.ip || 'searching...');
-            updateStatus('Looking for your RDM-7...', false);
+            updateStatus('Looking for your RDM-7...', true);
             if (s.ip) {
-                const hit = await RDM.probeDevice(s.ip, 1500);
+                /* 4 s, not 1.5: a dash busy rendering answers HTTP slowly, and
+                 * a missed probe here meant a needless multi-second sweep (or
+                 * "not found" against a dash that was on and working). */
+                const hit = await RDM.probeDevice(s.ip, 4000);
+                if (ep !== _connEpoch) return;
                 if (hit && (!s.serial || hit.serial === s.serial)) {
                     RDM.setMode('wifi', { ip: s.ip, port: s.port, serial: s.serial || hit.serial });
                     _setConnState('var(--text-muted)', s.ip);
                     await _testConnection({ quiet: true });
+                    if (ep !== _connEpoch) return;
                     if (_connectionOk) { showToast('Connected to RDM-7 at ' + s.ip, 'success'); return; }
                 }
             }
@@ -7652,6 +8267,7 @@
                 const known = RDM.getKnownDevices().map(d => d.ip);
                 devices = await RDM.discoverDevices([s.ip].concat(known).filter(Boolean));
             } catch (e) { } finally { _scanInFlight = false; }
+            if (ep !== _connEpoch) return;
             devices.forEach(d => RDM.rememberDevice(d));
             const match = s.serial
                 ? devices.find(d => d.serial === s.serial)
@@ -7660,6 +8276,7 @@
                 RDM.setMode('wifi', { ip: match.ip, port: match.port, serial: match.serial });
                 _setConnState('var(--text-muted)', match.ip);
                 await _testConnection({ quiet: true });
+                if (ep !== _connEpoch) return;
                 if (_connectionOk) {
                     showToast('Connected to RDM-7 at ' + match.ip +
                         (s.ip && match.ip !== s.ip ? ' (address changed)' : ''), 'success');
@@ -7678,7 +8295,18 @@
 
         function _restoreConnection() {
             const settings = RDM.getConnectionSettings();
-            if (settings.mode === 'wifi' && (settings.ip || settings.serial)) {
+            if (settings.mode === 'local') {
+                /* A DELIBERATE Offline choice — honour it: no probe, no sweep,
+                 * no discovery. Must be checked first and explicitly: a stored
+                 * 'local' otherwise falls to the first-run `else` below, which
+                 * schedules _backgroundDiscovery — and that guards on
+                 * `RDM.mode !== 'local'`, i.e. it runs PRECISELY when the user
+                 * is offline, auto-connects the first dash it finds and
+                 * re-persists WiFi. Persisting 'local' without this branch just
+                 * moves the yank from _autoConnectWifi to _backgroundDiscovery. */
+                _setConnState('var(--text-muted)', 'This PC');   /* same label a live switch gets */
+                _updateConnectionUI();
+            } else if (settings.mode === 'wifi' && (settings.ip || settings.serial)) {
                 _autoConnectWifi(settings);
             } else if (settings.mode === 'hotspot') {
                 RDM.setMode('hotspot');
@@ -7835,9 +8463,26 @@
                 if (connected && typeof _refetchWasmChannels === 'function') _refetchWasmChannels();
                 if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
             }
-            if (show && connected) { _wasmSimStop(); _wasmLiveStart(); }
-            else if (show)         { _wasmLiveStop(); _wasmSimStart(); }
-            else                   { _wasmLiveStop(); _wasmSimStop(); }
+            /* Connected -> mirror the real dash. Otherwise the bench sim is the
+             * only data source, and it follows the SIM pill: this used to start
+             * unconditionally whenever disconnected, so offline the sweep ran
+             * forever and the pill (which only relabels itself and drives the
+             * SVG layer hidden BEHIND this canvas) appeared to do nothing —
+             * "sim on and off doesnt work for offline mode". _simActive lives in
+             * the firmware base; treat it as ON if absent so a load-order hiccup
+             * fails to a live-looking dash rather than a dead one. */
+            const simWanted = (typeof _simActive === 'undefined') ? true : !!_simActive;
+            if (show && connected)     { _wasmSimStop(); _wasmLiveStart(); }
+            else if (show && simWanted) { _wasmLiveStop(); _wasmSimStart(); }
+            else                       { _wasmLiveStop(); _wasmSimStop(); }
+        }
+
+        /* Re-evaluate the backdrop's data source when the SIM pill flips. The
+         * pill lives in the firmware base, so the `sim-pill-text` overlay block
+         * (inside _updateSimButton) calls this — that covers both a user toggle
+         * and the boot _pollSimState() sync. */
+        function _wasmSimSync() {
+            if (typeof _updateWasmCanvasVisibility === 'function') _updateWasmCanvasVisibility();
         }
 
         /* Queried by the firmware's renderPreview() gate (overlay-patched)
@@ -7876,6 +8521,15 @@
                         needed.push(imgName);
                 }
             }
+            /* Animation frames are handled OUT OF BAND (see below), never in
+             * this blocking list: an anim widget references up to 16 frames,
+             * and awaiting 16 sequential getImageData() calls here — each up to
+             * the transport's 15 s timeout when a frame is slow or missing —
+             * would wall updateWasmPreview() (and therefore the live preview)
+             * for minutes on every edit. widget_anim renders a placeholder
+             * until its frames arrive, so we register them off the critical
+             * path and reschedule one preview when they land. */
+            _scheduleAnimFrameSync();
             if (needed.length === 0) return;
             for (let idx = 0; idx < needed.length; idx++) {
                 const imgName = needed[idx];
@@ -7900,6 +8554,148 @@
             _dlProgressShow('Download complete', 100);
             setTimeout(_dlProgressHide, 800);
         }
+
+        /* Background loader for animation-widget frames. Runs off the
+         * updateWasmPreview() critical path so a slow/missing frame transport
+         * can never freeze the live preview (the regression that awaiting these
+         * in _syncWasmImages caused). Registers whatever it can into MEMFS,
+         * marks misses as sticky-failed so they're tried once, and reschedules
+         * exactly one preview when new frames actually arrive so widget_anim
+         * repaints them. The _animFrameSyncing guard prevents overlapping runs
+         * (updateWasmPreview fires on every edit). */
+        let _animFrameSyncing = false;
+        async function _scheduleAnimFrameSync() {
+            if (_animFrameSyncing || !wasmModule || _wasmCrashed) return;
+            const frames = [];
+            for (const w of (currentLayout.widgets || [])) {
+                if (w.type !== 'anim' || !w.config || !w.config.frame_prefix || !w.config.frame_count) continue;
+                for (let i = 0; i < Math.min(16, w.config.frame_count); i++) {
+                    const fn = `${w.config.frame_prefix}_${i}`;
+                    if (!_wasmRegisteredImages.has(fn) && !_wasmFailedImages.has(fn) && !frames.includes(fn))
+                        frames.push(fn);
+                }
+            }
+            if (!frames.length) return;
+            _animFrameSyncing = true;
+            let got = 0;
+            try {
+                for (const fn of frames) {
+                    if (_wasmCrashed) break;
+                    try {
+                        const b64 = await RDM.getImageData(fn);
+                        if (!b64) { _wasmFailedImages.add(fn); continue; }
+                        const bin = atob(b64);
+                        const u8 = new Uint8Array(bin.length);
+                        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+                        const ptr = wasmModule._malloc(u8.length);
+                        if (!ptr) { _wasmFailedImages.add(fn); continue; }
+                        wasmModule.HEAPU8.set(u8, ptr);
+                        wasmModule.ccall('register_image', null, ['string', 'number', 'number'], [fn, ptr, u8.length]);
+                        wasmModule._free(ptr);
+                        _wasmRegisteredImages.add(fn);
+                        got++;
+                    } catch (e) {
+                        _wasmFailedImages.add(fn);
+                        if (e instanceof WebAssembly.RuntimeError) { _wasmCrashed = true; break; }
+                    }
+                }
+            } finally {
+                _animFrameSyncing = false;
+            }
+            /* Frames are now in MEMFS — one more preview pass paints them.
+             * Newly-registered frames are in _wasmRegisteredImages so this
+             * re-run enqueues nothing and cannot loop. */
+            if (got > 0 && !_wasmCrashed && typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+        }
+
+        /* Re-uploading an animation reuses the same frame NAMES, so the sets
+         * above would skip them and the preview would keep painting the OLD
+         * bytes still sitting in MEMFS (and a frame that missed once would
+         * stay sticky-failed forever, even after you upload it). The uploader
+         * is firmware-canonical, so hook it from here instead of editing the
+         * base: after any frame write, forget the prefix's whole name range
+         * (covers frames just written AND ones the upload trimmed away) so the
+         * background sync re-fetches them. _animUploadFrames is the single
+         * funnel for frame writes, so this covers every transport. */
+        /* ── Animation file picker: native dialog, NOT <input type="file"> ──
+         * WebView2 opens an <input type="file"> picker in a NESTED MODAL LOOP
+         * that blocks the renderer's JS thread until the dialog is dismissed —
+         * the whole app is frozen, and because the dialog can land BEHIND the
+         * maximized window there is no visual cue at all. Confirmed under a
+         * debugger: the evaluate that clicked the button never returned and the
+         * page stopped answering entirely. (Windows still reports the app as
+         * "Responding" because the modal pumps its own message loop, which is
+         * why this looked like a mystery hang rather than a dialog.)
+         *
+         * Tauri's dialog plugin is async and never blocks the thread, is
+         * already permissioned (dialog:allow-open, fs:allow-read) and is already
+         * how this app opens .rdm bundles. Route the picker through it and hand
+         * openAnimUploadDialog() an input-shaped object so the firmware-side
+         * slicer is reused verbatim.
+         *
+         * Capture phase + stopPropagation so the button's inline onclick (the
+         * input.click() that freezes) never runs. Delegated, so it survives the
+         * inspector re-rendering the button. Non-Tauri (plain browser) falls
+         * through untouched — there the input is correct and non-blocking. */
+        const _ANIM_EXTS = ['gif', 'mp4', 'webm', 'png', 'jpg', 'jpeg'];
+        const _ANIM_MIME = { gif: 'image/gif', mp4: 'video/mp4', webm: 'video/webm',
+                             png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' };
+        document.addEventListener('click', function (e) {
+            const btn = e.target && e.target.closest && e.target.closest('button');
+            if (!btn || !/upload animation/i.test(btn.textContent || '')) return;
+            if (typeof RDM === 'undefined' || typeof RDM.isTauri !== 'function' || !RDM.isTauri()) return;
+            if (typeof RDM.openFileDialog !== 'function' || typeof RDM.readFile !== 'function') return;
+            e.preventDefault();
+            e.stopPropagation();   /* must beat the inline onclick on the target */
+            (async function () {
+                let paths;
+                try {
+                    paths = await RDM.openFileDialog(
+                        [{ name: 'Animation (GIF, video, or stills)', extensions: _ANIM_EXTS }],
+                        { multiple: true });
+                } catch (err) {
+                    showToast('Could not open the file picker: ' + (err && err.message || err), 'error');
+                    return;
+                }
+                if (!paths || !paths.length) return;   /* cancelled */
+                const files = [];
+                for (const p of paths) {
+                    try {
+                        const bytes = await RDM.readFile(p);
+                        const name = String(p).split(/[\\/]/).pop() || 'frame';
+                        const ext = (name.split('.').pop() || '').toLowerCase();
+                        /* Type matters: openAnimUploadDialog dispatches on it
+                         * (image/gif -> GIF decoder, video/* -> video decoder). */
+                        files.push(new File([bytes], name, { type: _ANIM_MIME[ext] || 'application/octet-stream' }));
+                    } catch (err) {
+                        showToast('Could not read ' + p + ': ' + (err && err.message || err), 'error');
+                        return;
+                    }
+                }
+                openAnimUploadDialog({ files: files, value: '' });
+            })();
+        }, true);
+
+        (function _hookAnimUploadInvalidation() {
+            const install = () => {
+                if (typeof window._animUploadFrames !== 'function' || window._animUploadFrames.__wasmHooked) return false;
+                const orig = window._animUploadFrames;
+                const wrapped = async function (srcFrames, n, tw, th, prefix) {
+                    const r = await orig.apply(this, arguments);
+                    for (let i = 0; i < 16; i++) {   /* ANIM_MAX_FRAMES */
+                        const fn = `${prefix}_${i}`;
+                        _wasmRegisteredImages.delete(fn);
+                        _wasmFailedImages.delete(fn);
+                    }
+                    if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+                    return r;
+                };
+                wrapped.__wasmHooked = true;
+                window._animUploadFrames = wrapped;
+                return true;
+            };
+            if (!install()) window.addEventListener('DOMContentLoaded', install);
+        })();
 
         /* Sync layout-referenced TTF families into the WASM's MEMFS so text
          * renders in the real fonts (device fonts over wifi/usb, IndexedDB
@@ -8052,7 +8848,12 @@
             const out = {};
             for (const w of (currentLayout.widgets || [])) {
                 const c = w.config || {};
-                const sn = c.signal_name;
+                /* The editor's canonical binding is the TOP-LEVEL w.signal;
+                 * config.signal_name is only materialised by
+                 * buildFirmwarePayload(). Reading config alone silently skipped
+                 * every freshly-bound widget, so those gauges sat dead while the
+                 * sim "ran" — part of why offline sim looked broken. */
+                const sn = c.signal_name || w.signal;
                 if (!sn) continue;
                 let mn = 0, mx = 100;
                 if (w.type === 'rpm_bar')          { mn = 0;                  mx = c.rpm_max ?? 8000; }
@@ -8273,6 +9074,10 @@
 
 #! Desktop headers use the suite type ramp (Sora, title case) instead of the
 #! phone editor's mono-caps pills; keep the sim toggle's dynamic text in step.
+#! Also the desktop's data source is the WASM backdrop, not the base's SVG
+#! sweep (_pvSimSync, which this function already calls but which is hidden
+#! behind the canvas) — so the pill must ALSO drive the bench sim, or toggling
+#! it offline does nothing visible.
 ##[ block sim-pill-text ]##
 ##[ anchor ]##
             btn.textContent = _simActive ? 'SIM ON' : 'SIM';
@@ -8280,6 +9085,7 @@
             btn.textContent = document.body.classList.contains('suite-desktop')
                 ? (_simActive ? 'Sim on' : 'Sim')
                 : (_simActive ? 'SIM ON' : 'SIM');
+            if (typeof _wasmSimSync === 'function') _wasmSimSync();
 ##[ end ]##
 
 ##[ block hook-screen-dims ]##

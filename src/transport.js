@@ -104,6 +104,10 @@
      *  LocalTransport — wraps localStorage + IndexedDB (offline)
      * ═══════════════════════════════════════════════════════════════ */
 
+    /* Offline bench-sim on/off, persisted so the SIM pill survives a restart
+     * (absent = ON; see LocalTransport.getSimulationStatus). */
+    const LOCAL_SIM_KEY = 'rdm7_local_sim';
+
     const LocalTransport = {
         name: 'local',
 
@@ -313,8 +317,23 @@
         async getCanConfig() { return null; },
         async setCanConfig() { },
         async injectSignal() { },
-        async toggleSimulation() { },
-        async getSimulationStatus() { return { enabled: false }; },
+        /* Offline sim is REAL state, not a stub. There is no device to run the
+         * firmware simulator, but the desktop draws its preview with the WASM
+         * engine and sweeps it with a bench sim — so the SIM pill has something
+         * genuine to switch. Persisted, and defaults ON: a dash with no data
+         * renders as frozen no-signal gauges, which reads as broken. These were
+         * previously `async toggleSimulation() {}` + a hardcoded
+         * `{enabled:false}`, so the pill could never latch offline. */
+        async toggleSimulation(enable) {
+            const on = !!enable;
+            try { localStorage.setItem(LOCAL_SIM_KEY, on ? '1' : '0'); } catch (e) { }
+            return { enabled: on };
+        },
+        async getSimulationStatus() {
+            let raw = null;
+            try { raw = localStorage.getItem(LOCAL_SIM_KEY); } catch (e) { }
+            return { enabled: raw === null ? true : raw === '1' };
+        },
         async getDimmerConfig() { return null; },
         async setDimmerConfig() { },
         async getSystemHealth() { return null; },
@@ -610,8 +629,10 @@
                 return URL.createObjectURL(blob);
             },
 
-            async getDeviceInfo() {
-                try { return await api('/api/device/info'); } catch (e) { return null; }
+            async getDeviceInfo(opts) {
+                /* opts.timeout: the health check probes with a short timeout so
+                 * a dead dash is noticed in seconds, not the default 10 s. */
+                try { return await api('/api/device/info', opts); } catch (e) { return null; }
             },
 
             async getBrightness() {
@@ -653,7 +674,13 @@
                 return await api('/api/signal/simulate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enable: !!enable }),
+                    /* "enabled" — the HTTP handler reads exactly that key
+                     * (web_server_signals.c: GetObjectItemCaseSensitive(root,
+                     * "enabled")), so {enable:...} silently parsed as false and
+                     * this could only ever turn the device sim OFF. Mostly
+                     * latent (the editor's own fetch is passed through raw by
+                     * proxyApiCall), but wrong for any direct RDM.* caller. */
+                    body: JSON.stringify({ enabled: !!enable }),
                 });
             },
 
@@ -1189,10 +1216,15 @@
             return ok();
         }
         if (pathname === '/api/layout/rename' && method === 'POST') {
-            if (body && body.from && body.to) {
-                await T.renameLayout(body.from, body.to);
-                if (localStorage.getItem(LOCAL_ACTIVE_KEY) === body.from)
-                    localStorage.setItem(LOCAL_ACTIVE_KEY, body.to);
+            /* The editor (and the firmware endpoint) speak {old_name,new_name};
+             * this route only read {from,to}, so offline renames silently
+             * no-opped. Accept both shapes. */
+            const from = body && (body.old_name || body.from);
+            const to = body && (body.new_name || body.to);
+            if (from && to) {
+                await T.renameLayout(from, to);
+                if (localStorage.getItem(LOCAL_ACTIVE_KEY) === from)
+                    localStorage.setItem(LOCAL_ACTIVE_KEY, to);
             }
             return ok();
         }
@@ -1232,6 +1264,17 @@
         if (pathname === '/api/font/delete' && params.name) { await T.deleteFont(params.name); return ok(); }
         if (pathname === '/api/image/delete' && params.name) { await T.deleteImage(params.name); return ok(); }
         if (pathname === '/api/signals/values') return ok({ signals: [] });
+        /* Sim toggle. Without this the path fell through to the catch-all
+         * `ok({ok:true})` at the bottom: the POST looked like it worked, but the
+         * GET carried no `enabled`, so the editor's _pollSimState() read
+         * undefined and forced the pill OFF at boot — while the WASM bench sim
+         * swept regardless. The editor speaks the firmware's HTTP contract
+         * (web_server_signals.c), so read/emit `enabled`, NOT `enable` (that is
+         * the serial contract). */
+        if (pathname === '/api/signal/simulate') {
+            if (method === 'POST') return ok(await T.toggleSimulation(body && body.enabled));
+            return ok(await T.getSimulationStatus());
+        }
         if (pathname === '/api/storage/info') {
             /* Rough localStorage/IndexedDB budget — enough for the UI meter. */
             return ok({ total: 8 * 1024 * 1024, used: 0, free: 8 * 1024 * 1024, maxBytes: 8 * 1024 * 1024, totalBytes: 0 });
@@ -1292,8 +1335,20 @@
         if (pathname === '/api/storage/info') return t.getStorageInfo();
         if (pathname === '/api/signals/values') return t.getSignalValues();
         if (pathname === '/api/signal/simulate') {
-            if (method === 'POST') return t.toggleSimulation(body && body.enable);
-            return t.getSimulationStatus();
+            /* Contract translation, HTTP -> serial. The editor speaks the
+             * firmware's HTTP shape ({enabled} in, {enabled} out —
+             * web_server_signals.c), but the serial RPC uses a DIFFERENT shape
+             * ({enable} in, {active} out — serial_commands_signals.c). This
+             * read `body.enable`, which is never present in the editor's POST,
+             * so USB always toggled the sim OFF; and it returned the raw
+             * {active} that the editor's _pollSimState() (reading .enabled)
+             * could never see. Translate both directions. */
+            if (method === 'POST') {
+                await t.toggleSimulation(body && body.enabled);
+                return { enabled: !!(body && body.enabled) };
+            }
+            const s = await t.getSimulationStatus();
+            return { enabled: !!(s && (s.enabled !== undefined ? s.enabled : s.active)) };
         }
         if (pathname === '/api/signal/inject' && method === 'POST') {
             await t.injectSignal(body.name, body.value); return { ok: true };
@@ -1369,6 +1424,15 @@
 
             if (mode === 'local') {
                 this._transport = LocalTransport;
+                /* Persist the choice like every other mode does. Without this
+                 * the stored mode stayed 'wifi', so _restoreConnection() ran
+                 * _autoConnectWifi() on the next launch and forced the app back
+                 * into WiFi — hunting a dash that may be off, while the user
+                 * had deliberately picked Offline. _saveSettings REPLACES the
+                 * object, so carry ip/port/serial over: choosing WiFi again
+                 * should still remember which dash it was. */
+                const prev = _loadSettings();
+                _saveSettings({ ...prev, mode: 'local' });
             } else if (mode === 'wifi') {
                 const ip = opts.ip || '192.168.1.1';
                 const port = opts.port || 80;
@@ -1381,11 +1445,14 @@
             } else if (mode === 'hotspot') {
                 const url = 'http://192.168.4.1';
                 this._transport = createWifiTransport(url);
-                _saveSettings({ mode });
+                /* Carry ip/port/serial over — _saveSettings REPLACES, so the
+                 * bare {mode} this used to write erased the remembered dash and
+                 * broke WiFi reconnect-by-serial after any hotspot excursion. */
+                _saveSettings({ ..._loadSettings(), mode });
             } else if (mode === 'usb') {
                 const portName = opts.portName || '';
                 this._transport = createUsbTransport(portName);
-                _saveSettings({ mode, portName });
+                _saveSettings({ ..._loadSettings(), mode, portName });
             }
 
             this._notifyListeners();
@@ -1550,7 +1617,7 @@
 
         async getStorageInfo() { return this._transport.getStorageInfo(); },
         async getScreenshot() { return this._transport.getScreenshot(); },
-        async getDeviceInfo() { return this._transport.getDeviceInfo(); },
+        async getDeviceInfo(opts) { return this._transport.getDeviceInfo(opts); },
         async getBrightness() { return this._transport.getBrightness(); },
         async setBrightness(v) { return this._transport.setBrightness(v); },
         async getCanConfig() { return this._transport.getCanConfig(); },
@@ -1709,18 +1776,25 @@
          * Show a native open-file dialog. Returns the chosen path, or null.
          * @param {Array} filters - [{name, extensions}]
          */
-        async openFileDialog(filters) {
+        async openFileDialog(filters, opts) {
+            opts = opts || {};
             if (!_isTauri()) return null;
             try {
                 const result = await _tauriInvoke('plugin:dialog|open', {
                     options: {
-                        multiple: false,
+                        multiple: !!opts.multiple,
                         filters: filters || [],
                     }
                 });
                 if (!result) return null;
                 /* Tauri v2 may return {path: "..."} or a plain string */
-                return typeof result === 'string' ? result : (result.path || result);
+                const one = (r) => (typeof r === 'string' ? r : (r && (r.path || r)));
+                /* opts.multiple -> always an array (callers that omit it keep
+                 * getting a single path, unchanged). */
+                if (opts.multiple) {
+                    return (Array.isArray(result) ? result : [result]).map(one).filter(Boolean);
+                }
+                return one(Array.isArray(result) ? result[0] : result);
             } catch (e) {
                 console.error('Open dialog failed:', e);
                 return null;

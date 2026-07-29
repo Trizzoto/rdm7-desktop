@@ -123,7 +123,11 @@ async fn discover_devices(
         let app = app.clone();
         set.spawn(async move {
             let _permit = sem.acquire_owned().await.ok()?;
-            let dev = probe_device_info(&client, &ip, Duration::from_millis(1500)).await;
+            // 2.5 s per host, not 1.5: a dash busy rendering can take >1.5 s
+            // to answer /api/device/info, and a missed sweep here reads as
+            // "no dash on the network". Wall time barely moves — probes run
+            // 128-way and dead hosts still fail at the 400 ms connect.
+            let dev = probe_device_info(&client, &ip, Duration::from_millis(2500)).await;
             let done = scanned.fetch_add(1, Ordering::Relaxed) + 1;
             if done % 32 == 0 || dev.is_some() || done == total {
                 let _ = app.emit(
