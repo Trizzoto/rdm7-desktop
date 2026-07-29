@@ -7096,11 +7096,12 @@
                 }
                 gpComputeG(gp.trace);
                 gp.cmpLap = -1;
-                gpSplitLaps();
+                var said = gpSplitLapsAuto();
                 gp.selLap = gp.traceLaps.length ? 0 : -1;
                 gp.playIdx = 0;
                 gpDrawTrace(); gpFitTrace();
                 gpBuildRail(); gpRenderInspector();
+                if (said) gpSetMsg("gpTraceMsg", said, "ok");
             }).catch(function (e) {
                 gpSetMsg("gpTraceMsg", "Could not open that recording: " + (e && e.message ? e.message : e), "bad");
                 gpRenderInspector();
@@ -7332,6 +7333,71 @@
         var GP_ASIDE_SLOT = "<div class='gp-sess-aside' id='gpSessAside'></div>";
 
         /* ---- Session inspector -------------------------------------------- */
+        /* ---- Is this thing going to record? --------------------------------
+           Six facts, each either satisfied or carrying the one action that
+           satisfies it. The old panel showed capacity and two buttons, which
+           answered "how full is it" — a question nobody was asking — while
+           leaving "will I get laps out of this" entirely unanswered until
+           after the drive, when it is too late to fix.
+
+           Rows are what IS, never what we hope. A fix the node has not
+           reported reads as unknown rather than as good. */
+        function gpReadyRow(k, v, tone, sub) {
+            return "<div class='gp-row'><span class='k'>" + k + "</span><span class='v" +
+                   (tone ? " " + tone : "") + "'>" + v + "</span>" +
+                   "<span class='s'>" + (sub || "") + "</span></div>";
+        }
+
+        function gpReadyHtml() {
+            var inf = gp.traceInfo, s = gp.status, trk = gpActiveTrack();
+            var h = "<div class='gp-rows'>";
+
+            /* Fix — the one thing no amount of Studio can compensate for. */
+            if (!s) {
+                h += gpReadyRow("Fix", "not reported", null, "open Monitor to see it live");
+            } else {
+                var sats = gpN(s.sats), ft = gpN(s.fix_type);
+                var acc = gpN(s.hacc_mm) === null ? null : s.hacc_mm / 1000;
+                h += gpReadyRow("Fix", (GP_FIX_TYPES[ft] || gpInt(ft)),
+                    ft >= 3 ? "ok" : "bad",
+                    (sats === null ? "" : sats + " sats") + (acc === null ? "" : " · " + acc.toFixed(1) + " m"));
+            }
+
+            /* Track and line — the two silent prerequisites for lap splitting. */
+            h += gpReadyRow("Track", trk ? gpEsc(trk.name) : "none chosen", trk ? "ok" : "warn",
+                trk ? "" : "download a recording and it is worked out");
+            if (trk) {
+                h += gpReadyRow(gpIsTrial(trk) ? "Gates" : "Start/finish",
+                    trk.start_finish ? "placed" : "not placed",
+                    trk.start_finish ? "ok" : "warn",
+                    trk.start_finish ? "" : "proposed automatically on download");
+            }
+
+            /* Storage, said in minutes. Percent-full is not a unit anyone
+               plans a track day in. */
+            if (inf) {
+                var cap = gpN(inf.capacity_samples) || 1, used = gpN(inf.used_samples) || 0;
+                var leftMin = Math.max(0, (cap - used) / 25 / 60);
+                h += gpReadyRow("Recorded", (used / 25 / 60).toFixed(1) + " min", null,
+                    leftMin.toFixed(0) + " min still free");
+                if (inf.wrapped)
+                    h += gpReadyRow("Ring", "wrapped", "warn", "oldest laps overwritten");
+                if (gpN(inf.dropped))
+                    h += gpReadyRow("Dropped", String(inf.dropped), "bad", "gaps in the trace");
+                h += gpReadyRow("Node", inf.recording ? "recording" : "idle",
+                    inf.recording ? "ok" : "warn",
+                    inf.recording ? "" : "press Record on before you drive");
+            }
+
+            /* Laps in what is loaded right now — the answer to the actual
+               question, once there is a recording to answer it about. */
+            if (gp.trace && gp.trace.length)
+                h += gpReadyRow(gpRunWord(true) + "s found", String(gp.traceLaps.length),
+                    gp.traceLaps.length ? "ok" : "warn", "in the loaded recording");
+
+            return h + "</div>";
+        }
+
         function gpRenderSessionInspector(box) {
             var dev = gpDev();
             var head = "<h2>Session</h2><div class='ws-sub'>the line you actually drove</div>";
@@ -7341,22 +7407,7 @@
             if (!dev || !dev.traceRead) {
                 h += "<div class='ws-note'>Attach the RDM GPS over USB. The node records at 25 Hz on its own — no laptop needed in the car.</div>";
             } else {
-                var inf = gp.traceInfo;
-                if (inf) {
-                    var cap = gpN(inf.capacity_samples) || 1, used = gpN(inf.used_samples) || 0;
-                    h += "<div class='gp-rows'>" +
-                         "<div class='gp-row'><span class='k'>Recorded</span><span class='v'>" +
-                         (used / 25 / 60).toFixed(1) + " min</span></div>" +
-                         "<div class='gp-row'><span class='k'>Capacity used</span><span class='v'>" +
-                         Math.min(100, Math.round(used / cap * 100)) + "%</span><span class='s'>" +
-                         (cap / 25 / 60).toFixed(0) + " min total</span></div>";
-                    if (gpN(inf.dropped)) {
-                        /* A gap in the line, not a rounding detail. */
-                        h += "<div class='gp-row'><span class='k'>Dropped</span><span class='v bad'>" +
-                             inf.dropped + "</span><span class='s'>gaps in the trace</span></div>";
-                    }
-                    h += "</div>";
-                }
+                h += gpReadyHtml();
                 h += "<button class='ws-btn-line' style='margin-top:8px' onclick='gpTraceDownload()'" +
                      (gp.traceBusy ? " disabled" : "") + ">" +
                      (gp.traceBusy ? "Downloading… " + gp.tracePct + "%" : "Download from node") + "</button>";
@@ -8845,9 +8896,10 @@
                 return step().then(function () { gp.trace = rows; });
             }).then(function () {
                 var saved = null;
+                gp.autoSaid = null;
                 if (gp.trace && gp.trace.length) {
                     gpComputeG(gp.trace);
-                    gpSplitLaps();
+                    gp.autoSaid = gpSplitLapsAuto();
                     gp.selLap = gp.traceLaps.length ? 0 : -1;
                     gp.playIdx = 0;
                     saved = gpSessionSave(gp.trace);
@@ -8860,6 +8912,7 @@
                 gpBuildRail();
                 gpRenderInspector();
                 window.gpSetView("session");
+                if (gp.autoSaid) gpSetMsg("gpTraceMsg", gp.autoSaid, "ok");
             }).catch(function (e) {
                 gp.traceBusy = false;
                 gpSetMsg("gpTraceMsg", "Download failed: " + (e && e.message ? e.message : e), "bad");
@@ -8944,11 +8997,212 @@
             }
         }
 
+        /* Split, and if that produced nothing, work out why and try once more.
+           Every path that loads a recording goes through here, so "no laps"
+           is always followed by either laps or a reason. */
+        function gpSplitLapsAuto() {
+            gpSplitLaps();
+            if (gp.traceLaps.length) return null;
+            var said = gpAutoSetUp(gp.trace);
+            if (said) gpSplitLaps();
+            return said;
+        }
+
         function gpLapRange() {
             if (gp.selLap >= 0 && gp.traceLaps[gp.selLap])
                 return gp.traceLaps[gp.selLap];
             var end = gp.ghostFence !== null ? gp.ghostFence : (gp.trace ? gp.trace.length : 1);
             return { from: 0, to: end - 1 };
+        }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * Working out the track by itself
+         *
+         * Lap splitting needs an active track carrying a start/finish line.
+         * Both were things you had to know to do, in that order, before a
+         * download would ever show a lap — and nothing on screen said so. A
+         * recording with no laps in it looked identical to a recording of a
+         * car that never crossed the line.
+         *
+         * So: recognise the circuit from where the car was, and if the line
+         * has never been placed, propose one from the shape of the drive.
+         * Both are guesses and both say so — the proposed line is draggable
+         * and the track can be changed. A guess you can see and correct beats
+         * a prerequisite nobody told you about.
+         * ═════════════════════════════════════════════════════════════════ */
+
+        var GP_MATCH_KM = 3;        /* how close to a known circuit counts as being at it */
+        var GP_CLOSE_M = 30;        /* returning within this is "back where we were" */
+        var GP_MIN_LOOP_M = 400;    /* shorter than this is a car park, not a lap */
+
+        /* Where the recording happened: the first sample with the car actually
+           moving. A session that starts in the paddock and drives out would put
+           its very first fix in the wrong postcode for a short circuit. */
+        function gpTraceHome(rows) {
+            if (!rows || !rows.length) return null;
+            for (var i = 0; i < rows.length; i++)
+                if (rows[i].kph > 8) return rows[i];
+            return rows[0];
+        }
+
+        function gpKmBetween(aLat, aLon, bLat, bLon) {
+            return gpMetres({ lat: aLat, lon: aLon }, { lat: bLat, lon: bLon }) / 1000;
+        }
+
+        /* Nearest thing to the recording, preferring a track the user has
+           already set up (it carries their line, their sectors, their name)
+           over minting a second copy from the built-in list. */
+        function gpMatchTrack(rows) {
+            var home = gpTraceHome(rows);
+            if (!home) return null;
+            var best = null;
+            ((gp.tracks && gp.tracks.tracks) || []).forEach(function (t) {
+                var ref = t.start_finish || (t.center ? { lat: t.center[0], lon: t.center[1] } : null);
+                if (!ref) return;
+                var km = gpKmBetween(home.lat, home.lon, ref.lat, ref.lon);
+                if (km <= GP_MATCH_KM && (!best || km < best.km)) best = { km: km, track: t };
+            });
+            if (best) return { track: best.track, km: best.km, made: false };
+
+            var place = null;
+            GP_PLACES.forEach(function (p) {
+                var km = gpKmBetween(home.lat, home.lon, p.center[0], p.center[1]);
+                if (km <= GP_MATCH_KM && (!place || km < place.km)) place = { km: km, p: p };
+            });
+            if (!place) return null;
+            var t = { id: gpTrackUid(), name: place.p.name, center: place.p.center,
+                      zoom: place.p.zoom, start_finish: null, sectors: [], min_lap_time_s: 10,
+                      note: "recognised from a recording" };
+            gp.tracks.tracks.push(t);
+            gpTracksSave();
+            return { track: t, km: place.km, made: true, place: place.p };
+        }
+
+        /* Heading over a window rather than the single reported value: one fix's
+           heading wobbles, and we are asking "is this a straight", which is a
+           question about several seconds of driving. Returns degrees. */
+        function gpHeadingAt(rows, i, span) {
+            i = Math.max(0, Math.min(rows.length - 1, i));
+            var a = Math.max(0, i - span), b = Math.min(rows.length - 1, i + span);
+            if (b <= a) return rows[i].hdg;
+            var D = Math.PI / 180, R = 6371008.8;
+            var e = (rows[b].lon - rows[a].lon) * D * Math.cos(rows[a].lat * D) * R;
+            var n = (rows[b].lat - rows[a].lat) * D * R;
+            return (Math.atan2(e, n) / D + 360) % 360;
+        }
+
+        function gpAngleDiff(a, b) {
+            var d = ((a - b) % 360 + 540) % 360 - 180;
+            return Math.abs(d);
+        }
+
+        /* Does the drive come back on itself? Walk forward from an early moving
+           sample looking for the first later sample that is both near it and
+           pointed the same way — near alone matches the other side of a
+           hairpin, and on a circuit that is metres away but 180° out.
+           Returns the closing index, or -1. */
+        function gpLoopClosure(rows, from) {
+            var origin = rows[from], h0 = gpHeadingAt(rows, from, 12);
+            var run = 0;
+            for (var j = from + 1; j < rows.length; j++) {
+                run += (rows[j - 1].kph / 3.6) * gpStep(rows, j - 1);
+                if (run < GP_MIN_LOOP_M) continue;
+                if (gpMetres(origin, rows[j]) <= GP_CLOSE_M &&
+                    gpAngleDiff(gpHeadingAt(rows, j, 12), h0) < 45) return j;
+            }
+            return -1;
+        }
+
+        /* A line wants to sit where crossings are unambiguous: fast, straight,
+           and driven the same way every time. In a corner the car's line moves
+           several metres lap to lap and the crossing jitters with it.
+
+           Score each candidate on the first lap by speed and straightness, take
+           the winner, and lay the gate across the direction of travel. */
+        function gpProposeLine(rows) {
+            if (!rows || rows.length < 50) return null;
+            var from = -1, i;
+            for (i = 0; i < rows.length; i++) if (rows[i].kph > 20) { from = i; break; }
+            if (from < 0) return null;
+            var close = gpLoopClosure(rows, from);
+            if (close < 0) return null;                 /* never came back — not a circuit */
+
+            var best = -1, bestScore = -Infinity;
+            for (i = from; i < close; i++) {
+                if (rows[i].kph < 25) continue;
+                /* How much the car turns across the second either side. */
+                var bend = gpAngleDiff(gpHeadingAt(rows, i + 12, 12), gpHeadingAt(rows, i - 12, 12));
+                /* km/h is worth having; every degree of bend across a second of
+                   driving costs more than it. */
+                var score = rows[i].kph - bend * 4;
+                if (score > bestScore) { bestScore = score; best = i; }
+            }
+            if (best < 0) return null;
+            return { lat: rows[best].lat, lon: rows[best].lon,
+                     heading: gpHeadingAt(rows, best, 12), half_width_m: 15,
+                     _at: best, _loop: close - from };
+        }
+
+        /* Propose, then check the proposal against the recording it came from.
+           A line that yields one lap, or laps whose times scatter wildly, is a
+           line in the wrong place — and shipping it silently would be worse
+           than admitting we could not find one. */
+        function gpAutoLine(rows) {
+            var line = gpProposeLine(rows);
+            if (!line) return null;
+            var trk = gpActiveTrack();
+            if (!trk) return null;
+            var keep = trk.start_finish;
+            trk.start_finish = line;
+            var laps = gpSplitRows(rows);
+            var times = laps.map(function (l) { return gpSecs(rows, l.from, l.to); });
+            var ok = times.length >= 1;
+            if (times.length >= 3) {
+                var mean = times.reduce(function (a, b) { return a + b; }, 0) / times.length;
+                var sd = Math.sqrt(times.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / times.length);
+                if (mean > 0 && sd / mean > 0.35) ok = false;   /* not one repeated circuit */
+            }
+            if (!ok) { trk.start_finish = keep; return null; }
+            gpTracksSave();
+            return { line: line, laps: laps.length };
+        }
+
+        /* Run after any load that produced no laps. Returns a sentence about
+           what it did, or null when it changed nothing. */
+        function gpAutoSetUp(rows) {
+            if (!rows || !rows.length || !gp.tracks) return null;
+            var said = [];
+            var trk = gpActiveTrack();
+            var home = gpTraceHome(rows);
+            var far = trk && home && (function () {
+                var ref = trk.start_finish || (trk.center ? { lat: trk.center[0], lon: trk.center[1] } : null);
+                return ref ? gpKmBetween(home.lat, home.lon, ref.lat, ref.lon) > GP_MATCH_KM : true;
+            })();
+            if (!trk || far) {
+                var m = gpMatchTrack(rows);
+                if (m) {
+                    gp.tracks.active = m.track.id;
+                    gpTracksSave();
+                    said.push(m.made ? "Recognised " + m.track.name + " from where you drove"
+                                     : "Switched to " + m.track.name);
+                    trk = m.track;
+                } else {
+                    /* Nothing recognised. Placing a line would mean putting THIS
+                       drive's geometry onto a circuit on the other side of the
+                       country, which is worse than no laps. */
+                    return trk
+                        ? "This was not driven at " + trk.name + ", and no other track in the library is near it. Add the circuit in Tracks and the laps appear."
+                        : "This recording is not near any track in the library. Add one in Tracks, put the line on it, and the laps appear.";
+                }
+            }
+            if (trk && !trk.start_finish) {
+                var a = gpAutoLine(rows);
+                said.push(a
+                    ? "put a start/finish line on the fastest straight (" + a.laps + " " + gpRunWord() +
+                      (a.laps === 1 ? "" : "s") + "). Drag it onto the real line in Tracks if it matters."
+                    : "but could not find a repeated loop to place a start/finish line on. Place it yourself in Tracks.");
+            }
+            return said.length ? said.join(", and ") + "." : null;
         }
 
         /* ══════════════════════════════════════════════════════════════════
