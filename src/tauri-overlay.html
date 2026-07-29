@@ -1328,12 +1328,21 @@
            rack, with nothing overflowing and therefore nothing to scroll.
            With a floor, the column overflows instead and the stage scrolls. */
         .gp-viewer.tall { flex: 1 0 auto; min-height: 340px; margin-bottom: 0; }
-        /* Session is a PLAYBACK view: the traces are the subject and the map
-           is a position readout beside them, so it takes a fixed slice off the
-           top instead of growing to fill. Tracks still wants the big map — it
-           is a map editor — which is why this is scoped to the one view. */
-        .gp-viewer.tall.gp-sess { flex: 0 0 auto; min-height: 0; height: 188px; }
-        .gp-viewer.tall.gp-sess.has-video { height: 230px; }
+        /* Session is a PLAYBACK view: the traces are the subject. The map
+           moves OUT of the centre column entirely and docks at the top of the
+           aside as a square tile — a wide strip across the top was both the
+           wrong shape for a circuit (a track fitted into 5:1 sits in the
+           middle with empty margins either side) and a permanent slice off
+           the height the traces wanted. Tracks still gets the big map; it is
+           a map editor. */
+        .gp-viewer.docked { display: block; margin: 0 0 10px; flex: none;
+                            min-height: 0; height: auto; }
+        .gp-viewer.docked .gp-mapwrap { flex: none; width: 100%; aspect-ratio: 1 / 1; }
+        .gp-viewer.docked #gpMap { height: 100%; }
+        /* A video sits UNDER the map here rather than beside it — 252 px will
+           not usefully carry two tiles side by side. */
+        .gp-viewer.docked .gp-vtile { width: 100%; margin-top: 8px; aspect-ratio: 16 / 9; }
+        .gp-viewer.docked .gp-mapsearch { display: none; }
         .gp-mapwrap { position: relative; margin: 0; flex: 1 1 58%; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; flex-shrink: 1; }
         .gp-vtile { display: none; position: relative; flex: 1 1 42%; min-width: 0;
                     background: #000; border: 1px solid var(--border);
@@ -7205,7 +7214,7 @@
                      (gp.sessions && gp.sessions.length
                         ? "Pick a recording above, or download a new one from the node."
                         : "Download a recording from the node.") + "</div>";
-                rail.innerHTML = h + GP_ASIDE_SLOT;
+                gpRailBody(rail).innerHTML = h + GP_ASIDE_SLOT;
                 gpBindSessionRail(rail);
                 gpRenderInspector();
                 return;
@@ -7293,9 +7302,31 @@
             /* The read-only panels are appended by gpRenderInspector, into a
                slot that is part of THIS markup — so any gpBuildRail() call
                refreshes both halves of the aside and they cannot drift. */
-            rail.innerHTML = h + GP_ASIDE_SLOT;
+            gpRailBody(rail).innerHTML = h + GP_ASIDE_SLOT;
             gpBindSessionRail(rail);
             gpRenderInspector();
+        }
+
+        /* The session rail owns two things: a docked map at the top, and the
+           list below it. The list is rebuilt constantly; the map must not be.
+           So the list lives in its own child and innerHTML never touches the
+           rail itself. */
+        function gpRailBody(rail) {
+            var b = document.getElementById("gpRailBody");
+            if (!b || b.parentNode !== rail) {
+                /* Arriving from another view, the rail still holds whatever
+                   that view wrote straight into it — appending a body beside
+                   it stacked Monitor's status list on top of the recordings.
+                   Clear everything except the docked map, which is the one
+                   child that must survive. */
+                var kids = Array.prototype.slice.call(rail.childNodes), k;
+                for (k = 0; k < kids.length; k++)
+                    if (kids[k].id !== "gpViewer") rail.removeChild(kids[k]);
+                b = document.createElement("div");
+                b.id = "gpRailBody";
+                rail.appendChild(b);
+            }
+            return b;
         }
 
         var GP_ASIDE_SLOT = "<div class='gp-sess-aside' id='gpSessAside'></div>";
@@ -10339,8 +10370,15 @@
             var headDeg = gpN(s.head_1e5) === null ? 0 : gpN(s.head_1e5) / 1e5;
             /* In Tracks view the map is a work surface — you have panned it to
                a circuit deliberately. Nothing here may move it, or the 2 Hz
-               poll drags you straight back to wherever the car is sitting. */
-            var mayMoveMap = (gp.view !== "tracks");
+               poll drags you straight back to wherever the car is sitting.
+               Replaying a lap in Session is the same situation and worse: the
+               map is showing a lap you drove earlier, so following the car's
+               position NOW yanks it away from the line you are studying — ten
+               times a second, which beat the playhead's own follow every
+               time. While STREAMING it is right again, because then the live
+               car is the subject. */
+            var mayMoveMap = gp.view !== "tracks" &&
+                             (gp.view !== "session" || gp.liveMode);
             if (!gp.carMarker) {
                 gp.carMarker = L.marker(ll, { icon: gpCarIcon(headDeg), interactive: false, zIndexOffset: 900 })
                     .addTo(gp.carLayer);
@@ -10599,6 +10637,47 @@
             gpRenderInspector();
         };
 
+        /* Move the map between the centre column and the top of the aside.
+           Leaflet copes with being re-parented as long as it is told to
+           re-measure afterwards; what it does NOT cope with is having its
+           container replaced by an innerHTML assignment, which is why the
+           rail keeps its list in a child of its own (gpRailBody) and why this
+           runs before any rail rebuild. */
+        function gpDockViewer(where) {
+            var v = document.getElementById("gpViewer");
+            if (!v) return;
+            var rail = document.getElementById("gpRail");
+            if (!gp._viewerHome) {
+                gp._viewerHome = { parent: v.parentNode, next: v.nextSibling };
+            }
+            var want = (where === "rail" && rail) ? rail : gp._viewerHome.parent;
+            var first = want === rail ? rail.firstChild : gp._viewerHome.next;
+            if (v.parentNode === want && (want !== rail || rail.firstChild === v)) {
+                v.classList.toggle("docked", want === rail);
+                return;
+            }
+            if (want === rail) rail.insertBefore(v, first);
+            else want.insertBefore(v, gp._viewerHome.next || null);
+            v.classList.toggle("docked", want === rail);
+            /* The container just changed size and Leaflet has no way to know.
+               One invalidateSize is not enough: the new box is sized by
+               aspect-ratio, so at the moment of the move its height is not
+               resolved yet and the map re-measures to nothing — a blank tile
+               with a car floating on it. Re-measure again after layout has
+               actually settled, and redraw the trace, which was laid out
+               against the old size. */
+            if (!gp.map) return;
+            [0, 60, 250].forEach(function (d) {
+                setTimeout(function () {
+                    if (!gp.map) return;
+                    gp.map.invalidateSize({ animate: false });
+                    gpDrawTrace();
+                    gpDrawEditor();
+                    if (gp.trace && gp.trace.length) gpFitTrace();
+                }, d);
+            });
+        }
+
         window.gpSetView = function (v) {
             gp.view = (v === "tracks" || v === "session" || v === "setup") ? v : "monitor";
             var big = (gp.view === "tracks" || gp.view === "session");   /* the map-led views */
@@ -10617,8 +10696,6 @@
             var viewer = document.getElementById("gpViewer");
             if (viewer) {
                 viewer.classList.toggle("tall", big);
-                /* Session caps the map instead of letting it grow. */
-                viewer.classList.toggle("gp-sess", gp.view === "session");
                 /* Setup has no use for a map at all. */
                 viewer.style.display = gp.view === "setup" ? "none" : "";
             }
@@ -10626,6 +10703,9 @@
                what the inspector used to, and the inspector column goes. */
             var railEl = document.getElementById("gpRail");
             if (railEl) railEl.classList.toggle("gp-onecol", gp.view === "session");
+            /* BEFORE gpBuildRail below: every other view rebuilds the rail by
+               innerHTML, which would take the docked map's DOM with it. */
+            gpDockViewer(gp.view === "session" ? "rail" : "stage");
             var insp = document.getElementById("gpInspector");
             if (insp) insp.style.display = gp.view === "session" ? "none" : "";
             gpViewerSync();
