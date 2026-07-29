@@ -1080,9 +1080,6 @@
                         background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
                         border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 8px; }
         .gp-ses-field:focus { outline: none; border-color: #4a90d9; }
-        .gp-video-wrap { position: relative; margin: 2px 0 7px; }
-        .gp-video-wrap video { width: 100%; display: block; border-radius: 7px; background: #000; }
-        .gp-video-wrap canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
         .gp-video-status { font-size: 10px; color: var(--text-muted); margin: 2px 0 7px; }
         .lt-expbtns .ws-btn-line.on { border-color: #4a90d9; color: #9ecbff; }
         .gp-ghost-pick { width: 100%; box-sizing: border-box; margin: 3px 0 5px;
@@ -1131,7 +1128,22 @@
         .gp-glegend-lab { display: flex; justify-content: space-between; font-size: 9.5px;
                           color: var(--text-muted); margin-top: 3px; }
         /* live map: the puck's position + the dash's track */
-        .gp-mapwrap { position: relative; margin: 14px 14px 0; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; flex-shrink: 0; }
+        /* The viewer: map and video as monitor tiles. The margins that used
+           to live on the map wrap move up here so both tiles share them. */
+        .gp-viewer { display: flex; gap: 10px; margin: 14px 14px 0; flex-shrink: 0;
+                     align-items: stretch; min-height: 0; }
+        .gp-viewer.tall { flex: 1; min-height: 0; margin-bottom: 14px; }
+        .gp-mapwrap { position: relative; margin: 0; flex: 1 1 58%; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; flex-shrink: 1; }
+        .gp-vtile { display: none; position: relative; flex: 1 1 42%; min-width: 0;
+                    background: #000; border: 1px solid var(--border);
+                    border-radius: var(--radius-md); overflow: hidden; }
+        .gp-viewer.has-video .gp-vtile { display: block; }
+        .gp-viewer.has-video.solo-video .gp-mapwrap { display: none; }
+        .gp-viewer.has-video.solo-map .gp-vtile { display: none; }
+        .gp-vtile video { position: absolute; inset: 0; width: 100%; height: 100%;
+                          object-fit: contain; background: #000; }
+        .gp-vtile canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
+        .gp-vtile-btns { position: absolute; top: 9px; right: 9px; z-index: 1000; display: flex; gap: 6px; }
         #gpMap { height: 300px; background: #0C0E10; }
         #gpMap .leaflet-control-attribution { background: rgba(12,14,16,0.72); color: var(--text-muted); font-size: 9px; }
         #gpMap .leaflet-control-attribution a { color: #7C8590; }
@@ -1177,7 +1189,7 @@
         .gp-carwrap { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; }
         /* ---- track editing ----
          * The map becomes the workspace in Tracks view, so it takes the height. */
-        .gp-mapwrap.tall { flex: 1; min-height: 0; margin-bottom: 14px; display: flex; }
+        .gp-mapwrap.tall { min-height: 0; display: flex; }
         .gp-mapwrap.tall #gpMap { flex: 1; height: auto; }
         /* 26px grab area around a 13px dot — the dot alone is a fiddly target */
         .gp-hit { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: grab; }
@@ -1751,7 +1763,11 @@
                 <div class="gp-hint" id="gpHint"></div>
                 <!-- Live position from the puck, plus the dash's track and
                      start/finish gate. Two devices, one picture — which is the
-                     whole reason the transport registry exists. -->
+                     whole reason the transport registry exists.
+                     In Session the map shares this viewer with the video tile,
+                     editor-monitor style: side by side, and either one takes
+                     the whole space on demand. -->
+                <div class="gp-viewer" id="gpViewer">
                 <div class="gp-mapwrap" id="gpMapWrap">
                     <div id="gpMap"></div>
                     <div class="gp-mapchip" id="gpMapChip"></div>
@@ -1764,7 +1780,18 @@
                     <div class="gp-mapbtns">
                         <button class="gp-mapbtn" id="gpBtnLocate" onclick="gpLocate()" title="Centre on the car's current position">&#9678; My position</button>
                         <button class="gp-mapbtn on" id="gpBtnFollow" onclick="gpToggleFollow()" title="Keep the car centred">Follow</button>
+                        <button class="gp-mapbtn" id="gpMapFocusBtn" style="display:none"
+                                onclick="gpViewFocus('map')" title="Map full width / side by side">&#x26F6;</button>
                     </div>
+                </div>
+                <div class="gp-vtile" id="gpVideoTile">
+                    <video id="gpVideo" playsinline controls></video>
+                    <canvas id="gpVideoOv"></canvas>
+                    <div class="gp-vtile-btns">
+                        <button class="gp-mapbtn" onclick="gpViewFocus('video')"
+                                title="Video full width / side by side — double-click the picture does the same">&#x26F6;</button>
+                    </div>
+                </div>
                 </div>
                 <canvas class="gp-strip" id="gpStrip"></canvas>
                 <div class="gp-playbar" id="gpPlaybar">
@@ -1779,7 +1806,8 @@
                     <button class="gp-mapbtn" id="gpPlayBtn" onclick="gpPlayToggle()">&#9654; Play</button>
                     <button class="gp-mapbtn" id="gpLanesBtn" onclick="gpLanesToggle()"></button>
                     <i class="gp-lamp info" id="gpKeysLamp" data-tip="<b>Keyboard</b>
-                       <span class='k'>Space</span> play / pause<br>
+                       <span class='k'>Space / K</span> play / pause<br>
+                       <span class='k'>J / L</span> slower &middot; faster (editor transport); J at 1&times; jumps back 5 s<br>
                        <span class='k'>&larr; &rarr;</span> one sample<br>
                        <span class='k'>Shift + &larr; &rarr;</span> one second<br>
                        <span class='k'>&uarr; &darr;</span> step through the coach findings<br>
@@ -5730,6 +5758,7 @@
             sessionId: null,            /* which stored recording is loaded */
             ghostFence: null,           /* gp.trace length before the ghost was appended */
             video: null,                /* { name, url, t0, autoT0, offsetMs, follow } */
+            viewFocus: null,            /* null = side by side; 'map' | 'video' = that tile solo */
             ghostSrc: null,             /* { sesId, rows, laps, meta, cur } for the ghost's session */
             selGate: "sf",   /* "sf" | a sector index */
             editLayer: null, _gateViews: {},
@@ -7342,7 +7371,31 @@
            shift-arrows one second, up/down walk the coach findings. */
         function gpSessionKey(key, shift) {
             var r = gpLapRange();
-            if (key === " ") { window.gpPlayToggle(); return "play"; }
+            if (key === " " || key === "k" || key === "K") { window.gpPlayToggle(); return "play"; }
+            if (key === "l" || key === "L") {
+                /* L: play; L again: faster. The editor idiom. */
+                if (!gp.playing) { window.gpPlayToggle(); return "play"; }
+                var up = { "1": 2, "2": 4, "4": 10, "10": 10 };
+                window.gpPlayRateSet(String(up[String(gp.playRate)] || 2));
+                return "rate";
+            }
+            if (key === "j" || key === "J") {
+                if (gp.playing && gp.playRate > 1) {
+                    var dn = { "10": 4, "4": 2, "2": 1, "1": 1 };
+                    window.gpPlayRateSet(String(dn[String(gp.playRate)] || 1));
+                    return "rate";
+                }
+                /* At 1x (or paused): jump back five seconds. */
+                var rj = gpLapRange();
+                gp.playIdx = Math.max(rj.from, gp.playIdx - GP_TRACE_HZ * 5);
+                var elj = document.getElementById("gpVideo");
+                if (elj && gp.video && gp.video.follow && !elj.paused) {
+                    var vtj = gpVideoTimeFor(gp.playIdx);
+                    if (vtj !== null) elj.currentTime = Math.max(0, vtj);
+                }
+                gpSyncScrub(); gpDrawPlayhead();
+                return "jump";
+            }
             if (key === "ArrowLeft" || key === "ArrowRight") {
                 var step = (shift ? 25 : 1) * (key === "ArrowLeft" ? -1 : 1);
                 gpPlayStop();
@@ -8830,10 +8883,18 @@
             gp.playIdx = Math.max(r.from, Math.min(r.to, r.from + (parseInt(v, 10) || 0)));
             gpDrawPlayhead();
         };
-        window.gpPlayRateSet = function (v) { gp.playRate = parseFloat(v) || 1; };
+        window.gpPlayRateSet = function (v) {
+            gp.playRate = parseFloat(v) || 1;
+            var el = document.getElementById("gpVideo");
+            if (el && !el.paused) el.playbackRate = gp.playRate;
+            var sel = document.getElementById("gpPlayRate");
+            if (sel && sel.value !== String(gp.playRate)) sel.value = String(gp.playRate);
+        };
 
         function gpPlayStop() {
             if (gp.playTimer) { clearInterval(gp.playTimer); gp.playTimer = null; }
+            var el = document.getElementById("gpVideo");
+            if (el && !el.paused) { try { el.pause(); } catch (e) { } }
             gp.playing = false;
             var b = document.getElementById("gpPlayBtn");
             if (b) b.innerHTML = "&#9654; Play";
@@ -8847,6 +8908,25 @@
             gp.playing = true;
             var b = document.getElementById("gpPlayBtn");
             if (b) b.innerHTML = "&#10073;&#10073; Pause";
+            /* With a synced video open, the VIDEO is the transport: it plays
+               at the chosen rate and drives the timeline through timeupdate.
+               Real frames at real speed, instead of a 20 fps index ticker
+               seeking the picture underneath itself. */
+            var el = document.getElementById("gpVideo");
+            var vt = gp.video && gp.video.follow ? gpVideoTimeFor(gp.playIdx) : null;
+            if (el && vt !== null && isFinite(el.duration)) {
+                el.currentTime = Math.max(0, Math.min(el.duration, vt));
+                el.playbackRate = gp.playRate;
+                el.play().catch(function () { });
+                return;
+            }
+            gpPlayResumeTicker();
+        };
+
+        function gpPlayResumeTicker() {
+            gp.playing = true;
+            var b = document.getElementById("gpPlayBtn");
+            if (b) b.innerHTML = "&#10073;&#10073; Pause";
             /* 20 real fps; advance by whatever the chosen rate implies so the
                playback clock matches the recording clock at 1x. */
             gp.playTimer = setInterval(function () {
@@ -8857,7 +8937,7 @@
                 if (sc) sc.value = String(gp.playIdx - rr.from);
                 gpDrawPlayhead();
             }, 50);
-        };
+        }
 
         window.gpSelectLap = function (i) {
             gp.selLap = parseInt(i, 10);
@@ -9006,6 +9086,10 @@
                          t0: meta ? meta.recordedAt : null,   /* aligned to session start until probed */
                          autoT0: null, offsetMs: 0, follow: true, probing: true };
             input.value = "";
+            var el = document.getElementById("gpVideo");
+            if (el) el.src = gp.video.url;
+            gp.viewFocus = null;               /* a fresh video arrives side by side */
+            gpViewerSync();
             gpRenderInspector();
             gpVideoProbeT0(f).then(function (ms) {
                 if (!gp.video) return;
@@ -9020,9 +9104,12 @@
         };
 
         window.gpVideoClose = function () {
+            var el = document.getElementById("gpVideo");
+            if (el) { try { el.pause(); el.removeAttribute("src"); el.load(); } catch (e) { } }
             if (gp.video && gp.video.url) { try { URL.revokeObjectURL(gp.video.url); } catch (e) { } }
             gp.video = null;
-            gp._videoEl = null;
+            gp.viewFocus = null;
+            gpViewerSync();
             gpRenderInspector();
         };
 
@@ -9049,9 +9136,36 @@
             gpVideoFollowSeek();
         };
 
+        /* One place decides what the viewer shows: which tiles exist, which
+           one is solo. Leaflet must be told its box changed, a beat after the
+           CSS settles, or the map renders at the old size. */
+        function gpViewerSync() {
+            var v = document.getElementById("gpViewer");
+            if (!v) return;
+            var has = !!gp.video && gp.view === "session";
+            v.classList.toggle("has-video", has);
+            v.classList.toggle("solo-video", has && gp.viewFocus === "video");
+            v.classList.toggle("solo-map", has && gp.viewFocus === "map");
+            var mb = document.getElementById("gpMapFocusBtn");
+            if (mb) mb.style.display = has ? "" : "none";
+            setTimeout(function () {
+                if (gp.map) gp.map.invalidateSize();
+                gpVideoDrawOverlay();
+            }, 230);
+        }
+
+        window.gpViewFocus = function (which) {
+            gp.viewFocus = gp.viewFocus === which ? null : which;
+            gpViewerSync();
+        };
+
         function gpVideoFollowSeek() {
             var v = gp.video, el = document.getElementById("gpVideo");
             if (!v || !el || !v.follow || v.driving) return;
+            /* While the video is PLAYING it is the master — it drives the
+               timeline through timeupdate, and seeking it from here every
+               playhead tick would stutter the picture it is busy decoding. */
+            if (!el.paused) return;
             var tsec = gpVideoTimeFor(gp.playIdx);
             if (tsec === null || !isFinite(el.duration)) return;
             var c = Math.max(0, Math.min(el.duration, tsec));
@@ -9096,24 +9210,21 @@
             else g.fillRect(mid + (bw / 2) * frac, 20, -(bw / 2) * frac, 6);
         }
 
-        /* The inspector rebuilds its innerHTML freely — on poll ticks, lap
-           clicks, everything — and a <video> recreated from markup would
-           reload its file and lose its position every time. So the LIVE
-           element is kept and swapped back in over the fresh markup: same
-           node, same buffer, same currentTime. */
+        /* The video element is static markup in the stage tile — it never
+           lives inside the inspector's innerHTML, so re-renders cannot touch
+           its buffer or position. Bound once. */
         function gpVideoBind() {
             var el = document.getElementById("gpVideo");
             if (!el) return;
-            if (gp._videoEl && gp.video && gp._videoEl._gpUrl === gp.video.url && gp._videoEl !== el) {
-                el.parentNode.replaceChild(gp._videoEl, el);
-                el = gp._videoEl;
-                gpVideoDrawOverlay();
-                return;
-            }
-            el._gpUrl = gp.video && gp.video.url;
-            gp._videoEl = el;
             if (el._gpBound) return;
             el._gpBound = true;
+            /* Double-click on the picture solos the tile. Chromium's default
+               for that gesture is OS fullscreen, which would fight the tile
+               model — prevented, ours instead. */
+            el.addEventListener("dblclick", function (e) {
+                e.preventDefault();
+                window.gpViewFocus("video");
+            });
             el.addEventListener("timeupdate", function () {
                 var v = gp.video;
                 if (!v) return;
@@ -9131,6 +9242,26 @@
                 gpVideoDrawOverlay();
             });
             el.addEventListener("seeked", function () { gpVideoDrawOverlay(); });
+            /* The native controls are transport controls too. Pause there is
+               pause here; play there takes over from the index ticker rather
+               than running beside it. And when the footage runs out before
+               the lap does, the ticker carries the playhead the rest of the
+               way — 'ended' fires without a 'pause', so this is its own case. */
+            el.addEventListener("pause", function () {
+                if (gp.playing && !el.ended) gpPlayStop();
+            });
+            el.addEventListener("play", function () {
+                if (gp.playTimer) { clearInterval(gp.playTimer); gp.playTimer = null; }
+                if (!gp.playing && gp.video && gp.video.follow) {
+                    gp.playing = true;
+                    var b = document.getElementById("gpPlayBtn");
+                    if (b) b.innerHTML = "&#10073;&#10073; Pause";
+                }
+            });
+            el.addEventListener("ended", function () {
+                if (gp.playing && gp.playIdx < gpLapRange().to) gpPlayResumeTicker();
+                else if (gp.playing) gpPlayStop();
+            });
             gpVideoDrawOverlay();
         }
 
@@ -9150,8 +9281,6 @@
                      "<input type='file' id='gpVideoFile' accept='video/*' style='display:none' onchange='gpVideoOpen(this)'>";
                 return h + "</div>";
             }
-            h += "<div class='gp-video-wrap'><video id='gpVideo' src='" + v.url + "' controls playsinline></video>" +
-                 "<canvas id='gpVideoOv'></canvas></div>";
             var meta = gpCurSessionMeta();
             var synced = v.autoT0 !== null && v.t0 === v.autoT0;
             h += "<div class='gp-video-status'>" +
@@ -9813,6 +9942,9 @@
             var pb = document.getElementById("gpPlaybar");
             if (fb) fb.style.display = big ? "none" : "";
             if (wrap) wrap.classList.toggle("tall", big);
+            var viewer = document.getElementById("gpViewer");
+            if (viewer) viewer.classList.toggle("tall", big);
+            gpViewerSync();
             if (grid) grid.style.display = big ? "none" : "";
             /* The playback bar is part of the structure: visible in Session
                either way, idle until a recording gives it something to play. */
