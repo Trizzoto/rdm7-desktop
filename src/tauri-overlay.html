@@ -1050,9 +1050,12 @@
            because a deliberately paused bench unit is not an emergency. */
         /* The chip is a BUTTON: one press starts the log, one press stops it —
            the same control the dash will carry over CAN, so the two agree on
-           what pressing it means. Red and moving = recording, grey and still
-           = stopped. No confirm dialog: it toggles a flag on the node, wipes
-           nothing, and the state it lands in is the label it shows. */
+           what pressing it means. Red = recording, grey = stopped, and both
+           sit STILL: the first cut pulsed the dot, which read as an alert
+           rather than an instrument, and got called out for exactly that.
+           A steady red lamp is what real recorders show. No confirm dialog:
+           it toggles a flag on the node, wipes nothing, and the state it
+           lands in is the label it shows. */
         button.ws-chip { cursor: pointer; font: inherit; }
         button.ws-chip:hover { border-color: var(--accent); }
         .ws-chip.rec-on { color: #ff453a; border-color: #6e2f2b; font-weight: 700;
@@ -1060,18 +1063,15 @@
         .ws-chip.rec-on:hover { border-color: #ff453a; }
         .ws-chip.rec-off { color: var(--text-muted); border-color: var(--border); }
         .ws-chip.rec-off .gp-recdot { background: none; border: 1.5px solid var(--text-muted);
-                                      animation: none; box-sizing: border-box; }
+                                      box-sizing: border-box; }
         .gp-recdot { width: 8px; height: 8px; border-radius: 50%; background: #ff453a;
-                     display: inline-block; flex: none;
-                     animation: gpRecPulse 1.1s ease-in-out infinite; }
-        @keyframes gpRecPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
+                     display: inline-block; flex: none; }
         /* The same dot on the readiness row's value, drawn by the row itself
-           so gpReadyRow needs no new markup — tone "rec" is red-and-pulsing
-           the way "ok" is green. */
+           so gpReadyRow needs no new markup — tone "rec" is steady red the
+           way "ok" is green. */
         .gp-row .v.rec { color: #ff453a; }
         .gp-row .v.rec::before { content: ''; display: inline-block; width: 7px; height: 7px;
-                                 border-radius: 50%; background: #ff453a; margin-right: 6px;
-                                 animation: gpRecPulse 1.1s ease-in-out infinite; }
+                                 border-radius: 50%; background: #ff453a; margin-right: 6px; }
         /* ---- "Will this record laps?" ---------------------------------------
            First thing in the Session aside, and on a good day the only thing in
            it worth reading: one line. The rule is that COLLAPSED SHOWS WHAT IS
@@ -8066,14 +8066,19 @@
                    drive", which was an instruction for a prerequisite that
                    does not exist, and it graded a puck that was already
                    logging perfectly well as not ready. */
-                /* Tone "rec", not "ok": recording gets the camera-red pulse
-                   everywhere it is stated, so the card and the topbar chip
-                   cannot disagree about what red means. */
-                add("Logging", inf.recording ? "recording" : "paused",
+                /* Tone "rec", not "ok": recording is steady red everywhere it
+                   is stated, so the card and the topbar button cannot
+                   disagree about what red means. The "off" sub-line follows
+                   the power-on setting — "a power cycle fixes it" is only
+                   true for a track-car config, and a daily's card must not
+                   hand out a remedy that stopped being one. */
+                var rbDef = !gp.node || gp.node.record_on_boot !== false;
+                add("Recording", inf.recording ? "on" : "off",
                     inf.recording ? "rec" : "warn",
                     inf.recording ? "anything above 8 km/h"
-                                  : "a power cycle turns it back on",
-                    inf.recording ? null : { label: "Resume logging", call: "gpTraceRecord(true)" });
+                        : rbDef ? "press REC — a power cycle also starts it"
+                                : "press REC when the drive matters",
+                    inf.recording ? null : { label: "Start recording", call: "gpRecToggle()" });
 
                 /* Storage, said in minutes. Percent-full is not a unit anyone
                    plans a track day in. */
@@ -8176,16 +8181,20 @@
                 /* The checks that used to sit here are the card at the top of
                    this aside now. What is left is the four things you DO. */
                 var rec = !gp.traceInfo || gp.traceInfo.recording !== false;
+                var rbOn = !gp.node || gp.node.record_on_boot !== false;
                 h += "<button class='ws-btn-line' onclick='gpTraceDownload()'" +
                      (gp.traceBusy ? " disabled" : "") + ">" +
                      (gp.traceBusy ? "Downloading… " + gp.tracePct + "%" : "Download from node") + "</button>";
                 h += "<div class='lt-expbtns' style='margin-top:6px'>" +
                      "<button class='ws-btn-line' onclick='gpLiveWatch(" + (gp.liveMode ? "false" : "true") + ")'>" +
                      (gp.liveMode ? "Stop watching" : "Watch live") + "</button>" +
-                     "<button class='ws-btn-line' onclick='gpTraceRecord(" + (rec ? "false" : "true") + ")'>" +
-                     (rec ? "Pause logging" : "Resume logging") + "</button></div>";
+                     "<button class='ws-btn-line' onclick='gpRecToggle()'>" +
+                     (rec ? "Stop recording" : "Start recording") + "</button></div>";
                 h += "<button class='ws-btn-line' style='margin-top:6px' onclick='gpTraceClear()'>Clear the node's recording</button>";
-                h += "<div class='ws-note'>The node logs from the moment it has power — there is nothing to press before a drive. It writes only above 8 km/h, so a stationary car records nothing on purpose. <b>Pause</b> is for the bench, and a power cycle undoes it.</div>";
+                h += "<div class='ws-note'>" + (rbOn
+                     ? "The node records from the moment it has power — nothing to press before a drive. It writes only above 8 km/h, so a stationary car records nothing on purpose. (Setup → Recording changes what a power-up does, for a daily.)"
+                     : "This node waits for the <b>REC</b> button — press it before the drives you want kept, here or on the dash. It writes only above 8 km/h, and the memory holds about six hours before the oldest drive is overwritten. (Setup → Recording flips it back to always-on.)") +
+                     "</div>";
                 h += "<div class='gp-msg' id='gpTraceMsg'></div>";
             }
             h += "</div>";
@@ -10567,11 +10576,11 @@
            broken", not "the car never moved". Pure so the harness can hold
            the wording to account. */
         function gpEmptyDownloadMsg(recording) {
-            return "The node has nothing recorded. It logs by itself once the car is moving " +
+            return "The node has nothing recorded. It writes only once the car is moving " +
                    "(above about 8 km/h) — sitting still is left out on purpose." +
                    (recording === false
-                        ? " Logging is PAUSED — press Resume logging, or power-cycle the node."
-                        : " Logging is on, so just go drive.");
+                        ? " Recording is OFF — press the REC button in the top bar before you drive."
+                        : " Recording is on, so just go drive.");
         }
 
         window.gpTraceDownload = function () {
@@ -14644,6 +14653,28 @@
                      "<span class='gp-set-na'>no camera paired</span>") +
                  "</div>";
 
+            /* One decision, said in the owner's terms: track car or daily.
+               The live start/stop is the ● REC button; this only decides
+               what plugging the car in does. */
+            var rb = !gp.node ? null : gp.node.record_on_boot !== false;
+            h += "<div class='ws-grp'><div class='ws-gt'>Recording" +
+                 gpTip("What a power-up does",
+                       "The ring holds about six hours at the plain record, then " +
+                       "overwrites its oldest — so a daily that records every commute " +
+                       "eats its own weekend. <b>On</b> records from power-up, nothing " +
+                       "to press: right for a track car. <b>Off</b> records only after " +
+                       "you press REC, here or on the dash: right for a daily. " +
+                       "Stopping mid-day never needs this — that is what the REC " +
+                       "button is for, and the node keeps your choice through its own " +
+                       "self-restarts either way.") + "</div>" +
+                 gpSetRow("Start at power-on",
+                     gp.node === null
+                       ? "<span class='gp-set-na'>waiting for the node</span>"
+                       : "<div class='ws-seg' style='width:144px'>" +
+                         "<button class='" + (rb ? "on" : "") + "' onclick='gpRecBootSet(1)'>On</button>" +
+                         "<button class='" + (rb ? "" : "on") + "' onclick='gpRecBootSet(0)'>Off</button></div>") +
+                 "<div class='gp-msg' id='gpRecBootMsg'></div></div>";
+
             h += gpChannelsHtml();
             h += "<div class='ws-grp'><div class='ws-gt'>CAN bus" +
                  gpTip("Where the node broadcasts",
@@ -14765,6 +14796,25 @@
 
         window.gpTzSet = function (min) {
             gpNodeSave({ tz_offset_min: parseInt(min, 10) }, "Timezone saved to the node.");
+        };
+
+        /* The power-on default. Never touches the live state — the node side
+           enforces that too — so flipping it at a desk cannot stop a
+           recording, and the message says which world it applies to. */
+        window.gpRecBootSet = function (on) {
+            var dev = gpDev();
+            if (!dev || !dev.nodeConfigSet) return;
+            gpSetMsg("gpRecBootMsg", "Saving···", "");
+            dev.nodeConfigSet({ record_on_boot: !!Number(on) }).then(function (r) {
+                if (r) gp.node = r;
+                gpSetMsg("gpRecBootMsg", Number(on)
+                    ? "Saved — every power-up records by itself."
+                    : "Saved — from the next power-up, recording waits for the REC button. Right now nothing changed: the button owns the present.", "ok");
+                gpRenderSetup();
+                gpRenderInspector();
+            }).catch(function (e) {
+                gpSetMsg("gpRecBootMsg", "Failed: " + ((e && e.message) ? e.message : e), "bad");
+            });
         };
         window.gpTzMatchPc = function () {
             gpTzSet(-new Date().getTimezoneOffset());
