@@ -51,10 +51,13 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
     'gpDeviceChanIds', 'gpChanArraysEqual', 'gpChanToDevShape',
     'gpSessionSectors', 'gpSectorMarks', 'gpSectorTimes',
     'gpSplitsStats', 'gpSectorRange', 'gpHeatColour', 'gpSplitsHtml', 'gpTip', 'gpLapTime',
-    'gpLinesAgree', 'gpNodeTrackState', 'gpEmptyDownloadMsg', 'gpSnapGate'];
+    'gpLinesAgree', 'gpNodeTrackState', 'gpEmptyDownloadMsg', 'gpSnapGate',
+    'gpDash', 'gpU', 'gpSpdU', 'gpLaneShowMap', 'gpLaneShowSave', 'gpLaneShown', 'gpLaneShowSet', 'gpLaneSig',
+    'gpChannelRows', 'gpChkHtml', 'gpChannelListHtml', 'gpLanesBtnLabel'];
 const NEEDED_VAR = ['GP_LANES', 'GP_CHAN_LS', 'GP_DEVCHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_CHAN_COLOURS',
     'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
-    'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S'];
+    'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S',
+    'GP_SHOW_LS', 'GP_GRP_PUCK', 'GP_GRP_HERE', 'GP_GRP_CAR', 'GP_GRP_NONE', 'GP_UNITS'];
 
 let code = '';
 NEEDED_VAR.forEach(v => { code += grabVar(v) + '\n'; });
@@ -333,7 +336,7 @@ freshGp();
 /* localStorage is stubbed read-only, so drive gp.logChans directly — that is
    what the getter caches into anyway. */
 global.gp.logChans = [];
-global.gp.lanesOpen = true;
+global.gp.laneShow = {};
 global.gp.traceInfo = null;
 const bare = F.gpRingMinutes(0);
 ok('the empty ring matches the node partition (6.375 MB, 12 B, 25 Hz)',
@@ -347,6 +350,7 @@ global.gp.dashChans = [
     { id: 'rpm', name: 'Engine RPM', unit: 'rpm' },
     { id: 'map', name: 'Manifold pressure', unit: 'kPa' }
 ];
+global.gp.laneShow = {};
 global.gp.logChans = ['map', 'rpm'];
 const labels = F.gpLaneRowsAll().map(l => l.label);
 ok('chosen channels become named lanes', labels.indexOf('Manifold pressure') >= 0, labels.join(', '));
@@ -406,7 +410,7 @@ global.gp.dashChans = [
     { id: 'map', name: 'Manifold pressure', unit: 'kPa', decimals: 1,
       decode: { can_id: 0x360, bit_start: 16, bit_length: 16, is_signed: false, endian: 1, scale: 0.1, offset: 0 } }
 ];
-global.gp.lanesOpen = true;
+global.gp.laneShow = {};
 global.gp.logChans = ['rpm', 'map'];
 /* No download yet: still the "chosen, not yet on this data" placeholder. */
 let laneRows = F.gpLaneRowsAll();
@@ -637,6 +641,131 @@ ok('mid-session it names the lap being timed', /timing · lap 3/.test(html5));
 global.gp.lap = { has_track: true, track_name: 'Somewhere Else', timing: {} };
 html5 = F.gpReadyHtml();
 ok('a different track on the node is called out by name', /Somewhere Else/.test(html5) && /not “Winton”/.test(html5));
+
+console.log('\nwhich channels the rack draws, by default');
+freshGp();
+global.gp.laneShow = {};
+global.gp.logChans = [];
+global.gp.dashChans = null;
+let shownIds = F.gpLaneRows ? null : null;   /* gpLaneRows is exercised via gpLaneSig */
+const laneById = (id) => F.gpLaneRowsAll().filter(l => l.id === id)[0];
+ok('a channel with data is drawn without being asked', F.gpLaneShown(laneById('speed')) === true);
+ok('an empty channel is not', F.gpLaneShown(laneById('throttle')) === false);
+ok('the signature lists only the drawn ones',
+    F.gpLaneSig().indexOf('speed') >= 0 && F.gpLaneSig().indexOf('throttle') < 0, F.gpLaneSig());
+
+console.log('\nticking Graph stores only genuine opinions');
+F.gpLaneShowSet('yaw');            /* hide a lane that HAS data */
+ok('hiding a lane with data is remembered', F.gpLaneShown(laneById('yaw')) === false);
+ok('and is stored as an explicit decision', global.gp.laneShow.yaw === false,
+    JSON.stringify(global.gp.laneShow));
+ok('the signature drops it', F.gpLaneSig().indexOf('yaw') < 0, F.gpLaneSig());
+F.gpLaneShowSet('yaw');
+ok('showing it again clears the entry rather than storing true',
+    global.gp.laneShow.yaw === undefined && F.gpLaneShown(laneById('yaw')) === true,
+    JSON.stringify(global.gp.laneShow));
+
+F.gpLaneShowSet('throttle');       /* show an EMPTY lane */
+ok('showing an empty lane is an opinion worth keeping', global.gp.laneShow.throttle === true);
+F.gpLaneShowSet('throttle');
+ok('hiding it again reverts to automatic, not to a pinned false',
+    global.gp.laneShow.throttle === undefined,
+    JSON.stringify(global.gp.laneShow));
+/* Which is what lets a channel appear by itself once it carries data: the
+   same lane id, no stored decision, and the default now says yes. */
+ok('so a lane that gains data comes back on its own',
+    F.gpLaneShown({ id: 'throttle', pending: null }) === true);
+
+console.log('\nthe channel list: one row per channel, grouped');
+freshGp();
+global.gp.laneShow = {};
+global.gp.logChans = ['rpm'];
+global.gp.dashChans = [
+    { id: 'rpm', name: 'Engine RPM', unit: 'rpm', decimals: 0,
+      decode: { can_id: 0x360, bit_start: 0, bit_length: 16, is_signed: false, endian: 1, scale: 1, offset: 0 } },
+    { id: 'oilt', name: 'Oil temperature', unit: '°C', decimals: 0,
+      decode: { can_id: 0x361, bit_start: 0, bit_length: 8, is_signed: false, endian: 1, scale: 1, offset: -40 } },
+    { id: 'lat32', name: 'A 32-bit thing', unit: '',
+      decode: { can_id: 0x362, bit_start: 0, bit_length: 32, is_signed: true, endian: 1 } },
+    { id: 'calc', name: 'Something derived', unit: '' }        /* no decode at all */
+];
+let crows = F.gpChannelRows();
+const crow = (id) => crows.filter(r => r.id === id)[0];
+ok('the GPS channels are grouped as the puck\'s', crow('speed').group === F.GP_GRP_PUCK);
+ok('delta is grouped as worked out here', crow('delta').group === F.GP_GRP_HERE);
+ok('the car\'s channels are grouped together',
+    crow('can_rpm').group === F.GP_GRP_CAR && crow('can_oilt').group === F.GP_GRP_CAR);
+ok('a GPS channel is always logged and cannot be unticked',
+    crow('speed').log === 'always' && crow('speed').canLog === false);
+ok('and it says why', /fixed 12-byte record/.test(crow('speed').logWhy));
+ok('delta is not logged at all, and says so',
+    crow('delta').log === null && /works it out/.test(crow('delta').logWhy));
+ok('a chosen channel reads as logged', crow('can_rpm').log === true);
+ok('an unchosen one reads as not logged, but tickable',
+    crow('can_oilt').log === false && crow('can_oilt').canLog === true);
+ok('a 32-bit channel cannot be logged, and says how wide it is',
+    crow('can_lat32').canLog === false && /32 bits wide/.test(crow('can_lat32').logWhy));
+ok('a channel with no CAN decode cannot be logged either',
+    crow('can_calc').canLog === false && /nothing on the bus/.test(crow('can_calc').logWhy));
+ok('every dash channel gets a row, chosen or not', crows.filter(r => r.group === F.GP_GRP_CAR).length === 4);
+ok('every row is unique', new Set(crows.map(r => r.id)).size === crows.length);
+
+console.log('\nthe list does not move when you tick something');
+/* The bug this pins: ordering the car's rows by "is it a lane yet" moved a
+   channel to the top of its group the moment Log was ticked, the list redrew
+   under the cursor, and the next click in a run landed on the wrong channel.
+   Ticking three boxes produced one tick. */
+const orderNow = () => F.gpChannelRows().map(r => r.id).join(',');
+const order0 = orderNow();
+global.gp.logChans = ['oilt'];
+ok('ticking Log leaves every row exactly where it was', orderNow() === order0,
+    '\n    was ' + order0 + '\n    now ' + orderNow());
+global.gp.logChans = ['oilt', 'rpm'];
+ok('and still does with several ticked', orderNow() === order0);
+global.gp.laneShow = { speed: false };
+ok('hiding a lane does not move anything either', orderNow() === order0);
+global.gp.laneShow = {};
+global.gp.logChans = ['rpm'];
+ok('the car rows follow the dash list order, not the selection',
+    F.gpChannelRows().filter(r => r.group === F.GP_GRP_CAR).map(r => r.dashId).join(',') ===
+    global.gp.dashChans.map(c => c.id).join(','));
+
+console.log('\na recording can carry a channel that is no longer chosen');
+global.gp.traceChanIds = ['rpm', 'oilt'];
+global.gp.trace = [{ lat: 0, lon: 0, kph: 100, hdg: 0, g: 0, can: [3000, 90] }];
+global.gp.logChans = ['rpm', 'calc'];      /* calc chosen for next time; oilt dropped */
+crows = F.gpChannelRows();
+ok('the dropped channel still has a graphable row (it IS in the data)',
+    !!crow('can_oilt').lane && crow('can_oilt').log === false);
+ok('the newly chosen one has a row too, marked as absent from this recording',
+    crow('can_calc').log === true && crow('can_calc').lane === null &&
+    /not in this recording/.test(crow('can_calc').sub || ''), JSON.stringify(crow('can_calc')));
+
+console.log('\nthe list renders the two columns honestly');
+const chtml = F.gpChannelListHtml();
+ok('both column headers are there', /Log/.test(chtml) && /Graph/.test(chtml));
+ok('the always-recorded lock is drawn, not left blank', /gp-chk lock/.test(chtml));
+ok('un-loggable channels are drawn as unavailable', /gp-chk na/.test(chtml));
+ok('the cost of the selection is stated', /bytes a sample/.test(chtml));
+ok('recording time is stated in minutes', /Recording time/.test(chtml) && /min/.test(chtml));
+ok('Send only appears when the puck differs from what is ticked',
+    /Send 2 to the puck/.test(chtml), 'no send button');
+global.gp.deviceChanIds = ['rpm', 'calc'];
+ok('and disappears once they agree', !/Send .* to the puck/.test(F.gpChannelListHtml()));
+ok('a tick is a real pressed-state control',
+    /aria-pressed='true'/.test(chtml) && /aria-pressed='false'/.test(chtml));
+
+console.log('\nthe button over the rack counts what is drawn');
+freshGp();
+global.gp.laneShow = {};
+global.gp.logChans = [];
+global.gp.dashChans = null;
+let lbl = F.gpLanesBtnLabel();
+ok('it says how many of how many', /Channels · \d+\/\d+/.test(lbl.text), lbl.text);
+const before9 = lbl.text;
+F.gpLaneShowSet('speed');
+ok('hiding one moves the count', F.gpLanesBtnLabel().text !== before9,
+    before9 + ' -> ' + F.gpLanesBtnLabel().text);
 
 console.log('\na dropped gate snaps onto the driven line');
 freshGp();

@@ -1324,25 +1324,65 @@
         .gp-strip { display: none; width: calc(100% - 28px); margin: 8px 14px 0;
                     background: var(--panel); border: 1px solid var(--border);
                     border-radius: var(--radius-md); cursor: crosshair; }
-        /* Telemetry channel picker: a dense wrap of togglable chips, because
-           a dash can carry ninety channels and a checkbox list of ninety is a
-           scroll, not a choice. */
-        .gp-chanlist { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; max-height: 190px; overflow-y: auto; }
-        .gp-chan {
-            display: inline-flex; align-items: center; gap: 5px;
-            background: var(--panel); border: 1px solid var(--border); color: var(--text);
-            border-radius: 999px; padding: 3px 9px 3px 6px; font-size: 11px; cursor: pointer;
-            font-family: inherit;
-        }
-        .gp-chan:hover { border-color: var(--text-muted); }
-        .gp-chan .st { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex: none; }
-        .gp-chan.on { border-color: var(--accent); background: var(--panel-elevated); }
-        .gp-chan.on .st { background: var(--accent); }
-        .gp-chan em { font-style: normal; color: var(--text-muted); font-size: 9.5px; }
-        /* Wider than the puck's 16-bit slot — pickable in principle, refused
-           in gpChanToggle, so it reads as unavailable rather than just
-           unstyled. Not display:none: seeing it and why beats it vanishing. */
-        .gp-chan-wide { opacity: 0.45; cursor: not-allowed; }
+        /* ---- the channel list ----------------------------------------------
+           One row per channel, two ticks: does the puck LOG it, does the rack
+           GRAPH it. Those are the only two questions anyone asks about a
+           channel, they were previously answered on two different screens by
+           two controls that looked nothing alike, and neither was a list of
+           channels. Ruled table, labelled columns, one fact per column.
+
+           The same markup mounts in Setup and in the popover over the rack —
+           identical behaviour in both, so there is no "which screen was it
+           on". A search box appears once the car's bus is long enough that
+           scanning beats scrolling. */
+        .gp-chsearch { width: 100%; margin: 8px 0 0; padding: 5px 8px; font-size: 11px;
+                       background: var(--bg); border: 1px solid var(--border);
+                       border-radius: var(--radius-sm); color: var(--text); font-family: inherit; }
+        .gp-chtab { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+        .gp-chtab th { font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+                       color: var(--text-muted); font-weight: 600; text-align: center;
+                       padding: 0 0 5px; border-bottom: 1px solid var(--border); }
+        .gp-chtab th:first-child { text-align: left; }
+        .gp-chtab th.n { width: 56px; white-space: nowrap; }
+        .gp-chtab tr.g td { padding: 11px 0 3px; font-size: 9.5px; letter-spacing: 0.1em;
+                            text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
+        .gp-chtab tbody td { padding: 3px 0; vertical-align: middle; }
+        .gp-chtab td.n { text-align: center; }
+        .gp-chtab .nm { color: var(--text); }
+        .gp-chtab .un { color: var(--text-muted); font-size: 9.5px; margin-left: 5px; }
+        .gp-chtab .sub { display: block; color: var(--text-muted); font-size: 9px; margin-top: 1px; }
+        .gp-chtab tr.off .nm { color: var(--text-muted); }
+        /* A tick is a button, like every other control here. Locked and n/a
+           states are printed rather than hidden: "always recorded" and "there
+           is nothing to record" are different answers and both are useful. */
+        .gp-chk { width: 15px; height: 15px; padding: 0; border-radius: 4px; cursor: pointer;
+                  background: var(--bg); border: 1px solid var(--border); color: transparent;
+                  font-size: 10px; line-height: 1; font-family: inherit; }
+        .gp-chk:hover { border-color: var(--text-muted); }
+        .gp-chk.on { background: var(--accent); border-color: var(--accent); color: #08131c; font-weight: 700; }
+        /* Locked and n/a MUST NOT look like an empty tickbox — an empty box
+           reads as "off, click me", which is the opposite of "always recorded"
+           and of "nothing can record this". Both print their glyph (the base
+           rule hides it so unticked boxes stay clean), muted and dashed so
+           they read as stated fact rather than available choice. */
+        .gp-chk.lock { cursor: default; background: transparent; border-style: dashed;
+                       border-color: var(--text-muted); color: var(--text-muted); }
+        .gp-chk.na { cursor: not-allowed; background: transparent; border-color: transparent;
+                     color: var(--text-muted); opacity: 0.5; }
+        .gp-chdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+                    margin-right: 6px; vertical-align: 1px; background: var(--border); }
+        /* The popover: the list, over the rack, anchored to the button that
+           opened it — because when you are reading traces your mouse is
+           already down there and Setup is three clicks away. */
+        .gp-chpop { position: fixed; z-index: 16000; width: 360px; max-width: calc(100vw - 24px);
+                    max-height: 66vh; overflow-y: auto; padding: 12px 14px 14px;
+                    background: var(--panel); border: 1px solid var(--border-light);
+                    border-radius: var(--radius-md); box-shadow: 0 20px 50px rgba(0,0,0,0.55); }
+        .gp-chpop .ws-grp { border-top: none; margin: 0; padding: 0; }
+        .gp-chpop-hd { display: flex; justify-content: space-between; align-items: baseline; }
+        .gp-chpop-hd b { font-size: 12px; color: var(--text); }
+        .gp-chpop-hd button { background: none; border: none; color: var(--text-muted);
+                              cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; }
 
         /* The navigator: the whole lap, always, with a window you drag. Same
            width and gutter as the rack so the two share an x-axis by eye. */
@@ -2093,7 +2133,7 @@
                                 title="Colour the line by time gained or lost against the comparison lap">vs Ref</button>
                     </div>
                     <button class="gp-lanesbtn" id="gpPlotBtn" onclick="gpPlotModeToggle()"></button>
-                    <button class="gp-lanesbtn" id="gpLanesBtn" onclick="gpLanesToggle()"></button>
+                    <button class="gp-lanesbtn" id="gpLanesBtn" onclick="gpChanPopToggle()"></button>
                     <span class="gp-sep"></span>
                     <!-- The transport cluster: the NLE grammar, icon for icon.
                          SVGs rather than glyphs so the geometry is ours.
@@ -6156,10 +6196,15 @@
             delta: null, deltaKey: "",   /* memoised cumulative delta series */
             rate: null, rateKey: "",     /* memoised d(delta)/dt for the map */
             chan: null, chanKey: "",     /* memoised derived channels */
-            lanesOpen: (function () {
-                try { return window.localStorage.getItem("rdm7_gp_lanes") !== "0"; }
-                catch (e) { return true; }
-            })(),
+            /* Which channels the rack draws. A map of EXPLICIT decisions —
+               absent means "use the default for this kind of channel" (see
+               gpLaneShown), so a channel that starts arriving tomorrow shows
+               up without anybody having to go and tick it. Replaces the old
+               lanesOpen, which could only say "all the empty lanes" or "none
+               of them" and could not hide Yaw rate for love nor money. */
+            laneShow: null,
+            chanFilter: "",              /* the channel list's search box */
+            chanPop: false,              /* the list, floating over the rack */
             insightCursor: -1,           /* keyboard position in the findings */
             mapMode: (function () {      /* survives restarts on purpose */
                 try { return window.localStorage.getItem("rdm7_gp_mapmode") || "pace"; }
@@ -8215,30 +8260,19 @@
             return h + "</div>";
         }
 
-        window.gpLanesToggle = function () {
-            gp.lanesOpen = !gp.lanesOpen;
-            try { window.localStorage.setItem("rdm7_gp_lanes", gp.lanesOpen ? "1" : "0"); } catch (e) {}
-            gpDrawStrip();
-        };
-
-        /* A button labelled "Channels" tells you nothing about what pressing it
-           does. Label it with the outcome, and count the lanes rather than
-           hard-coding four — the number changes the day a channel starts
-           arriving over CAN. */
+        /* The button over the rack opens the channel list rather than toggling
+           one preset view of it. It says how many of how many are drawn,
+           because that is the fact you want before you decide to open it. */
         function gpLanesBtnLabel() {
-            /* Count the lanes that ACTUALLY exist, not the static table —
-               chosen dash channels replace the generic CAN placeholders, so
-               the static count stopped matching what the rack shows. */
-            var pend = 0, all = gpLaneRowsAll();
-            for (var i = 0; i < all.length; i++) if (all[i].pending) pend++;
-            if (!pend) return { text: "Channels", on: false, tip: "" };
-            return gp.lanesOpen
-                ? { text: "Hide " + pend + " empty", on: true,
-                    tip: "<b>Empty channels</b>Hide the " + pend + " lanes this recording " +
-                         "cannot fill yet." }
-                : { text: "+ " + pend + " channels", on: false,
-                    tip: "<b>Empty channels</b>Show the " + pend + " lanes that are coming, " +
-                         "and what each one is waiting on." };
+            var all = gpLaneRowsAll(), shown = 0;
+            for (var i = 0; i < all.length; i++) if (gpLaneShown(all[i])) shown++;
+            /* No tip while the list is open: the tooltip appears exactly where
+               the list just did, and covers the rows the click was for. */
+            return { text: "Channels · " + shown + "/" + all.length, on: !!gp.chanPop,
+                     tip: gp.chanPop ? "" :
+                          "<b>Channels</b>One row per channel: tick <b>Log</b> to have the " +
+                          "puck record it, tick <b>Graph</b> to draw it here. The same list " +
+                          "is in Setup." };
         }
 
         function gpSyncLanesBtn() {
@@ -8447,7 +8481,10 @@
               why: "Waiting on a brake-pressure or brake-switch channel over CAN. Braking is inferred from speed in the lane above, but real pressure tells you how you released it." },
             { id: "steer", label: "Steering", unit: "\u00b0", pending: "CAN",
               why: "Waiting on a steering-angle channel over CAN. Yaw rate above is the car's response; steering angle is what you asked for." },
-            { id: "roll", label: "Roll &amp; pitch", unit: "\u00b0", pending: "IMU",
+            /* Plain text, not an entity: the rack draws this with fillText on a
+               canvas, which would print "&amp;" literally, and the channel list
+               escapes it on the way into HTML. */
+            { id: "roll", label: "Roll & pitch", unit: "\u00b0", pending: "IMU",
               why: "The puck HAS an IMU and reports it live, but the recorder stores only position, speed and heading \u2014 12 bytes a sample. Logging attitude is a firmware change on the node, not a Studio one." }
         ];
 
@@ -8458,8 +8495,44 @@
            "Manifold pressure — waiting on the node" is a different statement
            from "Throttle — waiting on CAN", and only one of them is about
            this car. */
+        /* ---- what the rack draws -------------------------------------------
+           An explicit map, keyed by lane id: true shown, false hidden, absent
+           means the default for that kind of channel — a channel with data is
+           worth looking at, an empty one is not. That default is what makes
+           this need no maintenance: pick channels, download, and they appear;
+           nothing to tick, and nothing goes stale when the selection changes.
+
+           Storing decisions rather than a whole visible-set matters for the
+           same reason: "I never want to see yaw rate" survives choosing eight
+           new CAN channels, and "show me the empty Roll lane so I can see
+           what is coming" survives a download that fills four others. */
+        var GP_SHOW_LS = "rdm7_gp_laneshow";
+
+        function gpLaneShowMap() {
+            if (gp.laneShow) return gp.laneShow;
+            try { gp.laneShow = JSON.parse(window.localStorage.getItem(GP_SHOW_LS) || "{}") || {}; }
+            catch (e) { gp.laneShow = {}; }
+            return gp.laneShow;
+        }
+        function gpLaneShowSave() {
+            try { window.localStorage.setItem(GP_SHOW_LS, JSON.stringify(gp.laneShow || {})); } catch (e) {}
+        }
+
+        function gpLaneShown(lane) {
+            var m = gpLaneShowMap();
+            if (m[lane.id] !== undefined) return !!m[lane.id];
+            return !lane.pending;
+        }
+
+        /* Every cache downstream of the rack keys on WHICH lanes are drawn, so
+           it needs one token that changes when they do — the old gp.lanesOpen
+           was that token and was only ever two-valued. */
+        function gpLaneSig() {
+            return gpLaneRows().map(function (l) { return l.id; }).join(",");
+        }
+
         function gpLaneRows() {
-            return gpLaneRowsAll().filter(function (l) { return gp.lanesOpen || !l.pending; });
+            return gpLaneRowsAll().filter(gpLaneShown);
         }
 
         /* The trace actually loaded carries its own channel columns — decoded
@@ -8707,8 +8780,13 @@
             /* Units are in the key: the speed lane's numbers ARE the unit, so
                a metric scale held across a switch to mph would be silently
                wrong rather than merely stale. */
+            /* Which lanes are DRAWN is irrelevant here — a scale belongs to a
+               lane and a lap. What does matter is a CAN lane keeping its id
+               while meaning something else, which is exactly what a download
+               with a different channel table does. */
             var key = [gp.selLap, gp.cmpLap, r.from, r.to,
-                       gp.trace ? gp.trace.length : 0, gp.lanesOpen, gpUnits()].join(":");
+                       gp.trace ? gp.trace.length : 0, (gp.traceChanIds || []).join(","),
+                       gpUnits()].join(":");
             if (!gp.scaleCache || gp.scaleCache.key !== key)
                 gp.scaleCache = { key: key, map: {} };
             var m = gp.scaleCache.map;
@@ -8785,7 +8863,7 @@
            leaves the last column a fraction of a pixel out, which is the
            difference between a hairline and a grey smear. */
         function gpRackStatic(w, h, rng, dpr) {
-            var key = [gp.selLap, gp.cmpLap, rng.from, rng.to, w, h, dpr, gp.lanesOpen, gp.plotMode,
+            var key = [gp.selLap, gp.cmpLap, rng.from, rng.to, w, h, dpr, gpLaneSig(), gp.plotMode,
                        JSON.stringify(gp.laneW || {})].join(":");
             if (gp.stripCache && gp.stripCache.key === key) return gp.stripCache.cv;
 
@@ -12391,6 +12469,10 @@
                acquire a recording. */
             if (pb) pb.style.display = gp.view === "session" ? "flex" : "none";
             if (gp.view !== "session") gpPlayStop();
+            /* The channel popover is anchored to a button in the playbar, so it
+               cannot outlive the view that shows it — it would float over the
+               Tracks map with nothing underneath it to explain itself. */
+            if (gp.view !== "session" && gp.chanPop) { gp.chanPop = false; gpChanPopRender(); }
             gpDrawTrace();
             gpStripBind(); gpNavBind(); gpDrawStrip();
             gpBuildRail();
@@ -12653,9 +12735,13 @@
             if (gp.view === "tracks") { gpBuildTrackRail(rail); return; }
             if (gp.view === "session") { gpBuildSessionRail(rail); return; }
             if (gp.view === "setup") {
+                /* This list is matched to the groups BY POSITION, so it has to
+                   name every one of them in order — Channels was missing,
+                   which silently sent "CAN bus" and everything below it to the
+                   wrong card. */
                 rail.innerHTML = "<div class='ws-rail-title'>Setup</div>" +
-                    [["Display", "d"], ["Mounting", "m"], ["Camera", "c"], ["CAN bus", "b"],
-                     ["Network", "n"], ["Advanced", "a"], ["Device", "v"],
+                    [["Display", "d"], ["Mounting", "m"], ["Camera", "c"], ["Channels", "h"],
+                     ["CAN bus", "b"], ["Network", "n"], ["Advanced", "a"], ["Device", "v"],
                      ["Frame map", "f"]].map(function (s, i) {
                         return "<button class='ws-item' data-gp-set='" + i + "'>" +
                                "<span class='st'></span>" + s[0] + "</button>";
@@ -12955,10 +13041,12 @@
 
         window.gpChanRefresh = function () {
             gp.dashChans = "loading";
-            gpRenderSetup();
+            gpChanUiRefresh();
             gpFetchDashChannels().then(function (l) {
                 gp.dashChans = l;
-                gpRenderSetup();
+                gp.stripCache = null;
+                gpDrawStrip();          /* names on the lanes come from here */
+                gpChanUiRefresh();
             });
             window.gpChanReadDevice();
         };
@@ -12967,19 +13055,27 @@
             var sel = gpLogChans(), i = sel.indexOf(id);
             if (i >= 0) sel.splice(i, 1);
             else {
-                if (sel.length >= GP_CHAN_MAX) { showToast("That is as many as the ring will carry", "info"); return; }
+                if (sel.length >= GP_CHAN_MAX) {
+                    gpSetMsg("gpChanMsg", "That is as many as the puck's record has room for (" +
+                             GP_CHAN_MAX + "). Untick one first.", "warn");
+                    gpChanUiRefresh();
+                    return;
+                }
                 var byId = {};
                 ((gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : []).forEach(function (c) { byId[c.id] = c; });
                 if (!gpChanToDevShape(byId[id])) {
-                    showToast("That channel is wider than 16 bits — the puck's log can't fit it", "error");
+                    gpSetMsg("gpChanMsg", "That channel cannot be logged — no CAN decode, or wider " +
+                             "than the puck's 16-bit slot.", "warn");
+                    gpChanUiRefresh();
                     return;
                 }
                 sel.push(id);
             }
+            gpSetMsg("gpChanMsg", null);
             gpLogChansSave();
             gp.stripCache = null;
-            gpRenderSetup();
             gpDrawStrip();
+            gpChanUiRefresh();
         };
 
         /* A dash channel's decode, translated into what the puck's
@@ -13044,7 +13140,7 @@
                     gp.traceInfo = info;
                     showToast("Puck now logs " + ids.length + " channel" + (ids.length === 1 ? "" : "s") +
                               " beside GPS — ring cleared", "success");
-                    gpRenderSetup();
+                    gpChanUiRefresh();
                     gpRenderInspector();
                 }).catch(function (e) {
                     showToast("Failed: " + (e && e.message ? e.message : e), "error");
@@ -13072,7 +13168,7 @@
                     return byWire[c.can_id + ":" + c.start_bit + ":" + c.bit_len] || ("0x" + c.can_id.toString(16));
                 });
                 gpDeviceChanIdsSave();
-                gpRenderSetup();
+                gpChanUiRefresh();
             }).catch(function () {});
         };
 
@@ -13082,68 +13178,319 @@
             return true;
         }
 
-        function gpChannelsHtml() {
-            var sel = gpLogChans();
-            var onDev = gpDeviceChanIds();
-            var h = "<div class='ws-grp'><div class='ws-gt'>Telemetry channels" +
-                gpTip("The car's bus, in the recording",
-                      "The dash has already decoded and named every channel on the bus, so " +
-                      "there is nothing to map twice — pick from what it knows, then Send to " +
-                      "write the table to the puck. Each channel costs two bytes a sample; the " +
-                      "cost in recording time is shown as you pick. Sending clears whatever is " +
-                      "currently in the puck's ring — the record size changes, so old samples " +
-                      "cannot be read under the new one.") + "</div>";
+        /* ══════════════════════════════════════════════════════════════════
+         * The channel list
+         *
+         * Every channel, one row each, and the only two questions anyone asks
+         * about a channel as two tick columns:
+         *
+         *   Log    — does the PUCK record it (costs storage, needs Send,
+         *            clears the ring; only CAN channels have the choice, the
+         *            GPS block is always recorded)
+         *   Graph  — does the RACK draw it (instant, free, per channel)
+         *
+         * Before this they lived on different screens in different shapes:
+         * logging was a wrap of pill chips in Setup, and "graph" was a single
+         * playbar button that could only show or hide EVERY empty lane at
+         * once — there was no way to hide yaw rate, or to look at speed
+         * against throttle alone.
+         *
+         * One component, mounted in Setup and in a popover over the rack, so
+         * the answer to "where was that" is "wherever you are".
+         * ═════════════════════════════════════════════════════════════════ */
 
+        var GP_GRP_PUCK = "From the puck";
+        var GP_GRP_HERE = "Worked out here";
+        var GP_GRP_CAR = "From the car's bus";
+        var GP_GRP_NONE = "Nothing recording these";
+
+        /* One row per channel, in an order that DOES NOT MOVE when you tick
+           something. That is the whole reason this is built the way it is:
+           ordering the car's channels by "is it a lane yet" put a channel at
+           the top of its group the instant you ticked Log, the list re-drew
+           under the cursor, and the next click in a run of three landed on a
+           different channel. Found by ticking three boxes and getting one.
+
+           So: the GPS block keeps GP_LANES order, and the car's channels keep
+           the DASH's order — both fixed, whatever is chosen or loaded. Whether
+           a channel is a lane only ever changes what the Graph column says,
+           never where the row is. */
+        function gpChannelRows() {
+            var lanes = gpLaneRowsAll();
+            var sel = gpLogChans(), onDev = gpDeviceChanIds();
+            var dash = (gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : [];
+            var byId = {}, laneFor = {};
+            dash.forEach(function (c) { byId[c.id] = c; });
+            lanes.forEach(function (l) { if (l.id.indexOf("can_") === 0) laneFor[l.id.slice(4)] = l; });
+
+            var out = [], seen = {};
+            var canRow = function (dashId) {
+                var c = byId[dashId], lane = laneFor[dashId] || null;
+                var wide = !!(c && c.decode && gpN(c.decode.bit_length) > 16);
+                var noDecode = !!(c && !gpChanToDevShape(c));
+                seen[dashId] = true;
+                return { id: "can_" + dashId, dashId: dashId, lane: lane, group: GP_GRP_CAR,
+                         name: (lane && lane.label) || (c && (c.name || c.label)) || dashId,
+                         unit: (lane && lane.unit) || (c && (c.unit || c.units)) || "",
+                         sub: (!lane || lane.pending) ? "not in this recording" : null,
+                         log: sel.indexOf(dashId) >= 0, canLog: !!c && !noDecode,
+                         onDev: onDev.indexOf(dashId) >= 0,
+                         logWhy: !c ? "On the puck, but the dash does not list it — there is nothing here to re-send."
+                                 : wide ? gpN(c.decode.bit_length) + " bits wide — the puck's log has a 16-bit slot per channel."
+                                 : noDecode ? "No CAN decode on the dash's side — there is nothing on the bus to sniff."
+                                 : null };
+            };
+
+            /* The puck's own block and the derived channels, in lane order. */
+            lanes.forEach(function (l) {
+                if (l.id.indexOf("can_") === 0) return;      /* handled below, in dash order */
+                var unit = typeof l.unit === "function" ? l.unit() : l.unit;
+                if (l.pending) {
+                    out.push({ id: l.id, lane: l, group: GP_GRP_NONE, name: l.label, unit: unit,
+                               log: null, canLog: false, logWhy: l.why });
+                } else if (l.id === "delta") {
+                    out.push({ id: l.id, lane: l, group: GP_GRP_HERE, name: l.label, unit: unit,
+                               log: null, canLog: false,
+                               logWhy: "Not recorded — Studio works it out from the lap you picked and the one you are comparing it against." });
+                } else {
+                    out.push({ id: l.id, lane: l, group: GP_GRP_PUCK, name: l.label, unit: unit,
+                               log: "always", canLog: false,
+                               logWhy: "Always recorded. Position, speed and heading are the puck's fixed 12-byte record." });
+                }
+            });
+
+            /* The car's bus, in the dash's order. */
+            dash.forEach(function (c) { out.push(canRow(c.id)); });
+            /* Then anything in the recording or chosen that the dash cannot
+               name — a channel table set by another PC, or a dash that has
+               since been reconfigured. Real, and still worth a row. */
+            Object.keys(laneFor).concat(sel).forEach(function (did) {
+                if (!seen[did]) out.push(canRow(did));
+            });
+            return out;
+        }
+
+        function gpChkHtml(state, call, tip) {
+            /* state: true on, false off, "lock" always-on-and-fixed, "na" not
+               applicable. Locked and n/a are drawn rather than left blank —
+               "always recorded" and "nothing records this" are both answers. */
+            var cls = state === "lock" ? "gp-chk lock" : state === "na" ? "gp-chk na"
+                    : state ? "gp-chk on" : "gp-chk";
+            /* "Always" gets a tick, muted: it IS being recorded, you just do
+               not get a say. n/a gets a dash: there is nothing to say yes to. */
+            var glyph = state === "lock" ? "✓" : state === "na" ? "–" : state ? "✓" : "";
+            return "<button class='" + cls + "'" +
+                   (call ? " onclick=\"" + call + "\"" : "") +
+                   (tip ? " data-tip=\"" + gpEsc(tip) + "\"" : "") +
+                   " aria-pressed='" + (state === true) + "'>" + glyph + "</button>";
+        }
+
+        function gpChannelListHtml() {
+            var rows = gpChannelRows();
+            var sel = gpLogChans(), onDev = gpDeviceChanIds();
+            var synced = gpChanArraysEqual(sel, onDev);
             var mins0 = gpRingMinutes(0);
             var mins = gpRingMinutes(sel.length * GP_CHAN_BYTES);
-            var synced = gpChanArraysEqual(sel, onDev);
-            h += "<div class='gp-rows'>" +
-                 gpReadyRow("Chosen", sel.length + " of " + GP_CHAN_MAX, sel.length ? "ok" : null,
+
+            var h = "<div class='gp-rows'>" +
+                 gpReadyRow("Logging", sel.length + " of " + GP_CHAN_MAX + " channels", sel.length ? "ok" : null,
                             sel.length * GP_CHAN_BYTES + " bytes a sample") +
                  gpReadyRow("Recording time", Math.round(mins) + " min",
                             mins < 60 ? "warn" : null,
                             sel.length ? "was " + Math.round(mins0) + " min" : "at the 12-byte record") +
                  gpReadyRow("On the puck", onDev.length ? onDev.length + " channel" + (onDev.length === 1 ? "" : "s") : "none",
                             synced ? "ok" : "warn",
-                            synced ? "matches what's chosen" : "Send to sync — different from what's chosen") +
+                            synced ? "matches what's ticked" : "different from what's ticked") +
                  "</div>";
-            h += "<div class='lt-expbtns' style='margin-top:6px'>" +
-                 "<button class='ws-btn-line' onclick='gpChanSend()'" + (sel.length === onDev.length && synced ? " disabled" : "") +
-                 ">Send to puck</button>" +
-                 "<button class='ws-btn-line' onclick='gpChanReadDevice()' title=\"Read what the puck currently has, without changing your selection\">Read from puck</button>" +
-                 "</div>";
-
-            var d = gp.dashChans;
-            if (d === "loading") {
-                h += "<div class='ws-note'>Reading the dash…</div>";
-            } else if (!gpDash()) {
-                h += "<div class='ws-note'>No dash connected. The channel list comes from the dash, " +
-                     "which is the thing that knows what the bus means — connect one and the " +
-                     "list fills in.</div>";
-            } else if (!d) {
-                h += "<div class='ws-note'>The dash did not answer with a channel list. " +
-                     "<button class='ws-btn-line' onclick='gpChanRefresh()'>Try again</button></div>";
-            } else if (!d.length) {
-                h += "<div class='ws-note'>The dash has no active channels yet. Add them in the " +
-                     "dash editor — or import a DBC there — and they appear here.</div>";
-            } else {
-                h += "<div class='gp-chanlist'>";
-                d.forEach(function (c) {
-                    var on = sel.indexOf(c.id) >= 0;
-                    var unit = c.unit || c.units || "";
-                    var wide = c.decode && gpN(c.decode.bit_length) > 16;
-                    h += "<button class='gp-chan" + (on ? " on" : "") + (wide ? " gp-chan-wide" : "") +
-                         "' onclick=\"gpChanToggle('" + gpEsc(c.id) + "')\"" +
-                         (wide ? " title=\"" + gpN(c.decode.bit_length) + "-bit — wider than the puck's 16-bit slot, cannot be logged\"" : "") +
-                         "><span class='st'></span>" +
-                         gpEsc(c.name || c.label || c.id) +
-                         (unit ? "<em>" + gpEsc(unit) + "</em>" : "") + "</button>";
-                });
-                h += "</div>";
-                h += "<div class='ws-note'>Chosen channels appear as named lanes in the Session " +
-                     "rack once Send has pushed them to the puck and a new recording is downloaded.</div>";
+            /* Send is the only destructive thing on this surface, so it only
+               appears when there is actually a difference to push. */
+            if (!synced) {
+                h += "<button class='ws-btn-line' style='margin-top:7px' onclick='gpChanSend()'>" +
+                     "Send " + sel.length + " to the puck</button>";
             }
-            return h + "</div>";
+            h += "<div class='lt-expbtns' style='margin-top:6px'>" +
+                 "<button class='ws-btn-line' onclick='gpChanRefresh()' title=\"Re-read the dash's channel list and what the puck is logging\">Refresh</button>" +
+                 "<button class='ws-btn-line' onclick='gpLaneShowReset()' title=\"Back to drawing every channel that has data\">Reset graph</button>" +
+                 "</div>";
+            h += "<div class='gp-msg' id='gpChanMsg'></div>";
+
+            /* Search once the list is longer than a glance. */
+            var q = String(gp.chanFilter || "").toLowerCase();
+            if (rows.length > 14) {
+                h += "<input type='text' class='gp-chsearch' placeholder='Find a channel…' " +
+                     "spellcheck='false' value='" + gpEsc(gp.chanFilter || "") + "' " +
+                     "oninput='gpChanFilter(this.value)'>";
+            }
+            if (q) rows = rows.filter(function (r) { return r.name.toLowerCase().indexOf(q) >= 0; });
+
+            h += "<table class='gp-chtab'><thead><tr><th>Channel</th>" +
+                 "<th class='n'>Log" + gpTip("Log", "The puck records it at 25 Hz beside every GPS fix. " +
+                     "Two bytes a sample each — the recording time above is what it costs. " +
+                     "Sending a new set clears whatever is on the puck, because the record " +
+                     "changes size.") + "</th>" +
+                 "<th class='n'>Graph" + gpTip("Graph", "Draw it in the rack below. Free, instant, and " +
+                     "nothing to do with what the puck records — hide a channel here and it is " +
+                     "still in the recording.") + "</th></tr></thead><tbody>";
+
+            var grp = null, any = false;
+            [GP_GRP_PUCK, GP_GRP_HERE, GP_GRP_CAR, GP_GRP_NONE].forEach(function (g) {
+                rows.filter(function (r) { return r.group === g; }).forEach(function (r) {
+                    any = true;
+                    if (grp !== g) { grp = g; h += "<tr class='g'><td colspan='3'>" + g + "</td></tr>"; }
+                    var shown = r.lane ? gpLaneShown(r.lane) : false;
+                    var colour = (r.lane && r.lane.colour) || null;
+                    h += "<tr class='" + (shown ? "" : "off") + "'>" +
+                         "<td><span class='gp-chdot'" + (colour && shown ? " style='background:" + colour + "'" : "") +
+                         "></span><span class='nm'>" + gpEsc(r.name) + "</span>" +
+                         (r.unit ? "<span class='un'>" + gpEsc(String(r.unit)) + "</span>" : "") +
+                         (r.sub ? "<span class='sub'>" + gpEsc(r.sub) + "</span>" : "") + "</td>";
+                    h += "<td class='n'>" + (r.log === "always" ? gpChkHtml("lock", null, r.logWhy)
+                         : !r.canLog ? gpChkHtml("na", null, r.logWhy)
+                         : gpChkHtml(!!r.log, "gpChanToggle('" + gpEsc(r.dashId) + "')",
+                                     r.onDev && !r.log ? "On the puck now — untick and Send to stop logging it."
+                                     : r.log && !r.onDev ? "Ticked here, not on the puck yet — Send to write it." : null)) + "</td>";
+                    h += "<td class='n'>" + (r.lane
+                         ? gpChkHtml(shown, "gpLaneShow('" + gpEsc(r.id) + "')",
+                                     r.lane.pending ? "No data in this recording — the lane draws its name and what it is waiting on." : null)
+                         : gpChkHtml("na", null, "Nothing to draw: this recording does not carry it.")) + "</td>";
+                    h += "</tr>";
+                });
+            });
+            h += "</tbody></table>";
+            if (!any) {
+                h += "<div class='ws-note'>" + (q ? "Nothing matches “" + gpEsc(gp.chanFilter) + "”."
+                     : "No channels yet.") + "</div>";
+            }
+
+            /* Why the car's half of the list might be short or empty. */
+            var d = gp.dashChans;
+            if (d === "loading") h += "<div class='ws-note'>Reading the dash…</div>";
+            else if (!gpDash()) h += "<div class='ws-note'>The car's channels come from the dash — it is the " +
+                     "thing that knows what the bus means. Connect one and they appear here, " +
+                     "already named and decoded.</div>";
+            else if (!d) h += "<div class='ws-note'>The dash did not answer with a channel list. " +
+                     "<button class='ws-btn-line' onclick='gpChanRefresh()'>Try again</button></div>";
+            else if (!d.length) h += "<div class='ws-note'>The dash has no active channels yet. Add them in " +
+                     "the dash editor — or import a DBC there — and they appear here.</div>";
+            return h;
+        }
+
+        function gpChannelsHtml() {
+            return "<div class='ws-grp'><div class='ws-gt'>Channels" +
+                gpTip("What records, and what you look at",
+                      "Two ticks per channel: <b>Log</b> is what the puck writes to its own " +
+                      "memory while you drive, <b>Graph</b> is what the rack draws when you " +
+                      "review it. They are independent — you can log ten channels and look " +
+                      "at two. The same list is on the Channels button over the rack.") +
+                "</div>" + gpChannelListHtml() + "</div>";
+        }
+
+        /* Both mounts of the list, plus the button that counts the lanes. */
+        function gpChanUiRefresh() {
+            gpSyncLanesBtn();
+            if (gp.view === "setup") gpRenderSetup();
+            gpChanPopRender();
+        }
+
+        window.gpChanFilter = function (v) {
+            gp.chanFilter = v;
+            /* Re-render in place and keep the caret: a full gpRenderSetup on
+               every keystroke would blow away the field being typed into. */
+            var pop = document.getElementById("gpChanPop");
+            var host = pop || document.getElementById("gpSetup");
+            if (!host) return;
+            var tab = host.querySelector(".gp-chtab");
+            if (!tab) { gpChanUiRefresh(); return; }
+            var tmp = document.createElement("div");
+            tmp.innerHTML = gpChannelListHtml();
+            var fresh = tmp.querySelector(".gp-chtab");
+            if (fresh) tab.parentNode.replaceChild(fresh, tab);
+            gpTipInit();
+        };
+
+        /* The state half, kept separate from the redraw so the rule can be
+           held to account by the harness. Only genuine deviations from the
+           default are stored: hiding an EMPTY lane is "stop cluttering the
+           rack", which the default already does, so it reverts to automatic
+           and the lane comes back on its own the day it carries data. Hiding
+           a lane WITH data is a real opinion and is kept. */
+        function gpLaneShowSet(id) {
+            var lane = gpLaneRowsAll().filter(function (l) { return l.id === id; })[0];
+            if (!lane) return false;
+            var m = gpLaneShowMap();
+            var want = !gpLaneShown(lane);
+            if (want === !lane.pending) delete m[id]; else m[id] = want;
+            gpLaneShowSave();
+            return true;
+        }
+
+        window.gpLaneShow = function (id) {
+            if (!gpLaneShowSet(id)) return;
+            gp.stripCache = null;
+            gpDrawStrip();
+            gpChanUiRefresh();
+        };
+
+        window.gpLaneShowReset = function () {
+            gp.laneShow = {};
+            gpLaneShowSave();
+            gp.stripCache = null;
+            gpDrawStrip();
+            gpChanUiRefresh();
+        };
+
+        /* ---- the list, floating over the rack ----------------------------- */
+        window.gpChanPopToggle = function () {
+            gp.chanPop = !gp.chanPop;
+            gpChanPopRender();
+            gpSyncLanesBtn();
+        };
+
+        function gpChanPopRender() {
+            var el = document.getElementById("gpChanPop");
+            if (!gp.chanPop) {
+                if (el) el.remove();
+                if (gp._chanPopAway) {
+                    document.removeEventListener("mousedown", gp._chanPopAway, true);
+                    document.removeEventListener("keydown", gp._chanPopKey, true);
+                    gp._chanPopAway = null; gp._chanPopKey = null;
+                }
+                return;
+            }
+            if (!el) {
+                el = document.createElement("div");
+                el.id = "gpChanPop";
+                el.className = "gp-chpop";
+                document.body.appendChild(el);
+                /* Clicking the button that opened it must not count as
+                   "outside" — it toggles, and both firing would reopen it. */
+                gp._chanPopAway = function (e) {
+                    var t = e.target;
+                    if (t && t.closest && (t.closest("#gpChanPop") || t.closest("#gpLanesBtn"))) return;
+                    window.gpChanPopToggle();
+                };
+                gp._chanPopKey = function (e) {
+                    if (e.key !== "Escape") return;
+                    e.stopPropagation();          /* or Esc closes the workspace */
+                    window.gpChanPopToggle();
+                };
+                document.addEventListener("mousedown", gp._chanPopAway, true);
+                document.addEventListener("keydown", gp._chanPopKey, true);
+            }
+            el.innerHTML = "<div class='gp-chpop-hd'><b>Channels</b>" +
+                "<button onclick='gpChanPopToggle()' title='Close (Esc)'>×</button></div>" +
+                gpChannelListHtml();
+            /* Above the button, clamped to the window. */
+            var b = document.getElementById("gpLanesBtn");
+            if (b) {
+                var r = b.getBoundingClientRect(), w = el.offsetWidth, hh = el.offsetHeight;
+                var x = Math.max(8, Math.min(window.innerWidth - w - 8, r.left));
+                var y = r.top - hh - 8;
+                el.style.left = Math.round(x) + "px";
+                el.style.top = Math.round(y > 8 ? y : Math.min(r.bottom + 8, window.innerHeight - hh - 8)) + "px";
+            }
+            gpTipInit();
+            gpRestoreMsgs();
         }
 
         function gpRenderSetup() {
@@ -14874,6 +15221,9 @@
         window._gpClose = function () {
             gp.open = false;
             gpLiveStop();
+            /* A popover appended to document.body outlives the workspace div
+               it belongs to, so it has to be taken down by hand. */
+            if (gp.chanPop) { gp.chanPop = false; gpChanPopRender(); }
             if (gp.timer) { clearTimeout(gp.timer); gp.timer = null; }
             if (gp.lapTimer) { clearInterval(gp.lapTimer); gp.lapTimer = null; }
             var ws = document.getElementById("gpWorkspace");
