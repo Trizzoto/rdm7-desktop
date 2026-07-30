@@ -1252,6 +1252,21 @@
         .ws-item .tag.gp-best { color: #c98ae0; }
         .gp-ideal { cursor: default; opacity: 0.9; }
         .gp-ideal-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; }
+        .gp-splits-wrap { overflow-x: auto; margin-top: 4px; }
+        .gp-splits { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+        .gp-splits th, .gp-splits td { padding: 4px 6px; text-align: right; white-space: nowrap; }
+        .gp-splits th:first-child, .gp-splits td:first-child { text-align: left; }
+        .gp-splits thead th { color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border);
+                               font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+        .gp-splits th[data-gp-split-hd] { cursor: pointer; }
+        .gp-splits th[data-gp-split-hd]:hover { color: var(--text); }
+        .gp-splits td[data-gp-split-cell] { cursor: pointer; }
+        .gp-splits tbody tr:hover td { filter: brightness(1.15); }
+        .gp-splits tr.on td:first-child { color: #7CC0FF; font-weight: 600; }
+        .gp-splits tr.best { background: rgba(178, 102, 220, 0.06); }
+        .gp-splits td.p { background: rgba(178, 102, 220, 0.28); color: #c98ae0; font-weight: 600; }
+        .gp-splits td.na { color: var(--text-muted); }
+        .gp-splits td.tot { font-weight: 600; border-left: 1px solid var(--border); }
         .gp-ses-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; width: 100%; }
         .gp-hist-svg { width: 100%; height: 44px; display: block; margin: 6px 0 4px; }
         .gp-place-search { width: 100%; box-sizing: border-box; margin: 2px 0 6px;
@@ -1308,6 +1323,10 @@
         .gp-chan.on { border-color: var(--accent); background: var(--panel-elevated); }
         .gp-chan.on .st { background: var(--accent); }
         .gp-chan em { font-style: normal; color: var(--text-muted); font-size: 9.5px; }
+        /* Wider than the puck's 16-bit slot — pickable in principle, refused
+           in gpChanToggle, so it reads as unavailable rather than just
+           unstyled. Not display:none: seeing it and why beats it vanishing. */
+        .gp-chan-wide { opacity: 0.45; cursor: not-allowed; }
 
         /* The navigator: the whole lap, always, with a window you drag. Same
            width and gutter as the rack so the two share an x-axis by eye. */
@@ -7699,10 +7718,11 @@
                 h += "";
                 h += "</div>";
 
-                h = gpGlanceHtml() + gpHistoryHtml() + gpRenderCoach() + h;
+                h = gpGlanceHtml() + gpSplitsHtml() + gpHistoryHtml() + gpRenderCoach() + h;
             }
             box.innerHTML = head + h;
             gpVideoBind();
+            gpSplitsBind(box);
             Array.prototype.forEach.call(box.querySelectorAll('[data-gp-focus]'), function (b) {
                 b.addEventListener('click', function () {
                     var rk = parseInt(b.getAttribute('data-gp-rank'), 10);
@@ -7794,6 +7814,171 @@
             }
             return h + "</div>";
         }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * Stage 4 — the split times report
+         *
+         * Laps down the side, sectors across the top, every cell graded from
+         * the session's best to its worst. This reads gpSessionSectors for
+         * the sector numbers and gpSecs for the lap totals — no second
+         * opinion anywhere about what a time is, just another shape to look
+         * at the same numbers in.
+         * ═════════════════════════════════════════════════════════════════ */
+
+        /* The sample range one sector of one lap covers — the same split
+           points gpSectorTimes already computed, sliced instead of timed.
+           Shares gpSectorMarks rather than re-finding the gate crossings, so
+           a click here can never disagree with the time printed for it. */
+        function gpSectorRange(lap, sectorIdx) {
+            var marks = gpSectorMarks(lap);
+            if (!marks || sectorIdx < 0 || sectorIdx > marks.length) return null;
+            return { from: sectorIdx === 0 ? lap.from : marks[sectorIdx - 1],
+                     to: sectorIdx === marks.length ? lap.to : marks[sectorIdx] };
+        }
+
+        /* Green at the best of a column, red at the worst, straight-line
+           between — the same green/red gpSectorChips already uses against a
+           comparison lap, continuous here instead of binary. */
+        function gpHeatColour(frac, alpha) {
+            var x = Math.max(0, Math.min(1, frac));
+            var g = [111, 191, 115], r = [224, 93, 82];
+            var c = [0, 1, 2].map(function (i) { return Math.round(g[i] + (r[i] - g[i]) * x); });
+            return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + (alpha === undefined ? 1 : alpha) + ")";
+        }
+
+        /* One row per real lap — its total (always available, it only needs
+           the start/finish gate) plus its sector split if the lap crossed
+           every intermediate line (null otherwise, same rule gpSectorTimes
+           already enforces: a lap that missed a split is not timed for one,
+           it is untimed for all of them). Averages, median and consistency
+           are computed off the totals, which is why a lap with a missed
+           intermediate split still counts toward them. */
+        function gpSplitsStats() {
+            var S = gpSessionSectors();
+            var rows = [];
+            (gp.traceLaps || []).forEach(function (l, li) {
+                if (l.ghost) return;
+                rows.push({ li: li, total: gpSecs(gp.trace, l.from, l.to), secs: (S && S.per[li]) || null });
+            });
+            if (rows.length < 2) return null;
+            var totals = rows.map(function (r) { return r.total; });
+            var n = totals.length;
+            var mean = totals.reduce(function (a, b) { return a + b; }, 0) / n;
+            var sorted = totals.slice().sort(function (a, b) { return a - b; });
+            var median = n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+            var variance = totals.reduce(function (a, t) { return a + (t - mean) * (t - mean); }, 0) / n;
+            var best = rows.reduce(function (a, b) { return b.total < a.total ? b : a; });
+            var ideal = (S && S.best && S.best.length > 1)
+                ? S.best.reduce(function (a, b) { return a + b; }, 0) : null;
+            return { rows: rows, nSectors: (S && S.best) ? S.best.length : 0,
+                     mean: mean, median: median, stdDev: Math.sqrt(variance),
+                     bestIdx: best.li, bestTime: best.total, ideal: ideal };
+        }
+
+        function gpSplitsHtml() {
+            var D = gpSplitsStats();
+            if (!D) return "";
+            var S = gpSessionSectors();
+            var nSec = D.nSectors;
+            var h = "<div class='ws-grp'><div class='ws-gt'>Split times" +
+                gpTip("Laps down the side, sectors across the top",
+                      "Purple is the session's fastest sector. Green through red grades " +
+                      "every other lap in that column from best to worst. Click a lap's " +
+                      "name to select it, or a sector to jump the graph and map straight " +
+                      "to it.") + "</div>";
+            if (!nSec) {
+                h += "<div class='ws-note'>" + D.rows.length + " laps, but this track has no " +
+                     "sector lines yet — add splits in Tracks to break them down.</div></div>";
+                return h;
+            }
+            var colRange = [];
+            for (var s0 = 0; s0 < nSec; s0++) {
+                var vals = S.per.filter(Boolean).map(function (p) { return p[s0]; });
+                colRange.push({ lo: Math.min.apply(null, vals), hi: Math.max.apply(null, vals) });
+            }
+            h += "<div class='gp-splits-wrap'><table class='gp-splits'><thead><tr><th>" +
+                 gpRunWord(true) + "</th>";
+            for (var s1 = 0; s1 < nSec; s1++)
+                h += "<th data-gp-split-hd='" + s1 + "'>S" + (s1 + 1) + "</th>";
+            h += "<th>Total</th></tr></thead><tbody>";
+            D.rows.forEach(function (row) {
+                h += "<tr class='" + (row.li === gp.selLap ? "on " : "") +
+                     (row.li === D.bestIdx ? "best" : "") + "' data-gp-split-row='" + row.li + "'>" +
+                     "<td>" + gpRunWord(true) + " " + (row.li + 1) + "</td>";
+                for (var s2 = 0; s2 < nSec; s2++) {
+                    var v = row.secs ? row.secs[s2] : null;
+                    if (v === null || v === undefined) { h += "<td class='na'>—</td>"; continue; }
+                    var isBest = S.best && Math.abs(v - S.best[s2]) < 0.0005;
+                    var cr = colRange[s2];
+                    var frac = cr.hi > cr.lo ? (v - cr.lo) / (cr.hi - cr.lo) : 0;
+                    h += "<td class='" + (isBest ? "p" : "") + "' data-gp-split-cell='" + row.li + ":" + s2 + "'" +
+                         (isBest ? "" : " style='background:" + gpHeatColour(frac, 0.28) + "'") +
+                         ">" + v.toFixed(2) + "</td>";
+                }
+                h += "<td class='tot'>" + gpLapTime(row.total) + "</td></tr>";
+            });
+            h += "</tbody></table></div>";
+            h += "<div class='gp-rows' style='margin-top:9px'>" +
+                 "<div class='gp-row'><span class='k'>Average</span><span class='v'>" +
+                 gpLapTime(D.mean) + "</span></div>" +
+                 "<div class='gp-row'><span class='k'>Median</span><span class='v'>" +
+                 gpLapTime(D.median) + "</span></div>" +
+                 "<div class='gp-row'><span class='k'>Consistency" +
+                 gpTip("Consistency", "How far a typical lap strays from the average — " +
+                       "small means the same time, lap after lap.") +
+                 "</span><span class='v'>±" + D.stdDev.toFixed(2) + " s</span></div>" +
+                 "<div class='gp-row'><span class='k'>Best lap</span><span class='v'>" +
+                 gpLapTime(D.bestTime) + "</span><span class='s'>" + gpRunWord(true) + " " +
+                 (D.bestIdx + 1) + "</span></div>" +
+                 (D.ideal !== null ? "<div class='gp-row'><span class='k'>Ideal lap</span><span class='v'>" +
+                  gpLapTime(D.ideal) + "</span><span class='s'>best sectors added up</span></div>" : "") +
+                 "</div></div>";
+            return h;
+        }
+
+        function gpSplitsBind(box) {
+            Array.prototype.forEach.call(box.querySelectorAll("[data-gp-split-row]"), function (el) {
+                el.addEventListener("click", function () {
+                    window.gpSplitsJump(el.getAttribute("data-gp-split-row"));
+                });
+            });
+            Array.prototype.forEach.call(box.querySelectorAll("[data-gp-split-cell]"), function (el) {
+                el.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    var parts = el.getAttribute("data-gp-split-cell").split(":");
+                    window.gpSplitsJump(parts[0], parts[1]);
+                });
+            });
+            Array.prototype.forEach.call(box.querySelectorAll("[data-gp-split-hd]"), function (el) {
+                el.addEventListener("click", function () {
+                    var D = gpSplitsStats();
+                    var li = gp.selLap >= 0 && gp.traceLaps[gp.selLap] && !gp.traceLaps[gp.selLap].ghost
+                              ? gp.selLap : (D ? D.bestIdx : -1);
+                    if (li >= 0) window.gpSplitsJump(li, el.getAttribute("data-gp-split-hd"));
+                });
+            });
+        }
+
+        /* Select the lap, and if a sector was named, fit the rack and the map
+           to exactly that stretch of it — the same gp.stripZoom the
+           navigator drags already read and write, so whichever one you
+           touch next agrees with what this just set. */
+        window.gpSplitsJump = function (li, sectorIdx) {
+            li = parseInt(li, 10);
+            if (isNaN(li) || !gp.traceLaps[li]) return;
+            gp.selLap = li;
+            gp.insightCursor = -1;
+            if (sectorIdx === undefined || sectorIdx === null) {
+                gp.stripZoom = null;
+            } else {
+                var rng = gpSectorRange(gp.traceLaps[li], parseInt(sectorIdx, 10));
+                gp.stripZoom = rng ? { lap: li, from: rng.from, to: rng.to } : null;
+            }
+            gp.playIdx = gpLapRange().from;
+            gpPlayStop();
+            gpSyncScrub();
+            gpDrawTrace(); gpFitTrace(); gpDrawStrip(); gpRenderInspector();
+        };
 
         /* ---- Tooltips ------------------------------------------------------
            One floating element driven by [data-tip], bound once by delegation
@@ -8092,6 +8277,13 @@
            per channel is the i2 idiom exactly (ADR-0014: data keeps its
            colour), and hue spacing is wide enough to tell four stacked traces
            apart at a glance. */
+        /* Chosen CAN channels don't have a fixed identity the way speed or
+           yaw do — there can be up to twelve, in whatever order the user
+           picked them — so they cycle through a palette instead of each
+           owning a named colour. Saturated and distinct at a glance, same
+           idiom as the fixed lanes below. */
+        var GP_CHAN_COLOURS = ["#FF6FA8", "#5CE1C8", "#F0C93B", "#8E9CFF", "#FF9666", "#7BD9FF"];
+
         var GP_LANES = [
             { id: "speed", label: "Speed", unit: function () { return gpSpdU(); }, dp: 0, colour: "#4FB3FF",
               get: function (i) { return gpSpdN(gp.trace[i].kph); }, zero: false },
@@ -8130,18 +8322,43 @@
             return gpLaneRowsAll().filter(function (l) { return gp.lanesOpen || !l.pending; });
         }
 
+        /* The trace actually loaded carries its own channel columns — decoded
+           at download time from whatever the puck reported was on it, which
+           by construction (trace.channels.set clears the ring) is always
+           gp.deviceChanIds AT THE TIME OF THAT DOWNLOAD, not necessarily
+           what gp.deviceChanIds says right now if it has since changed again.
+           gpTraceDownload snapshots it into gp.traceChanIds for exactly this
+           reason — read that, never gpDeviceChanIds(), when deciding what a
+           LOADED sample's can[] array means. */
         function gpLaneRowsAll() {
-            var sel = gpLogChans();
+            var haveData = gp.trace && gp.trace.length && gp.traceChanIds && gp.traceChanIds.length &&
+                          gp.trace[0].can && gp.trace[0].can.length === gp.traceChanIds.length;
+            var ids = haveData ? gp.traceChanIds : gpLogChans();
             var base = GP_LANES;
-            if (sel.length) {
+            if (ids.length) {
                 var byId = {};
                 ((gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : []).forEach(function (c) { byId[c.id] = c; });
-                var chosen = sel.map(function (id) {
+                var chosen = ids.map(function (id, idx) {
                     var c = byId[id];
-                    return { id: "can_" + id, label: (c && (c.name || c.label)) || id,
-                             unit: (c && (c.unit || c.units)) || "", pending: "the node",
-                             why: "Chosen off the dash. The puck records position, speed and " +
-                                  "heading; storing bus channels needs its trace format to grow." };
+                    var scale = (c && c.decode && gpN(c.decode.scale)) || 1;
+                    var offset = (c && c.decode && gpN(c.decode.offset)) || 0;
+                    var dp = (c && gpN(c.decimals) !== null) ? c.decimals : 1;
+                    var lane = { id: "can_" + id, label: (c && (c.name || c.label)) || id,
+                                unit: (c && (c.unit || c.units)) || "", dp: dp,
+                                colour: GP_CHAN_COLOURS[idx % GP_CHAN_COLOURS.length], zero: false };
+                    if (haveData) {
+                        lane.get = function (i) {
+                            var raw = gp.trace[i].can ? gp.trace[i].can[idx] : null;
+                            return (raw === null || raw === undefined) ? null : raw * scale + offset;
+                        };
+                        lane.absent = function () { return false; };
+                        lane.absentSay = null;
+                    } else {
+                        lane.pending = "the node";
+                        lane.why = "Chosen off the dash. Press Send in Setup to write it to the " +
+                                   "puck, then download a new recording — this is the lane it will fill.";
+                    }
+                    return lane;
                 });
                 /* Keep the GPS lanes and the delta; replace only the generic
                    CAN placeholders, which these supersede. */
@@ -9596,6 +9813,20 @@
             dev.traceInfo().then(function (info) {
                 gp.traceInfo = info;
                 var total = gpN(info && info.used_samples) || 0;
+                var nchan = gpN(info && info.n_channels) || 0;
+                /* Names come from gpDeviceChanIds() — but only if its length
+                   still matches what the device just reported. A mismatch
+                   means Studio's local record of "what's on the node" has
+                   drifted (a restart, or something else configured it) — the
+                   columns are still real and still decoded, just unnamed
+                   rather than mislabelled with the wrong channel's identity. */
+                var devIds = gpDeviceChanIds();
+                var chanIds = null;
+                if (nchan) {
+                    chanIds = (devIds.length === nchan) ? devIds.slice()
+                        : (function () { var a = []; for (var k = 0; k < nchan; k++) a.push("ch" + (k + 1)); return a; })();
+                }
+                gp.traceChanIds = chanIds;
                 if (!total) { gp.trace = []; return null; }
                 var rows = [];
                 var step = function () {
@@ -9605,6 +9836,18 @@
                         var bin = atob(pg.data || "");
                         var dv = new DataView(new ArrayBuffer(bin.length));
                         for (var b = 0; b < bin.length; b++) dv.setUint8(b, bin.charCodeAt(b));
+
+                        /* Channel columns: sample-major uint16, nchan per row.
+                           TRACE_CHAN_STALE (0xFFFF) means that channel had
+                           gone quiet at that sample — decoded to null, same
+                           "nothing here" the rack already understands, never
+                           to 655.35-style garbage. */
+                        var cdv = null;
+                        if (nchan && pg.chan_data) {
+                            var cbin = atob(pg.chan_data);
+                            cdv = new DataView(new ArrayBuffer(cbin.length));
+                            for (var cb = 0; cb < cbin.length; cb++) cdv.setUint8(cb, cbin.charCodeAt(cb));
+                        }
 
                         /* t_marks is [[index, itow_ms], ...] within THIS page:
                            the first dates the page, any later one marks where
@@ -9618,13 +9861,21 @@
                         for (var i = 0; i < cnt; i++) {
                             while (mi < mk.length && mk[mi][0] === i) { tcur = mk[mi][1]; mi++; }
                             var o = i * 12;
+                            var can = null;
+                            if (cdv) {
+                                can = new Array(nchan);
+                                for (var c = 0; c < nchan; c++) {
+                                    var v = cdv.getUint16((i * nchan + c) * 2, true);
+                                    can[c] = v === 0xFFFF ? null : v;
+                                }
+                            }
                             rows.push({
                                 lat: dv.getInt32(o, true) / 1e7,
                                 lon: dv.getInt32(o + 4, true) / 1e7,
                                 kph: dv.getUint16(o + 8, true) / 100,
                                 hdg: dv.getUint16(o + 10, true) / 100,
                                 t: tcur === null ? undefined : tcur,
-                                g: 0
+                                g: 0, can: can
                             });
                             if (tcur !== null) tcur += 40;
                         }
@@ -12361,6 +12612,7 @@
          * picker that silently changes nothing is worse than no picker.
          * ═════════════════════════════════════════════════════════════════ */
         var GP_CHAN_LS = "rdm7_gp_logchans";
+        var GP_DEVCHAN_LS = "rdm7_gp_devchans";
         var GP_CHAN_BYTES = 2;      /* one 16-bit slot per channel per sample */
         var GP_CHAN_MAX = 12;       /* beyond this the ring is the limit, not the bus */
 
@@ -12372,6 +12624,24 @@
         }
         function gpLogChansSave() {
             try { window.localStorage.setItem(GP_CHAN_LS, JSON.stringify(gp.logChans || [])); } catch (e) {}
+        }
+
+        /* What is ACTUALLY on the node, in wire order — set only when
+           gpChanSend() confirms the push, never by merely ticking a box.
+           This is the column key for whatever is CURRENTLY in gp.trace: the
+           node clears its ring on every trace.channels.set, so anything in
+           the ring was necessarily recorded under whichever table this was
+           last set to, not whatever gp.logChans says right now. They drift
+           on purpose — logChans is "what you're choosing for NEXT time",
+           deviceChanIds is "what THIS data means". */
+        function gpDeviceChanIds() {
+            if (gp.deviceChanIds) return gp.deviceChanIds;
+            try { gp.deviceChanIds = JSON.parse(window.localStorage.getItem(GP_DEVCHAN_LS) || "[]") || []; }
+            catch (e) { gp.deviceChanIds = []; }
+            return gp.deviceChanIds;
+        }
+        function gpDeviceChanIdsSave() {
+            try { window.localStorage.setItem(GP_DEVCHAN_LS, JSON.stringify(gp.deviceChanIds || [])); } catch (e) {}
         }
 
         /* How long the ring lasts at a given record size. The node's own
@@ -12406,6 +12676,7 @@
                 gp.dashChans = l;
                 gpRenderSetup();
             });
+            window.gpChanReadDevice();
         };
 
         window.gpChanToggle = function (id) {
@@ -12413,6 +12684,12 @@
             if (i >= 0) sel.splice(i, 1);
             else {
                 if (sel.length >= GP_CHAN_MAX) { showToast("That is as many as the ring will carry", "info"); return; }
+                var byId = {};
+                ((gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : []).forEach(function (c) { byId[c.id] = c; });
+                if (!gpChanToDevShape(byId[id])) {
+                    showToast("That channel is wider than 16 bits — the puck's log can't fit it", "error");
+                    return;
+                }
                 sel.push(id);
             }
             gpLogChansSave();
@@ -12421,25 +12698,134 @@
             gpDrawStrip();
         };
 
+        /* A dash channel's decode, translated into what the puck's
+           trace_chan_t actually stores. Returns null when the channel
+           cannot be logged as-is: no CAN decode at all (it's math/derived,
+           nothing on the bus to sniff), or wider than the 16-bit slot a
+           trace record has room for. `ext_id` is inferred from the id's
+           range rather than carried explicitly — the dash's own channel
+           model has no separate extended-frame flag, and 0x7FF is the hard
+           boundary between an 11-bit standard id and a 29-bit one, so the
+           number itself is unambiguous. */
+        function gpChanToDevShape(dashChan) {
+            var d = dashChan && dashChan.decode;
+            if (!d || !gpN(d.can_id) || !gpN(d.bit_length) || d.bit_length < 1 || d.bit_length > 16)
+                return null;
+            return {
+                can_id: Math.round(d.can_id),
+                start_bit: Math.round(d.bit_start) || 0,
+                bit_len: Math.round(d.bit_length),
+                is_signed: !!d.is_signed,
+                ext_id: d.can_id > 0x7FF,
+                big_endian: gpN(d.endian) === 0
+            };
+        }
+
+        /* Push the current selection to the node. Explicit action, not
+           auto-fired per checkbox click: trace.channels.set CLEARS THE RING
+           (the record size just changed), so doing this on every tick of a
+           checkbox would silently wipe a recording mid-decision. Confirmed
+           the same way clearing the node's recording already is. */
+        window.gpChanSend = function () {
+            var dev = gpDev();
+            if (!dev || !dev.traceChannelsSet) { showToast("Connect to the puck over USB first", "error"); return; }
+            var byId = {};
+            ((gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : []).forEach(function (c) { byId[c.id] = c; });
+            var sel = gpLogChans(), sent = [], skipped = [];
+            sel.forEach(function (id) {
+                var shape = gpChanToDevShape(byId[id]);
+                if (shape) { shape._id = id; sent.push(shape); }
+                else skipped.push(id);
+            });
+            if (!window.confirm(
+                (sent.length ? "Send " + sent.length + " channel" + (sent.length === 1 ? "" : "s") + " to the puck?"
+                             : "Clear the puck's channel table?") +
+                "\n\nThis clears whatever is currently in the puck's recording ring — the record " +
+                "size is about to change, so old samples can't be read under the new one. " +
+                "Download first if there is anything on it you want to keep." +
+                (skipped.length ? "\n\n" + skipped.length + " chosen channel(s) have no CAN decode or are " +
+                 "wider than 16 bits and will be left off." : "")))
+                return;
+            var ids = sent.map(function (s) { return s._id; });
+            var wire = sent.map(function (s) {
+                return { can_id: s.can_id, start_bit: s.start_bit, bit_len: s.bit_len,
+                         is_signed: s.is_signed, ext_id: s.ext_id, big_endian: s.big_endian };
+            });
+            dev.traceChannelsSet(wire).then(function (r) {
+                if (!r || r.ok === false) throw new Error((r && r.error) || "the node refused it");
+                gp.deviceChanIds = ids;
+                gpDeviceChanIdsSave();
+                return dev.traceInfo();
+            }).then(function (info) {
+                gp.traceInfo = info;
+                showToast("Puck now logs " + ids.length + " channel" + (ids.length === 1 ? "" : "s") +
+                          " beside GPS — ring cleared", "success");
+                gpRenderSetup();
+                gpRenderInspector();
+            }).catch(function (e) {
+                showToast("Failed: " + (e && e.message ? e.message : e), "error");
+            });
+        };
+
+        /* Read what the node actually has right now, independent of what is
+           chosen locally — the two are allowed to disagree until Send. */
+        window.gpChanReadDevice = function () {
+            var dev = gpDev();
+            if (!dev || !dev.traceChannelsGet) return;
+            dev.traceChannelsGet().then(function (r) {
+                var ch = (r && r.channels) || [];
+                /* The node reports wire parameters, not names — match back to
+                   a dash channel by (can_id, start_bit, bit_len) so the UI can
+                   still say something readable. An unmatched entry is real
+                   (logged, just not nameable from here) and kept as its raw id. */
+                var byWire = {};
+                ((gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : []).forEach(function (c) {
+                    var d = c.decode;
+                    if (d) byWire[d.can_id + ":" + d.bit_start + ":" + d.bit_length] = c.id;
+                });
+                gp.deviceChanIds = ch.map(function (c) {
+                    return byWire[c.can_id + ":" + c.start_bit + ":" + c.bit_len] || ("0x" + c.can_id.toString(16));
+                });
+                gpDeviceChanIdsSave();
+                gpRenderSetup();
+            }).catch(function () {});
+        };
+
+        function gpChanArraysEqual(a, b) {
+            if (a.length !== b.length) return false;
+            for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+            return true;
+        }
+
         function gpChannelsHtml() {
             var sel = gpLogChans();
+            var onDev = gpDeviceChanIds();
             var h = "<div class='ws-grp'><div class='ws-gt'>Telemetry channels" +
                 gpTip("The car's bus, in the recording",
                       "The dash has already decoded and named every channel on the bus, so " +
-                      "there is nothing to map twice — pick from what it knows. Each one " +
-                      "costs two bytes a sample; the cost in recording time is shown as you " +
-                      "pick. <b>The node cannot store these yet</b>: its record is a fixed " +
-                      "12 bytes and the format has to grow first. Choosing them now names " +
-                      "the lanes the rack is holding open.") + "</div>";
+                      "there is nothing to map twice — pick from what it knows, then Send to " +
+                      "write the table to the puck. Each channel costs two bytes a sample; the " +
+                      "cost in recording time is shown as you pick. Sending clears whatever is " +
+                      "currently in the puck's ring — the record size changes, so old samples " +
+                      "cannot be read under the new one.") + "</div>";
 
             var mins0 = gpRingMinutes(0);
             var mins = gpRingMinutes(sel.length * GP_CHAN_BYTES);
+            var synced = gpChanArraysEqual(sel, onDev);
             h += "<div class='gp-rows'>" +
                  gpReadyRow("Chosen", sel.length + " of " + GP_CHAN_MAX, sel.length ? "ok" : null,
                             sel.length * GP_CHAN_BYTES + " bytes a sample") +
                  gpReadyRow("Recording time", Math.round(mins) + " min",
                             mins < 60 ? "warn" : null,
                             sel.length ? "was " + Math.round(mins0) + " min" : "at the 12-byte record") +
+                 gpReadyRow("On the puck", onDev.length ? onDev.length + " channel" + (onDev.length === 1 ? "" : "s") : "none",
+                            synced ? "ok" : "warn",
+                            synced ? "matches what's chosen" : "Send to sync — different from what's chosen") +
+                 "</div>";
+            h += "<div class='lt-expbtns' style='margin-top:6px'>" +
+                 "<button class='ws-btn-line' onclick='gpChanSend()'" + (sel.length === onDev.length && synced ? " disabled" : "") +
+                 ">Send to puck</button>" +
+                 "<button class='ws-btn-line' onclick='gpChanReadDevice()' title=\"Read what the puck currently has, without changing your selection\">Read from puck</button>" +
                  "</div>";
 
             var d = gp.dashChans;
@@ -12460,14 +12846,17 @@
                 d.forEach(function (c) {
                     var on = sel.indexOf(c.id) >= 0;
                     var unit = c.unit || c.units || "";
-                    h += "<button class='gp-chan" + (on ? " on" : "") + "' onclick=\"gpChanToggle('" +
-                         gpEsc(c.id) + "')\"><span class='st'></span>" +
+                    var wide = c.decode && gpN(c.decode.bit_length) > 16;
+                    h += "<button class='gp-chan" + (on ? " on" : "") + (wide ? " gp-chan-wide" : "") +
+                         "' onclick=\"gpChanToggle('" + gpEsc(c.id) + "')\"" +
+                         (wide ? " title=\"" + gpN(c.decode.bit_length) + "-bit — wider than the puck's 16-bit slot, cannot be logged\"" : "") +
+                         "><span class='st'></span>" +
                          gpEsc(c.name || c.label || c.id) +
                          (unit ? "<em>" + gpEsc(unit) + "</em>" : "") + "</button>";
                 });
                 h += "</div>";
                 h += "<div class='ws-note'>Chosen channels appear as named lanes in the Session " +
-                     "rack, marked as waiting on the node.</div>";
+                     "rack once Send has pushed them to the puck and a new recording is downloaded.</div>";
             }
             return h + "</div>";
         }

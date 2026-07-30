@@ -1182,6 +1182,13 @@
             async traceRead(from) { return await rpc('trace.read', { from: from | 0 }); },
             async traceClear() { return await rpc('trace.clear'); },
             async traceRecord(on) { return await rpc('trace.record', { on: !!on }); },
+            /* CAN channels logged beside the fix (trace format v2). Setting
+             * the table clears the ring on the node — the record size just
+             * changed, so old samples cannot be read under the new shape.
+             * `channels` is [{can_id, start_bit, bit_len, is_signed, ext_id,
+             * big_endian}, ...], same shape both directions. */
+            async traceChannelsGet() { return await rpc('trace.channels.get'); },
+            async traceChannelsSet(channels) { return await rpc('trace.channels.set', { channels }); },
             async lapTrackGet() { return await rpc('lap.track.get'); },
             async lapTrackSet(track) { return await rpc('lap.track.set', track); },
             async lapSessionReset() { return await rpc('lap.session.reset'); },

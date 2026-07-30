@@ -8,6 +8,12 @@ RDM Studio (formerly "RDM-7 Visual Designer"; renamed 2026-07-10 — the bundle 
 
 This repo (rdm7-desktop) is one part of a larger project that includes: **Web Studio** (browser-based editor), **Desktop Studio** (this repo), **RDM Marketplace** (shared layouts/assets), and **RDM-7 Dash** (the device firmware/runtime). They share the same WASM renderer and layout format.
 
+**Where to look for what** — this file is architecture and build mechanics, kept short on purpose. For a live feature initiative, read the doc, not this file:
+- GPS lap timing / telemetry analysis (Studio side) — `docs/LAP_ANALYSIS_REDESIGN_2026-07.md`
+- The whole device family's roadmap, and which repo owns which workspace — `../RDM-7_Dash/docs/PLATFORM_PLAN_2026-07.md`
+- Where new workspace UI gets authored (firmware-first vs desktop-first) — `../RDM-7_Dash/docs/STUDIO_SHELL_PLAN_2026-07.md` §2.0
+- CAN channel logging on the GPS puck itself (node firmware, unbuilt) — `../rdm-gps-node/docs/TRACE_V2_CAN_CHANNELS.md`
+
 ## Build & Development Commands
 
 ```bash

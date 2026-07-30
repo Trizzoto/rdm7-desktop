@@ -47,8 +47,12 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
     'gpTraceHome', 'gpKmBetween', 'gpMatchTrack', 'gpHeadingAt', 'gpAngleDiff',
     'gpLoopClosure', 'gpProposeLine', 'gpAutoLine', 'gpAutoSetUp', 'gpStints',
     'gpLapRange', 'gpLaneScale', 'gpScaleFor',
-    'gpLogChans', 'gpRingMinutes', 'gpLaneRows', 'gpLaneRowsAll'];
-const NEEDED_VAR = ['GP_LANES', 'GP_CHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
+    'gpLogChans', 'gpRingMinutes', 'gpLaneRows', 'gpLaneRowsAll',
+    'gpDeviceChanIds', 'gpChanArraysEqual', 'gpChanToDevShape',
+    'gpSessionSectors', 'gpSectorMarks', 'gpSectorTimes',
+    'gpSplitsStats', 'gpSectorRange', 'gpHeatColour', 'gpSplitsHtml', 'gpTip', 'gpLapTime'];
+const NEEDED_VAR = ['GP_LANES', 'GP_CHAN_LS', 'GP_DEVCHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_CHAN_COLOURS',
+    'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
     'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S'];
 
 let code = '';
@@ -363,6 +367,82 @@ global.gp.logChans = [];
 ok('picking nothing restores the generic placeholders',
     F.gpLaneRowsAll().map(l => l.label).indexOf('Steering') >= 0);
 
+console.log('\ntranslating a dash channel into what the puck can store');
+const rpmChan = { id: 'rpm', decode: { can_id: 0x360, bit_start: 0, bit_length: 16, is_signed: false, endian: 1 } };
+let shape = F.gpChanToDevShape(rpmChan);
+ok('a normal 16-bit channel translates', !!shape, JSON.stringify(shape));
+ok('field names match the puck\'s trace_chan_t', shape && shape.can_id === 0x360 &&
+    shape.start_bit === 0 && shape.bit_len === 16 && shape.is_signed === false);
+ok('a standard (11-bit) id is not marked extended', shape && shape.ext_id === false);
+ok('endian 1 (Intel) maps to big_endian=false', shape && shape.big_endian === false);
+
+const extChan = { id: 'odo', decode: { can_id: 0x18DAF100, bit_start: 0, bit_length: 8, is_signed: false, endian: 1 } };
+shape = F.gpChanToDevShape(extChan);
+ok('a can_id above 0x7FF is inferred extended', shape && shape.ext_id === true, JSON.stringify(shape));
+
+const motoChan = { id: 'x', decode: { can_id: 0x100, bit_start: 0, bit_length: 8, is_signed: false, endian: 0 } };
+shape = F.gpChanToDevShape(motoChan);
+ok('endian 0 (Motorola) maps to big_endian=true', shape && shape.big_endian === true);
+
+const wideChan = { id: 'lat', decode: { can_id: 0x401, bit_start: 0, bit_length: 32, is_signed: true, endian: 1 } };
+ok('wider than 16 bits is refused, not truncated', F.gpChanToDevShape(wideChan) === null);
+
+const noDecodeChan = { id: 'math_ch', decode: null };
+ok('a channel with no CAN decode at all is refused', F.gpChanToDevShape(noDecodeChan) === null);
+ok('a bare dashChan object with no .decode key is refused', F.gpChanToDevShape({ id: 'x' }) === null);
+
+console.log('\ncomparing the chosen list against what is on the device');
+ok('two empty arrays are equal', F.gpChanArraysEqual([], []));
+ok('same order, same content is equal', F.gpChanArraysEqual(['a', 'b'], ['a', 'b']));
+ok('different order is NOT equal — column order is the whole point', !F.gpChanArraysEqual(['a', 'b'], ['b', 'a']));
+ok('different length is not equal', !F.gpChanArraysEqual(['a'], ['a', 'b']));
+
+console.log('\nthe rack shows real data once a download has channel columns');
+freshGp();
+global.gp.dashChans = [
+    { id: 'rpm', name: 'Engine RPM', unit: 'rpm', decimals: 0,
+      decode: { can_id: 0x360, bit_start: 0, bit_length: 16, is_signed: false, endian: 1, scale: 1, offset: 0 } },
+    { id: 'map', name: 'Manifold pressure', unit: 'kPa', decimals: 1,
+      decode: { can_id: 0x360, bit_start: 16, bit_length: 16, is_signed: false, endian: 1, scale: 0.1, offset: 0 } }
+];
+global.gp.lanesOpen = true;
+global.gp.logChans = ['rpm', 'map'];
+/* No download yet: still the "chosen, not yet on this data" placeholder. */
+let laneRows = F.gpLaneRowsAll();
+let rpmLane = laneRows.filter(l => l.label === 'Engine RPM')[0];
+ok('before any matching download, the lane is still pending', rpmLane && !!rpmLane.pending);
+
+/* Now simulate a download whose device-reported channels match logChans. */
+global.gp.traceChanIds = ['rpm', 'map'];
+global.gp.trace = [
+    { lat: 0, lon: 0, kph: 100, hdg: 0, g: 0, can: [3200, 850] },   // 3200 rpm, 85.0 kPa
+    { lat: 0, lon: 0, kph: 100, hdg: 0, g: 0, can: [null, 900] }    // rpm channel stale this sample
+];
+laneRows = F.gpLaneRowsAll();
+rpmLane = laneRows.filter(l => l.label === 'Engine RPM')[0];
+const mapLane = laneRows.filter(l => l.label === 'Manifold pressure')[0];
+ok('a matching download makes the lane real, not pending', rpmLane && !rpmLane.pending);
+ok('the raw value is scaled using the dash\'s own decode.scale', mapLane.get(0) === 85.0,
+    'got ' + mapLane.get(0));
+ok('rpm at sample 0 comes through unscaled (scale 1, offset 0)', rpmLane.get(0) === 3200);
+ok('a stale (null) sample reads as null, not 0 or garbage', rpmLane.get(1) === null,
+    'got ' + rpmLane.get(1));
+ok('each chosen channel gets a distinct colour', rpmLane.colour !== mapLane.colour);
+
+/* If traceChanIds and the actual .can column count disagree — the loaded
+   session's own book-keeping is inconsistent, e.g. corrupted or half
+   migrated — showing real-looking data would be worse than falling back to
+   the safe "still pending" placeholder built from gpLogChans(). */
+global.gp.traceChanIds = ['rpm', 'map', 'ch3'];           // claims 3 columns
+global.gp.trace = [{ lat: 0, lon: 0, kph: 0, hdg: 0, g: 0, can: [1, 2] }]; // only has 2
+global.gp.logChans = ['rpm'];
+laneRows = F.gpLaneRowsAll();
+ok('traceChanIds/column-count disagreement falls back to gpLogChans, not the mismatched claim',
+    laneRows.filter(l => l.id === 'can_rpm').length === 1 && laneRows.every(l => l.id !== 'can_map'),
+    JSON.stringify(laneRows.filter(l => l.pending !== undefined || l.id === 'can_rpm').map(l => l.id)));
+ok('the fallback lane is pending again, not pretending to have data',
+    laneRows.filter(l => l.id === 'can_rpm')[0].pending === 'the node');
+
 console.log('\nthe readiness panel says what is actually true');
 /* Nothing plugged in, nothing known. */
 freshGp();
@@ -390,6 +470,79 @@ html = F.gpReadyHtml();
 ok('dropped samples are called out as bad', /Dropped[\s\S]*?bad[\s\S]*?42/.test(html), 'no bad-toned Dropped row');
 ok('a wrapped ring warns that laps are gone', /oldest laps overwritten/.test(html));
 ok('a recording node does not nag', !/press Record on before you drive/.test(html));
+
+console.log('\nthe split times report: stats before any sector lines exist');
+freshGp();
+F.gpAutoSetUp(rows);
+global.gp.trace = rows;
+global.gp.traceLaps = F.gpSplitRows(rows);
+global.gp.selLap = -1; global.gp.cmpLap = -1;
+let D = F.gpSplitsStats();
+ok('stats still work with zero sector lines', !!D && D.nSectors === 0 && D.ideal === null);
+ok('every real lap is counted', D.rows.length === laps.length, D.rows.length + ' vs ' + laps.length);
+ok('the mean matches the plain arithmetic done earlier', Math.abs(D.mean - mean) < 1e-9);
+ok('the standard deviation matches the plain arithmetic done earlier', Math.abs(D.stdDev - sd) < 1e-9);
+ok('the panel admits it has nothing to grid yet', /no sector lines yet/.test(F.gpSplitsHtml()));
+
+console.log('\nadding two sector lines (thirds) and re-checking the grid');
+/* Same shape gpProposeLine already builds a start/finish line in — just two
+   more of them, dropped a third and two-thirds around the way round lap 1. */
+const trk4 = F.gpActiveTrack();
+const lap0 = global.gp.traceLaps[0];
+const at4 = (frac) => lap0.from + Math.round((lap0.to - lap0.from) * frac);
+const gate4 = (i) => ({ lat: rows[i].lat, lon: rows[i].lon, heading: F.gpHeadingAt(rows, i, 12), half_width_m: 15 });
+trk4.sectors = [gate4(at4(1 / 3)), gate4(at4(2 / 3))];
+
+D = F.gpSplitsStats();
+ok('three sectors now exist (two lines)', D.nSectors === 3, 'got ' + D.nSectors);
+D.rows.forEach(function (r) {
+    ok('lap ' + (r.li + 1) + ' splits sum to its own total',
+        !!r.secs && Math.abs(r.secs.reduce(function (a, b) { return a + b; }, 0) - r.total) < 0.01,
+        r.secs ? r.secs.reduce(function (a, b) { return a + b; }, 0).toFixed(3) + ' vs ' + r.total.toFixed(3) : 'no secs');
+});
+ok('the best lap really is the fastest total', Math.abs(D.bestTime - Math.min.apply(null, times)) < 1e-6);
+ok('the ideal lap can never beat what was actually driven',
+    D.ideal !== null && D.ideal <= D.bestTime + 1e-6, D.ideal + ' vs best ' + D.bestTime);
+
+console.log('\nthe sector ranges chain with no gap and no overlap');
+const ranges4 = [F.gpSectorRange(lap0, 0), F.gpSectorRange(lap0, 1), F.gpSectorRange(lap0, 2)];
+ok('all three ranges resolved', ranges4.every(Boolean));
+ok('the first starts at the lap and the last ends at the lap',
+    ranges4[0].from === lap0.from && ranges4[2].to === lap0.to);
+ok('each range starts exactly where the last one finished',
+    ranges4[0].to === ranges4[1].from && ranges4[1].to === ranges4[2].from);
+ok('a sector index outside the lap returns nothing',
+    F.gpSectorRange(lap0, -1) === null && F.gpSectorRange(lap0, 3) === null);
+
+console.log('\nthe heat colour runs green to red and clamps at the ends');
+ok('the best of a column is the green endpoint', F.gpHeatColour(0) === 'rgba(111,191,115,1)');
+ok('the worst of a column is the red endpoint', F.gpHeatColour(1) === 'rgba(224,93,82,1)');
+ok('going past either end just holds the endpoint',
+    F.gpHeatColour(-5) === F.gpHeatColour(0) && F.gpHeatColour(5) === F.gpHeatColour(1));
+const mid4 = F.gpHeatColour(0.5).match(/[\d.]+/g).map(Number);
+ok('the midpoint sits between green and red on every channel',
+    mid4[0] > 111 && mid4[0] < 224 && mid4[1] < 191 && mid4[1] > 93 && mid4[2] < 115 && mid4[2] > 82,
+    F.gpHeatColour(0.5));
+
+console.log('\nthe table itself: headers, grading, and a lap that lost a split');
+const html4 = F.gpSplitsHtml();
+ok('one clickable header per sector', (html4.match(/data-gp-split-hd/g) || []).length === 3);
+ok('the session-best cell in each column is marked purple',
+    (html4.match(/class='p'/g) || []).length === 3, JSON.stringify(html4.match(/class='p'/g)));
+ok('every stat row is there', /Average/.test(html4) && /Median/.test(html4) &&
+    /Consistency/.test(html4) && /Best lap/.test(html4) && /Ideal lap/.test(html4));
+
+/* Simulate a lap that never re-crossed one of the sector gates — the same
+   "untimed, not partially timed" rule gpSectorMarks already enforces for a
+   missed line. gpSessionSectors caches on gp.sectors/gp.secKey; nothing that
+   feeds that key (lap count, sector count, track name) is changing here, so
+   mutating the cached object in place and asking again re-reads exactly
+   this rather than recomputing from the real, unbroken geometry. */
+global.gp.sectors.per[2] = null;
+const gapStats = F.gpSplitsStats();
+ok('the lap itself still counts (its total needs no sector gate)',
+    gapStats.rows.length === D.rows.length && gapStats.rows[2].secs === null);
+ok('the report shows a dash instead of inventing a number', /class='na'/.test(F.gpSplitsHtml()));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);
