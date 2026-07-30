@@ -57,7 +57,8 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
     'gpMyChans', 'gpMyChansSave', 'gpAllChans', 'gpChanGroup', 'gpParseId', 'gpMyChanCheck',
     'gpToggleHtml', 'gpMyChanFormHtml',
     'gpRowsPack', 'gpRowsUnpack', 'gpSessionFileBuild', 'gpSessionFileParse', 'gpB64', 'gpB64Dec',
-    'gpSesUid', 'gpChannels', 'gpCsvBuild', 'gpSpdN', 'gpSmoothPath'];
+    'gpSesUid', 'gpChannels', 'gpCsvBuild', 'gpSpdN', 'gpSmoothPath',
+    'gpSectorGates', 'gpSectorName', 'gpSectorNamed', 'gpSortSectors', 'gpSectorOfSample'];
 const NEEDED_VAR = ['GP_LANES', 'GP_CHAN_LS', 'GP_DEVCHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_CHAN_COLOURS',
     'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
     'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S',
@@ -550,15 +551,147 @@ trk4.sectors = farGates;
 global.gp.sectors = null; global.gp.secKey = '';
 D = F.gpSplitsStats();
 
+console.log('\nsplits you name');
+/* A name belongs to the GATE THAT OPENS the stretch — start/finish opens the
+   first one. That single choice is what makes inserting, deleting and
+   reordering correct without any index juggling, so it is what these check. */
+ok('there is one opening gate per stretch',
+    F.gpSectorGates(trk4).length === (trk4.sectors.length + 1),
+    F.gpSectorGates(trk4).length + ' gates for ' + (trk4.sectors.length + 1) + ' sectors');
+ok('an unnamed stretch falls back to its number', F.gpSectorName(trk4, 1) === 'Sector 2');
+ok('and says it is unnamed', F.gpSectorNamed(trk4, 1) === false);
+trk4.start_finish.name = 'Front straight';
+trk4.sectors[0].name = 'The Esses';
+ok('start/finish names the FIRST stretch', F.gpSectorName(trk4, 0) === 'Front straight');
+ok('a split names the stretch that begins at it', F.gpSectorName(trk4, 1) === 'The Esses');
+ok('the one after it is still unnamed', F.gpSectorName(trk4, 2) === 'Sector 3');
+ok('a named one reports as named', F.gpSectorNamed(trk4, 0) && !F.gpSectorNamed(trk4, 2));
+trk4.sectors[0].name = '   ';
+ok('whitespace is not a name', F.gpSectorNamed(trk4, 1) === false && F.gpSectorName(trk4, 1) === 'Sector 2');
+trk4.sectors[0].name = 'The Esses';
+
+console.log('\nnames survive the edits that move sectors around');
+/* Insert a split inside the FIRST stretch. The half that still begins at
+   start/finish keeps its name; only the new half needs one. */
+const insertAt = trk4.sectors[0];
+trk4.sectors = [gate4(at4(1 / 6)), insertAt];
+ok('after inserting, the first half keeps its name', F.gpSectorName(trk4, 0) === 'Front straight');
+ok('the new half is unnamed, not mislabelled', F.gpSectorNamed(trk4, 1) === false);
+ok('and the stretch that was named further along still is',
+    F.gpSectorName(trk4, 2) === 'The Esses');
+/* Delete that inserted gate: the two stretches merge and keep the earlier
+   name, which is the one whose opening gate survived. */
+trk4.sectors = [insertAt];
+ok('after deleting, the merged stretch keeps the earlier name',
+    F.gpSectorName(trk4, 0) === 'Front straight');
+ok('and the deleted gate takes its own name with it', F.gpSectorName(trk4, 1) === 'The Esses');
+
+console.log('\ngates get put in the order the car actually crosses them');
+/* The array holds them in the order they were ADDED. Drop one at the far side
+   of the circuit and it is still "Split 1" everywhere a person reads — while
+   the timing, which sorts crossings, disagrees. */
+freshGp();
+F.gpAutoSetUp(rows);
+global.gp.trace = rows;
+global.gp.traceLaps = F.gpSplitRows(rows);
+const trkO = F.gpActiveTrack();
+const lapO = global.gp.traceLaps[0];
+const atO = (f) => lapO.from + Math.round((lapO.to - lapO.from) * f);
+const gateO = (i, nm) => ({ lat: rows[i].lat, lon: rows[i].lon, heading: F.gpHeadingAt(rows, i, 12),
+                            half_width_m: 15, name: nm });
+/* Added back to front: the LATER one first. */
+trkO.sectors = [gateO(atO(0.7), 'Back straight'), gateO(atO(0.3), 'The Esses')];
+global.gp.selGate = 0;                       /* "Back straight" is selected */
+ok('the sort reports that it changed something', F.gpSortSectors() === true);
+ok('the earlier gate is now first', trkO.sectors[0].name === 'The Esses');
+ok('so the names follow the gates rather than the slots',
+    F.gpSectorName(trkO, 1) === 'The Esses' && F.gpSectorName(trkO, 2) === 'Back straight');
+ok('and the selected gate is still the one that was selected',
+    trkO.sectors[Number(global.gp.selGate)].name === 'Back straight',
+    'selGate=' + global.gp.selGate);
+ok('running it again changes nothing', F.gpSortSectors() === false);
+/* Sorting needs a lap to know the order; with none it must leave well alone
+   rather than inventing one. */
+const beforeNoLap = trkO.sectors.map(s => s.name).join(',');
+global.gp.traceLaps = [];
+trkO.sectors = [gateO(atO(0.7), 'Back straight'), gateO(atO(0.3), 'The Esses')];
+ok('with no laps it does nothing at all', F.gpSortSectors() === false &&
+    trkO.sectors[0].name === 'Back straight');
+global.gp.traceLaps = F.gpSplitRows(rows);
+/* A gate the lap never crossed cannot be placed in the order, so nothing is
+   reordered on a guess. */
+trkO.sectors = [gateO(atO(0.3), 'The Esses'),
+                { lat: rows[0].lat + 0.02, lon: rows[0].lon, heading: 0, half_width_m: 15, name: 'Miles away' }];
+ok('a gate the lap missed stops the sort rather than guessing',
+    F.gpSortSectors() === false && trkO.sectors[0].name === 'The Esses');
+
+console.log('\na finding can say where it happened');
+trkO.sectors = [gateO(atO(1 / 3), 'The Esses'), gateO(atO(2 / 3), 'Back straight')];
+trkO.start_finish.name = 'Front straight';
+global.gp.sectors = null; global.gp.secKey = '';
+const marksO = F.gpSectorMarks(lapO);
+ok('the lap has usable splits to place a sample in', !!marksO && marksO.length === 2);
+ok('a sample before the first split is in the opening stretch',
+    F.gpSectorOfSample(lapO, lapO.from + 1) === 0);
+ok('a sample between the splits is in the middle stretch',
+    F.gpSectorOfSample(lapO, marksO[0] + 5) === 1);
+ok('a sample after the last split is in the closing stretch',
+    F.gpSectorOfSample(lapO, marksO[1] + 5) === 2);
+ok('and it names it', F.gpSectorName(trkO, F.gpSectorOfSample(lapO, marksO[0] + 5)) === 'The Esses');
+trkO.sectors = [];
+ok('with no splits at all there is nowhere to place it',
+    F.gpSectorOfSample(lapO, lapO.from + 1) === null);
+
+console.log('\nthe split-times grid uses the names');
+global.gp.trace = rows;
+global.gp.traceLaps = F.gpSplitRows(rows);
+trkO.sectors = [gateO(atO(1 / 3), 'The Esses'), gateO(atO(2 / 3), 'Back straight')];
+global.gp.sectors = null; global.gp.secKey = '';
+const gridN = F.gpSplitsHtml();
+/* The names are a legend above the grid, not column headers: the rail is
+   ~290 px and three names plus a Total do not fit — putting them in the
+   headers pushed the Total column off the edge behind a scrollbar. */
+ok('the names are stated in full above the grid',
+    /gp-seclegend/.test(gridN) && /Front straight/.test(gridN) && /The Esses/.test(gridN));
+ok('the columns themselves stay short, so Total still fits',
+    /<th data-gp-split-hd='0'[^>]*>S1<\/th>/.test(gridN), 'header is not S1');
+ok('and every named header carries its name in a tooltip', /sector 2/.test(gridN));
+trkO.start_finish.name = '';
+delete trkO.sectors[0].name;
+delete trkO.sectors[1].name;
+global.gp.sectors = null; global.gp.secKey = '';
+const gridU = F.gpSplitsHtml();
+ok('with nothing named there is no legend at all', !/gp-seclegend/.test(gridU));
+ok('and the grid is unchanged', /<th data-gp-split-hd='0'[^>]*>S1<\/th>/.test(gridU));
+trkO.sectors[1].name = 'Back straight';
+global.gp.sectors = null; global.gp.secKey = '';
+const gridM = F.gpSplitsHtml();
+ok('naming only some of them lists only those',
+    /gp-seclegend/.test(gridM) && /Back straight/.test(gridM) && !/Front straight/.test(gridM));
+
 console.log('\nthe sector ranges chain with no gap and no overlap');
-const ranges4 = [F.gpSectorRange(lap0, 0), F.gpSectorRange(lap0, 1), F.gpSectorRange(lap0, 2)];
+/* Its own gates on its own track, so the sections above are free to move the
+   active track around without quietly changing what this asserts. */
+freshGp();
+F.gpAutoSetUp(rows);
+global.gp.trace = rows;
+global.gp.traceLaps = F.gpSplitRows(rows);
+const trkR = F.gpActiveTrack();
+const lapR = global.gp.traceLaps[0];
+const atR = (f) => lapR.from + Math.round((lapR.to - lapR.from) * f);
+trkR.sectors = [{ lat: rows[atR(1 / 3)].lat, lon: rows[atR(1 / 3)].lon,
+                  heading: F.gpHeadingAt(rows, atR(1 / 3), 12), half_width_m: 15 },
+                { lat: rows[atR(2 / 3)].lat, lon: rows[atR(2 / 3)].lon,
+                  heading: F.gpHeadingAt(rows, atR(2 / 3), 12), half_width_m: 15 }];
+global.gp.sectors = null; global.gp.secKey = '';
+const ranges4 = [F.gpSectorRange(lapR, 0), F.gpSectorRange(lapR, 1), F.gpSectorRange(lapR, 2)];
 ok('all three ranges resolved', ranges4.every(Boolean));
 ok('the first starts at the lap and the last ends at the lap',
-    ranges4[0].from === lap0.from && ranges4[2].to === lap0.to);
+    ranges4[0].from === lapR.from && ranges4[2].to === lapR.to);
 ok('each range starts exactly where the last one finished',
     ranges4[0].to === ranges4[1].from && ranges4[1].to === ranges4[2].from);
 ok('a sector index outside the lap returns nothing',
-    F.gpSectorRange(lap0, -1) === null && F.gpSectorRange(lap0, 3) === null);
+    F.gpSectorRange(lapR, -1) === null && F.gpSectorRange(lapR, 3) === null);
 
 console.log('\nthe heat colour runs green to red and clamps at the ends');
 ok('the best of a column is the green endpoint', F.gpHeatColour(0) === 'rgba(111,191,115,1)');

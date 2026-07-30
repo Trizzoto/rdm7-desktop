@@ -1263,6 +1263,13 @@
                                font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; }
         .gp-splits th[data-gp-split-hd] { cursor: pointer; }
         .gp-splits th[data-gp-split-hd]:hover { color: var(--text); }
+        /* The names, stated once above the grid — see gpSplitsHtml for why they
+           are not in the column headers. Wraps freely: this is prose, and the
+           table below it is not. */
+        .gp-seclegend { font-size: 10px; color: var(--text-muted); line-height: 1.6;
+                        margin-top: 7px; }
+        .gp-seclegend b { font-family: 'JetBrains Mono', monospace; color: var(--text);
+                          font-weight: 600; }
         .gp-splits td[data-gp-split-cell] { cursor: pointer; }
         .gp-splits tbody tr:hover td { filter: brightness(1.15); }
         .gp-splits tr.on td:first-child { color: #7CC0FF; font-weight: 600; }
@@ -1442,6 +1449,10 @@
                    background: var(--accent); color: #fff; font-size: 10px; line-height: 16px;
                    text-align: center; }
         .gp-op-t { flex: 1; font-size: 12px; color: var(--text); }
+        /* Where it happened, when the driver has named that stretch. Its own
+           line — the titles already run long — and muted, because it is a
+           place rather than a finding. */
+        .gp-op-loc { display: block; font-size: 10px; color: var(--text-muted); margin-top: 2px; }
         .gp-op-d { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
         .gp-op-d.bad { color: #e05d52; }
         .gp-op-d.ok { color: #6FBF73; }
@@ -8066,6 +8077,103 @@
             return out;
         }
 
+        /* ══════════════════════════════════════════════════════════════════
+         * Splits you name
+         *
+         * "You lost 0.3 s in sector 2" is a fact you have to translate before
+         * you can drive on it. "You lost 0.3 s through the Esses" is an
+         * instruction. Same number.
+         *
+         * A NAME BELONGS TO THE GATE THAT STARTS THE STRETCH — including the
+         * start/finish line, which starts the first one. That one decision
+         * makes every edit correct for free:
+         *
+         *   - drop a new split inside a stretch and the first half keeps its
+         *     name (its opening gate has not moved) while the second half
+         *     begins at the new gate, unnamed;
+         *   - delete a gate and its stretch merges into the one before, which
+         *     keeps its own name;
+         *   - reorder the gates and the names travel with them.
+         *
+         * Naming them the other way round — an array of names indexed by
+         * position — would need all three of those handled by hand, and would
+         * silently relabel someone's track the first time one was missed.
+         * ═════════════════════════════════════════════════════════════════ */
+
+        /* The gates that OPEN each stretch, in driving order: start/finish
+           first, then the splits. One longer than `sectors`, which is exactly
+           the number of stretches. */
+        function gpSectorGates(trk) {
+            if (!trk || !trk.start_finish) return [];
+            return [trk.start_finish].concat(trk.sectors || []);
+        }
+
+        function gpSectorName(trk, i) {
+            var g = gpSectorGates(trk)[i];
+            var nm = g && typeof g.name === "string" ? g.name.trim() : "";
+            return nm || ("Sector " + (i + 1));
+        }
+
+        /* True when it has a name of its own rather than the positional
+           fallback — the UI shows the two differently, because "Sector 2" is
+           a placeholder and "The Esses" is a decision. */
+        function gpSectorNamed(trk, i) {
+            var g = gpSectorGates(trk)[i];
+            return !!(g && typeof g.name === "string" && g.name.trim());
+        }
+
+        /* ---- gates in the order they are actually crossed --------------------
+           The array holds them in the order they were ADDED, which for
+           hand-placed splits is no order at all: drop one at the far side of
+           the circuit and it is still "Split 1". The timing already copes
+           (gpSectorMarks sorts the crossings), but everything a person reads
+           — the gate list, the split-times columns, and now the names —
+           numbered them by array position and so could disagree with the car.
+
+           Sorting needs a lap to know the order, so it happens when one
+           exists and is a no-op otherwise. Names ride along because they live
+           on the gates. */
+        function gpSortSectors() {
+            var trk = gpActiveTrack();
+            var secs = (trk && trk.sectors) || [];
+            if (secs.length < 2 || !gp.trace || !gp.trace.length) return false;
+            var lap = (gp.traceLaps || []).filter(function (l) { return !l.ghost; })[0];
+            if (!lap) return false;
+
+            var at = [], i;
+            for (i = 0; i < secs.length; i++) {
+                var G = gpGateHits(gp.trace, secs[i], lap.from, lap.to);
+                if (!G.hits.length) return false;      /* a gate this lap missed: leave well alone */
+                at.push({ g: secs[i], i: G.hits[0].i });
+            }
+            var sorted = at.slice().sort(function (a, b) { return a.i - b.i; });
+            var same = true;
+            for (i = 0; i < at.length; i++) if (at[i].g !== sorted[i].g) same = false;
+            if (same) return false;
+            /* gp.selGate is an INDEX into this array, so re-point it at the
+               gate the user actually has selected rather than at whatever
+               slides into its slot. Losing the selection mid-drag would be
+               the sort snatching the thing being edited. */
+            var selObj = (gp.selGate !== "sf" && gp.selGate !== "fin") ? secs[Number(gp.selGate)] : null;
+            trk.sectors = sorted.map(function (x) { return x.g; });
+            if (selObj) {
+                var at2 = trk.sectors.indexOf(selObj);
+                if (at2 >= 0) gp.selGate = at2;
+            }
+            gpTracksSave();
+            gp.sectors = null; gp.secKey = "";      /* the split cache is keyed on order */
+            return true;
+        }
+
+        /* Which stretch a sample falls in, so a finding can name where it
+           happened. Returns null when the lap has no usable splits. */
+        function gpSectorOfSample(lap, i) {
+            var marks = gpSectorMarks(lap);
+            if (!marks) return null;
+            for (var k = 0; k < marks.length; k++) if (i < marks[k]) return k;
+            return marks.length;
+        }
+
         function gpSessionSectors() {
             var trk = gpActiveTrack();
             var key = gp.traceLaps.length + ":" + (gp.ghostFence === null ? "" : "g") + ":" +
@@ -8091,13 +8199,17 @@
         function gpSectorChips(li) {
             var S = gpSessionSectors();
             if (!S || !S.per[li]) return "";
+            var trk = gpActiveTrack();
             var row = S.per[li], ref = (gp.cmpLap >= 0 && gp.cmpLap !== li) ? S.per[gp.cmpLap] : null;
             var h = "<div class='gp-secs'>";
             for (var i = 0; i < row.length; i++) {
                 var cls = "";
                 if (S.best && Math.abs(row[i] - S.best[i]) < 0.0005) cls = "p";
                 else if (ref) cls = row[i] < ref[i] ? "g" : "r";
-                h += "<span class='" + cls + "'>" + row[i].toFixed(2) + "</span>";
+                /* Four bare numbers in a row give no clue which is which; the
+                   name is the cheapest way to say so without widening them. */
+                h += "<span class='" + cls + "' title='" + gpEsc(gpSectorName(trk, i)) + "'>" +
+                     row[i].toFixed(2) + "</span>";
             }
             return h + "</div>";
         }
@@ -8213,10 +8325,29 @@
                 var vals = S.per.filter(Boolean).map(function (p) { return p[s0]; });
                 colRange.push({ lo: Math.min.apply(null, vals), hi: Math.max.apply(null, vals) });
             }
+            /* Names go in a legend above the grid, not in the column headers.
+               Tried it the other way first and it was wrong on this surface:
+               the rail is ~290 px, three names plus a total do not fit, and
+               the Total column — the number people actually read — was pushed
+               off the edge behind a horizontal scrollbar. Headers stay S1/S2/S3
+               so the grid stays a grid of numbers; the legend says in full
+               what each one is, once, and every header keeps its name in its
+               tooltip. */
+            var trkS = gpActiveTrack();
+            var legend = [];
+            for (var sL = 0; sL < nSec; sL++)
+                if (gpSectorNamed(trkS, sL))
+                    legend.push("<b>S" + (sL + 1) + "</b> " + gpEsc(gpSectorName(trkS, sL)));
+            if (legend.length) h += "<div class='gp-seclegend'>" + legend.join(" · ") + "</div>";
+
             h += "<div class='gp-splits-wrap'><table class='gp-splits'><thead><tr><th>" +
                  gpRunWord(true) + "</th>";
-            for (var s1 = 0; s1 < nSec; s1++)
-                h += "<th data-gp-split-hd='" + s1 + "'>S" + (s1 + 1) + "</th>";
+            for (var s1 = 0; s1 < nSec; s1++) {
+                h += "<th data-gp-split-hd='" + s1 + "'" +
+                     (gpSectorNamed(trkS, s1)
+                        ? " data-tip=\"" + gpEsc(gpSectorName(trkS, s1)) + " — sector " + (s1 + 1) + "\""
+                        : "") + ">S" + (s1 + 1) + "</th>";
+            }
             h += "<th>Total</th></tr></thead><tbody>";
             D.rows.forEach(function (row) {
                 h += "<tr class='" + (row.li === gp.selLap ? "on " : "") +
@@ -9876,8 +10007,21 @@
                     title += ins.members === 2 ? " + the next"
                                                : " + the next " + (ins.members - 1) + " corners";
             }
+            /* If the driver has named the stretch this happened in, say where
+               it happened — "you lost 0.3 s in the Esses" is somewhere to go
+               and try again, where a corner entry speed is a number to decode
+               first. On its own line rather than appended to the title, which
+               already runs long; and only when it is a REAL name, since "in
+               Sector 2" adds nothing the grid two panels up does not say. */
+            var where = "";
+            var lapIns = gp.traceLaps[gp.selLap];
+            if (lapIns) {
+                var sIdx = gpSectorOfSample(lapIns, ins.a);
+                if (sIdx !== null && gpSectorNamed(gpActiveTrack(), sIdx))
+                    where = "<span class='gp-op-loc'>" + gpEsc(gpSectorName(gpActiveTrack(), sIdx)) + "</span>";
+            }
             h += "<div class='gp-op-hd'><span class='gp-op-n'>" + rank + "</span>" +
-                 "<span class='gp-op-t'>" + title + "</span>" +
+                 "<span class='gp-op-t'>" + title + where + "</span>" +
                  "<span class='gp-op-d " + (ins.total_s > 0 ? "bad" : "ok") + "'>" +
                  gpSigned(ins.total_s, 2, " s") + "</span></div>";
 
@@ -10450,9 +10594,12 @@
            is always followed by either laps or a reason. */
         function gpSplitLapsAuto() {
             gpSplitLaps();
-            if (gp.traceLaps.length) return null;
+            /* Once there are laps, the gates can be put in the order the car
+               meets them — the only moment that order is knowable, and the
+               thing every numbered label downstream assumes. */
+            if (gp.traceLaps.length) { gpSortSectors(); return null; }
             var said = gpAutoSetUp(gp.trace);
-            if (said) gpSplitLaps();
+            if (said) { gpSplitLaps(); gpSortSectors(); }
             return said;
         }
 
@@ -12454,8 +12601,12 @@
                        the last few metres of aim so the mouse doesn't have to. */
                     gpSnapGate(g.line);
                     gpTracksSave();
+                    /* Dragging a split past another one changes which is
+                       first, so the numbering (and the names that hang off
+                       it) is re-derived from where they now sit. */
+                    gpSortSectors();
                     if (!selected) { gpSelectGate(g.key); return; }   /* rebuilds */
-                    gpDrawEditor(); gpRenderInspector();
+                    gpDrawEditor(); gpRenderInspector(); gpBuildRail(); gpDrawStrip();
                 });
                 centre.bindTooltip(g.label, { direction: "top", offset: [0, -10] });
 
@@ -12727,6 +12878,19 @@
             }
             gpTracksSave();
             gpBuildRail(); gpDrawEditor(); gpRenderInspector();
+        };
+
+        /* Typed into, so no re-render — that would take the caret with it.
+           The gate list and the split-times columns pick the new name up on
+           their next natural redraw, and the name is saved on every keystroke
+           so nothing is lost by clicking away. */
+        window.gpGateName = function (value) {
+            var g = gpSelectedLine();
+            if (!g) return;
+            var v = String(value || "").trim().slice(0, 24);
+            if (v) g.name = v; else delete g.name;
+            gpTracksSave();
+            gp.stripCache = null;
         };
 
         window.gpGateField = function (field, value) {
@@ -14823,6 +14987,29 @@
                  "The dash counts a crossing only inside that width.</div>";
             h += "</div>";
 
+            /* The stretches between the gates, which is what the split times
+               are actually OF. Only worth a panel once there is more than
+               one — a single sector is the lap, and naming it "the lap" helps
+               nobody. Clicking one selects the gate that opens it, which is
+               where its name is edited. */
+            if (t.start_finish && secs.length) {
+                h += "<div class='ws-grp'><div class='ws-gt'>Sectors" +
+                     gpTip("What the split times are of",
+                           "Each stretch runs from one gate to the next. Give them the names " +
+                           "you already use for those parts of the circuit and every split " +
+                           "time, every column header and every coaching note starts using " +
+                           "them too.") + "</div><div class='gp-gatelist'>";
+                for (var si2 = 0; si2 <= secs.length; si2++) {
+                    var opens = si2 === 0 ? "sf" : (si2 - 1);
+                    h += "<button class='gp-gate" + (String(gp.selGate) === String(opens) ? " on" : "") +
+                         "' onclick=\"gpSelectGate(" + (si2 === 0 ? "'sf'" : (si2 - 1)) + ")\">" +
+                         "<i style='background:" + (si2 === 0 ? "#F5F7FA" : "#FF9F0A") + "'></i>" +
+                         gpEsc(gpSectorName(t, si2)) +
+                         (gpSectorNamed(t, si2) ? "" : " <em>— unnamed</em>") + "</button>";
+                }
+                h += "</div></div>";
+            }
+
             /* Selected gate */
             if (g) {
                 h += "<div class='ws-grp'><div class='ws-gt'>" +
@@ -14832,6 +15019,23 @@
                 h += "<div class='gp-rows'>" +
                      "<div class='gp-row'><span class='k'>Position</span><span class='v'>" +
                      g.lat.toFixed(7) + "</span><span class='s'>" + g.lon.toFixed(7) + "</span></div></div>";
+                /* Every gate except the finish OPENS a stretch, so it is the
+                   thing that carries that stretch's name. The finish ends the
+                   run and opens nothing. */
+                if (gp.selGate !== "fin") {
+                    var si = gp.selGate === "sf" ? 0 : Number(gp.selGate) + 1;
+                    h += "<div class='ws-field' style='margin-top:9px'><label>Name of the stretch that starts here" +
+                         gpTip("Naming a sector",
+                               "Sector times read as “you lost 0.3 s in sector 2” until the " +
+                               "sectors have names, and then they read as “you lost 0.3 s " +
+                               "through the Esses”. Same number, but one of them tells you " +
+                               "where to go and try again.<br><br>The name belongs to the gate " +
+                               "that opens the stretch, so adding a split later leaves the " +
+                               "first half named and only the new half needs one.") +
+                         "</label><input type='text' maxlength='24' spellcheck='false' placeholder='" +
+                         gpEsc("Sector " + (si + 1)) + "' value='" + gpEsc((g.name || "")) +
+                         "' oninput=\"gpGateName(this.value)\"></div>";
+                }
                 h += "<div class='ws-field' style='margin-top:9px'><label>Direction of travel across it</label>" +
                      "<div class='ws-slider'><input type='range' data-gp-fld='heading' min='0' max='359' step='1' value='" + Math.round(g.heading) +
                      "' oninput=\"gpGateField('heading', this.value)\">" +

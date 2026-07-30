@@ -14,8 +14,13 @@
 > file, or be typed in (ADR-0018). Recordings now keep their channel
 > columns through a save, a reload and an export.
 >
-> **Remaining:** Stage 5 (named splits), and the live-bus check of the
-> puck's bit extraction, which needs a moving car or a real CAN source.
+> Stage 5 landed too: sectors can be named, the name lives on the gate that
+> opens the stretch so every edit stays correct, and gates are now kept in
+> the order the car crosses them (ADR-0019).
+>
+> **All five stages are done.** The one thing still unverified is the puck's
+> bit extraction against a live bus — everything around it is proven on
+> hardware, but reading real frames needs a moving car or a real CAN source.
 
 Sourced from the Race Studio 3 manual (structure and vocabulary only — no code,
 no assets, no wording lifted) and from what the RDM hardware can already do that
