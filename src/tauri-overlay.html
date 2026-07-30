@@ -1048,9 +1048,19 @@
            view. The pulse is opacity-only — a size pulse would make the whole
            chip row breathe. Paused is amber and still: obvious, but calm,
            because a deliberately paused bench unit is not an emergency. */
+        /* The chip is a BUTTON: one press starts the log, one press stops it —
+           the same control the dash will carry over CAN, so the two agree on
+           what pressing it means. Red and moving = recording, grey and still
+           = stopped. No confirm dialog: it toggles a flag on the node, wipes
+           nothing, and the state it lands in is the label it shows. */
+        button.ws-chip { cursor: pointer; font: inherit; }
+        button.ws-chip:hover { border-color: var(--accent); }
         .ws-chip.rec-on { color: #ff453a; border-color: #6e2f2b; font-weight: 700;
                           letter-spacing: 0.08em; }
-        .ws-chip.rec-off { color: #d99a3d; border-color: #5c4a24; }
+        .ws-chip.rec-on:hover { border-color: #ff453a; }
+        .ws-chip.rec-off { color: var(--text-muted); border-color: var(--border); }
+        .ws-chip.rec-off .gp-recdot { background: none; border: 1.5px solid var(--text-muted);
+                                      animation: none; box-sizing: border-box; }
         .gp-recdot { width: 8px; height: 8px; border-radius: 50%; background: #ff453a;
                      display: inline-block; flex: none;
                      animation: gpRecPulse 1.1s ease-in-out infinite; }
@@ -2195,7 +2205,7 @@
             <span class="ws-brand" id="gpBrand"></span>
             <span class="ws-chip" id="gpChipDev">no node linked</span>
             <span class="ws-chip" id="gpChipFix">&#8212;</span>
-            <span class="ws-chip" id="gpChipRec" style="display:none"></span>
+            <button class="ws-chip" id="gpChipRec" style="display:none" onclick="gpRecToggle()"></button>
             <button class="btn" id="gpConnectBtn" style="font-size:11px; padding:0 14px; display:none;" onclick="gpConnect()">Connect over USB</button>
             <div class="ws-modes" role="group" aria-label="View">
                 <button id="gpBtnMonitor" class="on" onclick="gpSetView('monitor')">Monitor</button>
@@ -6580,7 +6590,16 @@
                     sub: function (s) { return s.rx_recover === undefined
                         ? "node firmware predates this count"
                         : (s.rx_recover ? "the puck had to rebuild the connection to it" : "none"); },
-                    tone: function (s) { return s.rx_recover === undefined ? null : (s.rx_recover ? "bad" : "ok"); } }
+                    tone: function (s) { return s.rx_recover === undefined ? null : (s.rx_recover ? "bad" : "ok"); } },
+                /* The sentinel's trips — the puck rebooting ITSELF out of the
+                   wedge the two counters above cannot see (their zeroes are
+                   its signature). Nonzero is worth amber, not red: it means
+                   the failure happened and was survived without a laptop. */
+                { label: "Self-restarts", v: function (s) { return gpInt(s.sentinel_reboots); },
+                    sub: function (s) { return s.sentinel_reboots === undefined
+                        ? "node firmware predates this count"
+                        : (s.sentinel_reboots ? "the puck rebooted itself to revive the receiver" : "none this power-cycle"); },
+                    tone: function (s) { return s.sentinel_reboots === undefined ? null : (s.sentinel_reboots ? "warn" : "ok"); } }
             ], note: "The satellite receiver is a separate chip inside the puck, and these count what it hands to the puck's processor. Nothing you plug into the car changes them — corrupted or incomplete messages mean the fault is inside the unit. If the receiver stops answering, the bottom two rows say whether it was the known flash-contention fault: both climbing means it is back, both at zero means this is something else." },
             { id: "imu", title: "IMU", ok: function (s) { return !!s.imu; }, rows: [
                 { label: "Accel X", v: function (s) { return gpImu(s, "ax_mg", " mg"); } },
@@ -10385,6 +10404,30 @@
                 return dev.traceInfo();
             }).then(function (i) { gp.traceInfo = i; gpRenderInspector(); })
               .catch(function (e) { gpSetMsg("gpTraceMsg", "Failed: " + (e && e.message ? e.message : e), "bad"); });
+        };
+
+        /* The topbar ● REC button. One press, no dialog: it flips a flag on
+           the node and destroys nothing, and the button's own colour is the
+           receipt. _recBusy keeps a second press (and the 5 s traceInfo
+           refresh) from racing the round trip — the chip shows "…" for the
+           beat the node takes to answer. */
+        window.gpRecToggle = function () {
+            var dev = gpDev();
+            if (!dev || !dev.traceRecord || gp._recBusy) return;
+            var want = !(gp.traceInfo && gp.traceInfo.recording !== false);
+            gp._recBusy = true;
+            gpUpdateChips();
+            dev.traceRecord(want).then(function () {
+                return dev.traceInfo();
+            }).then(function (i) {
+                gp.traceInfo = i; gp._trcInfAt = Date.now();
+            }).catch(function (e) {
+                showToast("Recording toggle failed: " + (e && e.message ? e.message : e), "error");
+            }).then(function () {
+                gp._recBusy = false;
+                gpUpdateChips();
+                gpRenderInspector();
+            });
         };
 
         /* Watching is a Studio-side thing entirely — the node is logging
@@ -16089,24 +16132,45 @@
                     ? "<b>" + gpInt(s.sats) + "</b> sats · " + gpDist(gpN(s.hacc_mm) === null ? null : s.hacc_mm / 1000, 2)
                     : (s ? "no fix" : "—");
             }
-            /* ● REC — the whole point of this chip is that it is in the topbar
-               and therefore in EVERY view. It states the node's own flag, not
-               Studio's wishes: no traceInfo yet means no claim either way. */
+            /* ● REC — the whole point of this button is that it is in the
+               topbar and therefore in EVERY view. It states the node's own
+               flag, not Studio's wishes: no traceInfo yet means no claim
+               either way, and pressing it is gpRecToggle.
+
+               Rewritten only when the STATE changes: gpUpdateChips runs on
+               every poll tick, and re-setting innerHTML restarts the CSS
+               pulse — a 1.1 s animation reset every 100-500 ms never gets
+               past its first frames, which read as a broken flicker rather
+               than a heartbeat. (Same reason a mid-hover rewrite would eat
+               a click.) */
             var rec = document.getElementById("gpChipRec");
             if (rec) {
                 var inf2 = gp.traceInfo;
-                if (!gpLinked() || !inf2) {
-                    rec.style.display = "none";
-                } else if (inf2.recording === false) {
-                    rec.style.display = "";
-                    rec.className = "ws-chip rec-off";
-                    rec.title = "The node is NOT logging — you paused it. Resume in Session; a power cycle also resumes it.";
-                    rec.innerHTML = "&#10074;&#10074; logging paused";
-                } else {
-                    rec.style.display = "";
-                    rec.className = "ws-chip rec-on";
-                    rec.title = "The node is logging on its own — it writes above 8 km/h.";
-                    rec.innerHTML = "<i class='gp-recdot'></i>REC";
+                var st2 = (!gpLinked() || !inf2) ? "gone"
+                        : gp._recBusy ? "busy"
+                        : inf2.recording === false ? "off" : "on";
+                if (rec.getAttribute("data-state") !== st2) {
+                    rec.setAttribute("data-state", st2);
+                    if (st2 === "gone") {
+                        rec.style.display = "none";
+                    } else if (st2 === "busy") {
+                        rec.style.display = "";
+                        rec.disabled = true;
+                        rec.className = "ws-chip rec-off";
+                        rec.innerHTML = "&#8230;";
+                    } else if (st2 === "off") {
+                        rec.style.display = "";
+                        rec.disabled = false;
+                        rec.className = "ws-chip rec-off";
+                        rec.title = "Not recording. Press to start — the node then logs anything above 8 km/h by itself.";
+                        rec.innerHTML = "<i class='gp-recdot'></i>REC";
+                    } else {
+                        rec.style.display = "";
+                        rec.disabled = false;
+                        rec.className = "ws-chip rec-on";
+                        rec.title = "Recording — the node writes anything above 8 km/h. Press to stop.";
+                        rec.innerHTML = "<i class='gp-recdot'></i>REC";
+                    }
                 }
             }
             var hint = document.getElementById("gpHint");
