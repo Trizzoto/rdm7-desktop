@@ -50,7 +50,8 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
     'gpLogChans', 'gpRingMinutes', 'gpLaneRows', 'gpLaneRowsAll',
     'gpDeviceChanIds', 'gpChanArraysEqual', 'gpChanToDevShape',
     'gpSessionSectors', 'gpSectorMarks', 'gpSectorTimes',
-    'gpSplitsStats', 'gpSectorRange', 'gpHeatColour', 'gpSplitsHtml', 'gpTip', 'gpLapTime'];
+    'gpSplitsStats', 'gpSectorRange', 'gpHeatColour', 'gpSplitsHtml', 'gpTip', 'gpLapTime',
+    'gpLinesAgree', 'gpNodeTrackState', 'gpEmptyDownloadMsg', 'gpSnapGate'];
 const NEEDED_VAR = ['GP_LANES', 'GP_CHAN_LS', 'GP_DEVCHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_CHAN_COLOURS',
     'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
     'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S'];
@@ -504,6 +505,31 @@ ok('the best lap really is the fastest total', Math.abs(D.bestTime - Math.min.ap
 ok('the ideal lap can never beat what was actually driven',
     D.ideal !== null && D.ideal <= D.bestTime + 1e-6, D.ideal + ' vs best ' + D.bestTime);
 
+console.log('\nsplit lines work in whatever order they were placed');
+/* Same two thirds gates, array order REVERSED — the order a mouse adds
+   lines in has nothing to do with the order a car meets them. */
+const fwd = D.rows.map(r => r.secs && r.secs.map(v => Math.round(v * 1000)));
+trk4.sectors = [trk4.sectors[1], trk4.sectors[0]];
+global.gp.sectors = null; global.gp.secKey = '';
+const rev = F.gpSplitsStats().rows.map(r => r.secs && r.secs.map(v => Math.round(v * 1000)));
+ok('reversed placement order gives identical splits',
+    JSON.stringify(fwd) === JSON.stringify(rev),
+    JSON.stringify(rev && rev[0]) + ' vs ' + JSON.stringify(fwd && fwd[0]));
+trk4.sectors = [trk4.sectors[1], trk4.sectors[0]];
+global.gp.sectors = null; global.gp.secKey = '';
+D = F.gpSplitsStats();
+
+console.log('\nlines that exist but were never crossed say so');
+const farGates = trk4.sectors;
+trk4.sectors = [gate4(at4(0.5))].map(g => Object.assign({}, g, { lat: g.lat + 0.02 }));  /* 2 km off the loop */
+global.gp.sectors = null; global.gp.secKey = '';
+let htmlMiss = F.gpSplitsHtml();
+ok('a placed-but-missed line is not called "no lines"',
+    /no lap crossed/.test(htmlMiss) && !/no sector lines yet/.test(htmlMiss));
+trk4.sectors = farGates;
+global.gp.sectors = null; global.gp.secKey = '';
+D = F.gpSplitsStats();
+
 console.log('\nthe sector ranges chain with no gap and no overlap');
 const ranges4 = [F.gpSectorRange(lap0, 0), F.gpSectorRange(lap0, 1), F.gpSectorRange(lap0, 2)];
 ok('all three ranges resolved', ranges4.every(Boolean));
@@ -543,6 +569,102 @@ const gapStats = F.gpSplitsStats();
 ok('the lap itself still counts (its total needs no sector gate)',
     gapStats.rows.length === D.rows.length && gapStats.rows[2].secs === null);
 ok('the report shows a dash instead of inventing a number', /class='na'/.test(F.gpSplitsHtml()));
+
+console.log('\ntwo gates: the same line, or not');
+const line5 = { lat: -36.5178, lon: 146.0854, heading: 90, half_width_m: 15 };
+const near5 = (d) => Object.assign({}, line5, d);
+ok('a line agrees with itself', F.gpLinesAgree(line5, line5));
+ok('float32 wobble in the 6th decimal still agrees', F.gpLinesAgree(line5, near5({ lat: line5.lat + 1e-6 })));
+ok('a line moved 30 m does not', !F.gpLinesAgree(line5, near5({ lat: line5.lat + 0.00027 })));
+ok('a line aimed the other way does not', !F.gpLinesAgree(line5, near5({ heading: 270 })));
+ok('two degrees of aim is the same line', F.gpLinesAgree(line5, near5({ heading: 92 })));
+ok('a slightly different width is the same line', F.gpLinesAgree(line5, near5({ half_width_m: 15.4 })));
+ok('a very different width is not', !F.gpLinesAgree(line5, near5({ half_width_m: 25 })));
+ok('both missing agrees (nothing vs nothing)', F.gpLinesAgree(null, null));
+ok('one missing does not', !F.gpLinesAgree(line5, null) && !F.gpLinesAgree(null, line5));
+
+console.log('\nwhat the node holds, versus what Studio holds');
+freshGp();
+ok('no local track at all: nothing to compare', F.gpNodeTrackState().st === 'nolocal');
+global.gp.tracks.tracks.push({ id: 't1', name: 'Winton', start_finish: null, sectors: [] });
+global.gp.tracks.active = 't1';
+ok('a local track with no line: still nothing to send', F.gpNodeTrackState().st === 'nolocal');
+const t5 = F.gpActiveTrack();
+t5.start_finish = Object.assign({}, line5);
+ok('line placed but the node has not answered: checking', F.gpNodeTrackState().st === 'checking');
+global.gp.lap = { has_track: false, timing: {} };
+ok('the node answered "no track": none', F.gpNodeTrackState().st === 'none');
+global.gp.lap = { has_track: true, track_name: 'Barker Test 2', timing: {} };
+let ns5 = F.gpNodeTrackState();
+ok('the node is timing a different track: other, named', ns5.st === 'other' && ns5.name === 'Barker Test 2');
+global.gp.lap = { has_track: true, track_name: 'Winton', timing: {} };
+global.gp.nodeTrack = undefined;
+ok('name matches, geometry not read back yet: optimistic match', F.gpNodeTrackState().st === 'match');
+global.gp.nodeTrack = { name: 'Winton', start_finish: Object.assign({}, line5), sectors: [] };
+ok('same name, same gates: match', F.gpNodeTrackState().st === 'match');
+global.gp.nodeTrack.start_finish.lat += 0.00027;
+ok('the line moved here since it was sent: stale', F.gpNodeTrackState().st === 'stale');
+global.gp.nodeTrack.start_finish.lat -= 0.00027;
+t5.sectors = [near5({ lat: line5.lat + 0.002 })];
+ok('a split added here since it was sent: stale', F.gpNodeTrackState().st === 'stale');
+global.gp.nodeTrack.sectors = [near5({ lat: line5.lat + 0.002 })];
+ok('the same split on both: match again', F.gpNodeTrackState().st === 'match');
+t5.finish = near5({ lat: line5.lat + 0.004 });   /* now a time trial locally */
+ok('a finish line added here (trial) vs a circuit there: stale', F.gpNodeTrackState().st === 'stale');
+global.gp.nodeTrack.point_to_point = true;
+global.gp.nodeTrack.finish = near5({ lat: line5.lat + 0.004 });
+ok('the trial sent across: match', F.gpNodeTrackState().st === 'match');
+global.gp.lap = { has_track: true, track_name: 'Winton', timing: {} };
+global.gp.nodeTrack = null;
+ok('status says track but the read-back found nothing: none (send again)', F.gpNodeTrackState().st === 'none');
+
+console.log('\nthe readiness panel now includes the node\'s side of the story');
+freshGp();
+F.gpAutoSetUp(drive(WINTON.center, 3, {}));
+global.gp.status = { fix_type: 3, sats: 11, hacc_mm: 800 };
+global.gp.lap = { has_track: false, timing: {} };
+let html5 = F.gpReadyHtml();
+ok('the node with no track is a warning row', /On the node/.test(html5) && /no track/.test(html5));
+ok('and the fix is one click away, right there', /Send “Winton” to the node/.test(html5));
+global.gp.lap = { has_track: true, track_name: 'Winton', timing: { armed: true } };
+global.gp.nodeTrack = undefined;
+html5 = F.gpReadyHtml();
+ok('a matching armed node says the clock is ready', /armed, watching for the line/.test(html5));
+ok('no Send button when there is nothing to send', !/Send “Winton” to the node/.test(html5));
+global.gp.lap = { has_track: true, track_name: 'Winton', timing: { armed: true, lap_number: 3 } };
+html5 = F.gpReadyHtml();
+ok('mid-session it names the lap being timed', /timing · lap 3/.test(html5));
+global.gp.lap = { has_track: true, track_name: 'Somewhere Else', timing: {} };
+html5 = F.gpReadyHtml();
+ok('a different track on the node is called out by name', /Somewhere Else/.test(html5) && /not “Winton”/.test(html5));
+
+console.log('\na dropped gate snaps onto the driven line');
+freshGp();
+global.gp.trace = rows;
+const mid5 = rows[Math.floor(rows.length / 2)];
+const near6 = { lat: mid5.lat + 0.0003, lon: mid5.lon, heading: 0, half_width_m: 15 };  /* ~33 m off */
+ok('within 60 m it snaps', F.gpSnapGate(near6) === true);
+ok('onto an actual sample of the line', rows.some(r => r.lat === near6.lat && r.lon === near6.lon));
+ok('aimed the way the car was going there',
+    F.gpAngleDiff(near6.heading, rows.filter(r => r.lat === near6.lat)[0].hdg) < 1);
+const far6 = { lat: mid5.lat + 0.01, lon: mid5.lon, heading: 0, half_width_m: 15 };     /* ~1.1 km off */
+ok('a kilometre away it stays put', F.gpSnapGate(far6) === false && far6.lat === mid5.lat + 0.01);
+global.gp.trace = null;
+ok('with nothing loaded it never invents a snap', F.gpSnapGate(near6) === false);
+
+console.log('\na quiet receiver is not a fix');
+freshGp();
+global.gp.status = { link: false, ubx: 242315, fix: true, fix_type: 3, sats: 16, hacc_mm: 390 };
+html5 = F.gpReadyHtml();
+ok('link=false outranks a stale cached fix', /receiver quiet/.test(html5) && !/3D/.test(html5));
+ok('and it says what to do about it', /power-cycle/.test(html5));
+global.gp.status = { link: true, fix: true, fix_type: 3, sats: 16, hacc_mm: 390 };
+ok('with the link up the fix reports normally', /3D/.test(F.gpReadyHtml()));
+
+console.log('\nan empty download explains itself');
+ok('recording on: says go drive', /go drive/.test(F.gpEmptyDownloadMsg(true)));
+ok('recording off: says turn it on first', /Recording is OFF/.test(F.gpEmptyDownloadMsg(false)));
+ok('both say the node only logs while moving', /moving/.test(F.gpEmptyDownloadMsg(true)) && /moving/.test(F.gpEmptyDownloadMsg(false)));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

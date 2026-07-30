@@ -1015,7 +1015,10 @@
         .kp-subhead .gp-lamp, .kp-gt .gp-lamp, .ws-gt .gp-lamp,
         .kp-guide-chip .gp-lamp { margin: 0 0 0 6px; vertical-align: middle; }
         .kp-guide-chip .gp-lamp.carry { margin: 0 0 0 6px; }
-        .gp-tip { position: fixed; z-index: 9999; max-width: 268px; box-sizing: border-box;
+        /* Above the workspaces (15000) AND the modal tier (16000): a lamp
+           inside a confirm dialog still needs its tip on top. Below the
+           toasts (22000), which always win. */
+        .gp-tip { position: fixed; z-index: 21500; max-width: 268px; box-sizing: border-box;
                   pointer-events: none;
                   background: #1b1b1b; border: 1px solid var(--border-light);
                   border-radius: var(--radius-md); padding: 8px 10px; font-size: 10.5px;
@@ -1268,6 +1271,19 @@
         .gp-splits td.na { color: var(--text-muted); }
         .gp-splits td.tot { font-weight: 600; border-left: 1px solid var(--border); }
         .gp-ses-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; width: 100%; }
+        /* Above the workspaces (15000), tier with the other modals. */
+        .gp-confirm { position: fixed; inset: 0; background: rgba(6,8,10,0.72); z-index: 16000;
+                      display: flex; align-items: center; justify-content: center; }
+        .gp-confirm-box { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+                          padding: 18px 20px; width: 420px; max-width: calc(100vw - 40px);
+                          box-shadow: 0 24px 60px rgba(0,0,0,0.55); }
+        .gp-confirm-box .t { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+        .gp-confirm-box .b { font-size: 11.5px; color: var(--text-muted); line-height: 1.55; margin-bottom: 16px; }
+        .gp-confirm-box .r { display: flex; gap: 8px; justify-content: flex-end; }
+        .gp-confirm-box button { padding: 7px 16px; cursor: pointer; border-radius: 6px; font-size: 12px; }
+        .gp-confirm-box .c { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+        .gp-confirm-box .c:focus { outline: 1px solid var(--text-muted); }
+        .gp-confirm-box .o { background: #7CC0FF; border: none; color: #08131c; font-weight: 600; }
         .gp-hist-svg { width: 100%; height: 44px; display: block; margin: 6px 0 4px; }
         .gp-place-search { width: 100%; box-sizing: border-box; margin: 2px 0 6px;
                            background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
@@ -6432,6 +6448,48 @@
            rebuilds the panel wholesale, so a message set just before one — a
            refresh, a device change — used to vanish before it was read. Keep
            the last message per slot and re-apply it after every rebuild. */
+        /* window.confirm in the desktop webview is remapped by Tauri's dialog
+           plugin and returns a PROMISE — always truthy — so every
+           `if (!confirm()) return` guard in this workspace had silently
+           stopped guarding: the action ran before the dialog was answered,
+           and Cancel changed nothing. Proven on the bench: "Node recording
+           cleared." appeared BEHIND a dialog nobody had clicked yet.
+
+           This is the workspace's own modal instead. Promise of a real
+           boolean; Esc, the backdrop and Cancel all resolve false. Focus
+           starts on Cancel and Enter is swallowed, because half these
+           dialogs are opened by the Enter that commits a field — its keyup
+           must not press OK (the same trap gpCanApply documents). */
+        function gpConfirm(message) {
+            return new Promise(function (resolve) {
+                var lines = String(message).split("\n\n");
+                var title = lines.shift();
+                var ov = document.createElement("div");
+                ov.className = "gp-confirm";
+                ov.innerHTML =
+                    "<div class='gp-confirm-box'>" +
+                    "<div class='t'>" + gpEsc(title) + "</div>" +
+                    (lines.length ? "<div class='b'>" + gpEsc(lines.join("\n\n")).replace(/\n/g, "<br>") + "</div>" : "") +
+                    "<div class='r'><button class='c'>Cancel</button><button class='o'>OK</button></div></div>";
+                document.body.appendChild(ov);
+                var onKey = function (e) {
+                    if (e.key === "Escape") { e.stopPropagation(); done(false); }
+                    else if (e.key === "Enter") e.stopPropagation();
+                };
+                var done = function (yes) {
+                    if (!ov.parentNode) return;
+                    ov.remove();
+                    document.removeEventListener("keydown", onKey, true);
+                    resolve(yes);
+                };
+                document.addEventListener("keydown", onKey, true);
+                ov.addEventListener("mousedown", function (e) { if (e.target === ov) done(false); });
+                ov.querySelector(".c").addEventListener("click", function () { done(false); });
+                ov.querySelector(".o").addEventListener("click", function () { done(true); });
+                ov.querySelector(".c").focus();
+            });
+        }
+
         function gpSetMsg(id, text, tone) {
             gp._msgs = gp._msgs || {};
             if (text) gp._msgs[id] = { text: text, tone: tone };
@@ -6527,12 +6585,12 @@
         }
 
         /* ---- track library ------------------------------------------------
-         * Studio owns the library; the dash holds exactly ONE track at a time
-         * (a lap_track_t, with up to 8 splits). So this is the place you keep
-         * your circuits, and "Send to dash" is what makes one of them
-         * live. Everything is stored in the DASH's own units — half-widths in
-         * metres, heading = the car's direction of travel across the line — so
-         * nothing needs converting on the way out.
+         * Studio owns the library; the GPS node holds exactly ONE track at a
+         * time (a lap_track_t, with up to 8 splits). So this is the place you
+         * keep your circuits, and "Send to the node" is what makes one of
+         * them live. Everything is stored in the NODE's own units — half-
+         * widths in metres, heading = the car's direction of travel across
+         * the line — so nothing needs converting on the way out.
          *
          * There is ONE kind of track. A start/finish line makes it a circuit;
          * adding a second line makes it a time trial, timed from the start line
@@ -7344,6 +7402,22 @@
                 var said = gpSplitLapsAuto();
                 gp.selLap = gp.traceLaps.length ? 0 : -1;
                 gp.playIdx = 0;
+                /* The card must agree with what just split. An imported file
+                   carries whatever its exporter knew (often "0 laps"), and a
+                   session saved before a start line existed splits
+                   differently today — heal the stored copy whenever the
+                   answer changed, so the list stops contradicting the rack. */
+                var times = gp.traceLaps.filter(function (l) { return !l.ghost; })
+                    .map(function (l) { return gpSecs(gp.trace, l.from, l.to); });
+                var best = times.length ? Math.min.apply(null, times) : null;
+                if (meta.lapCount !== times.length || (gpN(meta.bestLapS) || 0) !== (best || 0)) {
+                    meta.lapCount = times.length;
+                    meta.bestLapS = best;
+                    meta.lapTimesS = times.map(function (t) { return Math.round(t * 1000) / 1000; });
+                    var inList = (gp.sessions || []).filter(function (x) { return x.id === meta.id; })[0];
+                    if (inList) { inList.lapCount = meta.lapCount; inList.bestLapS = meta.bestLapS; inList.lapTimesS = meta.lapTimesS; }
+                    gpStore.putMeta(meta);
+                }
                 gpDrawTrace(); gpFitTrace();
                 gpBuildRail(); gpRenderInspector();
                 if (said) gpSetMsg("gpTraceMsg", said, "ok");
@@ -7368,11 +7442,13 @@
         window.gpSessionDelete = function (id) {
             var cur = (gp.sessions || []).filter(function (s) { return s.id === id; })[0];
             if (!cur) return;
-            if (!window.confirm("Delete “" + cur.name + "”?\n\nThis removes it from this PC. If the node has already overwritten it, there is no other copy.")) return;
-            gpStore.remove(id).then(function () {
-                if (gp.sessionId === id) gp.sessionId = null;
-                return gpSessionsRefresh();
-            }).then(function () { gpBuildRail(); });
+            gpConfirm("Delete “" + cur.name + "”?\n\nThis removes it from this PC. If the node has already overwritten it, there is no other copy.").then(function (yes) {
+                if (!yes) return;
+                gpStore.remove(id).then(function () {
+                    if (gp.sessionId === id) gp.sessionId = null;
+                    return gpSessionsRefresh();
+                }).then(function () { gpBuildRail(); });
+            });
         };
 
         function gpRecordingsHtml() {
@@ -7460,6 +7536,15 @@
                      (gp.sessions && gp.sessions.length
                         ? "Pick a recording above, or download a new one from the node."
                         : "Download a recording from the node.") + "</div>";
+                /* The sentence above names an action — put the action next to
+                   it. The same button also lives in the checklist below, but
+                   "below" was below the fold, and an empty state that tells
+                   you to press a button it will not show you is a dead end. */
+                var dev0 = gpDev();
+                if (dev0 && dev0.traceRead)
+                    h += "<button class='ws-btn-line' style='margin:0 6px 8px' onclick='gpTraceDownload()'" +
+                         (gp.traceBusy ? " disabled" : "") + ">" +
+                         (gp.traceBusy ? "Downloading… " + gp.tracePct + "%" : "Download from node") + "</button>";
                 gpRailBody(rail).innerHTML = h + GP_ASIDE_SLOT;
                 gpBindSessionRail(rail);
                 gpRenderInspector();
@@ -7596,6 +7681,12 @@
             /* Fix — the one thing no amount of Studio can compensate for. */
             if (!s) {
                 h += gpReadyRow("Fix", "not reported", null, "open Monitor to see it live");
+            } else if (s.link === false) {
+                /* Not "no fix": the receiver isn't SAYING anything, which is
+                   a different failure with a different remedy. The node now
+                   retries the receiver by itself; if this row stays red, the
+                   remedy is power. */
+                h += gpReadyRow("Fix", "receiver quiet", "bad", "the node is trying to wake it — if this stays, power-cycle the node");
             } else {
                 var sats = gpN(s.sats), ft = gpN(s.fix_type);
                 var acc = gpN(s.hacc_mm) === null ? null : s.hacc_mm / 1000;
@@ -7612,6 +7703,34 @@
                     trk.start_finish ? "placed" : "not placed",
                     trk.start_finish ? "ok" : "warn",
                     trk.start_finish ? "" : "proposed automatically on download");
+            }
+
+            /* The node's own copy — the rows above are Studio's library, and
+               the library times nothing. Live laps, the beep at the line and
+               the dash's readout all come from whatever the NODE holds, so
+               the panel is not allowed to say "ready" from this side of the
+               USB cable alone. */
+            var ns = gpNodeTrackState();
+            if (ns.st !== "nolocal") {
+                var tm0 = (gp.lap && gp.lap.timing) || {};
+                if (ns.st === "checking")
+                    h += gpReadyRow("On the node", "—", null, "waiting for its reply");
+                else if (ns.st === "none")
+                    h += gpReadyRow("On the node", "no track", "warn", "it cannot time laps live");
+                else if (ns.st === "other")
+                    h += gpReadyRow("On the node", gpEsc(ns.name), "warn",
+                        "not “" + gpEsc(trk.name) + "”");
+                else if (ns.st === "stale")
+                    h += gpReadyRow("On the node", "out of date", "warn",
+                        "edited here since it was sent");
+                else
+                    h += gpReadyRow("On the node", gpEsc(ns.name), "ok",
+                        gpN(tm0.lap_number) ? "timing · " + gpRunWord() + " " + tm0.lap_number
+                        : tm0.armed ? "armed, watching for the line"
+                        : "arms once it has a fix");
+                if (ns.st === "none" || ns.st === "other" || ns.st === "stale")
+                    h += "<button class='ws-btn-line' style='margin-top:6px' onclick=\"gpSendTrack('gpTraceMsg')\">" +
+                         "Send “" + gpEsc(trk.name) + "” to the node</button>";
             }
 
             /* Storage, said in minutes. Percent-full is not a unit anyone
@@ -7752,19 +7871,24 @@
             var rows = gp.trace;
             if (!secs.length || !rows || lap.to <= lap.from) return null;
 
-            var at = lap.from, marks = [], s;
+            /* Each line is found on its own, then the crossings are put in
+               DRIVING order. The array's order is whatever order the lines
+               were added in — for hand-placed splits that is no order at
+               all, and the old sequential search silently produced "no
+               splits" for a perfectly good lap whenever the two disagreed. */
+            var marks = [], s;
             for (s = 0; s < secs.length; s++) {
                 /* Either direction, same reasoning as the start line: a sector
                    line's arrow is wherever the mouse happened to leave it, and
                    the lap already fixes which way the car is going. */
-                var G = gpGateHits(rows, secs[s], at, lap.to);
+                var G = gpGateHits(rows, secs[s], lap.from, lap.to);
                 /* A lap that missed a sector line is not a lap with a missing
                    split — it is a lap we cannot time. Reporting partial splits
                    would put a fast-looking sector against an incomplete lap. */
                 if (!G.hits.length) return null;
                 marks.push(G.hits[0].i);
-                at = G.hits[0].i;
             }
+            marks.sort(function (a, b) { return a - b; });
             return marks;
         }
 
@@ -7886,9 +8010,39 @@
                       "every other lap in that column from best to worst. Click a lap's " +
                       "name to select it, or a sector to jump the graph and map straight " +
                       "to it.") + "</div>";
+            /* The stats live on lap TOTALS, so they exist with or without
+               sector lines — only the grid needs the lines. Hiding the whole
+               panel behind "add splits first" threw away median and
+               consistency for every track that hadn't been subdivided yet. */
+            var statsHtml =
+                 "<div class='gp-rows' style='margin-top:9px'>" +
+                 "<div class='gp-row'><span class='k'>Average</span><span class='v'>" +
+                 gpLapTime(D.mean) + "</span></div>" +
+                 "<div class='gp-row'><span class='k'>Median</span><span class='v'>" +
+                 gpLapTime(D.median) + "</span></div>" +
+                 "<div class='gp-row'><span class='k'>Consistency" +
+                 gpTip("Consistency", "How far a typical lap strays from the average — " +
+                       "small means the same time, lap after lap.") +
+                 "</span><span class='v'>±" + D.stdDev.toFixed(2) + " s</span></div>" +
+                 "<div class='gp-row'><span class='k'>Best lap</span><span class='v'>" +
+                 gpLapTime(D.bestTime) + "</span><span class='s'>" + gpRunWord(true) + " " +
+                 (D.bestIdx + 1) + "</span></div>" +
+                 (D.ideal !== null ? "<div class='gp-row'><span class='k'>Ideal lap</span><span class='v'>" +
+                  gpLapTime(D.ideal) + "</span><span class='s'>best sectors added up</span></div>" : "") +
+                 "</div>";
             if (!nSec) {
-                h += "<div class='ws-note'>" + D.rows.length + " laps, but this track has no " +
-                     "sector lines yet — add splits in Tracks to break them down.</div></div>";
+                /* Two different "no grid" truths: no lines at all, or lines
+                   nothing crossed. The second used to print the first, which
+                   told someone who had just placed two splits that they had
+                   placed none. */
+                var placed = ((gpActiveTrack() || {}).sectors || []).length;
+                h += "<div class='ws-note'>" + (placed
+                        ? "This track has " + placed + " sector line" + (placed === 1 ? "" : "s") +
+                          ", but no lap crossed " + (placed === 1 ? "it" : "them all") +
+                          " — in Tracks, drag each split onto the driven line."
+                        : D.rows.length + " laps, but this track has no sector lines yet — " +
+                          "add splits in Tracks to break them down.") + "</div>" +
+                     statsHtml + "</div>";
                 return h;
             }
             var colRange = [];
@@ -7918,21 +8072,7 @@
                 h += "<td class='tot'>" + gpLapTime(row.total) + "</td></tr>";
             });
             h += "</tbody></table></div>";
-            h += "<div class='gp-rows' style='margin-top:9px'>" +
-                 "<div class='gp-row'><span class='k'>Average</span><span class='v'>" +
-                 gpLapTime(D.mean) + "</span></div>" +
-                 "<div class='gp-row'><span class='k'>Median</span><span class='v'>" +
-                 gpLapTime(D.median) + "</span></div>" +
-                 "<div class='gp-row'><span class='k'>Consistency" +
-                 gpTip("Consistency", "How far a typical lap strays from the average — " +
-                       "small means the same time, lap after lap.") +
-                 "</span><span class='v'>±" + D.stdDev.toFixed(2) + " s</span></div>" +
-                 "<div class='gp-row'><span class='k'>Best lap</span><span class='v'>" +
-                 gpLapTime(D.bestTime) + "</span><span class='s'>" + gpRunWord(true) + " " +
-                 (D.bestIdx + 1) + "</span></div>" +
-                 (D.ideal !== null ? "<div class='gp-row'><span class='k'>Ideal lap</span><span class='v'>" +
-                  gpLapTime(D.ideal) + "</span><span class='s'>best sectors added up</span></div>" : "") +
-                 "</div></div>";
+            h += statsHtml + "</div>";
             return h;
         }
 
@@ -9687,14 +9827,16 @@
         window.gpTraceClear = function () {
             var dev = gpDev();
             if (!dev || !dev.traceClear) return;
-            if (!window.confirm("Clear the recording on the node?\n\nThe line you drove is erased. Download it first if you want to keep it.")) return;
-            dev.traceClear().then(function () {
-                gp.trace = null; gp.traceLaps = []; gp.selLap = -1; gp.cmpLap = -1;
-                gpSetMsg("gpTraceMsg", "Node recording cleared.", "ok");
-                return dev.traceInfo();
-            }).then(function (i) {
-                gp.traceInfo = i; gpDrawTrace(); gpBuildRail(); gpRenderInspector();
-            }).catch(function (e) { gpSetMsg("gpTraceMsg", "Failed: " + (e && e.message ? e.message : e), "bad"); });
+            gpConfirm("Clear the recording on the node?\n\nThe line you drove is erased. Download it first if you want to keep it.").then(function (yes) {
+                if (!yes) return;
+                dev.traceClear().then(function () {
+                    gp.trace = null; gp.traceLaps = []; gp.selLap = -1; gp.cmpLap = -1;
+                    gpSetMsg("gpTraceMsg", "Node recording cleared.", "ok");
+                    return dev.traceInfo();
+                }).then(function (i) {
+                    gp.traceInfo = i; gpDrawTrace(); gpBuildRail(); gpRenderInspector();
+                }).catch(function (e) { gpSetMsg("gpTraceMsg", "Failed: " + (e && e.message ? e.message : e), "bad"); });
+            });
         };
 
         /* ══════════════════════════════════════════════════════════════════
@@ -9804,10 +9946,23 @@
         }
 
         /* ---- download ---------------------------------------------------- */
+        /* What an empty download MEANS, said out loud. Before this, pressing
+           Download on a node with nothing in its ring did literally nothing
+           visible — same screen, no message — which reads as "the button is
+           broken", not "the car never moved". Pure so the harness can hold
+           the wording to account. */
+        function gpEmptyDownloadMsg(recording) {
+            return "The node has nothing recorded. It logs by itself once the car is moving " +
+                   "(above about 8 km/h) — sitting still is left out on purpose." +
+                   (recording === false
+                        ? " Recording is OFF — press Record on before you drive."
+                        : " Recording is on, so just go drive.");
+        }
+
         window.gpTraceDownload = function () {
             var dev = gpDev();
             if (!dev || !dev.traceRead || gp.traceBusy) return;
-            gp.traceBusy = true; gp.tracePct = 0;
+            gp.traceBusy = true; gp.tracePct = 0; gp._dlEmpty = false;
             gpRenderInspector();
 
             dev.traceInfo().then(function (info) {
@@ -9827,7 +9982,10 @@
                         : (function () { var a = []; for (var k = 0; k < nchan; k++) a.push("ch" + (k + 1)); return a; })();
                 }
                 gp.traceChanIds = chanIds;
-                if (!total) { gp.trace = []; return null; }
+                /* Empty is an answer, not a blank: leave whatever session is
+                   on screen alone (clobbering it to [] used to wipe the very
+                   laps someone was looking at) and say why nothing arrived. */
+                if (!total) { gp._dlEmpty = true; return null; }
                 var rows = [];
                 var step = function () {
                     return dev.traceRead(rows.length).then(function (pg) {
@@ -9890,7 +10048,10 @@
             }).then(function () {
                 var saved = null;
                 gp.autoSaid = null;
-                if (gp.trace && gp.trace.length) saved = gpSaveStints(gp.trace);
+                /* The guard on _dlEmpty matters: gp.trace may still be a
+                   PREVIOUSLY loaded session, and re-saving it here would
+                   duplicate it in the library every time the node was empty. */
+                if (!gp._dlEmpty && gp.trace && gp.trace.length) saved = gpSaveStints(gp.trace);
                 gp.traceBusy = false;
                 return saved;
             }).then(function () {
@@ -9899,7 +10060,9 @@
                 gpBuildRail();
                 gpRenderInspector();
                 window.gpSetView("session");
-                if (gp.autoSaid) gpSetMsg("gpTraceMsg", gp.autoSaid, "ok");
+                if (gp._dlEmpty)
+                    gpSetMsg("gpTraceMsg", gpEmptyDownloadMsg(gp.traceInfo && gp.traceInfo.recording), "warn");
+                else if (gp.autoSaid) gpSetMsg("gpTraceMsg", gp.autoSaid, "ok");
             }).catch(function (e) {
                 gp.traceBusy = false;
                 gpSetMsg("gpTraceMsg", "Download failed: " + (e && e.message ? e.message : e), "bad");
@@ -10711,7 +10874,22 @@
             if (!gp.map) return;
             if (!gp.traceLayer) gp.traceLayer = L.layerGroup().addTo(gp.map);
             gp.traceLayer.clearLayers();
-            if (gp.view !== "session" || !gp.trace || !gp.trace.length) return;
+            if (!gp.trace || !gp.trace.length) return;
+            /* Tracks view gets the driven line too — flat, thin, underneath
+               the gate markers. Aiming a split at satellite imagery works on
+               a circuit with painted kerbs; on a road course, a new track or
+               anything the imagery is stale for, the line you actually drove
+               is the only thing worth aiming at. */
+            if (gp.view === "tracks") {
+                if (!gp._canvasRenderer) gp._canvasRenderer = L.canvas({ padding: 0.3 });
+                var tp = [], TP = gpSmoothPath();
+                for (var tq = 0; tq < gp.trace.length; tq += 2)
+                    tp.push(TP ? TP[tq] : [gp.trace[tq].lat, gp.trace[tq].lon]);
+                L.polyline(tp, { color: "#7CC0FF", weight: 3, opacity: 0.55,
+                                 renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
+                return;
+            }
+            if (gp.view !== "session") return;
 
             /* Canvas, not SVG: 30,000 points of SVG path is a slideshow. */
             if (!gp._canvasRenderer) gp._canvasRenderer = L.canvas({ padding: 0.3 });
@@ -11499,14 +11677,11 @@
         function gpLapTiming() { return (gp.lap && gp.lap.timing) || {}; }
 
         /* ---- who is doing the timing? -------------------------------------
-         * The puck times its own laps now: it has the track in NVS and stamps
-         * every fix with the receiver's own iTOW, so there is no CAN hop and
-         * none of the scheduling jitter the dash path accepts. When a puck is
-         * attached it wins. A dash over WiFi is the fallback.
-         *
-         * Both speak the same payload shapes on purpose — identical field
-         * names, units and the "0 means unset" convention — so everything
-         * downstream of here is unaware of which one answered. */
+         * The node, and only the node (ADR-0008, 2026-07-30): it holds the
+         * track in its own NVS, stamps every fix with the receiver's iTOW,
+         * and broadcasts lap/sector/delta on CAN. The dash just displays
+         * that broadcast — its own lap engine and /api/lap/* endpoints were
+         * removed, so there is no fallback to offer any more. */
         function gpLapApi() {
             var puck = gpDev();
             if (puck && puck.lapStatus) {
@@ -11520,49 +11695,12 @@
                     history: function () { return puck.lapHistory(); }
                 };
             }
-            var dash = gpDash();
-            /* The dash's SERIAL protocol carries no lap commands at all, so a
-               USB dash cannot do this — only its HTTP surface can. */
-            if (dash && dash.name !== "usb") {
-                var http = function (path, body) {
-                    return fetch(path, body === undefined ? undefined : {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(body)
-                    }).then(function (r) {
-                        if (r.status === 503) throw new Error("dash busy - try again");
-                        return r.text().then(function (txt) {
-                            var jj = null;
-                            try { jj = JSON.parse(txt); } catch (e) { }
-                            /* 400/500 come back as PLAIN TEXT, not JSON. */
-                            if (!r.ok) throw new Error((jj && jj.error) || txt || ("HTTP " + r.status));
-                            return jj || {};
-                        });
-                    });
-                };
-                return {
-                    where: "dash", label: "RDM-7 Dash",
-                    status: function () { return http("/api/lap/status"); },
-                    trackGet: function () { return http("/api/lap/track"); },
-                    trackSet: function (b) { return http("/api/lap/track", b); },
-                    reset: function () { return http("/api/lap/session/reset", {}); },
-                    capture: function (what) { return http("/api/lap/capture", { what: what }); },
-                    /* The dash publishes current/last/best as channels but keeps
-                       no per-lap list, so there is nothing to fetch. Null, not
-                       an empty array — "not supported" and "no laps yet" are
-                       different things and the UI says which. */
-                    history: null
-                };
-            }
             return null;
         }
 
         function gpLapReason() {
             if (gpLapApi()) return null;
-            var dash = gpDash();
-            if (dash && dash.name === "usb")
-                return "This dash is on USB, and its USB protocol carries no lap commands. Attach the RDM GPS, or connect the dash over WiFi.";
-            return "Nothing here can time a lap yet. Attach the RDM GPS over USB — it holds the track and does the timing itself — or connect a dash over WiFi.";
+            return "Nothing here can time a lap. Attach the RDM GPS over USB — the node holds the track and does the timing itself; the dash only displays what it broadcasts.";
         }
         function gpLapUsable() { return !!gpLapApi(); }
 
@@ -11570,6 +11708,84 @@
         function gpLapWhere() {
             var api = gpLapApi();
             return api ? api.label : null;
+        }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * What is on the node, versus what is in Studio
+         *
+         * The node senses the start line; Studio keeps the library. Those are
+         * different computers, and a track "saved" here has done nothing to
+         * the one in the car until it is SENT. The readiness panel used to
+         * grade "Track ✓ / Gates ✓" purely from Studio's library — every row
+         * green while the node had no track at all, which is exactly the
+         * afternoon of driving across a start line that never beeped.
+         *
+         * So the node's own copy is held here (fetched, never assumed) and
+         * compared, and the panel gets a row that answers the only question
+         * that matters on the driveway: will the LINE do anything?
+         * ═════════════════════════════════════════════════════════════════ */
+
+        /* gp.nodeTrack: undefined = never asked / no reply yet,
+           null = asked, the node has nothing, object = the node's track. */
+        function gpNodeTrackFetch() {
+            var api = gpLapApi();
+            if (!api) { gp.nodeTrack = undefined; return Promise.resolve(null); }
+            if (gp._nodeTrackBusy) return Promise.resolve(null);
+            gp._nodeTrackBusy = true;
+            return Promise.resolve(api.trackGet()).then(function (j) {
+                gp.nodeTrack = (!j || j.empty) ? null : j;
+                gp._nodeTrackBusy = false;
+                if (gp.view === "session") gpRenderInspector();
+                return gp.nodeTrack;
+            }).catch(function () {
+                gp._nodeTrackBusy = false;
+                gp.nodeTrack = undefined;
+                return null;
+            });
+        }
+
+        /* Two gates agree when they are the same place, the same way round,
+           and about the same width. The node stores float32, which wobbles
+           the 7th decimal of a latitude — so the position tolerance is ~2 m,
+           far below anything a hand-drag does and far above float noise. */
+        function gpLinesAgree(a, b) {
+            if (!a || !b) return !a && !b;
+            return Math.abs((gpN(a.lat) || 0) - (gpN(b.lat) || 0)) < 2e-5 &&
+                   Math.abs((gpN(a.lon) || 0) - (gpN(b.lon) || 0)) < 2e-5 &&
+                   gpAngleDiff(gpN(a.heading) || 0, gpN(b.heading) || 0) < 3 &&
+                   Math.abs((gpN(a.half_width_m) || 0) - (gpN(b.half_width_m) || 0)) < 1;
+        }
+
+        /* The one comparison the readiness row is built from. Reads only
+           gp.lap / gp.nodeTrack / the active track, so it can be exercised
+           without a device on the bench. States:
+           nolocal  — Studio has no track-with-a-line to send yet
+           checking — a node is expected but hasn't answered lap.status yet
+           none     — the node answered: it has no track
+           other    — the node is timing a DIFFERENT track than the active one
+           stale    — same track, but its gates were edited here since sent
+           match    — the node has this track, gates and all */
+        function gpNodeTrackState() {
+            var t = gpActiveTrack();
+            if (!t || !t.start_finish) return { st: "nolocal" };
+            var lap = gp.lap;
+            if (!lap) return { st: "checking" };
+            if (!lap.has_track) return { st: "none" };
+            var name = lap.track_name || "unnamed";
+            if ((t.name || "").slice(0, 31) !== name) return { st: "other", name: name };
+            var nt = gp.nodeTrack;
+            /* Status says the name matches but the geometry hasn't been read
+               back yet — call it a match rather than crying wolf; the fetch
+               that settles it is already on its way. */
+            if (nt === undefined) return { st: "match", name: name };
+            if (!nt) return { st: "none" };
+            var mine = t.sectors || [], theirs = nt.sectors || [];
+            var agree = gpLinesAgree(t.start_finish, nt.start_finish) &&
+                        mine.length === theirs.length &&
+                        mine.every(function (s, i) { return gpLinesAgree(s, theirs[i]); }) &&
+                        (!gpIsTrial(t) === !nt.point_to_point) &&
+                        (!gpIsTrial(t) || gpLinesAgree(t.finish, nt.finish));
+            return agree ? { st: "match", name: name } : { st: "stale", name: name };
         }
 
         function gpLapPoll() {
@@ -11587,6 +11803,11 @@
                     if (epoch !== gp._epoch) return;
                     gp.lapErr = null;
                     gp.lap = j;
+                    /* Keep the node's-copy cache honest: a status that names a
+                       track we have no geometry for triggers ONE read-back; a
+                       status that says "nothing" IS the answer, no RPC needed. */
+                    if (j && j.has_track) { if (gp.nodeTrack === undefined) gpNodeTrackFetch(); }
+                    else if (j) gp.nodeTrack = null;
                     /* Only re-read the list when a lap has actually completed —
                        lap_number only ever advances, so this is one extra RPC
                        per lap rather than one per second. */
@@ -11614,6 +11835,20 @@
                        field has focus, or a rebuild would eat the keystroke. */
                     if (gp.view === "tracks" && !/INPUT|SELECT/.test((document.activeElement || {}).tagName || ""))
                         gpRenderInspector();
+                    /* The Session checklist carries the "On the node" row. It
+                       is NOT rebuilt per tick (that fights the scroll) — only
+                       when the fact it states actually changes: track name,
+                       armed, or a lap closing. */
+                    if (gp.view === "session") {
+                        var L = gp.lap || {}, T = L.timing || {};
+                        var sig = [!!L.has_track, L.track_name || "", !!T.armed,
+                                   gpN(T.lap_number) || 0].join("|");
+                        if (sig !== gp._lapSig) {
+                            gp._lapSig = sig;
+                            if (!/INPUT|SELECT/.test((document.activeElement || {}).tagName || ""))
+                                gpRenderInspector();
+                        }
+                    }
                 });
         }
 
@@ -11663,24 +11898,27 @@
                 : what === "finish"
                 ? "Set the finish line at the car's position now?\n\nThe track becomes a time trial: timing runs from the start line to here, then stops. This resets the session."
                 : "Add a sector split at the car's position now?\n\nThis resets the session — best, last and the predictive reference are lost.";
-            if (!window.confirm(msg)) return;
-            gpLapAction(function () { return api.capture(what); }, function (j) {
-                if (j && j.heading_reliable === false) {
-                    return "Line set — but the car was under " + gpSpd(5) + ", so the direction it recorded is unreliable. Re-capture while driving across the line.";
-                }
-                return what === "start_finish"
-                    ? "Start/finish set from the car's position."
-                    : what === "finish"
-                    ? "Finish set from the car's position — this is a time trial now."
-                    : "Split " + (j && j.sector_count ? j.sector_count : "") + " set from the car's position.";
+            gpConfirm(msg).then(function (yes) {
+                if (!yes) return;
+                gpLapAction(function () { return api.capture(what); }, function (j) {
+                    if (j && j.heading_reliable === false) {
+                        return "Line set — but the car was under " + gpSpd(5) + ", so the direction it recorded is unreliable. Re-capture while driving across the line.";
+                    }
+                    return what === "start_finish"
+                        ? "Start/finish set from the car's position."
+                        : what === "finish"
+                        ? "Finish set from the car's position — this is a time trial now."
+                        : "Split " + (j && j.sector_count ? j.sector_count : "") + " set from the car's position.";
+                });
             });
         };
 
         window.gpResetSession = function () {
             var api = gpLapApi();
             if (!api) return;
-            if (!window.confirm("Reset the session?\n\nBest, last, theoretical and the predictive reference are cleared. The track itself is kept.")) return;
-            gpLapAction(function () { return api.reset(); }, function () { return "Session reset."; });
+            gpConfirm("Reset the session?\n\nBest, last, theoretical and the predictive reference are cleared. The track itself is kept.").then(function (yes) {
+                if (yes) gpLapAction(function () { return api.reset(); }, function () { return "Session reset."; });
+            });
         };
 
         /* ---- live map ----------------------------------------------------
@@ -12012,6 +12250,9 @@
                     gpRefreshGate(g.key, "centre");
                 });
                 centre.on("dragend", function () {
+                    /* Landing NEAR the line is landing ON it — the snap eats
+                       the last few metres of aim so the mouse doesn't have to. */
+                    gpSnapGate(g.line);
                     gpTracksSave();
                     if (!selected) { gpSelectGate(g.key); return; }   /* rebuilds */
                     gpDrawEditor(); gpRenderInspector();
@@ -12205,12 +12446,38 @@
         window.gpTrackDelete = function () {
             var t = gpActiveTrack();
             if (!t) return;
-            if (!window.confirm("Delete “" + t.name + "” from the library?\n\nThis only removes it from this PC — whatever is loaded on the dash stays there.")) return;
-            gp.tracks.tracks = gp.tracks.tracks.filter(function (x) { return x.id !== t.id; });
-            gp.tracks.active = gp.tracks.tracks.length ? gp.tracks.tracks[0].id : null;
-            gpTracksSave();
-            gpBuildRail(); gpDrawEditor(); gpRenderInspector();
+            gpConfirm("Delete “" + t.name + "” from the library?\n\nThis only removes it from this PC — whatever is loaded on the node stays there.").then(function (yes) {
+                if (!yes) return;
+                gp.tracks.tracks = gp.tracks.tracks.filter(function (x) { return x.id !== t.id; });
+                gp.tracks.active = gp.tracks.tracks.length ? gp.tracks.tracks[0].id : null;
+                gpTracksSave();
+                gpBuildRail(); gpDrawEditor(); gpRenderInspector();
+            });
         };
+
+        /* A gate that is not ON the driven line times nothing — so when a
+           recording is loaded, a dropped or dragged gate snaps to the nearest
+           sample of it (within 60 m) and takes the direction the car was
+           travelling there. Aiming a 15 m gate at the racing line by eye,
+           against satellite imagery that may be years stale, was the single
+           hardest gesture in this workspace — and a near-miss produced laps
+           with no splits and no reason why. */
+        function gpSnapGate(line) {
+            var rows = gp.trace;
+            if (!rows || !rows.length) return false;
+            var best = -1, bd = 60, i, d;
+            for (i = 0; i < rows.length; i += 3) {
+                d = gpMetres(line, rows[i]);
+                if (d < bd) { bd = d; best = i; }
+            }
+            if (best < 0) return false;
+            line.lat = rows[best].lat;
+            line.lon = rows[best].lon;
+            var hdg = gpN(rows[best].hdg);
+            if (hdg === null) hdg = gpHeadingAt(rows, best, 5);
+            line.heading = ((hdg % 360) + 360) % 360;
+            return true;
+        }
 
         /* Drop a gate at the middle of the current view — the "I'm looking at
            the line right now" gesture. Heading defaults along the map's up. */
@@ -12219,6 +12486,7 @@
             if (!t || !gp.map) return;
             var c = gp.map.getCenter();
             var line = { lat: c.lat, lon: c.lng, heading: 0, half_width_m: 15 };
+            var snapped = gpSnapGate(line);
             if (what === "sf") {
                 t.start_finish = line;
                 gp.selGate = "sf";
@@ -12239,7 +12507,9 @@
                moment one is added — and then contradicts the inspector next to
                it, which is worse than showing nothing. */
             gpBuildRail(); gpDrawEditor(); gpRenderInspector();
-            gpSetMsg("gpTrackMsg", "Drag the centre onto the line, then drag the end to aim it the way the car travels.", null);
+            gpSetMsg("gpTrackMsg", snapped
+                ? "Snapped onto the driven line, aimed the way the car went — drag the end to widen it if the line varies here."
+                : "Drag the centre onto the line, then drag the end to aim it the way the car travels.", null);
         };
 
         window.gpGateDelete = function () {
@@ -12277,15 +12547,21 @@
 
         /* ---- library <-> dash ---------------------------------------------- */
 
-        window.gpSendTrack = function () {
+        /* msgId: where the outcome lands. The Tracks inspector passes nothing
+           and keeps its own message slot; the Session checklist's inline
+           button passes its slot, so the answer appears where the question
+           was asked instead of in a view the user is not looking at. */
+        window.gpSendTrack = function (msgId) {
+            msgId = msgId || "gpTrackMsg";
             var t = gpActiveTrack();
             var api = gpLapApi();
             if (!t || !api) return;
             if (!t.start_finish) {
-                gpSetMsg("gpTrackMsg", "This track has no start/finish line yet.", "warn");
+                gpSetMsg(msgId, "This track has no start/finish line yet.", "warn");
                 return;
             }
-            if (!window.confirm("Send “" + t.name + "” to the " + api.label + "?\n\nIt replaces whatever track is loaded there and resets the session — best, last and the predictive reference are cleared.")) return;
+            gpConfirm("Send “" + t.name + "” to the " + api.label + "?\n\nIt replaces whatever track is loaded there and resets the session — best, last and the predictive reference are cleared.").then(function (yes) {
+                if (!yes) return;
             var body = {
                 name: t.name.slice(0, 31),
                 min_lap_time_s: gpN(t.min_lap_time_s) === null ? 10 : t.min_lap_time_s,
@@ -12297,16 +12573,23 @@
             if (gpIsTrial(t)) { body.point_to_point = true; body.finish = t.finish; }
             var wanted = body.sectors.length;
             gpLapAction(function () { return api.trackSet(body); }, function (j) {
-                /* The dash SILENTLY drops a split it can't parse and still
-                   answers 200, so the echoed count is the only way to know. */
+                /* The node's copy is now exactly what was sent — recorded
+                   without a read-back, and the shape matches lap.track.get,
+                   so the readiness row flips to "match" immediately. */
+                gp.nodeTrack = JSON.parse(JSON.stringify(body));
+                gp._lapSig = "";        /* let the next poll re-render the row */
+                gpRenderInspector();
+                /* The node SILENTLY drops a split it can't parse and still
+                   answers ok, so the echoed count is the only way to know. */
                 var got = j && gpN(j.sector_count);
                 if (got !== null && got !== wanted) {
-                    return { tone: "warn", text: "Sent, but the dash stored " + got + " of " + wanted +
+                    return { tone: "warn", text: "Sent, but the node stored " + got + " of " + wanted +
                            " splits — the rest were rejected. Check each split has a position." };
                 }
                 return "“" + t.name + "” is live on the " + api.label +
                        (wanted ? " with " + wanted + " split" + (wanted === 1 ? "" : "s") : "") + ".";
-            }, "gpTrackMsg");
+            }, msgId);
+            });
         };
 
         window.gpReadTrack = function () {
@@ -12314,9 +12597,10 @@
             if (!api) return;
             gpSetMsg("gpTrackMsg", "Reading…", null);
             Promise.resolve(api.trackGet()).then(function (j) {
+                gp.nodeTrack = (!j || j.empty) ? null : j;   /* we just learned it — keep it */
                 if (!j || j.empty) { gpSetMsg("gpTrackMsg", "The " + api.label + " has no track loaded.", "warn"); return; }
                 var t = {
-                    id: gpTrackUid(), name: (j.name || "From dash").slice(0, 31),
+                    id: gpTrackUid(), name: (j.name || "From the node").slice(0, 31),
                     center: [j.start_finish.lat, j.start_finish.lon], zoom: 18,
                     start_finish: j.start_finish, sectors: j.sectors || [],
                     min_lap_time_s: gpN(j.min_lap_time_s) === null ? 10 : j.min_lap_time_s
@@ -12737,33 +13021,34 @@
                 if (shape) { shape._id = id; sent.push(shape); }
                 else skipped.push(id);
             });
-            if (!window.confirm(
+            gpConfirm(
                 (sent.length ? "Send " + sent.length + " channel" + (sent.length === 1 ? "" : "s") + " to the puck?"
                              : "Clear the puck's channel table?") +
                 "\n\nThis clears whatever is currently in the puck's recording ring — the record " +
                 "size is about to change, so old samples can't be read under the new one. " +
                 "Download first if there is anything on it you want to keep." +
                 (skipped.length ? "\n\n" + skipped.length + " chosen channel(s) have no CAN decode or are " +
-                 "wider than 16 bits and will be left off." : "")))
-                return;
-            var ids = sent.map(function (s) { return s._id; });
-            var wire = sent.map(function (s) {
-                return { can_id: s.can_id, start_bit: s.start_bit, bit_len: s.bit_len,
-                         is_signed: s.is_signed, ext_id: s.ext_id, big_endian: s.big_endian };
-            });
-            dev.traceChannelsSet(wire).then(function (r) {
-                if (!r || r.ok === false) throw new Error((r && r.error) || "the node refused it");
-                gp.deviceChanIds = ids;
-                gpDeviceChanIdsSave();
-                return dev.traceInfo();
-            }).then(function (info) {
-                gp.traceInfo = info;
-                showToast("Puck now logs " + ids.length + " channel" + (ids.length === 1 ? "" : "s") +
-                          " beside GPS — ring cleared", "success");
-                gpRenderSetup();
-                gpRenderInspector();
-            }).catch(function (e) {
-                showToast("Failed: " + (e && e.message ? e.message : e), "error");
+                 "wider than 16 bits and will be left off." : "")).then(function (yes) {
+                if (!yes) return;
+                var ids = sent.map(function (s) { return s._id; });
+                var wire = sent.map(function (s) {
+                    return { can_id: s.can_id, start_bit: s.start_bit, bit_len: s.bit_len,
+                             is_signed: s.is_signed, ext_id: s.ext_id, big_endian: s.big_endian };
+                });
+                dev.traceChannelsSet(wire).then(function (r) {
+                    if (!r || r.ok === false) throw new Error((r && r.error) || "the node refused it");
+                    gp.deviceChanIds = ids;
+                    gpDeviceChanIdsSave();
+                    return dev.traceInfo();
+                }).then(function (info) {
+                    gp.traceInfo = info;
+                    showToast("Puck now logs " + ids.length + " channel" + (ids.length === 1 ? "" : "s") +
+                              " beside GPS — ring cleared", "success");
+                    gpRenderSetup();
+                    gpRenderInspector();
+                }).catch(function (e) {
+                    showToast("Failed: " + (e && e.message ? e.message : e), "error");
+                });
             });
         };
 
@@ -13051,10 +13336,11 @@
         function gpGyroZeroConfirmed() {
             var dev = gpDev();
             if (!dev || !dev.imuCalibrate) return;
-            if (!window.confirm("Measure the gyro's resting offset?\n\nThe node averages two " +
-                                "seconds of readings, so the car must be completely still \u2014 " +
-                                "engine off is safest. It refuses rather than storing a bad " +
-                                "figure if it detects movement.")) return;
+            gpConfirm("Measure the gyro's resting offset?\n\nThe node averages two " +
+                      "seconds of readings, so the car must be completely still \u2014 " +
+                      "engine off is safest. It refuses rather than storing a bad " +
+                      "figure if it detects movement.").then(function (yes) {
+            if (!yes) return;
             gpSetMsg("gpMountMsg", "Hold still··· measuring for two seconds.", "");
             dev.imuCalibrate().then(function (r) {
                 if (r && r.gyro_bias_cdps && gp.node) gp.node.gyro_bias_cdps = r.gyro_bias_cdps;
@@ -13064,6 +13350,7 @@
             }).catch(function (e) {
                 /* The node's refusals are written to be shown verbatim. */
                 gpSetMsg("gpMountMsg", (e && e.message) ? e.message : String(e), "bad");
+            });
             });
         }
 
@@ -13687,6 +13974,13 @@
         }
 
         function gpRenderTrackInspector(box) {
+            /* This panel is rebuilt by the once-a-second lap poll, and
+               replacing innerHTML resets the scroll. Un-preserved, the panel
+               snapped back to the top faster than anyone could reach the
+               bottom of it — which made "Send to the node", the button that
+               makes live timing work at all, unreachable the whole time a
+               node was connected. */
+            var keepScroll = box.scrollTop;
             var t = gpActiveTrack();
             if (!t) {
                 box.innerHTML = "<h2>Tracks</h2><div class='ws-sub'>nothing selected</div>" +
@@ -13804,6 +14098,7 @@
                  "</div>";
 
             box.innerHTML = h;
+            box.scrollTop = keepScroll;
             gpRestoreMsgs();
         }
 
@@ -13928,7 +14223,8 @@
         function gpCanConfirmAndWrite(patch, confirmMsg) {
             var dev = gpDev();
             if (!dev || !dev.canConfigSet || !gp.can) return;
-            if (!window.confirm(confirmMsg)) {
+            gpConfirm(confirmMsg).then(function (yes) {
+            if (!yes) {
                 /* Put the control back where the node still is — the widget
                    moved, nothing else did. */
                 gpRenderInspector();
@@ -13955,6 +14251,7 @@
             }).catch(function (e2) {
                 gpSetMsg("gpCanMsg", "Save failed: " + (e2 && e2.message ? e2.message : e2), "bad");
                 gpRefreshDevice();
+            });
             });
         }
 
@@ -14041,14 +14338,16 @@
         function gpCanResetConfirmed() {
             if (!gp.can) return;
             var d = GP_CAN_DEFAULTS;
-            if (!window.confirm("Put every CAN setting back to the factory default?\n\n" +
-                                "Base " + gpHex(d.base_id) + ", 500 kbps, " + d.fast_hz + " Hz and " +
-                                d.slow_hz + " Hz. Anything on the bus reading the current IDs needs " +
-                                "updating to match. Applied at boot.")) return;
-            /* Straight through gpCanApply's saver, but the confirm above has
-               already been asked and answered. */
-            gpCanApplyConfirmed({ base_id: d.base_id, bitrate_idx: d.bitrate_idx,
-                                  fast_hz: d.fast_hz, slow_hz: d.slow_hz });
+            gpConfirm("Put every CAN setting back to the factory default?\n\n" +
+                      "Base " + gpHex(d.base_id) + ", 500 kbps, " + d.fast_hz + " Hz and " +
+                      d.slow_hz + " Hz. Anything on the bus reading the current IDs needs " +
+                      "updating to match. Applied at boot.").then(function (yes) {
+                if (!yes) return;
+                /* Straight through gpCanApply's saver, but the confirm above
+                   has already been asked and answered. */
+                gpCanApplyConfirmed({ base_id: d.base_id, bitrate_idx: d.bitrate_idx,
+                                      fast_hz: d.fast_hz, slow_hz: d.slow_hz });
+            });
         };
 
         function gpCanApplyConfirmed(body) {
@@ -14181,6 +14480,7 @@
             window._attachUsbDevice("gps").then(function () {
                 gp.connecting = false;
                 gp.status = null; gp._prev = null; gp.rates = {}; gp.err = null;
+                gp.nodeTrack = undefined; gp._nodeTrackBusy = false; gp._lapSig = "";
                 gpRefreshDevice();
                 gpTick();
             }).catch(function (e) {
@@ -14213,7 +14513,14 @@
             if (gp.err) return "Lost contact with the node: " + gp.err;
             var s = gp.status;
             if (!s) return "Waiting for the node's first reply…";
-            if (!s.link) return "No data from the receiver yet. Opening the USB port resets the node, so give it a moment to boot before treating this as a fault.";
+            /* "yet" and "any more" are different sentences: a counter says
+               which one is true. Seen live: the receiver died an hour into a
+               bench session and the old wording kept implying a slow boot. */
+            if (!s.link) {
+                return (gpN(s.ubx) > 500)
+                    ? "The receiver went quiet mid-session — its data stream stopped. The node re-probes it on its own; if this message stays up, power-cycle the node."
+                    : "No data from the receiver yet. Opening the USB port resets the node, so give it a moment to boot before treating this as a fault.";
+            }
             if (!s.fix) {
                 return "Searching for satellites (" + Math.round((Date.now() - gp.openedAt) / 1000) +
                     " s). A cold start takes 10–30 s and needs a clear view of the sky.";
@@ -14247,7 +14554,14 @@
             var fix = document.getElementById("gpChipFix");
             if (fix) {
                 var s = gp.status;
-                fix.innerHTML = (s && s.fix)
+                /* link false outranks everything: a cached "16 sats" from a
+                   receiver that stopped talking is not a fix, and older node
+                   firmware reports exactly that (fix stayed true off stale
+                   data). Newer firmware zeroes fix itself; this guard keeps
+                   the chip honest against nodes that don't. */
+                fix.innerHTML = (s && s.link === false)
+                    ? "receiver quiet"
+                    : (s && s.fix)
                     ? "<b>" + gpInt(s.sats) + "</b> sats · " + gpDist(gpN(s.hacc_mm) === null ? null : s.hacc_mm / 1000, 2)
                     : (s ? "no fix" : "—");
             }
@@ -14472,6 +14786,13 @@
                 return t.nodeConfigGet ? t.nodeConfigGet() : null;
             }).then(function (n) {
                 if (n) gp.node = n;
+                /* The ring's state used to arrive only as a side effect of the
+                   first download, so "is it recording?" and "how many minutes
+                   are on it?" were unanswerable exactly when they matter —
+                   before anything has been downloaded. One RPC at connect. */
+                return t.traceInfo ? t.traceInfo() : null;
+            }).then(function (i) {
+                if (i) gp.traceInfo = i;
                 gpRenderInspector();
                 gpUpdateChips();
             }).catch(function (e) {
@@ -14498,6 +14819,10 @@
                early-returning until it landed, then overwrite fresh state. */
             gp.inFlight = false; gp.lapInFlight = false; gp._epoch = (gp._epoch || 0) + 1;
             gp._msgs = {}; gp._misses = 0;
+            /* The node's-track cache belongs to one physical node: a fresh
+               open must ask again rather than grade this node's readiness
+               against whatever the LAST one held. */
+            gp.nodeTrack = undefined; gp._nodeTrackBusy = false; gp._lapSig = "";
             /* Identity is the previous NODE's, not this one's. */
             if (!gpDev()) {
                 gp.info = null; gp.wifi = null; gp.can = null; gp.node = null;
