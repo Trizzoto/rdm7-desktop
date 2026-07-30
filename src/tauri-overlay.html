@@ -1405,6 +1405,27 @@
                     opacity: 0; font-family: inherit; }
         .gp-chtab tr:hover .gp-chdel { opacity: 1; }
         .gp-chdel:hover { color: #d16358; }
+        /* Live readings. Monospace so the digits do not jitter as they change,
+           which at 2 Hz is the difference between a reading and a flicker. */
+        .gp-chtab th.lvh { width: 74px; text-align: right; white-space: nowrap; }
+        .gp-chtab td.lvc { text-align: right; }
+        .lv { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); }
+        .lv.on { color: #7da982; }
+        .lv.stale { color: #c78f2e; }
+        /* What's on the bus: a dense read-only table, monospace for the id
+           and the bytes because that is how they are read everywhere else. */
+        .gp-bustab { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10px; }
+        .gp-bustab th { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+                        color: var(--text-muted); font-weight: 600; text-align: left;
+                        padding: 0 4px 4px 0; border-bottom: 1px solid var(--border); }
+        .gp-bustab td { padding: 3px 4px 3px 0; vertical-align: middle; }
+        .gp-bustab .id { font-family: 'JetBrains Mono', monospace; color: var(--text); white-space: nowrap; }
+        .gp-bustab .hz { color: var(--text-muted); white-space: nowrap; }
+        .gp-bustab .by { font-family: 'JetBrains Mono', monospace; color: var(--text-muted);
+                         letter-spacing: 0.04em; word-break: break-all; }
+        .gp-bustab em { font-style: normal; color: var(--text-muted); font-size: 8.5px;
+                        margin-left: 4px; opacity: 0.8; }
+        .ws-btn-line.sm { padding: 2px 8px; font-size: 10px; white-space: nowrap; }
         .gp-chform { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }
         .gp-chform .ws-field { margin-bottom: 7px; }
         .gp-chform .un { color: var(--text-muted); font-size: 9.5px; font-style: normal; }
@@ -6250,6 +6271,9 @@
             chanPop: false,              /* the list, floating over the rack */
             myChans: null,               /* definitions typed here or from a DBC */
             chanForm: null,              /* the add-a-channel form, when open */
+            chanLive: null,              /* dashId -> {value, fresh}, polled while visible */
+            chanLiveTimer: null,
+            busSeen: null,               /* the last can.seen reply, or "loading" */
             insightCursor: -1,           /* keyboard position in the findings */
             mapMode: (function () {      /* survives restarts on purpose */
                 try { return window.localStorage.getItem("rdm7_gp_mapmode") || "pace"; }
@@ -13692,7 +13716,12 @@
                      "changes size.") + "</th>" +
                  "<th class='n'>Graph" + gpTip("Graph", "Draw it in the rack below. Free, instant, and " +
                      "nothing to do with what the puck records — hide a channel here and it is " +
-                     "still in the recording.") + "</th></tr></thead><tbody>";
+                     "still in the recording.") + "</th>" +
+                 "<th class='lvh'>Live" + gpTip("Live", "What the puck is reading off the bus right " +
+                     "now, for channels it is logging. This is how you check a decode with the " +
+                     "engine running instead of finding out after the drive: blip the throttle " +
+                     "and the number should move the way you expect. “Quiet” means the frame " +
+                     "has not arrived for a second.") + "</th></tr></thead><tbody>";
 
             var grp = null, any = false;
             [GP_GRP_PUCK, GP_GRP_HERE, GP_GRP_DASH, GP_GRP_DBC, GP_GRP_MINE,
@@ -13726,6 +13755,12 @@
                                      r.lane.pending ? "No data in this recording — the lane draws its name and what it is waiting on." : null,
                                      colour)
                          : gpChkHtml("graph", "na", null, "Nothing to draw: this recording does not carry it.")) + "</td>";
+                    /* Only a channel the PUCK is logging has a live reading —
+                       it is the puck doing the sniffing, so one merely ticked
+                       here has nothing to report until it is Sent. */
+                    h += "<td class='lvc'>" + (r.onDev
+                         ? "<span class='lv' data-gp-live='" + gpEsc(r.dashId) + "'>—</span>"
+                         : "") + "</td>";
                     h += "</tr>";
                 });
             });
@@ -13757,6 +13792,7 @@
                  "<button class='ws-btn-line' onclick='gpMyChanForm()'>Add a channel</button></div>" +
                  "<input type='file' id='gpDbcFile' accept='.dbc' style='display:none' onchange='gpDbcImport(this)'>";
             if (gp.chanForm) h += gpMyChanFormHtml();
+            h += gpBusSeenHtml();
             return h;
         }
 
@@ -13825,10 +13861,13 @@
                 "</div>" + gpChannelListHtml() + "</div>";
         }
 
-        window.gpMyChanForm = function (open) {
+        /* `seed` pre-fills the form — used by the bus scanner, where you have
+           just seen a frame and want a channel pointed at it without
+           re-typing the id you are looking at. */
+        window.gpMyChanForm = function (open, seed) {
             gp.chanForm = (open === false) ? null
-                : { name: "", unit: "", can_id: "", bit_start: "0", bit_length: "16",
-                    scale: "1", offset: "0", big: false, signed: false };
+                : Object.assign({ name: "", unit: "", can_id: "", bit_start: "0", bit_length: "16",
+                                  scale: "1", offset: "0", big: false, signed: false }, seed || {});
             gpChanUiRefresh();
         };
 
@@ -13987,6 +14026,10 @@
             gpSyncLanesBtn();
             if (gp.view === "setup") gpRenderSetup();
             gpChanPopRender();
+            /* The list is what the live values are for, so the poll follows
+               it on and off screen rather than running all session. */
+            gpChanLiveStart();
+            gpChanLivePaint();
         }
 
         window.gpChanFilter = function (v) {
@@ -14035,6 +14078,169 @@
             gpDrawStrip();
             gpChanUiRefresh();
         };
+
+        /* ══════════════════════════════════════════════════════════════════
+         * Seeing the bus, live
+         *
+         * Two questions you can only answer with the engine running, and
+         * neither of which could be answered at all before:
+         *
+         *   "what is this car even talking about?"  — can.seen lists every
+         *   id the puck has heard, with a rate and the last payload. Without
+         *   it you had to already know your ids before you could configure a
+         *   single channel, which is fine for an RDM dash and useless for
+         *   anything else.
+         *
+         *   "is my decode right?"  — the live reading of each configured
+         *   channel, beside its definition. Otherwise the first time you find
+         *   out a start bit was wrong is after the drive, from a lane full of
+         *   nonsense, with the car back on the trailer.
+         *
+         * Both poll only while the channel list is actually on screen, and
+         * the live values are written into their cells in place rather than
+         * by re-rendering — a re-render every half second would fight the
+         * search box for the caret.
+         * ═════════════════════════════════════════════════════════════════ */
+        var GP_LIVE_MS = 500;
+
+        function gpChanLiveOn() {
+            return !!(gp.chanPop || (gp.open && gp.view === "setup"));
+        }
+
+        function gpChanLiveTick() {
+            if (!gpChanLiveOn()) { gp.chanLiveTimer = null; return; }
+            var dev = gpDev();
+            if (!dev || !dev.traceChannelsGet) { gp.chanLiveTimer = setTimeout(gpChanLiveTick, GP_LIVE_MS); return; }
+            dev.traceChannelsGet().then(function (r) {
+                var ch = (r && r.channels) || [];
+                /* Keyed by POSITION, matching gp.deviceChanIds — the node
+                   reports wire parameters, not names, and position is the
+                   only thing the two agree on. */
+                var ids = gpDeviceChanIds();
+                var live = {};
+                ch.forEach(function (c, i) {
+                    var id = ids[i];
+                    if (id) live[id] = { value: c.value, fresh: !!c.fresh };
+                });
+                gp.chanLive = live;
+                gpChanLivePaint();
+            }).catch(function () { }).then(function () {
+                gp.chanLiveTimer = gpChanLiveOn() ? setTimeout(gpChanLiveTick, GP_LIVE_MS) : null;
+            });
+        }
+
+        function gpChanLiveStart() {
+            if (gp.chanLiveTimer || !gpChanLiveOn()) return;
+            gp.chanLiveTimer = setTimeout(gpChanLiveTick, 0);
+        }
+
+        /* Values written straight into their cells: no re-render, no caret
+           lost, no scroll jump. */
+        function gpChanLivePaint() {
+            var live = gp.chanLive || {};
+            var byId = {};
+            gpAllChans().forEach(function (c) { byId[c.id] = c; });
+            Array.prototype.forEach.call(document.querySelectorAll("[data-gp-live]"), function (el) {
+                var id = el.getAttribute("data-gp-live");
+                var L = live[id];
+                if (!L) { el.textContent = "—"; el.className = "lv"; return; }
+                if (!L.fresh) { el.textContent = "quiet"; el.className = "lv stale"; return; }
+                var c = byId[id], d = c && c.decode;
+                var scale = (d && gpN(d.scale)) === null ? 1 : (d ? d.scale : 1);
+                var off = (d && gpN(d.offset)) === null ? 0 : (d ? d.offset : 0);
+                var dp = (c && gpN(c.decimals) !== null) ? c.decimals : 1;
+                el.textContent = (L.value * scale + off).toFixed(dp) +
+                                 (c && (c.unit || c.units) ? " " + (c.unit || c.units) : "");
+                el.className = "lv on";
+            });
+        }
+
+        /* ---- what is on the bus ------------------------------------------- */
+        window.gpBusScan = function () {
+            var dev = gpDev();
+            if (!dev || !dev.canSeen) {
+                gpSetMsg("gpChanMsg", "Connect the puck over USB first.", "warn");
+                gpChanUiRefresh(); return;
+            }
+            gp.busSeen = "loading";
+            gpChanUiRefresh();
+            dev.canSeen().then(function (r) {
+                gp.busSeen = r || { frames: [] };
+                gpChanUiRefresh();
+            }).catch(function (e) {
+                gp.busSeen = null;
+                gpSetMsg("gpChanMsg", "Could not read the bus: " + (e && e.message ? e.message : e), "bad");
+                gpChanUiRefresh();
+            });
+        };
+
+        window.gpBusForget = function () {
+            var dev = gpDev();
+            if (!dev || !dev.canSeenClear) return;
+            dev.canSeenClear().then(function () {
+                gp.busSeen = null;
+                gpSetMsg("gpChanMsg", "Cleared. Scan again to see what arrives from now on.", "ok");
+                gpChanUiRefresh();
+            }).catch(function () { });
+        };
+
+        /* Start a definition from a frame you can see arriving. The id and
+           its extended flag come across; the bit layout is the part only you
+           can know, so the form opens on it. */
+        window.gpBusMake = function (idHex, ext) {
+            window.gpMyChanForm(true, { can_id: "0x" + idHex, big: false });
+            gpSetMsg("gpChanFormMsg", "Set the start bit and width for the signal you want out of 0x" +
+                     idHex + ". Save it, tick Log, Send, and its live value appears in the list.", null);
+            gpChanUiRefresh();
+        };
+
+        function gpBusSeenHtml() {
+            var h = "<div class='ws-grp' style='border-top:none;padding-top:2px'>" +
+                    "<div class='ws-gt'>What's on the bus" +
+                    gpTip("Every id the puck has heard",
+                          "The puck listens to the whole bus, so this is what the car is " +
+                          "actually saying — id, how often, and the last eight bytes it " +
+                          "carried. Watch a byte change as you blip the throttle and you " +
+                          "have found your signal; then make a channel from it and check " +
+                          "the live reading.") + "</div>";
+            h += "<div class='lt-expbtns'>" +
+                 "<button class='ws-btn-line' onclick='gpBusScan()'>" +
+                 (gp.busSeen && gp.busSeen !== "loading" ? "Scan again" : "Scan the bus") + "</button>" +
+                 "<button class='ws-btn-line' onclick='gpBusForget()' title=\"Forget what has been heard so far and start counting again\">Forget</button></div>";
+            if (gp.busSeen === "loading") return h + "<div class='ws-note'>Listening…</div></div>";
+            if (!gp.busSeen) return h + "</div>";
+            var fr = (gp.busSeen.frames || []).slice().sort(function (a, b) { return b.hz - a.hz; });
+            if (!fr.length) {
+                /* The two things that are actually wrong when a bus is silent,
+                   and the current bitrate stated so it can be checked against
+                   the car without leaving the panel. */
+                var rate = "";
+                if (gp.can && gp.can.bitrate_idx !== undefined)
+                    GP_BITRATES.forEach(function (b) {
+                        if (String(b[0]) === String(gp.can.bitrate_idx)) rate = b[1];
+                    });
+                h += "<div class='ws-note'>Nothing heard. The puck is listening but no frames have " +
+                     "arrived — check CAN High and Low are not swapped, that the bus is " +
+                     "terminated, and that the bitrate matches the car" +
+                     (rate ? " (it is set to " + gpEsc(rate) + ")" : "") + ".</div>";
+                return h + "</div>";
+            }
+            if (gp.busSeen.full)
+                h += "<div class='ws-note'>The list is full at " + fr.length + " ids — this bus has " +
+                     "more. Press Forget and scan again to see a fresh sample.</div>";
+            h += "<table class='gp-bustab'><thead><tr><th>Frame</th><th>Rate</th><th>Last bytes</th><th></th></tr></thead><tbody>";
+            fr.forEach(function (f) {
+                var hex = (f.can_id >>> 0).toString(16).toUpperCase();
+                h += "<tr><td class='id'>0x" + hex + (f.ext ? "<em>ext</em>" : "") + "</td>" +
+                     "<td class='hz'>" + (f.hz >= 1 ? Math.round(f.hz) + " Hz"
+                        : f.hz > 0 ? f.hz.toFixed(1) + " Hz" : "once") +
+                     (f.quiet_ms > 2000 ? "<em>quiet</em>" : "") + "</td>" +
+                     "<td class='by'>" + gpEsc(f.data || "") + "</td>" +
+                     "<td><button class='ws-btn-line sm' onclick=\"gpBusMake('" + hex + "', " +
+                     (f.ext ? "true" : "false") + ")\">Use</button></td></tr>";
+            });
+            return h + "</tbody></table></div>";
+        }
 
         /* ---- the list, floating over the rack ----------------------------- */
         window.gpChanPopToggle = function () {

@@ -1188,6 +1188,11 @@
              * `channels` is [{can_id, start_bit, bit_len, is_signed, ext_id,
              * big_endian}, ...], same shape both directions. */
             async traceChannelsGet() { return await rpc('trace.channels.get'); },
+            /* Which CAN ids the puck has actually heard, with rates and the
+             * last payload — for pointing a channel at a signal on a car
+             * nobody has profiled. */
+            async canSeen() { return await rpc('can.seen'); },
+            async canSeenClear() { return await rpc('can.seen.clear'); },
             async traceChannelsSet(channels) { return await rpc('trace.channels.set', { channels }); },
             async lapTrackGet() { return await rpc('lap.track.get'); },
             async lapTrackSet(track) { return await rpc('lap.track.set', track); },

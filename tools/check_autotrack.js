@@ -58,12 +58,13 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
     'gpToggleHtml', 'gpMyChanFormHtml',
     'gpRowsPack', 'gpRowsUnpack', 'gpSessionFileBuild', 'gpSessionFileParse', 'gpB64', 'gpB64Dec',
     'gpSesUid', 'gpChannels', 'gpCsvBuild', 'gpSpdN', 'gpSmoothPath',
-    'gpSectorGates', 'gpSectorName', 'gpSectorNamed', 'gpSortSectors', 'gpSectorOfSample'];
+    'gpSectorGates', 'gpSectorName', 'gpSectorNamed', 'gpSortSectors', 'gpSectorOfSample',
+    'gpBusSeenHtml'];
 const NEEDED_VAR = ['GP_LANES', 'GP_CHAN_LS', 'GP_DEVCHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_CHAN_COLOURS',
     'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
     'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S',
     'GP_SHOW_LS', 'GP_GRP_PUCK', 'GP_GRP_HERE', 'GP_GRP_CAR', 'GP_GRP_NONE', 'GP_UNITS',
-    'GP_MYCHAN_LS', 'GP_GRP_DASH', 'GP_GRP_DBC', 'GP_GRP_MINE',
+    'GP_MYCHAN_LS', 'GP_GRP_DASH', 'GP_GRP_DBC', 'GP_GRP_MINE', 'GP_BITRATES',
     'GP_NO_T', 'GP_CHAN_STALE', 'GP_SESFILE_FMT'];
 
 let code = '';
@@ -999,6 +1000,39 @@ ok('the dash comes first, yours after — it needs no setting up',
 ok('a dash channel is never mistaken for one of yours', mrow('can_rpm') && mrow('can_rpm').mine === false);
 ok('the list offers both ways in regardless',
     /Import a DBC/.test(F.gpChannelListHtml()) && /Add a channel/.test(F.gpChannelListHtml()));
+
+console.log('\nseeing what is on the bus');
+freshGp();
+global.gp.busSeen = null;
+ok('before a scan it offers to scan', /Scan the bus/.test(F.gpBusSeenHtml()));
+global.gp.busSeen = 'loading';
+ok('while scanning it says so', /Listening/.test(F.gpBusSeenHtml()));
+global.gp.busSeen = { frames: [], full: false };
+global.gp.can = { bitrate_idx: 2 };
+let busH = F.gpBusSeenHtml();
+ok('a silent bus names the three things that are actually wrong',
+    /swapped/.test(busH) && /terminated/.test(busH) && /bitrate/.test(busH));
+ok('and states the bitrate it is set to, to check against the car',
+    /500 kbps/.test(busH), busH.slice(busH.indexOf('Nothing heard'), busH.indexOf('Nothing heard') + 260));
+global.gp.busSeen = { full: false, frames: [
+    { can_id: 0x360, ext: false, dlc: 8, count: 500, hz: 50.0, quiet_ms: 20, data: '0C8000FA12340000' },
+    { can_id: 0x18FEF1FE, ext: true, dlc: 8, count: 10, hz: 1.0, quiet_ms: 40, data: '7B00000000000000' },
+    { can_id: 0x201, ext: false, dlc: 2, count: 1, hz: 0, quiet_ms: 9000, data: 'ABCD' }
+] };
+busH = F.gpBusSeenHtml();
+ok('ids are listed in hex', /0x360/.test(busH) && /0x18FEF1FE/.test(busH));
+ok('an extended id is marked as one', /0x18FEF1FE<em>ext<\/em>/.test(busH));
+ok('rates are rounded to something readable', /50 Hz/.test(busH));
+ok('a frame seen once says so rather than 0 Hz', /once/.test(busH));
+ok('one that has stopped arriving is flagged quiet', /quiet<\/em>/.test(busH));
+ok('the last payload is shown so a byte can be watched', /0C8000FA12340000/.test(busH));
+ok('the busiest frame is listed first',
+    busH.indexOf('0x360') < busH.indexOf('0x18FEF1FE'), 'not sorted by rate');
+ok('every frame offers to become a channel', (busH.match(/gpBusMake\(/g) || []).length === 3);
+ok('and passes the extended flag through', /gpBusMake\('18FEF1FE', true\)/.test(busH));
+global.gp.busSeen = { full: true, frames: [{ can_id: 1, ext: false, dlc: 1, count: 2, hz: 5, quiet_ms: 1, data: '00' }] };
+ok('a truncated list says so rather than pretending to be the whole bus',
+    /list is full/.test(F.gpBusSeenHtml()));
 
 console.log('\nreading a CAN id the way people actually type it');
 ok('0x360 works', F.gpParseId('0x360') === 0x360);
