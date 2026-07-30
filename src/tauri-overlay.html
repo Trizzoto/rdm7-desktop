@@ -6981,10 +6981,26 @@
            cheaper than storing and immune to drifting out of step with it. */
         var GP_NO_T = 4294967295;        /* a recording made before timestamps */
 
+        /* The CAN columns travel with the GPS block, in exactly the shape the
+           node sends them: sample-major uint16, TRACE_CHAN_STALE (0xFFFF) for
+           "that channel had gone quiet". Storing them was the missing half of
+           the channel work — without it a recording lost its channels the
+           moment Studio closed, and the channel list would offer you Graph on
+           a lane that could only ever be empty. Which ids those columns MEAN
+           lives in the session's meta (chanIds), because the numbers alone
+           cannot say. */
+        var GP_CHAN_STALE = 0xFFFF;
+
         function gpRowsPack(rows) {
             var n = rows.length;
             var pk = { v: 1, n: n, lat: new Int32Array(n), lon: new Int32Array(n),
                        kph: new Uint16Array(n), hdg: new Uint16Array(n), t: new Uint32Array(n) };
+            /* Take the width from the FIRST row that has one: a download makes
+               every row the same width, and trusting row 0 alone would drop
+               every column if that one sample happened to arrive bare. */
+            var nch = 0, k;
+            for (k = 0; k < n; k++) if (rows[k].can && rows[k].can.length) { nch = rows[k].can.length; break; }
+            if (nch) { pk.nch = nch; pk.can = new Uint16Array(n * nch); }
             for (var i = 0; i < n; i++) {
                 var r = rows[i];
                 pk.lat[i] = Math.round(r.lat * 1e7);
@@ -6992,6 +7008,11 @@
                 pk.kph[i] = Math.round(r.kph * 100);
                 pk.hdg[i] = Math.round(r.hdg * 100);
                 pk.t[i] = r.t === undefined ? GP_NO_T : r.t;
+                if (!nch) continue;
+                for (var c = 0; c < nch; c++) {
+                    var v = (r.can && r.can[c] !== undefined && r.can[c] !== null) ? r.can[c] : null;
+                    pk.can[i * nch + c] = v === null ? GP_CHAN_STALE : v;
+                }
             }
             return pk;
         }
@@ -6999,10 +7020,21 @@
         function gpRowsUnpack(pk) {
             if (!pk || !pk.lat) return [];
             var n = pk.n === undefined ? pk.lat.length : pk.n, rows = new Array(n);
+            /* A recording saved before channels existed has no `can` at all,
+               and must still open — hence the guard rather than a format bump. */
+            var nch = (pk.can && pk.nch) ? pk.nch : 0;
             for (var i = 0; i < n; i++) {
+                var can = null;
+                if (nch) {
+                    can = new Array(nch);
+                    for (var c = 0; c < nch; c++) {
+                        var v = pk.can[i * nch + c];
+                        can[c] = v === GP_CHAN_STALE ? null : v;
+                    }
+                }
                 rows[i] = { lat: pk.lat[i] / 1e7, lon: pk.lon[i] / 1e7,
                             kph: pk.kph[i] / 100, hdg: pk.hdg[i] / 100,
-                            t: pk.t[i] === GP_NO_T ? undefined : pk.t[i], g: 0 };
+                            t: pk.t[i] === GP_NO_T ? undefined : pk.t[i], g: 0, can: can };
             }
             return rows;
         }
@@ -7043,19 +7075,39 @@
             (gp.traceLaps || []).forEach(function (l, i) {
                 for (var k = l.from; k <= l.to; k++) lapOf[k] = i + 1;
             });
-            var out = [word + ",t_s,utc,lat_deg,lon_deg," +
+            /* The car's channels go out too, scaled and named the same way the
+               rack draws them — an export that quietly kept only the GPS half
+               would be found out in Excel, a long way from here. A column
+               header carries its unit for the same reason the speed one does.
+               Stale samples are left EMPTY rather than zero: a spreadsheet
+               averages a zero and ignores a blank, and the channel genuinely
+               had no value at that instant. */
+            var canLanes = gpLaneRowsAll().filter(function (l) {
+                return l.id.indexOf("can_") === 0 && !l.pending && typeof l.get === "function";
+            });
+            var head = word + ",t_s,utc,lat_deg,lon_deg," +
                        "speed_" + (gpSpdU() === "km/h" ? "kph" : "mph") +
-                       ",heading_deg,long_g,lat_g,yaw_dps"];
+                       ",heading_deg,long_g,lat_g,yaw_dps";
+            canLanes.forEach(function (l) {
+                var nm = String(l.label).replace(/[^\w]+/g, "_").replace(/^_|_$/g, "");
+                head += "," + nm + (l.unit ? "_" + String(l.unit).replace(/[^\w]+/g, "") : "");
+            });
+            var out = [head];
             for (var i = 0; i < rows.length; i++) {
                 var r = rows[i];
                 var utc = (meta && meta.dated === "gps" && r.t !== undefined && t0 !== undefined)
                     ? new Date(meta.recordedAt + (r.t - t0)).toISOString() : "";
-                out.push([lapOf[i] || "", gpSecs(rows, 0, i).toFixed(3), utc,
+                var line = [lapOf[i] || "", gpSecs(rows, 0, i).toFixed(3), utc,
                           r.lat.toFixed(7), r.lon.toFixed(7),
                           gpSpdN(r.kph).toFixed(2), r.hdg.toFixed(2),
                           (r.g || 0).toFixed(3),
                           (ch.glat ? ch.glat[i] : 0).toFixed(3),
-                          (ch.yaw ? ch.yaw[i] : 0).toFixed(1)].join(","));
+                          (ch.yaw ? ch.yaw[i] : 0).toFixed(1)];
+                canLanes.forEach(function (l) {
+                    var v = l.get(i);
+                    line.push(v === null || v === undefined ? "" : v.toFixed(l.dp === undefined ? 1 : l.dp));
+                });
+                out.push(line.join(","));
             }
             return out.join("\n");
         }
@@ -7067,14 +7119,21 @@
             /* The id is THIS PC's primary key; the receiving PC mints its own,
                so two imports of the same file cannot collide. */
             Object.keys(meta).forEach(function (k) { if (k !== "id") m[k] = meta[k]; });
-            return JSON.stringify({
-                format: GP_SESFILE_FMT, version: 1, meta: m,
-                data: { n: pk.n,
+            var data = { n: pk.n,
                         lat: gpB64(new Uint8Array(pk.lat.buffer)),
                         lon: gpB64(new Uint8Array(pk.lon.buffer)),
                         kph: gpB64(new Uint8Array(pk.kph.buffer)),
                         hdg: gpB64(new Uint8Array(pk.hdg.buffer)),
-                        t: gpB64(new Uint8Array(pk.t.buffer)) }
+                        t: gpB64(new Uint8Array(pk.t.buffer)) };
+            /* Only when there are any: a file from a GPS-only recording stays
+               byte-for-byte what it was before channels existed, and an older
+               Studio reading this one simply does not see the extra keys. */
+            if (pk.can && pk.nch) {
+                data.nch = pk.nch;
+                data.can = gpB64(new Uint8Array(pk.can.buffer));
+            }
+            return JSON.stringify({
+                format: GP_SESFILE_FMT, version: 1, meta: m, data: data
             });
         }
 
@@ -7097,7 +7156,21 @@
                        kph: arr(d.kph, Uint16Array, 2),
                        hdg: arr(d.hdg, Uint16Array, 2),
                        t: arr(d.t, Uint32Array, 4) };
+            if (d.can && gpN(d.nch)) {
+                var u8 = gpB64Dec(d.can);
+                if (u8.byteLength !== d.n * d.nch * 2) throw new Error("session file is truncated");
+                pk.nch = d.nch;
+                pk.can = new Uint16Array(u8.buffer);
+            }
             var meta = j.meta;
+            /* A file carrying columns but no names for them is not a failure —
+               the data is real. gpLaneRowsAll falls back to generic ids, the
+               same way a download whose count disagrees with the local record
+               already does. */
+            if (pk.can && !(meta.chanIds && meta.chanIds.length)) {
+                meta.chanIds = [];
+                for (var q = 0; q < pk.nch; q++) meta.chanIds.push("ch" + (q + 1));
+            }
             meta.id = gpSesUid();
             meta.savedAt = Date.now();
             return { meta: meta, pk: pk };
@@ -7234,6 +7307,11 @@
                 bestLapS: best,
                 lapTimesS: lapTimes,
                 corners: corners,
+                /* What this recording's CAN columns are, in column order. The
+                   numbers in `can` are meaningless without it — and it has to
+                   be the snapshot taken at download time, not whatever is
+                   ticked now, because the two are allowed to differ. */
+                chanIds: (gp.traceChanIds && gp.traceChanIds.length) ? gp.traceChanIds.slice() : null,
                 car: "", driver: ""            /* stage 6 fills these in */
             };
         }
@@ -7468,6 +7546,12 @@
                 gp.trace = rows;
                 gp.traceInfo = { used_samples: rows.length };
                 gp.sessionId = id;
+                /* The columns came back with the rows; this is what they mean.
+                   Cleared rather than left alone when a session has none, or
+                   the LAST recording's channel names would be printed over
+                   this one's numbers. */
+                gp.traceChanIds = (meta.chanIds && meta.chanIds.length) ? meta.chanIds.slice() : null;
+                gp.stripCache = null;
                 /* A video opened before any recording existed has been playing
                    untethered — tether it now: its clock against this session's,
                    by the same rule as opening it the other way round. */
@@ -10093,11 +10177,15 @@
                     chanIds = (devIds.length === nchan) ? devIds.slice()
                         : (function () { var a = []; for (var k = 0; k < nchan; k++) a.push("ch" + (k + 1)); return a; })();
                 }
-                gp.traceChanIds = chanIds;
                 /* Empty is an answer, not a blank: leave whatever session is
                    on screen alone (clobbering it to [] used to wipe the very
-                   laps someone was looking at) and say why nothing arrived. */
+                   laps someone was looking at) and say why nothing arrived.
+                   Before traceChanIds too — it describes the columns of the
+                   trace in memory, and with no new data those are still the
+                   loaded session's. Setting it here made the loaded
+                   recording's channel lanes vanish on an empty download. */
                 if (!total) { gp._dlEmpty = true; return null; }
+                gp.traceChanIds = chanIds;
                 var rows = [];
                 var step = function () {
                     return dev.traceRead(rows.length).then(function (pg) {

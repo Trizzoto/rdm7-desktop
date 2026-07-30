@@ -55,12 +55,15 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
     'gpDash', 'gpU', 'gpSpdU', 'gpLaneShowMap', 'gpLaneShowSave', 'gpLaneShown', 'gpLaneShowSet', 'gpLaneSig',
     'gpChannelRows', 'gpChkHtml', 'gpChannelListHtml', 'gpLanesBtnLabel',
     'gpMyChans', 'gpMyChansSave', 'gpAllChans', 'gpChanGroup', 'gpParseId', 'gpMyChanCheck',
-    'gpToggleHtml', 'gpMyChanFormHtml'];
+    'gpToggleHtml', 'gpMyChanFormHtml',
+    'gpRowsPack', 'gpRowsUnpack', 'gpSessionFileBuild', 'gpSessionFileParse', 'gpB64', 'gpB64Dec',
+    'gpSesUid', 'gpChannels', 'gpCsvBuild', 'gpSpdN', 'gpSmoothPath'];
 const NEEDED_VAR = ['GP_LANES', 'GP_CHAN_LS', 'GP_DEVCHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_CHAN_COLOURS',
     'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
     'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S',
     'GP_SHOW_LS', 'GP_GRP_PUCK', 'GP_GRP_HERE', 'GP_GRP_CAR', 'GP_GRP_NONE', 'GP_UNITS',
-    'GP_MYCHAN_LS', 'GP_GRP_DASH', 'GP_GRP_DBC', 'GP_GRP_MINE'];
+    'GP_MYCHAN_LS', 'GP_GRP_DASH', 'GP_GRP_DBC', 'GP_GRP_MINE',
+    'GP_NO_T', 'GP_CHAN_STALE', 'GP_SESFILE_FMT'];
 
 let code = '';
 NEEDED_VAR.forEach(v => { code += grabVar(v) + '\n'; });
@@ -722,6 +725,111 @@ ok('a channel with no CAN decode cannot be logged either',
     crow('can_calc').canLog === false && /nothing to sniff/.test(crow('can_calc').logWhy));
 ok('every dash channel gets a row, chosen or not', crows.filter(r => r.group === F.GP_GRP_DASH).length === 4);
 ok('every row is unique', new Set(crows.map(r => r.id)).size === crows.length);
+
+console.log('\na recording keeps its channel columns when it is saved');
+/* The hole this closes: the columns lived only in memory, so a recording
+   lost its channels the moment Studio closed — and the channel list would
+   cheerfully offer Graph on a lane that could only ever be empty. */
+const canRows = [
+    { lat: -36.5, lon: 146.08, kph: 100.5, hdg: 90.25, t: 1000, g: 0, can: [3200, 850] },
+    { lat: -36.51, lon: 146.09, kph: 110.25, hdg: 91.5, t: 1040, g: 0, can: [null, 900] },
+    { lat: -36.52, lon: 146.10, kph: 0, hdg: 0, t: 1080, g: 0, can: [0, 65534] }
+];
+let pk = F.gpRowsPack(canRows);
+ok('the pack carries the column count', pk.nch === 2, String(pk.nch));
+ok('and one uint16 per channel per sample', pk.can.length === 3 * 2, String(pk.can.length));
+let back = F.gpRowsUnpack(pk);
+ok('a value survives the round trip', back[0].can[0] === 3200 && back[0].can[1] === 850,
+    JSON.stringify(back[0].can));
+ok('a stale sample comes back as null, not as 65535',
+    back[1].can[0] === null && back[1].can[1] === 900, JSON.stringify(back[1].can));
+ok('a genuine zero is not mistaken for stale', back[2].can[0] === 0);
+ok('a genuine 65534 is not mistaken for stale', back[2].can[1] === 65534);
+ok('the GPS block still round-trips exactly',
+    Math.abs(back[0].lat - canRows[0].lat) < 1e-7 && Math.abs(back[0].kph - 100.5) < 0.01 &&
+    back[0].t === 1000 && back[1].t === 1040);
+/* A row arriving bare must not silently drop every other row's columns. */
+const bareFirst = [{ lat: 0, lon: 0, kph: 0, hdg: 0, t: 1, g: 0, can: null },
+               { lat: 0, lon: 0, kph: 0, hdg: 0, t: 2, g: 0, can: [7, 8] }];
+const mixedBack = F.gpRowsUnpack(F.gpRowsPack(bareFirst));
+ok('the width is taken from the first row that has one',
+    mixedBack[1].can[0] === 7 && mixedBack[1].can[1] === 8, JSON.stringify(mixedBack[1].can));
+ok('and a bare row reads as all-stale rather than as zeroes',
+    mixedBack[0].can[0] === null && mixedBack[0].can[1] === null, JSON.stringify(mixedBack[0].can));
+
+console.log('\na recording from before channels existed still opens');
+const oldRows = [{ lat: -36.5, lon: 146.08, kph: 50, hdg: 10, t: 5, g: 0 }];
+const oldPk = F.gpRowsPack(oldRows);
+ok('nothing is stored when there are no columns',
+    oldPk.can === undefined && oldPk.nch === undefined);
+const oldBack = F.gpRowsUnpack(oldPk);
+ok('and it unpacks with no columns rather than throwing', oldBack.length === 1 && oldBack[0].can === null);
+delete oldPk.nch;      /* a pack written by an older Studio */
+ok('a pack with no nch at all is still readable', F.gpRowsUnpack(oldPk)[0].can === null);
+
+console.log('\nand keeps them when exported to another PC');
+const sesMeta = { id: 'ses_x', name: 'Winton', recordedAt: 1, dated: 'gps', samples: 3,
+                  chanIds: ['rpm', 'map'], lapCount: 0, bestLapS: null };
+const file = F.gpSessionFileBuild(sesMeta, pk);
+ok('the file carries the columns and their width',
+    /"nch":2/.test(file) && /"can":"/.test(file));
+ok('and what they mean travels in the meta', /"chanIds":\["rpm","map"\]/.test(file));
+const parsed = F.gpSessionFileParse(file);
+ok('the id is re-minted so two imports cannot collide', parsed.meta.id !== 'ses_x');
+ok('the names come back', parsed.meta.chanIds.join(',') === 'rpm,map');
+const pBack = F.gpRowsUnpack(parsed.pk);
+ok('and every value survives the file round trip',
+    pBack[0].can[0] === 3200 && pBack[1].can[0] === null && pBack[2].can[1] === 65534,
+    JSON.stringify(pBack.map(r => r.can)));
+/* A GPS-only export must stay exactly what it always was. */
+const oldFile = F.gpSessionFileBuild(sesMeta, oldPk);
+ok('a GPS-only file gains no channel keys', !/"can"/.test(oldFile) && !/"nch"/.test(oldFile));
+ok('and still parses', F.gpSessionFileParse(oldFile).pk.can === undefined);
+/* Columns with no names is real data, not a broken file. */
+const noNames = F.gpSessionFileBuild({ id: 'y', name: 'n', recordedAt: 1 }, pk);
+ok('columns with no names get generic ones rather than being dropped',
+    F.gpSessionFileParse(noNames).meta.chanIds.join(',') === 'ch1,ch2');
+/* Truncation is caught rather than thrown as a RangeError from a typed array. */
+const trunc = JSON.parse(file);
+trunc.data.can = F.gpB64(new Uint8Array(4));
+let threw = '';
+try { F.gpSessionFileParse(JSON.stringify(trunc)); } catch (e) { threw = e.message; }
+ok('a truncated channel block is refused in plain words', /truncated/.test(threw), threw);
+
+console.log('\nthe CSV carries the car\'s channels too');
+/* An export that quietly kept only the GPS half would be found out in Excel,
+   a long way from here and with no way to get the rest back. */
+freshGp();
+global.gp.laneShow = {};
+global.gp.logChans = [];
+global.gp.dashChans = null;
+global.gp.myChans = [{ id: 'my:p', name: 'Oil pressure', unit: 'bar', decimals: 2,
+    decode: { can_id: 0x5F0, bit_start: 0, bit_length: 16, is_signed: false, endian: 1, scale: 0.1, offset: 0 } }];
+global.gp.traceChanIds = ['my:p'];
+global.gp.trace = [
+    { lat: -36.5, lon: 146.0, kph: 100, hdg: 0, g: 0.1, can: [1234] },
+    { lat: -36.5001, lon: 146.0, kph: 101, hdg: 0, g: 0.1, can: [null] }
+];
+global.gp.traceLaps = [];
+global.gp.sessions = [];
+const csv = F.gpCsvBuild();
+const csvHead = csv.split('\n')[0], csvRow0 = csv.split('\n')[1], csvRow1 = csv.split('\n')[2];
+ok('the channel gets a column, named and united', /Oil_pressure_bar/.test(csvHead), csvHead);
+ok('the GPS columns are still all there',
+    /lat_deg/.test(csvHead) && /speed_kph/.test(csvHead) && /yaw_dps/.test(csvHead));
+ok('its value is scaled the same way the rack scales it',
+    csvRow0.split(',').pop() === '123.40', csvRow0.split(',').pop());
+ok('a stale sample is left EMPTY, not zero — a spreadsheet averages a zero',
+    csvRow1.split(',').pop() === '', JSON.stringify(csvRow1.split(',').pop()));
+ok('every row has as many fields as the header',
+    csvRow0.split(',').length === csvHead.split(',').length &&
+    csvRow1.split(',').length === csvHead.split(',').length);
+/* And a GPS-only recording exports exactly what it always did. */
+global.gp.traceChanIds = null;
+global.gp.trace = [{ lat: -36.5, lon: 146.0, kph: 100, hdg: 0, g: 0 }];
+ok('a recording with no channels gains no columns',
+    F.gpCsvBuild().split('\n')[0].split(',').length === 10,
+    F.gpCsvBuild().split('\n')[0]);
 
 console.log('\nchannel definitions can come from anywhere, not just a dash');
 freshGp();
