@@ -1351,24 +1351,56 @@
         .gp-chtab .nm { color: var(--text); }
         .gp-chtab .un { color: var(--text-muted); font-size: 9.5px; margin-left: 5px; }
         .gp-chtab .sub { display: block; color: var(--text-muted); font-size: 9px; margin-top: 1px; }
+        .gp-chtab tbody tr:hover td { background: var(--panel-elevated); }
         .gp-chtab tr.off .nm { color: var(--text-muted); }
-        /* A tick is a button, like every other control here. Locked and n/a
-           states are printed rather than hidden: "always recorded" and "there
-           is nothing to record" are different answers and both are useful. */
-        .gp-chk { width: 15px; height: 15px; padding: 0; border-radius: 4px; cursor: pointer;
-                  background: var(--bg); border: 1px solid var(--border); color: transparent;
-                  font-size: 10px; line-height: 1; font-family: inherit; }
-        .gp-chk:hover { border-color: var(--text-muted); }
-        .gp-chk.on { background: var(--accent); border-color: var(--accent); color: #08131c; font-weight: 700; }
-        /* Locked and n/a MUST NOT look like an empty tickbox — an empty box
-           reads as "off, click me", which is the opposite of "always recorded"
-           and of "nothing can record this". Both print their glyph (the base
-           rule hides it so unticked boxes stay clean), muted and dashed so
-           they read as stated fact rather than available choice. */
-        .gp-chk.lock { cursor: default; background: transparent; border-style: dashed;
-                       border-color: var(--text-muted); color: var(--text-muted); }
-        .gp-chk.na { cursor: not-allowed; background: transparent; border-color: transparent;
-                     color: var(--text-muted); opacity: 0.5; }
+        /* ---- the two marks -------------------------------------------------
+           First cut was twenty accent-filled tickboxes on one screen, which
+           breaks this app's own rule (ADR-0014: chrome is monochrome, the
+           accent marks rather than fills, nothing is a solid pill). It also
+           just looked cheap.
+
+           So neither mark is a checkbox. GRAPH is a short rule in the
+           channel's OWN trace colour — the control looks like the line it
+           governs, and that colour is legitimate because it is data identity,
+           not chrome (ADR-0014 rule 7). LOG is a small neutral square, filled
+           when the puck is recording it: state, in greys, calm.
+
+           The button is the whole cell so the target is big; hover elevates
+           the neutral background, which is the same "active is an elevated
+           neutral" idiom as the tabs and rails. */
+        .gp-chk { width: 30px; height: 20px; padding: 0; border: none; background: none;
+                  cursor: pointer; border-radius: 3px; display: inline-flex;
+                  align-items: center; justify-content: center; font-family: inherit; }
+        .gp-chk:hover { background: var(--panel); }
+        .gp-chk i { display: block; }
+        /* LOG: a neutral square. Filled = the puck records it. */
+        .gp-chk .log { width: 9px; height: 9px; border-radius: 2px;
+                       border: 1px solid var(--border); background: transparent; }
+        .gp-chk.on .log { background: var(--text); border-color: var(--text); }
+        /* Locked and n/a must NOT read as an empty box waiting for a click —
+           that is the opposite of "always recorded" and of "nothing can record
+           this". Locked is filled but muted (it is on, just not yours to
+           change); n/a is a bare dash with no box at all. */
+        .gp-chk.lock { cursor: default; }
+        .gp-chk.lock:hover { background: none; }
+        /* Dim, but unmistakably FILLED — at 9px an extra 0.7 opacity made it
+           read as an empty box, which is the one thing it must not say. */
+        .gp-chk.lock .log { background: var(--text-muted); border-color: var(--text-muted); }
+        .gp-chk.na { cursor: not-allowed; }
+        .gp-chk.na:hover { background: none; }
+        .gp-chk .na-dash { width: 8px; height: 1px; background: var(--text-muted); opacity: 0.5; }
+        /* GRAPH: the trace, in miniature. */
+        .gp-chk .ln { width: 16px; height: 3px; border-radius: 2px; background: var(--border); }
+        /* Only on definitions you own — the dash's are its to manage. Hidden
+           until the row is hovered so twenty rows are not twenty crosses. */
+        .gp-chdel { background: none; border: none; color: var(--text-muted); cursor: pointer;
+                    font-size: 13px; line-height: 1; padding: 0 3px; margin-left: 4px;
+                    opacity: 0; font-family: inherit; }
+        .gp-chtab tr:hover .gp-chdel { opacity: 1; }
+        .gp-chdel:hover { color: #d16358; }
+        .gp-chform { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }
+        .gp-chform .ws-field { margin-bottom: 7px; }
+        .gp-chform .un { color: var(--text-muted); font-size: 9.5px; font-style: normal; }
         .gp-chdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
                     margin-right: 6px; vertical-align: 1px; background: var(--border); }
         /* The popover: the list, over the rack, anchored to the button that
@@ -6205,6 +6237,8 @@
             laneShow: null,
             chanFilter: "",              /* the channel list's search box */
             chanPop: false,              /* the list, floating over the rack */
+            myChans: null,               /* definitions typed here or from a DBC */
+            chanForm: null,              /* the add-a-channel form, when open */
             insightCursor: -1,           /* keyboard position in the findings */
             mapMode: (function () {      /* survives restarts on purpose */
                 try { return window.localStorage.getItem("rdm7_gp_mapmode") || "pace"; }
@@ -8550,7 +8584,7 @@
             var base = GP_LANES;
             if (ids.length) {
                 var byId = {};
-                ((gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : []).forEach(function (c) { byId[c.id] = c; });
+                gpAllChans().forEach(function (c) { byId[c.id] = c; });
                 var chosen = ids.map(function (id, idx) {
                     var c = byId[id];
                     var scale = (c && c.decode && gpN(c.decode.scale)) || 1;
@@ -12971,15 +13005,16 @@
          * The puck records position, speed and heading. Throttle, brake,
          * steering, RPM, boost, temperatures — everything that says WHY a lap
          * was slow rather than just where — is already on the CAN bus, and
-         * the dash has already decoded and named every one of them. So the
-         * dash's channel list IS the configuration: no DBC to import twice,
-         * no bit offsets to retype. Pick from what the dash already knows.
+         * the puck is already sitting on it. All that is missing is a
+         * DESCRIPTION of where each signal lives in a frame.
          *
-         * What this screen does today is choose and cost the selection, and
-         * name the lanes the rack is waiting on. The node cannot yet store
-         * them: its trace record is a fixed 12 bytes and the format has to
-         * grow first. That is stated here rather than implied, because a
-         * picker that silently changes nothing is worse than no picker.
+         * A connected RDM dash is the quickest source of those descriptions:
+         * it has the bus decoded and named already, so there is nothing to
+         * type twice. But it is not the only source and must not be a
+         * prerequisite — a car with someone else's dash, or no dash yet, is
+         * still a car with a bus. So descriptions can equally be imported
+         * from a DBC or typed in here, and all three end up in one shape
+         * (see gpAllChans) that nothing downstream can tell apart.
          * ═════════════════════════════════════════════════════════════════ */
         var GP_CHAN_LS = "rdm7_gp_logchans";
         var GP_DEVCHAN_LS = "rdm7_gp_devchans";
@@ -13016,11 +13051,20 @@
 
         /* How long the ring lasts at a given record size. The node's own
            numbers: a 6.375 MB partition at 25 Hz. Stated in minutes because
-           that is the unit a track day is planned in. */
+           that is the unit a track day is planned in.
+
+           capacity_samples is reported for whatever record the node has RIGHT
+           NOW, so the bytes it stands for are capacity × THAT record size.
+           Assuming 12 here made the estimate shrink every time channels were
+           actually sent: two channels on the puck read as 206 minutes when the
+           truth was 278, and the partition had not changed size. Seen live,
+           immediately after a Send. */
         function gpRingMinutes(extraBytes) {
             var cap = 0;
-            if (gp.traceInfo && gpN(gp.traceInfo.capacity_samples))
-                cap = gpN(gp.traceInfo.capacity_samples) * 12;   /* bytes, at the 12 B record */
+            if (gp.traceInfo && gpN(gp.traceInfo.capacity_samples)) {
+                var rec = gpN(gp.traceInfo.record_bytes) || 12;
+                cap = gpN(gp.traceInfo.capacity_samples) * rec;   /* bytes on the partition */
+            }
             if (!cap) cap = 0x660000;                            /* the partition, when no node is attached */
             return cap / (12 + extraBytes) / 25 / 60;
         }
@@ -13062,7 +13106,7 @@
                     return;
                 }
                 var byId = {};
-                ((gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : []).forEach(function (c) { byId[c.id] = c; });
+                gpAllChans().forEach(function (c) { byId[c.id] = c; });
                 if (!gpChanToDevShape(byId[id])) {
                     gpSetMsg("gpChanMsg", "That channel cannot be logged — no CAN decode, or wider " +
                              "than the puck's 16-bit slot.", "warn");
@@ -13110,7 +13154,7 @@
             var dev = gpDev();
             if (!dev || !dev.traceChannelsSet) { showToast("Connect to the puck over USB first", "error"); return; }
             var byId = {};
-            ((gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : []).forEach(function (c) { byId[c.id] = c; });
+            gpAllChans().forEach(function (c) { byId[c.id] = c; });
             var sel = gpLogChans(), sent = [], skipped = [];
             sel.forEach(function (id) {
                 var shape = gpChanToDevShape(byId[id]);
@@ -13160,7 +13204,7 @@
                    still say something readable. An unmatched entry is real
                    (logged, just not nameable from here) and kept as its raw id. */
                 var byWire = {};
-                ((gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : []).forEach(function (c) {
+                gpAllChans().forEach(function (c) {
                     var d = c.decode;
                     if (d) byWire[d.can_id + ":" + d.bit_start + ":" + d.bit_length] = c.id;
                 });
@@ -13203,6 +13247,55 @@
         var GP_GRP_HERE = "Worked out here";
         var GP_GRP_CAR = "From the car's bus";
         var GP_GRP_NONE = "Nothing recording these";
+        var GP_GRP_DASH = "On the bus · known by the dash";
+        var GP_GRP_DBC = "On the bus · from a DBC file";
+        var GP_GRP_MINE = "On the bus · you added these";
+
+        /* ══════════════════════════════════════════════════════════════════
+         * Where a channel definition comes from
+         *
+         * The puck sniffs whatever is on the wire; it does not care who
+         * described it. A connected dash is the CONVENIENT source — if you
+         * own one it already has the bus decoded and named, so there is
+         * nothing to type twice — but it was wired as the ONLY source, which
+         * made the whole feature unavailable to anyone logging a car whose
+         * dash is not RDM, or not plugged in, or not built yet.
+         *
+         * So a definition can also be typed here, or imported from a DBC. All
+         * three end up in the same shape and the rest of the code cannot tell
+         * them apart: what the puck needs is can_id / start bit / length /
+         * signedness / endianness, and what Studio needs to draw it is a
+         * name, a unit and scale+offset. Nobody needs to know who said so.
+         * ═════════════════════════════════════════════════════════════════ */
+        var GP_MYCHAN_LS = "rdm7_gp_mychans";
+
+        function gpMyChans() {
+            if (gp.myChans) return gp.myChans;
+            try { gp.myChans = JSON.parse(window.localStorage.getItem(GP_MYCHAN_LS) || "[]") || []; }
+            catch (e) { gp.myChans = []; }
+            return gp.myChans;
+        }
+        function gpMyChansSave() {
+            try { window.localStorage.setItem(GP_MYCHAN_LS, JSON.stringify(gp.myChans || [])); } catch (e) {}
+        }
+
+        /* Every channel definition available, dash first because it needs no
+           setting up. Ids from here are prefixed "my:" so a hand-typed
+           channel can never collide with a dash channel of the same name —
+           the id is what gets stored in the log selection and in a saved
+           session, so a collision would silently relabel someone's data. */
+        function gpAllChans() {
+            var dash = (gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : [];
+            return dash.concat(gpMyChans());
+        }
+
+        /* The group a definition belongs to, which is also the answer to
+           "where did this come from" without a legend. */
+        function gpChanGroup(c) {
+            if (!c) return GP_GRP_CAR;
+            if (String(c.id).indexOf("my:") !== 0) return GP_GRP_DASH;
+            return c.dbc ? GP_GRP_DBC : GP_GRP_MINE;
+        }
 
         /* One row per channel, in an order that DOES NOT MOVE when you tick
            something. That is the whole reason this is built the way it is:
@@ -13218,26 +13311,41 @@
         function gpChannelRows() {
             var lanes = gpLaneRowsAll();
             var sel = gpLogChans(), onDev = gpDeviceChanIds();
-            var dash = (gp.dashChans && gp.dashChans !== "loading") ? gp.dashChans : [];
+            var defs = gpAllChans();
             var byId = {}, laneFor = {};
-            dash.forEach(function (c) { byId[c.id] = c; });
+            defs.forEach(function (c) { byId[c.id] = c; });
             lanes.forEach(function (l) { if (l.id.indexOf("can_") === 0) laneFor[l.id.slice(4)] = l; });
 
             var out = [], seen = {};
-            var canRow = function (dashId) {
-                var c = byId[dashId], lane = laneFor[dashId] || null;
+            var canRow = function (chanId) {
+                var c = byId[chanId], lane = laneFor[chanId] || null;
                 var wide = !!(c && c.decode && gpN(c.decode.bit_length) > 16);
                 var noDecode = !!(c && !gpChanToDevShape(c));
-                seen[dashId] = true;
-                return { id: "can_" + dashId, dashId: dashId, lane: lane, group: GP_GRP_CAR,
-                         name: (lane && lane.label) || (c && (c.name || c.label)) || dashId,
+                var d = c && c.decode;
+                seen[chanId] = true;
+                return { id: "can_" + chanId, dashId: chanId, lane: lane, group: gpChanGroup(c),
+                         mine: !!c && String(c.id).indexOf("my:") === 0,
+                         name: (lane && lane.label) || (c && (c.name || c.label)) || chanId,
                          unit: (lane && lane.unit) || (c && (c.unit || c.units)) || "",
-                         sub: (!lane || lane.pending) ? "not in this recording" : null,
-                         log: sel.indexOf(dashId) >= 0, canLog: !!c && !noDecode,
-                         onDev: onDev.indexOf(dashId) >= 0,
-                         logWhy: !c ? "On the puck, but the dash does not list it — there is nothing here to re-send."
+                         /* Where it lives on the wire, stated in the row: it is
+                            the only way to tell two same-named signals apart,
+                            and the only way to spot a typo in one you added. */
+                         wire: d && gpN(d.can_id) !== null
+                               ? "0x" + Math.round(d.can_id).toString(16).toUpperCase() +
+                                 " · bit " + (gpN(d.bit_start) || 0) + "+" + (gpN(d.bit_length) || 0)
+                               : null,
+                         from: c && c.dbc ? c.dbc : null,
+                         /* Only worth saying when there IS a recording to be
+                            absent from. With nothing loaded it was true of
+                            every row, wrapped each one onto a second line, and
+                            told you nothing. */
+                         sub: (gp.trace && gp.trace.length && (!lane || lane.pending))
+                              ? "not in this recording" : null,
+                         log: sel.indexOf(chanId) >= 0, canLog: !!c && !noDecode,
+                         onDev: onDev.indexOf(chanId) >= 0,
+                         logWhy: !c ? "On the puck, but nothing here defines it — a table set from another PC, or a definition since deleted. Add it below to name it."
                                  : wide ? gpN(c.decode.bit_length) + " bits wide — the puck's log has a 16-bit slot per channel."
-                                 : noDecode ? "No CAN decode on the dash's side — there is nothing on the bus to sniff."
+                                 : noDecode ? "No CAN decode — this one is worked out on the dash rather than read off the bus, so there is nothing to sniff."
                                  : null };
             };
 
@@ -13259,30 +13367,32 @@
                 }
             });
 
-            /* The car's bus, in the dash's order. */
-            dash.forEach(function (c) { out.push(canRow(c.id)); });
-            /* Then anything in the recording or chosen that the dash cannot
-               name — a channel table set by another PC, or a dash that has
-               since been reconfigured. Real, and still worth a row. */
+            /* The bus, in definition order — dash first, then yours. */
+            defs.forEach(function (c) { out.push(canRow(c.id)); });
+            /* Then anything in the recording or chosen that nothing defines —
+               a channel table set from another PC, or a definition since
+               deleted. Real, logged, and still worth a row. */
             Object.keys(laneFor).concat(sel).forEach(function (did) {
                 if (!seen[did]) out.push(canRow(did));
             });
             return out;
         }
 
-        function gpChkHtml(state, call, tip) {
-            /* state: true on, false off, "lock" always-on-and-fixed, "na" not
-               applicable. Locked and n/a are drawn rather than left blank —
-               "always recorded" and "nothing records this" are both answers. */
-            var cls = state === "lock" ? "gp-chk lock" : state === "na" ? "gp-chk na"
-                    : state ? "gp-chk on" : "gp-chk";
-            /* "Always" gets a tick, muted: it IS being recorded, you just do
-               not get a say. n/a gets a dash: there is nothing to say yes to. */
-            var glyph = state === "lock" ? "✓" : state === "na" ? "–" : state ? "✓" : "";
+        /* kind: "log" (a neutral square — state) or "graph" (a short rule in
+           the channel's own colour — the trace in miniature).
+           state: true on, false off, "lock" on-but-not-yours, "na" nothing to
+           say yes to. */
+        function gpChkHtml(kind, state, call, tip, colour) {
+            var cls = "gp-chk" + (state === "lock" ? " lock" : state === "na" ? " na"
+                    : state === true ? " on" : "");
+            var mark = state === "na" ? "<i class='na-dash'></i>"
+                     : kind === "graph"
+                       ? "<i class='ln'" + (state === true && colour ? " style='background:" + colour + "'" : "") + "></i>"
+                       : "<i class='log'></i>";
             return "<button class='" + cls + "'" +
                    (call ? " onclick=\"" + call + "\"" : "") +
                    (tip ? " data-tip=\"" + gpEsc(tip) + "\"" : "") +
-                   " aria-pressed='" + (state === true) + "'>" + glyph + "</button>";
+                   " aria-pressed='" + (state === true) + "'>" + mark + "</button>";
         }
 
         function gpChannelListHtml() {
@@ -13333,26 +13443,37 @@
                      "still in the recording.") + "</th></tr></thead><tbody>";
 
             var grp = null, any = false;
-            [GP_GRP_PUCK, GP_GRP_HERE, GP_GRP_CAR, GP_GRP_NONE].forEach(function (g) {
+            [GP_GRP_PUCK, GP_GRP_HERE, GP_GRP_DASH, GP_GRP_DBC, GP_GRP_MINE,
+             GP_GRP_CAR, GP_GRP_NONE].forEach(function (g) {
                 rows.filter(function (r) { return r.group === g; }).forEach(function (r) {
                     any = true;
                     if (grp !== g) { grp = g; h += "<tr class='g'><td colspan='3'>" + g + "</td></tr>"; }
                     var shown = r.lane ? gpLaneShown(r.lane) : false;
                     var colour = (r.lane && r.lane.colour) || null;
+                    /* One line under the name, carrying whichever facts are
+                       true: where it is on the wire, which file it came from,
+                       whether this recording has it. */
+                    var bits = [];
+                    if (r.wire) bits.push(gpEsc(r.wire));
+                    if (r.from) bits.push(gpEsc(r.from));
+                    if (r.sub) bits.push(gpEsc(r.sub));
                     h += "<tr class='" + (shown ? "" : "off") + "'>" +
                          "<td><span class='gp-chdot'" + (colour && shown ? " style='background:" + colour + "'" : "") +
                          "></span><span class='nm'>" + gpEsc(r.name) + "</span>" +
                          (r.unit ? "<span class='un'>" + gpEsc(String(r.unit)) + "</span>" : "") +
-                         (r.sub ? "<span class='sub'>" + gpEsc(r.sub) + "</span>" : "") + "</td>";
-                    h += "<td class='n'>" + (r.log === "always" ? gpChkHtml("lock", null, r.logWhy)
-                         : !r.canLog ? gpChkHtml("na", null, r.logWhy)
-                         : gpChkHtml(!!r.log, "gpChanToggle('" + gpEsc(r.dashId) + "')",
+                         (r.mine ? "<button class='gp-chdel' onclick=\"gpMyChanDelete('" + gpEsc(r.dashId) +
+                                   "')\" data-tip=\"Remove this definition. It only removes the description — anything already recorded keeps its data.\">&times;</button>" : "") +
+                         (bits.length ? "<span class='sub'>" + bits.join(" · ") + "</span>" : "") + "</td>";
+                    h += "<td class='n'>" + (r.log === "always" ? gpChkHtml("log", "lock", null, r.logWhy)
+                         : !r.canLog ? gpChkHtml("log", "na", null, r.logWhy)
+                         : gpChkHtml("log", !!r.log, "gpChanToggle('" + gpEsc(r.dashId) + "')",
                                      r.onDev && !r.log ? "On the puck now — untick and Send to stop logging it."
                                      : r.log && !r.onDev ? "Ticked here, not on the puck yet — Send to write it." : null)) + "</td>";
                     h += "<td class='n'>" + (r.lane
-                         ? gpChkHtml(shown, "gpLaneShow('" + gpEsc(r.id) + "')",
-                                     r.lane.pending ? "No data in this recording — the lane draws its name and what it is waiting on." : null)
-                         : gpChkHtml("na", null, "Nothing to draw: this recording does not carry it.")) + "</td>";
+                         ? gpChkHtml("graph", shown, "gpLaneShow('" + gpEsc(r.id) + "')",
+                                     r.lane.pending ? "No data in this recording — the lane draws its name and what it is waiting on." : null,
+                                     colour)
+                         : gpChkHtml("graph", "na", null, "Nothing to draw: this recording does not carry it.")) + "</td>";
                     h += "</tr>";
                 });
             });
@@ -13362,17 +13483,82 @@
                      : "No channels yet.") + "</div>";
             }
 
-            /* Why the car's half of the list might be short or empty. */
+            /* ---- where definitions come from ------------------------------
+               The puck sniffs the wire; it does not care who described it. A
+               dash is the easy source because it already has the bus decoded,
+               but it is not the only one — so the other two ways in are always
+               offered, and the dash's absence is a note rather than a wall. */
             var d = gp.dashChans;
             if (d === "loading") h += "<div class='ws-note'>Reading the dash…</div>";
-            else if (!gpDash()) h += "<div class='ws-note'>The car's channels come from the dash — it is the " +
-                     "thing that knows what the bus means. Connect one and they appear here, " +
-                     "already named and decoded.</div>";
+            else if (!gpDash()) h += "<div class='ws-note'>No dash connected. If you have one it is the " +
+                     "quickest source — it already has this car's bus decoded and named. " +
+                     "Otherwise import a DBC or add a channel by hand; the puck reads the wire " +
+                     "either way.</div>";
             else if (!d) h += "<div class='ws-note'>The dash did not answer with a channel list. " +
                      "<button class='ws-btn-line' onclick='gpChanRefresh()'>Try again</button></div>";
-            else if (!d.length) h += "<div class='ws-note'>The dash has no active channels yet. Add them in " +
-                     "the dash editor — or import a DBC there — and they appear here.</div>";
+            else if (!d.length) h += "<div class='ws-note'>The dash has no active channels yet — set them up " +
+                     "there, or import a DBC here.</div>";
+
+            h += "<div class='lt-expbtns' style='margin-top:8px'>" +
+                 "<button class='ws-btn-line' onclick=\"document.getElementById('gpDbcFile').click()\" " +
+                 "title=\"Read a .dbc and offer every signal in it\">Import a DBC…</button>" +
+                 "<button class='ws-btn-line' onclick='gpMyChanForm()'>Add a channel</button></div>" +
+                 "<input type='file' id='gpDbcFile' accept='.dbc' style='display:none' onchange='gpDbcImport(this)'>";
+            if (gp.chanForm) h += gpMyChanFormHtml();
             return h;
+        }
+
+        /* ---- a channel typed in by hand -------------------------------------
+           Everything the puck needs to find a signal, and everything Studio
+           needs to draw it. Deliberately the same fields a DBC line carries,
+           because that is the vocabulary anyone doing this already speaks. */
+        function gpMyChanFormHtml() {
+            var f = gp.chanForm || {};
+            var fld = function (k, label, ph, hint) {
+                /* Numeric fields arrive pre-filled with a sensible default, so
+                   they select on focus — otherwise typing 8 into a field
+                   holding 0 gives 08, which happened the first time I used
+                   this. */
+                var num = k !== "name" && k !== "unit";
+                return "<div class='ws-field'><label>" + label + (hint ? " <span class='un'>" + hint + "</span>" : "") +
+                       "</label><input type='text' spellcheck='false' value='" + gpEsc(f[k] === undefined ? "" : String(f[k])) +
+                       "' oninput=\"gpMyChanField('" + k + "', this.value)\"" +
+                       (num ? " onfocus='this.select()'" : "") +
+                       " placeholder='" + gpEsc(ph) + "'></div>";
+            };
+            /* Two NAMED options, not On/Off: "byte order: off" tells you
+               nothing, and these are the two words every DBC and every CAN
+               tool prints. */
+            var seg = function (k, opts) {
+                return "<div class='ws-seg'>" + opts.map(function (o) {
+                    return "<button class='" + (!!f[k] === !!o.v ? "on" : "") + "' onclick=\"gpMyChanField('" +
+                           k + "', " + (o.v ? "1" : "0") + ")\">" + o.t + "</button>";
+                }).join("") + "</div>";
+            };
+            return "<div class='gp-chform'>" +
+                fld("name", "Name", "Oil pressure") +
+                fld("unit", "Unit", "bar") +
+                fld("can_id", "CAN id", "0x360", "hex or decimal") +
+                fld("bit_start", "Start bit", "0", "0 to 63") +
+                fld("bit_length", "Bits", "16", "1 to 16") +
+                fld("scale", "Scale", "1", "raw × scale") +
+                fld("offset", "Offset", "0", "added after scale") +
+                "<div class='ws-field'><label>Byte order" +
+                gpTip("Byte order", "How a multi-byte value is laid out in the frame. " +
+                      "Intel (little-endian) is by far the more common; a DBC writes these " +
+                      "as @1 and @0 respectively. If the numbers come out wildly wrong, this " +
+                      "is the first thing to try.") + "</label>" +
+                seg("big", [{ v: 0, t: "Intel" }, { v: 1, t: "Motorola" }]) + "</div>" +
+                "<div class='ws-field'><label>Value" +
+                gpTip("Signed or unsigned", "Signed means the top bit marks a negative " +
+                      "number — needed for anything that can read below zero, like an " +
+                      "intake temperature or a steering angle.") + "</label>" +
+                seg("signed", [{ v: 0, t: "Unsigned" }, { v: 1, t: "Signed" }]) + "</div>" +
+                "<div class='gp-msg' id='gpChanFormMsg'></div>" +
+                "<div class='lt-expbtns'>" +
+                "<button class='ws-btn-line' onclick='gpMyChanSave()'>Save channel</button>" +
+                "<button class='ws-btn-line' onclick='gpMyChanForm(false)'>Cancel</button></div>" +
+                "</div>";
         }
 
         function gpChannelsHtml() {
@@ -13381,9 +13567,168 @@
                       "Two ticks per channel: <b>Log</b> is what the puck writes to its own " +
                       "memory while you drive, <b>Graph</b> is what the rack draws when you " +
                       "review it. They are independent — you can log ten channels and look " +
-                      "at two. The same list is on the Channels button over the rack.") +
+                      "at two.<br><br>The car's channels come from a connected dash if you " +
+                      "have one, from a DBC file, or typed in here — the puck reads the wire " +
+                      "either way. The same list is on the Channels button over the rack.") +
                 "</div>" + gpChannelListHtml() + "</div>";
         }
+
+        window.gpMyChanForm = function (open) {
+            gp.chanForm = (open === false) ? null
+                : { name: "", unit: "", can_id: "", bit_start: "0", bit_length: "16",
+                    scale: "1", offset: "0", big: false, signed: false };
+            gpChanUiRefresh();
+        };
+
+        window.gpMyChanField = function (k, v) {
+            if (!gp.chanForm) return;
+            gp.chanForm[k] = (k === "big" || k === "signed") ? (v === "1" || v === 1 || v === true) : v;
+            /* Only the toggles need a redraw — re-rendering on every keystroke
+               would take the caret with it. */
+            if (k === "big" || k === "signed") gpChanUiRefresh();
+        };
+
+        /* Accepts 0x360, 360h, or plain decimal — people read CAN ids in hex
+           and type them however their tooling prints them. */
+        function gpParseId(s) {
+            var t = String(s === undefined || s === null ? "" : s).trim().toLowerCase();
+            if (!t) return null;
+            var n = /^0x[0-9a-f]+$/.test(t) ? parseInt(t.slice(2), 16)
+                  : /^[0-9a-f]+h$/.test(t) ? parseInt(t.slice(0, -1), 16)
+                  : /^\d+$/.test(t) ? parseInt(t, 10)
+                  : /^[0-9a-f]+$/.test(t) ? parseInt(t, 16)      /* bare hex like 1a4 */
+                  : NaN;
+            return isFinite(n) ? n : null;
+        }
+
+        /* Refuses rather than storing something the puck cannot use, and says
+           which field is wrong. A definition that silently logs nothing is the
+           worst outcome here — you find out after the track day. */
+        function gpMyChanCheck(f) {
+            var id = gpParseId(f.can_id);
+            var bs = gpN(f.bit_start), bl = gpN(f.bit_length), sc = gpN(f.scale), of = gpN(f.offset);
+            if (!String(f.name || "").trim()) return "Give it a name — that is what the lane is labelled with.";
+            if (id === null || id < 0 || id > 0x1FFFFFFF) return "CAN id must be 0 to 0x1FFFFFFF. Hex like 0x360 is fine.";
+            if (bs === null || bs < 0 || bs > 63) return "Start bit must be 0 to 63.";
+            if (bl === null || bl < 1 || bl > 16) return "Bits must be 1 to 16 — the puck's log has a 16-bit slot per channel.";
+            if (bs + bl > 64) return "Start bit plus bits runs past the end of an 8-byte frame.";
+            if (sc === null || sc === 0) return "Scale cannot be zero — every reading would come out the same.";
+            if (of === null) return "Offset has to be a number (0 if there is none).";
+            return null;
+        }
+
+        window.gpMyChanSave = function () {
+            var f = gp.chanForm;
+            if (!f) return;
+            var bad = gpMyChanCheck(f);
+            if (bad) { gpSetMsg("gpChanFormMsg", bad, "warn"); gpChanUiRefresh(); return; }
+            var list = gpMyChans();
+            list.push({
+                id: "my:" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+                name: String(f.name).trim().slice(0, 40),
+                unit: String(f.unit || "").trim().slice(0, 12),
+                decimals: 1,
+                decode: { can_id: gpParseId(f.can_id), bit_start: Math.round(gpN(f.bit_start)),
+                          bit_length: Math.round(gpN(f.bit_length)), is_signed: !!f.signed,
+                          endian: f.big ? 0 : 1, scale: gpN(f.scale), offset: gpN(f.offset) }
+            });
+            gpMyChansSave();
+            gp.chanForm = null;
+            gpSetMsg("gpChanMsg", "Added “" + String(f.name).trim() + "”. Tick Log to have the puck record it.", "ok");
+            gp.stripCache = null;
+            gpDrawStrip();
+            gpChanUiRefresh();
+        };
+
+        window.gpMyChanDelete = function (id) {
+            var list = gpMyChans();
+            var i = -1, k;
+            for (k = 0; k < list.length; k++) if (list[k].id === id) i = k;
+            if (i < 0) return;
+            var name = list[i].name;
+            /* Untick it on the way out, or the selection keeps an id nothing
+               can name and the row reappears in the unnameable group. */
+            var sel = gpLogChans(), si = sel.indexOf(id);
+            if (si >= 0) { sel.splice(si, 1); gpLogChansSave(); }
+            list.splice(i, 1);
+            gpMyChansSave();
+            gpSetMsg("gpChanMsg", "Removed “" + name + "”." +
+                     (si >= 0 ? " It was ticked for logging, so it has been unticked — Send to update the puck." : ""), "ok");
+            gp.stripCache = null;
+            gpDrawStrip();
+            gpChanUiRefresh();
+        };
+
+        /* ---- DBC import -----------------------------------------------------
+           Reuses parseDbcFile from the firmware editor rather than carrying a
+           second parser: it is the one already trusted with imports on the
+           dash side, it handles the 29-bit extended-id marker, and two
+           parsers would eventually disagree about the same file. */
+        window.gpDbcImport = function (input) {
+            var file = input && input.files && input.files[0];
+            input.value = "";
+            if (!file) return;
+            if (typeof window.parseDbcFile !== "function") {
+                gpSetMsg("gpChanMsg", "The DBC reader is not available in this build.", "bad");
+                gpChanUiRefresh();
+                return;
+            }
+            var rd = new FileReader();
+            rd.onload = function () {
+                var sigs;
+                try { sigs = window.parseDbcFile(String(rd.result)) || []; }
+                catch (e) { sigs = null; }
+                if (!sigs) {
+                    gpSetMsg("gpChanMsg", "Could not read that file as a DBC.", "bad");
+                    gpChanUiRefresh(); return;
+                }
+                /* Only what the puck can actually log is worth offering; the
+                   rest would be rows that can never be ticked. Counted and
+                   stated rather than dropped in silence. */
+                var fit = sigs.filter(function (s) { return gpN(s.bit_length) >= 1 && gpN(s.bit_length) <= 16; });
+                var wide = sigs.length - fit.length;
+                if (!fit.length) {
+                    gpSetMsg("gpChanMsg", "That DBC has " + sigs.length + " signal(s), but none of them fit " +
+                             "the puck's 16-bit slot.", "warn");
+                    gpChanUiRefresh(); return;
+                }
+                gpConfirm("Add " + fit.length + " channel" + (fit.length === 1 ? "" : "s") + " from " + file.name + "?" +
+                    "\n\nThey become available to pick — nothing is logged until you tick Log and Send." +
+                    (wide ? "\n\n" + wide + " signal(s) in the file are wider than 16 bits and will be left out." : "")
+                ).then(function (yes) {
+                    if (!yes) return;
+                    var list = gpMyChans(), stamp = Date.now().toString(36);
+                    fit.forEach(function (s, i) {
+                        list.push({
+                            id: "my:" + stamp + "_" + i,
+                            name: String(s.label || "signal").slice(0, 40),
+                            unit: String(s.unit || "").slice(0, 12),
+                            decimals: gpN(s.decimals) === null ? 1 : s.decimals,
+                            dbc: file.name,
+                            decode: { can_id: parseInt(s.can_id, 16), bit_start: gpN(s.bit_start) || 0,
+                                      bit_length: gpN(s.bit_length), is_signed: !!s.is_signed,
+                                      /* parseDbcFile reports DBC's own convention:
+                                         0 = Motorola, 1 = Intel, which is exactly
+                                         what a dash channel's `endian` carries. */
+                                      endian: gpN(s.endianess) === 0 ? 0 : 1,
+                                      scale: gpN(s.scale) === null ? 1 : s.scale,
+                                      offset: gpN(s.offset) === null ? 0 : s.offset }
+                        });
+                    });
+                    gpMyChansSave();
+                    gpSetMsg("gpChanMsg", "Added " + fit.length + " channel" + (fit.length === 1 ? "" : "s") +
+                             " from " + file.name + ". Tick the ones to log.", "ok");
+                    gp.stripCache = null;
+                    gpDrawStrip();
+                    gpChanUiRefresh();
+                });
+            };
+            rd.onerror = function () {
+                gpSetMsg("gpChanMsg", "Could not read that file.", "bad");
+                gpChanUiRefresh();
+            };
+            rd.readAsText(file);
+        };
 
         /* Both mounts of the list, plus the button that counts the lanes. */
         function gpChanUiRefresh() {
@@ -13462,6 +13807,11 @@
                 el.id = "gpChanPop";
                 el.className = "gp-chpop";
                 document.body.appendChild(el);
+                /* The button's own tooltip is on screen at the moment it is
+                   clicked, directly over where the list is about to appear.
+                   Dropping its data-tip stops the NEXT hover, not the one
+                   already showing — so take it down by hand. */
+                if (gp._tipEl) gp._tipEl.classList.remove("on");
                 /* Clicking the button that opened it must not count as
                    "outside" — it toggles, and both firing would reopen it. */
                 gp._chanPopAway = function (e) {

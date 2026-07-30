@@ -53,11 +53,14 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
     'gpSplitsStats', 'gpSectorRange', 'gpHeatColour', 'gpSplitsHtml', 'gpTip', 'gpLapTime',
     'gpLinesAgree', 'gpNodeTrackState', 'gpEmptyDownloadMsg', 'gpSnapGate',
     'gpDash', 'gpU', 'gpSpdU', 'gpLaneShowMap', 'gpLaneShowSave', 'gpLaneShown', 'gpLaneShowSet', 'gpLaneSig',
-    'gpChannelRows', 'gpChkHtml', 'gpChannelListHtml', 'gpLanesBtnLabel'];
+    'gpChannelRows', 'gpChkHtml', 'gpChannelListHtml', 'gpLanesBtnLabel',
+    'gpMyChans', 'gpMyChansSave', 'gpAllChans', 'gpChanGroup', 'gpParseId', 'gpMyChanCheck',
+    'gpToggleHtml', 'gpMyChanFormHtml'];
 const NEEDED_VAR = ['GP_LANES', 'GP_CHAN_LS', 'GP_DEVCHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_CHAN_COLOURS',
     'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
     'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S',
-    'GP_SHOW_LS', 'GP_GRP_PUCK', 'GP_GRP_HERE', 'GP_GRP_CAR', 'GP_GRP_NONE', 'GP_UNITS'];
+    'GP_SHOW_LS', 'GP_GRP_PUCK', 'GP_GRP_HERE', 'GP_GRP_CAR', 'GP_GRP_NONE', 'GP_UNITS',
+    'GP_MYCHAN_LS', 'GP_GRP_DASH', 'GP_GRP_DBC', 'GP_GRP_MINE'];
 
 let code = '';
 NEEDED_VAR.forEach(v => { code += grabVar(v) + '\n'; });
@@ -341,6 +344,16 @@ global.gp.traceInfo = null;
 const bare = F.gpRingMinutes(0);
 ok('the empty ring matches the node partition (6.375 MB, 12 B, 25 Hz)',
     Math.round(bare) === 371, Math.round(bare) + ' min');
+/* The estimate must not move because the node currently HOLDS channels: it
+   reports capacity for its present record size, so the byte capacity is
+   capacity × that size. Reading it as ×12 made two channels on the puck show
+   206 minutes when the partition still held 278 — caught live after a Send. */
+global.gp.traceInfo = { capacity_samples: 417792, record_bytes: 16 };
+ok('the estimate is the same whatever record the node is on now',
+    Math.round(F.gpRingMinutes(0)) === 371, Math.round(F.gpRingMinutes(0)) + ' min');
+ok('and costing four extra bytes gives the same answer either way',
+    Math.round(F.gpRingMinutes(4)) === 279, Math.round(F.gpRingMinutes(4)) + ' min');
+global.gp.traceInfo = null;
 const with8 = F.gpRingMinutes(8 * 2);
 ok('eight channels cost what the plan said (~152 min)',
     Math.round(with8) === 159 || Math.abs(with8 - 152) < 10, Math.round(with8) + ' min');
@@ -693,8 +706,8 @@ let crows = F.gpChannelRows();
 const crow = (id) => crows.filter(r => r.id === id)[0];
 ok('the GPS channels are grouped as the puck\'s', crow('speed').group === F.GP_GRP_PUCK);
 ok('delta is grouped as worked out here', crow('delta').group === F.GP_GRP_HERE);
-ok('the car\'s channels are grouped together',
-    crow('can_rpm').group === F.GP_GRP_CAR && crow('can_oilt').group === F.GP_GRP_CAR);
+ok('the dash\'s channels are grouped as the dash\'s',
+    crow('can_rpm').group === F.GP_GRP_DASH && crow('can_oilt').group === F.GP_GRP_DASH);
 ok('a GPS channel is always logged and cannot be unticked',
     crow('speed').log === 'always' && crow('speed').canLog === false);
 ok('and it says why', /fixed 12-byte record/.test(crow('speed').logWhy));
@@ -706,15 +719,122 @@ ok('an unchosen one reads as not logged, but tickable',
 ok('a 32-bit channel cannot be logged, and says how wide it is',
     crow('can_lat32').canLog === false && /32 bits wide/.test(crow('can_lat32').logWhy));
 ok('a channel with no CAN decode cannot be logged either',
-    crow('can_calc').canLog === false && /nothing on the bus/.test(crow('can_calc').logWhy));
-ok('every dash channel gets a row, chosen or not', crows.filter(r => r.group === F.GP_GRP_CAR).length === 4);
+    crow('can_calc').canLog === false && /nothing to sniff/.test(crow('can_calc').logWhy));
+ok('every dash channel gets a row, chosen or not', crows.filter(r => r.group === F.GP_GRP_DASH).length === 4);
 ok('every row is unique', new Set(crows.map(r => r.id)).size === crows.length);
+
+console.log('\nchannel definitions can come from anywhere, not just a dash');
+freshGp();
+global.gp.laneShow = {};
+global.gp.logChans = [];
+global.gp.dashChans = null;                 /* no dash at all */
+global.gp.myChans = [
+    { id: 'my:a', name: 'Oil pressure', unit: 'bar', decimals: 1,
+      decode: { can_id: 0x360, bit_start: 8, bit_length: 16, is_signed: false, endian: 1, scale: 0.1, offset: 0 } },
+    { id: 'my:b', name: 'Fuel level', unit: '%', decimals: 0, dbc: 'mycar.dbc',
+      decode: { can_id: 0x18DAF110, bit_start: 0, bit_length: 8, is_signed: false, endian: 0, scale: 1, offset: 0 } }
+];
+let mrows = F.gpChannelRows();
+const mrow = (id) => mrows.filter(r => r.id === id)[0];
+ok('with no dash connected, your own channels are still offered', !!mrow('can_my:a'));
+ok('and they are loggable', mrow('can_my:a').canLog === true);
+ok('a hand-added one is grouped as yours', mrow('can_my:a').group === F.GP_GRP_MINE);
+ok('a DBC-imported one is grouped as from a file', mrow('can_my:b').group === F.GP_GRP_DBC);
+ok('and names the file it came from', mrow('can_my:b').from === 'mycar.dbc');
+ok('each row states where it sits on the wire',
+    /0x360/.test(mrow('can_my:a').wire) && /bit 8\+16/.test(mrow('can_my:a').wire), mrow('can_my:a').wire);
+ok('yours are marked as yours (so they can be removed)',
+    mrow('can_my:a').mine === true);
+ok('an extended id survives the round trip to the puck shape',
+    F.gpChanToDevShape(global.gp.myChans[1]).ext_id === true &&
+    F.gpChanToDevShape(global.gp.myChans[1]).big_endian === true);
+global.gp.dashChans = [{ id: 'rpm', name: 'Engine RPM', unit: 'rpm',
+    decode: { can_id: 0x360, bit_start: 0, bit_length: 16, is_signed: false, endian: 1, scale: 1, offset: 0 } }];
+ok('the dash and your own definitions coexist', F.gpAllChans().length === 3);
+mrows = F.gpChannelRows();
+ok('the dash comes first, yours after — it needs no setting up',
+    mrows.filter(r => r.dashId).map(r => r.dashId).join(',') === 'rpm,my:a,my:b',
+    mrows.filter(r => r.dashId).map(r => r.dashId).join(','));
+ok('a dash channel is never mistaken for one of yours', mrow('can_rpm') && mrow('can_rpm').mine === false);
+ok('the list offers both ways in regardless',
+    /Import a DBC/.test(F.gpChannelListHtml()) && /Add a channel/.test(F.gpChannelListHtml()));
+
+console.log('\nreading a CAN id the way people actually type it');
+ok('0x360 works', F.gpParseId('0x360') === 0x360);
+ok('360h works', F.gpParseId('360h') === 0x360);
+ok('bare hex works', F.gpParseId('1A4') === 0x1A4);
+ok('plain decimal works', F.gpParseId('864') === 864);
+ok('whitespace and case do not matter', F.gpParseId('  0X18DAF110 ') === 0x18DAF110);
+ok('nonsense is refused rather than guessed', F.gpParseId('') === null && F.gpParseId('zz') === null);
+
+console.log('\na typed-in definition is checked before it is stored');
+const goodF = { name: 'Oil temp', unit: 'C', can_id: '0x360', bit_start: '0',
+                bit_length: '16', scale: '1', offset: '0' };
+const withF = (o) => Object.assign({}, goodF, o);
+ok('a sane definition passes', F.gpMyChanCheck(goodF) === null, F.gpMyChanCheck(goodF));
+ok('no name is refused', /name/i.test(F.gpMyChanCheck(withF({ name: ' ' })) || ''));
+ok('a bad id is refused', /CAN id/.test(F.gpMyChanCheck(withF({ can_id: 'nope' })) || ''));
+ok('an id past 29 bits is refused', /CAN id/.test(F.gpMyChanCheck(withF({ can_id: '0x20000000' })) || ''));
+ok('17 bits is refused, with the reason', /16-bit slot/.test(F.gpMyChanCheck(withF({ bit_length: '17' })) || ''));
+ok('zero bits is refused', !!F.gpMyChanCheck(withF({ bit_length: '0' })));
+ok('a signal running past the frame is refused',
+    /past the end/.test(F.gpMyChanCheck(withF({ bit_start: '56', bit_length: '16' })) || ''));
+ok('start bit 48 with 16 bits is fine (exactly fills the frame)',
+    F.gpMyChanCheck(withF({ bit_start: '48', bit_length: '16' })) === null);
+ok('a zero scale is refused — every reading would be the same',
+    /Scale cannot be zero/.test(F.gpMyChanCheck(withF({ scale: '0' })) || ''));
+ok('a non-numeric offset is refused', !!F.gpMyChanCheck(withF({ offset: 'x' })));
+ok('a negative scale is allowed (inverted sensors exist)',
+    F.gpMyChanCheck(withF({ scale: '-0.5' })) === null);
+
+console.log('\nthe form asks for what a DBC line carries');
+global.gp.chanForm = { name: '', unit: '', can_id: '', bit_start: '0', bit_length: '16',
+                       scale: '1', offset: '0', big: false, signed: false };
+const fhtml = F.gpMyChanFormHtml();
+['Name', 'Unit', 'CAN id', 'Start bit', 'Bits', 'Scale', 'Offset', 'Byte order'].forEach(function (l) {
+    ok('the form has a ' + l + ' field', fhtml.indexOf(l) >= 0);
+});
+ok('byte order names both options rather than saying On/Off',
+    /Intel/.test(fhtml) && /Motorola/.test(fhtml) && !/gpMyChanField\('big'[^)]*\)\">On</.test(fhtml));
+ok('signedness names both options too', /Unsigned/.test(fhtml) && /Signed/.test(fhtml));
+ok('numeric fields select on focus, so a default is overwritten not appended',
+    (fhtml.match(/onfocus='this.select\(\)'/g) || []).length === 5,
+    (fhtml.match(/onfocus='this.select\(\)'/g) || []).length + ' of 5');
+global.gp.chanForm = null;
+
+console.log('\nthe marks are not accent-filled tickboxes (ADR-0014)');
+const logOn = F.gpChkHtml('log', true, "x()", null);
+const grOn = F.gpChkHtml('graph', true, "x()", null, '#FF6FA8');
+ok('Graph draws a rule in the channel\'s own trace colour', /background:#FF6FA8/.test(grOn), grOn);
+ok('Log draws a neutral square, with no colour of its own',
+    /class='log'/.test(logOn) && !/background:/.test(logOn), logOn);
+ok('nothing carries an accent fill',
+    !/--accent/.test(logOn + grOn) && !/gp-chk on'[^>]*style/.test(logOn));
+ok('not-applicable is a bare dash, not an empty box',
+    /na-dash/.test(F.gpChkHtml('log', 'na', null, 'x')));
+ok('always-on is its own state, distinct from off',
+    /gp-chk lock/.test(F.gpChkHtml('log', 'lock', null, 'x')));
 
 console.log('\nthe list does not move when you tick something');
 /* The bug this pins: ordering the car's rows by "is it a lane yet" moved a
    channel to the top of its group the moment Log was ticked, the list redrew
    under the cursor, and the next click in a run landed on the wrong channel.
    Ticking three boxes produced one tick. */
+/* Its own fixture, so re-ordering the sections above cannot quietly change
+   what this is asserting about. */
+freshGp();
+global.gp.laneShow = {};
+global.gp.myChans = [];
+global.gp.logChans = ['rpm'];
+global.gp.dashChans = [
+    { id: 'rpm', name: 'Engine RPM', unit: 'rpm', decimals: 0,
+      decode: { can_id: 0x360, bit_start: 0, bit_length: 16, is_signed: false, endian: 1, scale: 1, offset: 0 } },
+    { id: 'oilt', name: 'Oil temperature', unit: '°C', decimals: 0,
+      decode: { can_id: 0x361, bit_start: 0, bit_length: 8, is_signed: false, endian: 1, scale: 1, offset: -40 } },
+    { id: 'lat32', name: 'A 32-bit thing', unit: '',
+      decode: { can_id: 0x362, bit_start: 0, bit_length: 32, is_signed: true, endian: 1 } },
+    { id: 'calc', name: 'Something derived', unit: '' }
+];
 const orderNow = () => F.gpChannelRows().map(r => r.id).join(',');
 const order0 = orderNow();
 global.gp.logChans = ['oilt'];
@@ -727,7 +847,7 @@ ok('hiding a lane does not move anything either', orderNow() === order0);
 global.gp.laneShow = {};
 global.gp.logChans = ['rpm'];
 ok('the car rows follow the dash list order, not the selection',
-    F.gpChannelRows().filter(r => r.group === F.GP_GRP_CAR).map(r => r.dashId).join(',') ===
+    F.gpChannelRows().filter(r => r.group === F.GP_GRP_DASH).map(r => r.dashId).join(',') ===
     global.gp.dashChans.map(c => c.id).join(','));
 
 console.log('\na recording can carry a channel that is no longer chosen');
