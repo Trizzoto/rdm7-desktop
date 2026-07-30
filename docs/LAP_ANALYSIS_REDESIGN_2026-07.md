@@ -1,5 +1,22 @@
 # Lap recording and telemetry analysis — the redesign (2026-07-29)
 
+> **Status 2026-07-30:** Stages 0–4 built and verified live (Stage 3's
+> live-bus bit-extraction still wants a moving car). Stage 4 shipped with
+> the split-times grid, stats, ideal lap and click-to-zoom. The same pass
+> fixed the seams the plan missed: the node's track is now part of the
+> readiness checklist (ADR-0015), confirm dialogs actually gate
+> (ADR-0015/0016), gates snap onto the driven line, and a dead receiver
+> reports as dead.
+>
+> Channels then got their own surface — one list, a **Log** tick and a
+> **Graph** tick, in Setup and in a popover over the rack (ADR-0017) — and
+> stopped needing an RDM dash: a definition can come from a dash, a DBC
+> file, or be typed in (ADR-0018). Recordings now keep their channel
+> columns through a save, a reload and an export.
+>
+> **Remaining:** Stage 5 (named splits), and the live-bus check of the
+> puck's bit extraction, which needs a moving car or a real CAN source.
+
 Sourced from the Race Studio 3 manual (structure and vocabulary only — no code,
 no assets, no wording lifted) and from what the RDM hardware can already do that
 AiM's cannot.
