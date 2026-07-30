@@ -1041,6 +1041,62 @@
         .gp-msg.ok { color: #6FBF73; }
         .gp-msg.warn { color: #FF9F0A; }
         .gp-msg.bad { color: #e05d52; }
+        /* ---- ● REC ----------------------------------------------------------
+           The camera convention, on purpose: red and moving is the one visual
+           grammar everybody already reads as "this is being recorded", and
+           recording is the one state that must be impossible to miss from any
+           view. The pulse is opacity-only — a size pulse would make the whole
+           chip row breathe. Paused is amber and still: obvious, but calm,
+           because a deliberately paused bench unit is not an emergency. */
+        .ws-chip.rec-on { color: #ff453a; border-color: #6e2f2b; font-weight: 700;
+                          letter-spacing: 0.08em; }
+        .ws-chip.rec-off { color: #d99a3d; border-color: #5c4a24; }
+        .gp-recdot { width: 8px; height: 8px; border-radius: 50%; background: #ff453a;
+                     display: inline-block; flex: none;
+                     animation: gpRecPulse 1.1s ease-in-out infinite; }
+        @keyframes gpRecPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
+        /* The same dot on the readiness row's value, drawn by the row itself
+           so gpReadyRow needs no new markup — tone "rec" is red-and-pulsing
+           the way "ok" is green. */
+        .gp-row .v.rec { color: #ff453a; }
+        .gp-row .v.rec::before { content: ''; display: inline-block; width: 7px; height: 7px;
+                                 border-radius: 50%; background: #ff453a; margin-right: 6px;
+                                 animation: gpRecPulse 1.1s ease-in-out infinite; }
+        /* ---- "Will this record laps?" ---------------------------------------
+           First thing in the Session aside, and on a good day the only thing in
+           it worth reading: one line. The rule is that COLLAPSED SHOWS WHAT IS
+           WRONG and expanded shows everything that was checked — so on a good
+           day the wrong-list is empty and the card is the line alone, while a
+           bad one puts the failing row and its fix button on screen without
+           anyone having to know to open anything. */
+        .gp-ready { border: 1px solid var(--border); border-radius: var(--radius-md);
+                    background: var(--panel); padding: 9px 10px; margin: 0 0 10px; }
+        .gp-ready.warn { border-color: #6a5423; }
+        .gp-ready.bad  { border-color: #6f3a34; }
+        .gp-ready-hd { display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+                       gap: 8px; width: 100%; background: none; border: none; padding: 0;
+                       cursor: pointer; text-align: left; }
+        .gp-ready-hd .t { font-family: 'Sora', sans-serif; font-size: 11.5px; font-weight: 600; color: var(--text); }
+        .gp-ready-hd .s { font-family: 'JetBrains Mono', monospace; font-size: 9.5px;
+                          color: var(--text-muted); text-align: right;
+                          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .gp-ready .gp-rows { margin-top: 9px; }
+        .gp-ready .ws-btn-line { margin-top: 7px; }
+        .gp-ready-more { font-size: 9.5px; color: var(--text-muted); margin-top: 8px;
+                         font-family: 'Sora', sans-serif; }
+        /* ---- Tracks: the order of operations, said once ----------------------
+           Three steps, struck through as each becomes true. It only exists
+           while the track is unfinished, so a set-up track never carries
+           instructions for work already done. */
+        .gp-steps { display: flex; flex-direction: column; gap: 4px; margin: 0 0 12px;
+                    padding: 9px 10px; border: 1px solid var(--border);
+                    border-left: 3px solid var(--accent); border-radius: var(--radius-sm);
+                    background: var(--bg); }
+        .gp-step { display: grid; grid-template-columns: 14px 1fr; gap: 7px; align-items: baseline;
+                   font-size: 10.5px; color: var(--text); line-height: 1.45; }
+        .gp-step .n { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--text-muted); }
+        .gp-step.done { color: var(--text-muted); }
+        .gp-step.done .n { color: #7da982; }
         /* lap list */
         .gp-laplist { margin-top: 9px; max-height: 190px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
         .gp-lap { display: grid; grid-template-columns: 2.2em 1fr auto; align-items: baseline; gap: 8px;
@@ -2139,6 +2195,7 @@
             <span class="ws-brand" id="gpBrand"></span>
             <span class="ws-chip" id="gpChipDev">no node linked</span>
             <span class="ws-chip" id="gpChipFix">&#8212;</span>
+            <span class="ws-chip" id="gpChipRec" style="display:none"></span>
             <button class="btn" id="gpConnectBtn" style="font-size:11px; padding:0 14px; display:none;" onclick="gpConnect()">Connect over USB</button>
             <div class="ws-modes" role="group" aria-label="View">
                 <button id="gpBtnMonitor" class="on" onclick="gpSetView('monitor')">Monitor</button>
@@ -6449,10 +6506,21 @@
 
                    Absent and false are different answers: a node on firmware
                    older than this field reports neither, and printing "none"
-                   there would accuse a working SBAS fix of not existing. */
+                   there would accuse a working SBAS fix of not existing.
+
+                   But absent has TWO causes, and the old text only knew one.
+                   `diff` ships inside the reply's fix block, so it is missing
+                   from every reply made without a fix — and this row then
+                   accused a current node of running ancient firmware whenever
+                   the receiver was merely searching. Position is in that same
+                   block, so its absence is what separates the two. */
                 { label: "Corrections", v: function (s) {
                         return s.diff === undefined ? "—" : (s.diff ? "SBAS applied" : "none"); },
-                    sub: function (s) { return s.diff === undefined ? "node firmware predates this field" : null; },
+                    sub: function (s) {
+                        if (s.diff !== undefined) return null;
+                        return s.lat_1e7 === undefined
+                            ? "not reported until there is a fix"
+                            : "node firmware predates this field"; },
                     tone: function (s) { return s.diff === undefined ? null : (s.diff ? "ok" : "warn"); } },
                 { label: "UTC", v: function (s) { return s.utc || "—"; } }
             ] },
@@ -6495,8 +6563,25 @@
                     tone: function (s) { return s.ck_err ? "bad" : "ok"; } },
                 { label: "Messages incomplete", v: function (s) { return gpInt(s.fr_err); },
                     sub: function () { return "since power-on"; },
-                    tone: function (s) { return s.fr_err ? "bad" : "ok"; } }
-            ], note: "The satellite receiver is a separate chip inside the puck, and these count what it hands to the puck's processor. Nothing you plug into the car changes them — corrupted or incomplete messages mean the fault is inside the unit." },
+                    tone: function (s) { return s.fr_err ? "bad" : "ok"; } },
+                /* The two numbers that separate "the receiver went quiet" from
+                   "the receiver went quiet FOR THE KNOWN REASON". The node has
+                   sent both since the 2026-07-30 GNSS fix; nothing displayed
+                   them, so the one instruction the fix left behind — note these
+                   before you power-cycle — could not be followed. A node too
+                   old to report them says so rather than showing a zero it
+                   never sent. */
+                { label: "Receiver data lost", v: function (s) { return gpInt(s.rx_overflow); },
+                    sub: function (s) { return s.rx_overflow === undefined
+                        ? "node firmware predates this count"
+                        : (s.rx_overflow ? "incoming data outran the puck and was dropped" : "none"); },
+                    tone: function (s) { return s.rx_overflow === undefined ? null : (s.rx_overflow ? "warn" : "ok"); } },
+                { label: "Receiver restarts", v: function (s) { return gpInt(s.rx_recover); },
+                    sub: function (s) { return s.rx_recover === undefined
+                        ? "node firmware predates this count"
+                        : (s.rx_recover ? "the puck had to rebuild the connection to it" : "none"); },
+                    tone: function (s) { return s.rx_recover === undefined ? null : (s.rx_recover ? "bad" : "ok"); } }
+            ], note: "The satellite receiver is a separate chip inside the puck, and these count what it hands to the puck's processor. Nothing you plug into the car changes them — corrupted or incomplete messages mean the fault is inside the unit. If the receiver stops answering, the bottom two rows say whether it was the known flash-contention fault: both climbing means it is back, both at zero means this is something else." },
             { id: "imu", title: "IMU", ok: function (s) { return !!s.imu; }, rows: [
                 { label: "Accel X", v: function (s) { return gpImu(s, "ax_mg", " mg"); } },
                 { label: "Accel Y", v: function (s) { return gpImu(s, "ay_mg", " mg"); } },
@@ -7727,7 +7812,12 @@
 
         /* ---- Session rail: the laps in the recording ---------------------- */
         function gpBuildSessionRail(rail) {
-            var h = gpRecordingsHtml();
+            /* "Will this record laps?" is the question you have BEFORE the
+               drive, and it used to be answerable only at the foot of the
+               aside, under the recordings list and the lap list — below the
+               fold, under the things you read afterwards. It goes first. */
+            var h = "<div id='gpReadyCard'></div>";
+            h += gpRecordingsHtml();
             h += "<div class='ws-rail-title'>Session</div>";
             if (!gp.trace || !gp.trace.length) {
                 h += "<div class='ws-none' style='padding:14px 6px'>Nothing loaded.<br>" +
@@ -7872,32 +7962,48 @@
                    "<span class='s'>" + (sub || "") + "</span></div>";
         }
 
-        function gpReadyHtml() {
+        /* Every fact, gathered once, each with its own verdict and — where one
+           exists — the single button that settles it. The banner and the
+           expanded list read this SAME array, so a green summary sitting over
+           a broken row is not expressible.
+
+           `wait` marks a check that has not answered yet, as distinct from one
+           that answered badly: it withholds the green verdict without claiming
+           anything is wrong. */
+        function gpReadyRows() {
             var inf = gp.traceInfo, s = gp.status, trk = gpActiveTrack();
-            var h = "<div class='gp-rows'>";
+            var rows = [];
+            var add = function (k, v, tone, sub, fix, wait) {
+                rows.push({ k: k, v: v, tone: tone || null, sub: sub || "",
+                            fix: fix || null, wait: !!wait });
+            };
 
             /* Fix — the one thing no amount of Studio can compensate for. */
             if (!s) {
-                h += gpReadyRow("Fix", "not reported", null, "open Monitor to see it live");
+                add("Fix", "not reported", null, "open Monitor to see it live", null, true);
             } else if (s.link === false) {
                 /* Not "no fix": the receiver isn't SAYING anything, which is
                    a different failure with a different remedy. The node now
                    retries the receiver by itself; if this row stays red, the
                    remedy is power. */
-                h += gpReadyRow("Fix", "receiver quiet", "bad", "the node is trying to wake it — if this stays, power-cycle the node");
+                add("Fix", "receiver quiet", "bad", "the node is trying to wake it — if this stays, power-cycle the node");
             } else {
                 var sats = gpN(s.sats), ft = gpN(s.fix_type);
                 var acc = gpN(s.hacc_mm) === null ? null : s.hacc_mm / 1000;
-                h += gpReadyRow("Fix", (GP_FIX_TYPES[ft] || gpInt(ft)),
+                add("Fix", (GP_FIX_TYPES[ft] || gpInt(ft)),
                     ft >= 3 ? "ok" : "bad",
                     (sats === null ? "" : sats + " sats") + (acc === null ? "" : " · " + acc.toFixed(1) + " m"));
             }
 
-            /* Track and line — the two silent prerequisites for lap splitting. */
-            h += gpReadyRow("Track", trk ? gpEsc(trk.name) : "none chosen", trk ? "ok" : "warn",
-                trk ? "" : "download a recording and it is worked out");
+            /* Track and line — the two silent prerequisites for lap splitting.
+               The sub-line names the course type, because whether this is a
+               circuit or a time trial changes what "a lap" even means and it
+               is otherwise only inferable from how many gates are drawn. */
+            add("Track", trk ? gpEsc(trk.name) : "none chosen", trk ? "ok" : "warn",
+                trk ? (gpIsTrial(trk) ? "time trial" : "circuit")
+                    : "download a recording and it is worked out");
             if (trk) {
-                h += gpReadyRow(gpIsTrial(trk) ? "Gates" : "Start/finish",
+                add(gpIsTrial(trk) ? "Gates" : "Start/finish",
                     trk.start_finish ? "placed" : "not placed",
                     trk.start_finish ? "ok" : "warn",
                     trk.start_finish ? "" : "proposed automatically on download");
@@ -7911,49 +8017,132 @@
             var ns = gpNodeTrackState();
             if (ns.st !== "nolocal") {
                 var tm0 = (gp.lap && gp.lap.timing) || {};
+                var send = { label: "Send “" + gpEsc(trk.name) + "” to the node",
+                             call: "gpSendTrack('gpTraceMsg')" };
                 if (ns.st === "checking")
-                    h += gpReadyRow("On the node", "—", null, "waiting for its reply");
+                    add("On the node", "—", null, "waiting for its reply", null, true);
                 else if (ns.st === "none")
-                    h += gpReadyRow("On the node", "no track", "warn", "it cannot time laps live");
+                    add("On the node", "no track", "warn", "it cannot time laps live", send);
                 else if (ns.st === "other")
-                    h += gpReadyRow("On the node", gpEsc(ns.name), "warn",
-                        "not “" + gpEsc(trk.name) + "”");
+                    add("On the node", gpEsc(ns.name), "warn",
+                        "not “" + gpEsc(trk.name) + "”", send);
                 else if (ns.st === "stale")
-                    h += gpReadyRow("On the node", "out of date", "warn",
-                        "edited here since it was sent");
+                    add("On the node", "out of date", "warn",
+                        "edited here since it was sent", send);
                 else
-                    h += gpReadyRow("On the node", gpEsc(ns.name), "ok",
+                    add("On the node", gpEsc(ns.name), "ok",
                         gpN(tm0.lap_number) ? "timing · " + gpRunWord() + " " + tm0.lap_number
                         : tm0.armed ? "armed, watching for the line"
                         : "arms once it has a fix");
-                if (ns.st === "none" || ns.st === "other" || ns.st === "stale")
-                    h += "<button class='ws-btn-line' style='margin-top:6px' onclick=\"gpSendTrack('gpTraceMsg')\">" +
-                         "Send “" + gpEsc(trk.name) + "” to the node</button>";
             }
 
-            /* Storage, said in minutes. Percent-full is not a unit anyone
-               plans a track day in. */
             if (inf) {
+                /* The node boots recording: s_recording defaults to true in
+                   trace_log.c and is never persisted, and it writes only above
+                   TRACE_IDLE_KPH_X100 (8.00 km/h). So "paused" is not a state
+                   anyone arrives in by forgetting a step — it is one you can
+                   only reach by pressing Pause during this power cycle.
+
+                   This row used to read "idle · press Record on before you
+                   drive", which was an instruction for a prerequisite that
+                   does not exist, and it graded a puck that was already
+                   logging perfectly well as not ready. */
+                /* Tone "rec", not "ok": recording gets the camera-red pulse
+                   everywhere it is stated, so the card and the topbar chip
+                   cannot disagree about what red means. */
+                add("Logging", inf.recording ? "recording" : "paused",
+                    inf.recording ? "rec" : "warn",
+                    inf.recording ? "anything above 8 km/h"
+                                  : "a power cycle turns it back on",
+                    inf.recording ? null : { label: "Resume logging", call: "gpTraceRecord(true)" });
+
+                /* Storage, said in minutes. Percent-full is not a unit anyone
+                   plans a track day in. */
                 var cap = gpN(inf.capacity_samples) || 1, used = gpN(inf.used_samples) || 0;
                 var leftMin = Math.max(0, (cap - used) / 25 / 60);
-                h += gpReadyRow("Recorded", (used / 25 / 60).toFixed(1) + " min", null,
+                add("Recorded", (used / 25 / 60).toFixed(1) + " min", null,
                     leftMin.toFixed(0) + " min still free");
                 if (inf.wrapped)
-                    h += gpReadyRow("Ring", "wrapped", "warn", "oldest laps overwritten");
+                    add("Ring", "wrapped", "warn", "oldest laps overwritten");
                 if (gpN(inf.dropped))
-                    h += gpReadyRow("Dropped", String(inf.dropped), "bad", "gaps in the trace");
-                h += gpReadyRow("Node", inf.recording ? "recording" : "idle",
-                    inf.recording ? "ok" : "warn",
-                    inf.recording ? "" : "press Record on before you drive");
+                    add("Dropped", String(inf.dropped), "bad", "gaps in the trace");
             }
 
             /* Laps in what is loaded right now — the answer to the actual
                question, once there is a recording to answer it about. */
             if (gp.trace && gp.trace.length)
-                h += gpReadyRow(gpRunWord(true) + "s found", String(gp.traceLaps.length),
+                add(gpRunWord(true) + "s found", String(gp.traceLaps.length),
                     gp.traceLaps.length ? "ok" : "warn", "in the loaded recording");
 
+            return rows;
+        }
+
+        /* Worst-wins, with "not answered yet" ranking between good and bad —
+           it cannot say Ready, but it must not cry wolf either. */
+        function gpReadyVerdict(rows) {
+            var bad = 0, warn = 0, wait = 0;
+            rows.forEach(function (r) {
+                if (r.tone === "bad") bad++;
+                else if (r.tone === "warn") warn++;
+                else if (r.wait) wait++;
+            });
+            if (bad || warn) return { tone: bad ? "bad" : "warn", n: bad + warn };
+            return { tone: wait ? null : "ok", n: 0 };
+        }
+
+        /* One line, and under it only what is WRONG. Expanded, everything that
+           was checked. Nine rows of mostly-fine was a panel you had to read to
+           learn nothing; this is a panel you read only when it has something
+           to say. */
+        function gpReadyCardHtml() {
+            var rows = gpReadyRows(), v = gpReadyVerdict(rows), trk = gpActiveTrack();
+            var open = !!gp.readyOpen, title = "", sub = "";
+            if (v.tone === "ok") {
+                title = "Ready to record";
+                var st = gp.status, bits = [];
+                if (trk) bits.push(trk.name);
+                if (st && gpN(st.sats) !== null) bits.push(st.sats + " sats");
+                sub = bits.join(" · ");
+            } else if (v.tone === null) {
+                title = "Checking…";
+            } else {
+                title = (v.n === 1 ? "One thing" : v.n + " things") + " to fix";
+            }
+            var h = "<div class='gp-ready" + (v.tone === "warn" ? " warn" : v.tone === "bad" ? " bad" : "") + "'>";
+            h += "<button class='gp-ready-hd' onclick='gpReadyToggle()' title='" +
+                 (open ? "hide the rest" : "show all " + rows.length + " checks") + "'>" +
+                 "<i class='gp-lamp" + (v.tone === "ok" ? " on" : v.tone ? " warn" : "") + "'></i>" +
+                 "<span class='t'>" + gpEsc(title) + "</span>" +
+                 "<span class='s'>" + (sub ? gpEsc(sub) + "  " : "") +
+                 (open ? "▾" : "▸") + "</span></button>";
+            var show = open ? rows : rows.filter(function (r) {
+                return r.tone === "warn" || r.tone === "bad";
+            });
+            if (show.length) {
+                h += "<div class='gp-rows'>";
+                show.forEach(function (r) { h += gpReadyRow(r.k, r.v, r.tone, r.sub); });
+                h += "</div>";
+                show.forEach(function (r) {
+                    if (r.fix)
+                        h += "<button class='ws-btn-line' onclick=\"" + r.fix.call + "\">" +
+                             r.fix.label + "</button>";
+                });
+            }
             return h + "</div>";
+        }
+
+        window.gpReadyToggle = function () { gp.readyOpen = !gp.readyOpen; gpRenderReady(); };
+
+        /* The card lives at the top of the Session aside, but the thing that
+           refreshes once a second is the INSPECTOR at the foot of it. So it
+           gets its own slot and its own render, called from both — otherwise
+           the one panel that has to be current would be the one panel only
+           redrawn when the rail happened to be rebuilt. */
+        function gpRenderReady() {
+            var box = document.getElementById("gpReadyCard");
+            if (!box) return;
+            var dev = gpDev();
+            box.innerHTML = (dev && dev.traceRead) ? gpReadyCardHtml() : "";
         }
 
         function gpRenderSessionInspector(box) {
@@ -7965,14 +8154,19 @@
             if (!dev || !dev.traceRead) {
                 h += "<div class='ws-note'>Attach the RDM GPS over USB. The node records at 25 Hz on its own — no laptop needed in the car.</div>";
             } else {
-                h += gpReadyHtml();
-                h += "<button class='ws-btn-line' style='margin-top:8px' onclick='gpTraceDownload()'" +
+                /* The checks that used to sit here are the card at the top of
+                   this aside now. What is left is the four things you DO. */
+                var rec = !gp.traceInfo || gp.traceInfo.recording !== false;
+                h += "<button class='ws-btn-line' onclick='gpTraceDownload()'" +
                      (gp.traceBusy ? " disabled" : "") + ">" +
                      (gp.traceBusy ? "Downloading… " + gp.tracePct + "%" : "Download from node") + "</button>";
                 h += "<div class='lt-expbtns' style='margin-top:6px'>" +
-                     "<button class='ws-btn-line' onclick='gpTraceRecord(true)'>Record on</button>" +
-                     "<button class='ws-btn-line' onclick='gpTraceRecord(false)'>Off</button></div>";
+                     "<button class='ws-btn-line' onclick='gpLiveWatch(" + (gp.liveMode ? "false" : "true") + ")'>" +
+                     (gp.liveMode ? "Stop watching" : "Watch live") + "</button>" +
+                     "<button class='ws-btn-line' onclick='gpTraceRecord(" + (rec ? "false" : "true") + ")'>" +
+                     (rec ? "Pause logging" : "Resume logging") + "</button></div>";
                 h += "<button class='ws-btn-line' style='margin-top:6px' onclick='gpTraceClear()'>Clear the node's recording</button>";
+                h += "<div class='ws-note'>The node logs from the moment it has power — there is nothing to press before a drive. It writes only above 8 km/h, so a stationary car records nothing on purpose. <b>Pause</b> is for the bench, and a power cycle undoes it.</div>";
                 h += "<div class='gp-msg' id='gpTraceMsg'></div>";
             }
             h += "</div>";
@@ -8038,6 +8232,10 @@
                 h = gpGlanceHtml() + gpSplitsHtml() + gpHistoryHtml() + gpRenderCoach() + h;
             }
             box.innerHTML = head + h;
+            /* Same 1 Hz beat as this panel: the card is elsewhere in the DOM
+               but it is the same live state, and it must not go stale while
+               the panel under it stays current. */
+            gpRenderReady();
             gpVideoBind();
             gpSplitsBind(box);
             Array.prototype.forEach.call(box.querySelectorAll('[data-gp-focus]'), function (b) {
@@ -10171,21 +10369,31 @@
             }
         };
 
+        /* Pausing the node's log, and watching it live, used to be one button
+           called Record — which made the app say a drive needed Record pressed
+           first. It does not: the node boots logging (trace_log.c) and writes
+           above 8 km/h whether or not a laptop is attached. The two jobs are
+           now two buttons, and only one of them touches the node. */
         window.gpTraceRecord = function (on) {
             var dev = gpDev();
             if (!dev || !dev.traceRecord) return;
             dev.traceRecord(on).then(function () {
-                /* Pressing Record starts EVERYTHING: the node's own log and
-                   the live view on this PC. Before, it started the node and
-                   left the screen exactly as it was, so the only way to see
-                   what you were recording was to stop and download it. */
-                if (on) { gpLiveStart(); if (gp.view !== "session") gpSetView("session"); }
-                else gpLiveStop();
                 gpDrawStrip();
-                gpSetMsg("gpTraceMsg", on ? "Recording — live below." : "Recording stopped.", "ok");
+                gpSetMsg("gpTraceMsg", on
+                    ? "Logging resumed — it writes above 8 km/h."
+                    : "Logging paused. A power cycle turns it back on.", on ? "ok" : "warn");
                 return dev.traceInfo();
             }).then(function (i) { gp.traceInfo = i; gpRenderInspector(); })
               .catch(function (e) { gpSetMsg("gpTraceMsg", "Failed: " + (e && e.message ? e.message : e), "bad"); });
+        };
+
+        /* Watching is a Studio-side thing entirely — the node is logging
+           either way, and stopping the watch stops nothing but the stream. */
+        window.gpLiveWatch = function (on) {
+            if (on) { gpLiveStart(); if (gp.view !== "session") gpSetView("session"); }
+            else gpLiveStop();
+            gpDrawStrip();
+            gpRenderInspector();
         };
 
         window.gpTraceClear = function () {
@@ -10319,8 +10527,8 @@
             return "The node has nothing recorded. It logs by itself once the car is moving " +
                    "(above about 8 km/h) — sitting still is left out on purpose." +
                    (recording === false
-                        ? " Recording is OFF — press Record on before you drive."
-                        : " Recording is on, so just go drive.");
+                        ? " Logging is PAUSED — press Resume logging, or power-cycle the node."
+                        : " Logging is on, so just go drive.");
         }
 
         window.gpTraceDownload = function () {
@@ -12161,6 +12369,26 @@
 
         function gpLapPoll() {
             if (!gp.open || gp.lapInFlight) return;
+            /* The ● REC chip reads trace.info, and nothing else refreshes it
+               between downloads — a flag that can change under us (a reboot
+               resumes logging by itself) must not be displayed from an old
+               fetch. Every 5 s on the lap poll's clock is fresh enough for a
+               state a human toggles, and one extra RPC every five seconds is
+               noise on a link doing ten a second. Never during a download:
+               the pages own the port's bandwidth. */
+            var dvI = gpDev();
+            if (dvI && dvI.traceInfo && !gp._trcInfBusy && !gp.traceBusy &&
+                (!gp._trcInfAt || Date.now() - gp._trcInfAt > 5000)) {
+                gp._trcInfBusy = true;
+                var ep0 = gp._epoch;
+                dvI.traceInfo().then(function (i) {
+                    if (ep0 !== gp._epoch) return;
+                    gp.traceInfo = i;
+                    gp._trcInfAt = Date.now();
+                    gpUpdateChips();
+                }).catch(function () { /* the status poll owns link health */ })
+                  .then(function () { gp._trcInfBusy = false; });
+            }
             var api = gpLapApi();
             if (!api) {
                 gp.lap = null;
@@ -12889,6 +13117,26 @@
             gpSetMsg("gpTrackMsg", snapped
                 ? "Snapped onto the driven line, aimed the way the car went — drag the end to widen it if the line varies here."
                 : "Drag the centre onto the line, then drag the end to aim it the way the car travels.", null);
+        };
+
+        /* The segment in the Gates group. It writes the same one field the
+           "+ Finish line" button always did — this is a label for the state,
+           not a second way to store it. Going back to a circuit destroys a
+           placed gate, so it asks; becoming a trial only adds one, so it does
+           not. */
+        window.gpCourseType = function (wantTrial) {
+            var t = gpActiveTrack();
+            if (!t) return;
+            var isTrial = gpIsTrial(t);
+            if (!!Number(wantTrial) === isTrial) return;
+            if (Number(wantTrial)) { window.gpPlaceGate("fin"); return; }
+            gpConfirm("Make “" + t.name + "” a circuit again?\n\nThe finish gate is removed, and timing goes back to line-to-line laps.").then(function (yes) {
+                if (!yes) return;
+                delete t.finish;
+                gp.selGate = "sf";
+                gpTracksSave();
+                gpBuildRail(); gpDrawEditor(); gpRenderInspector();
+            });
         };
 
         window.gpGateDelete = function () {
@@ -14371,12 +14619,21 @@
                        "carries \u2014 little-endian, byte offsets from 0.") + "</div>" +
                  gpCanAdvancedHtml() + "</div>";
 
+            var devT = gpDev();
             h += "<div class='ws-grp'><div class='ws-gt'>Device</div>" +
                  gpSetRow("Identify",
                      "<button class='ws-btn-line' id='gpIdentBtn' style='width:144px' onclick='gpIdentify()'>" +
                      "Flash the LED</button>") +
                  (revA ? gpSetRow("<b>LED1</b>rev A, errata E7",
                      "<span class='gp-set-na' title='Fitted 180\u00b0 out with its data pin unconnected \u2014 it cannot light, whatever the firmware reports. Identify still exercises the driver.'>cannot light</span>") : "") +
+                 /* The unplug-it-and-plug-it-back-in button. Hardware reset via
+                    the serial control lines, so it works when the firmware is
+                    too wedged to answer an RPC \u2014 which is the only time anyone
+                    reaches for it. USB only: the WiFi path has no EN line. */
+                 gpSetRow("<b>Restart</b>if it stops answering",
+                     (devT && devT.nodeReset)
+                       ? "<button class='ws-btn-line' style='width:144px' onclick='gpNodeRestart()'>Restart the node</button>"
+                       : "<span class='gp-set-na' title='The hardware reset line only exists over USB.'>USB only</span>") +
                  "<div class='gp-msg' id='gpIdentMsg'></div></div>";
 
             h += "</div>";
@@ -15154,12 +15411,30 @@
                 "<div class='ws-sub'>" + (trial ? "time trial" : "circuit") + " · " +
                 (secs.length + 1) + " sector" + (secs.length ? "s" : "") + "</div>";
 
+            /* The order of operations, said once, in the app rather than only
+               in a doc. It exists only while the track is unfinished, so a
+               set-up track never carries instructions for work already done. */
+            var nsT = gpNodeTrackState();
+            var sent = nsT.st === "match";
+            if (!t.start_finish || (!sent && gpLapUsable())) {
+                h += "<div class='gp-steps'>" +
+                     "<div class='gp-step done'><span class='n'>1</span><span>Circuit picked</span></div>" +
+                     "<div class='gp-step" + (t.start_finish ? " done" : "") + "'>" +
+                       "<span class='n'>2</span><span>Put the " +
+                       (trial ? "start and finish gates" : "start/finish line") +
+                       " on the real paint — zoom right in on the tarmac first</span></div>" +
+                     "<div class='gp-step" + (sent ? " done" : "") + "'><span class='n'>3</span><span>Send it to the puck, so it can time laps in the car</span></div>" +
+                     "</div>";
+            }
+
             h += "<div class='ws-field'><label>Track name</label>" +
                  "<input type='text' maxlength='31' value='" + gpEsc(t.name) + "' onchange='gpTrackRename(this)'></div>";
 
-            /* Gates. There is no course-type control: a track with one line is
-               a circuit and a track with two is a time trial, so adding the
-               finish line is the whole gesture. */
+            /* Gates. The model has no course-type field — a track with one line
+               is a circuit and a track with two is a time trial (ADR-0013), so
+               adding the finish line IS the gesture. The segment below does not
+               change that; it just names on screen the state you would
+               otherwise have to infer from how many gates are drawn. */
             h += "<div class='ws-grp'><div class='ws-gt'>Gates" +
                  "<i class='gp-lamp info' data-tip=\"<b>One line, or two</b>" +
                  "With just the start/finish line this is a <b>circuit</b>: the first crossing arms the timer " +
@@ -15168,6 +15443,9 @@
                  "to the finish line, and then nothing until you cross the start again. That covers time attack " +
                  "on a circuit, a sprint, and a hillclimb whose finish is kilometres from its start." +
                  "<br><br>Splits work the same way in between either way.\"></i></div>";
+            h += "<div class='ws-seg' style='margin-bottom:8px'>" +
+                 "<button class='" + (trial ? "" : "on") + "' onclick='gpCourseType(0)'>Circuit</button>" +
+                 "<button class='" + (trial ? "on" : "") + "' onclick='gpCourseType(1)'>Time trial</button></div>";
             h += "<div class='gp-gatelist'>";
             h += "<button class='gp-gate" + (gp.selGate === "sf" ? " on" : "") + "' onclick=\"gpSelectGate('sf')\">" +
                  "<i style='background:" + (trial ? "#6FBF73" : "#F5F7FA") + "'></i>" +
@@ -15618,6 +15896,57 @@
             });
         };
 
+        /* The same reset esptool pulses before a flash, minus download mode.
+           It exists because the receiver watchdog lives inside the task it
+           watches (gnss_task), so a wedged task can never save itself, and a
+           reboot RPC would need the wedged firmware to be alive enough to
+           answer. The EN line works below the firmware entirely. */
+        window.gpNodeRestart = function () {
+            var t = gpDev();
+            if (!t || !t.nodeReset) return;
+            gpConfirm("Restart the node?\n\nSame as unplugging it and plugging it back in. The recording, the track and every setting survive — the ring resumes where it left off. The live session (current lap) starts over, and logging comes back ON, because that is the boot default.").then(function (yes) {
+                if (!yes) return;
+                gpSetMsg("gpIdentMsg", "Resetting…", null);
+                /* The status poll keeps running while the node boots, and
+                   every miss counts toward GP_DEAD_MISSES — enough of them
+                   and the workspace declares the link dead mid-boot. Buy the
+                   boot a grace window instead of racing it. */
+                gp._misses = -20;
+                /* Timed from the button, not from when the reset RPC returns —
+                   the reset itself takes ~2 s (line ceremony + USB reopen) and
+                   a message that says 0.0 s reads as "nothing happened". */
+                var t0 = Date.now();
+                t.nodeReset().then(function () {
+                    var tries = 0;
+                    var probe = function () {
+                        tries++;
+                        return t.getDeviceInfo().then(function (info) {
+                            gp.info = info;
+                            gp._misses = 0;
+                            /* Everything cached about the node's state is now
+                               a statement about the PREVIOUS boot. */
+                            gp.nodeTrack = undefined;
+                            gp.traceInfo = null; gp._trcInfAt = 0;
+                            gp.status = null; gp._prev = null; gp.rates = {};
+                            gpSetMsg("gpIdentMsg", "Node restarted — back in " +
+                                ((Date.now() - t0) / 1000).toFixed(1) + " s. The receiver bring-up runs at boot; watch the Fix chip.", "ok");
+                            gpRenderInspector();
+                            gpUpdateChips();
+                        }).catch(function (e) {
+                            if (tries < 24) {
+                                return new Promise(function (r) { setTimeout(r, 500); }).then(probe);
+                            }
+                            throw e;
+                        });
+                    };
+                    return probe();
+                }).catch(function (e) {
+                    gpSetMsg("gpIdentMsg", "Reset failed: " + (e && e.message ? e.message : e) +
+                        " — if it never came back, pull the USB plug.", "bad");
+                });
+            });
+        };
+
         window.gpWifiSave = function () {
             var dev = gpDev();
             if (!dev) return;
@@ -15759,6 +16088,26 @@
                     : (s && s.fix)
                     ? "<b>" + gpInt(s.sats) + "</b> sats · " + gpDist(gpN(s.hacc_mm) === null ? null : s.hacc_mm / 1000, 2)
                     : (s ? "no fix" : "—");
+            }
+            /* ● REC — the whole point of this chip is that it is in the topbar
+               and therefore in EVERY view. It states the node's own flag, not
+               Studio's wishes: no traceInfo yet means no claim either way. */
+            var rec = document.getElementById("gpChipRec");
+            if (rec) {
+                var inf2 = gp.traceInfo;
+                if (!gpLinked() || !inf2) {
+                    rec.style.display = "none";
+                } else if (inf2.recording === false) {
+                    rec.style.display = "";
+                    rec.className = "ws-chip rec-off";
+                    rec.title = "The node is NOT logging — you paused it. Resume in Session; a power cycle also resumes it.";
+                    rec.innerHTML = "&#10074;&#10074; logging paused";
+                } else {
+                    rec.style.display = "";
+                    rec.className = "ws-chip rec-on";
+                    rec.title = "The node is logging on its own — it writes above 8 km/h.";
+                    rec.innerHTML = "<i class='gp-recdot'></i>REC";
+                }
             }
             var hint = document.getElementById("gpHint");
             if (hint) hint.textContent = gpHintText();
@@ -15940,12 +16289,27 @@
                    dead transport for the rest of the session. */
                 if (gp._misses >= GP_DEAD_MISSES) gpLinkLost();
             }).then(function () {
+                /* Re-arm FIRST, and that means BEFORE the epoch guard — which
+                   is where this used to sit, and which made the comment below
+                   false. The loop is self-clocking: the only thing that starts
+                   the next tick is the last reply landing. So a reply that
+                   arrives after _gpOpen() has bumped the epoch did not just
+                   skip a screen update, it ENDED THE LOOP — no interval exists
+                   to recover it, and the workspace sat there with frozen
+                   values and no polling until it was closed and reopened.
+
+                   Rescheduling from a stale reply is safe: gpPollSchedule
+                   clears any pending timer first, so there is never more than
+                   one, and a tick that fires while a live request is in flight
+                   returns at the inFlight guard and lets its owner re-arm.
+
+                   The state writes stay behind the guard — a stale reply must
+                   still not clear a live request's inFlight latch, nor reset a
+                   miss count that belongs to a different node. */
+                gpPollSchedule();
                 if (epoch !== gp._epoch) return;
                 gp._misses = gp.err ? gp._misses : 0;
                 gp.inFlight = false;
-                /* Re-arm FIRST: whatever the reply was, the loop has to keep
-                   running, and nothing below here is allowed to stop it. */
-                gpPollSchedule();
                 gpUpdateStage();
                 gpUpdateChips();
                 gpMapUpdate();

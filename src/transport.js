@@ -1147,6 +1147,15 @@
                 return await rpc('identify', seconds === undefined ? {} : { seconds });
             },
 
+            /* Hard-restart the node via the serial EN pulse — hardware, not
+             * an RPC, so it works when the firmware is wedged. USB only by
+             * construction: this method exists on the USB transport alone,
+             * so a WiFi-attached node simply has no nodeReset and the UI
+             * says so instead of pretending. */
+            async nodeReset() {
+                return await _tauriInvoke('serial_pulse_reset', {});
+            },
+
             /* ── Lap timing on the puck ────────────────────────────
              * The node owns a track and times its own laps, so it works with
              * no dash on the bus. Payload shapes deliberately mirror the

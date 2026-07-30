@@ -833,6 +833,105 @@ async fn serial_disconnect() -> Result<(), String> {
     Ok(())
 }
 
+/// Hard-reset the attached device through the serial control lines.
+///
+/// Why this exists: the RDM GPS's receiver watchdog lives inside the task it
+/// watches, so a wedged task can never recover itself, and the node has no
+/// reboot RPC (and an RPC would need the very firmware that is wedged to be
+/// alive enough to answer). The control lines work at the USB peripheral,
+/// below the firmware entirely.
+///
+/// The puck is a native USB-Serial-JTAG device (VID 303A, verified on the
+/// bench 2026-07-30 — a single-RTS "EN pulse" did nothing and the ubx counter
+/// proved the chip never went down). That peripheral arms its reset latch on
+/// BOTH lines asserted together and fires it when both release — the
+/// deliberate two-key design that stops a terminal program toggling one line
+/// from rebooting the chip.
+///
+/// The second thing the bench proved: when this chip resets, its USB PHY
+/// drops off the bus, so the open COM handle goes stale. The reset is
+/// therefore pulse → close → wait for re-enumeration → reopen, all in here,
+/// and the caller gets a port that is live again (or an error saying the
+/// device never came back).
+#[tauri::command]
+async fn serial_pulse_reset(app: tauri::AppHandle) -> Result<String, String> {
+    /* Take the port OUT for the whole ceremony. Line writes interleaved with
+     * a serial_request mid-frame would corrupt both; and if this command ever
+     * stalls, holding the MUTEX (rather than just the port) would freeze
+     * every poll with it. With the port out, concurrent RPCs fail fast with
+     * "Not connected" — which the status poll already treats as misses. */
+    let (mut port, port_name) = {
+        let mut conn = SERIAL.lock().map_err(|e| format!("Lock error: {e}"))?;
+        let port = conn.port.take().ok_or("Not connected")?;
+        conn.log_partial.clear();
+        (port, conn.port_name.clone())
+    };
+
+    /* The exact sequence esptool proved on THIS board (bench, 2026-07-30):
+     * the USB-Serial-JTAG bootloader-entry dance, then the classic RTS pulse
+     * out of the bootloader into the app. Simpler patterns were tried first
+     * and the ubx counter proved the chip never reset: a lone RTS pulse and
+     * a plain both-lines toggle both do nothing from a running app — the
+     * peripheral's reset latch wants this handshake and nothing less. */
+    let dance: &[(&str, bool, bool, u64)] = &[
+        /* (step, dtr, rts, hold_ms) — writes go DTR then RTS; Windows CDC
+         * drivers only reliably propagate DTR alongside an RTS write. */
+        ("idle", false, false, 100),
+        ("arm IO0", true, false, 100),
+        ("reset", false, true, 100),  /* passes through (1,1) via write order */
+        ("release", false, false, 100),
+        /* Now in the bootloader. The classic pulse exits it into the app —
+         * "Hard resetting via RTS pin", verbatim what esptool prints here. */
+        ("EN low", false, true, 100),
+        ("run", false, false, 0),
+    ];
+    for (step, dtr, rts, hold) in dance {
+        /* The "reset" step needs RTS written while DTR is still up, THEN DTR
+         * dropped, THEN RTS re-asserted — esptool's inverted double-write. */
+        if *step == "reset" {
+            port.write_request_to_send(true).map_err(|e| format!("{step} RTS: {e}"))?;
+            port.write_data_terminal_ready(false).map_err(|e| format!("{step} DTR: {e}"))?;
+            port.write_request_to_send(true).map_err(|e| format!("{step} RTS2: {e}"))?;
+        } else {
+            port.write_data_terminal_ready(*dtr).map_err(|e| format!("{step} DTR: {e}"))?;
+            port.write_request_to_send(*rts).map_err(|e| format!("{step} RTS: {e}"))?;
+        }
+        if *hold > 0 {
+            tokio::time::sleep(Duration::from_millis(*hold)).await;
+        }
+    }
+    /* The chip is rebooting; the handle may be stale. Drop it and reopen. */
+    drop(port);
+    /* Re-enumeration: the port disappears and comes back under the same name.
+     * Poll rather than sleep-and-hope — boards differ, hubs differ. */
+    let mut last_err = String::new();
+    for attempt in 0..20u32 {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        match serialport::new(&port_name, 921600)
+            .timeout(Duration::from_millis(100))
+            .open()
+        {
+            Ok(port) => {
+                let mut conn = SERIAL.lock().map_err(|e| format!("Lock error: {e}"))?;
+                conn.port = Some(port);
+                conn.port_name = port_name.clone();
+                conn.request_id = 0;
+                conn.log_partial.clear();
+                drop(conn);
+                spawn_log_drain(app);
+                return Ok(format!(
+                    "Device reset; {port_name} back after {:.1} s",
+                    (attempt + 1) as f32 * 0.5
+                ));
+            }
+            Err(e) => last_err = e.to_string(),
+        }
+    }
+    Err(format!(
+        "Device reset, but {port_name} never re-enumerated (10 s): {last_err}"
+    ))
+}
+
 #[tauri::command]
 async fn serial_is_connected() -> Result<bool, String> {
     let conn = SERIAL.lock().map_err(|e| format!("Lock error: {e}"))?;
@@ -1605,6 +1704,13 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .text("backup_all", "Backup All Device Layouts…")
         .text("restore_all", "Restore Layouts from Backup…")
         .separator()
+        /* The recovery pair. Both are handled NATIVELY in on_menu_event —
+         * never routed through the menu-action event like everything else —
+         * because their whole reason to exist is the day the frontend is
+         * wedged and an emitted event would land in a dead listener. */
+        .text("reload_ui", "Reload Interface")
+        .text("restart_app", "Restart RDM Studio")
+        .separator()
         .item(&PredefinedMenuItem::quit(app, Some("Exit"))?)
         .build()?;
 
@@ -1703,8 +1809,27 @@ pub fn run() {
         })
         .on_menu_event(|app, event| {
             let id = event.id().0.clone();
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.emit("menu-action", id);
+            match id.as_str() {
+                /* Recovery items run in Rust, not the webview. eval() injects
+                 * a fresh script into the page, so it reloads even when the
+                 * page's own event loop is stuck — the exact situation these
+                 * exist for. */
+                "reload_ui" => {
+                    if let Some(win) = app.get_webview_window("main") {
+                        let _ = win.eval("window.location.reload()");
+                    }
+                }
+                /* Full process restart: the serial port handle, every poll
+                 * loop and the webview all die with the process, so this is
+                 * the clean-slate the reload cannot promise. */
+                "restart_app" => {
+                    app.restart();
+                }
+                _ => {
+                    if let Some(win) = app.get_webview_window("main") {
+                        let _ = win.emit("menu-action", id);
+                    }
+                }
             }
         })
         .on_window_event(|window, event| {
@@ -1729,6 +1854,7 @@ pub fn run() {
             serial_auto_detect,
             serial_connect,
             serial_disconnect,
+            serial_pulse_reset,
             serial_is_connected,
             serial_get_port,
             serial_request,

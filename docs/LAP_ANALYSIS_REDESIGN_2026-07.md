@@ -21,6 +21,22 @@
 > **All five stages are done.** The one thing still unverified is the puck's
 > bit extraction against a live bus — everything around it is proven on
 > hardware, but reading real frames needs a moving car or a real CAN source.
+>
+> **Setup pass, same day (ADR-0020).** Stage 1.4's checklist was right about
+> what to check and wrong about where to put it and how much of it to say.
+> It now leads the Session aside as a single line — *Ready to record ·
+> Winton · 11 sats* — that expands only when it has something to report, and
+> collapsed it lists nothing but the failing rows and their fix buttons.
+>
+> The same pass retired a genuine falsehood: **Record was never a
+> prerequisite.** `s_recording` defaults to true in `trace_log.c` and is not
+> persisted, so the puck logs from power-on and writes above 8 km/h with no
+> laptop attached — yet three places in the product told you to press Record
+> before driving, and the checklist graded a correctly-logging puck as not
+> ready. Record's two jobs are now two buttons: **Watch live** (Studio only)
+> and **Pause logging** (for the bench). Tracks gained a course-type segment
+> and a three-step strip, so *circuit or time trial* and *what is left to do*
+> are stated rather than inferred.
 
 Sourced from the Race Studio 3 manual (structure and vocabulary only — no code,
 no assets, no wording lifted) and from what the RDM hardware can already do that
