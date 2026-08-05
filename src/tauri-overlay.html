@@ -7097,6 +7097,133 @@
             return s;
         }
 
+        /* ══════════════════════════════════════════════════════════════════
+         * The track's OUTLINE — its shape, as distinct from its gates
+         *
+         * Gates are what a lap is timed against. The outline is what a track
+         * LOOKS like, and it exists for a different consumer: the dash, which
+         * will draw it with the car's position on it (see
+         * docs/TRACK_MAP_ON_DASH_2026-07.md).
+         *
+         * Stored as geography — plain [lat, lon] pairs in degrees — never as
+         * screen pixels. The dash needs a lat/lon->pixel function anyway for
+         * the moving dot, so pre-projected points would be a second copy of
+         * the same truth, and the two would drift the first time a widget was
+         * resized.
+         *
+         *   outline = { pts: [[lat, lon], …], src: "lap" | "traced", at: ms }
+         *
+         * It rides on the track object, so gpTracksSave, the export file and
+         * the import path all carry it with no further work.
+         * ═════════════════════════════════════════════════════════════════ */
+
+        /* A 400-point cap is not a storage limit — 400 points is 3.2 KB on the
+           dash, nothing. It is a RESOLUTION limit: a 400 px-wide widget cannot
+           resolve more, so anything beyond it is bytes and heap spent drawing
+           detail no one can see. */
+        var GP_OUTLINE_MAX = 400;
+        var GP_OUTLINE_TOL_M = 1.5;    /* starting simplify tolerance */
+
+        /* Local tangent plane about `origin`, in metres. Good to centimetres
+           over a circuit — the same approximation the dash will use, kept
+           identical on purpose so a shape simplified here cannot land
+           somewhere else there. */
+        function gpToLocalM(pts, origin) {
+            var D = Math.PI / 180;
+            var kx = Math.cos(origin[0] * D) * 111320, ky = 110540;
+            return pts.map(function (p) {
+                return [(p[1] - origin[1]) * kx, (p[0] - origin[0]) * ky];
+            });
+        }
+
+        /* Ramer–Douglas–Peucker, iterative so a 30,000-point lap cannot blow
+           the stack. Returns the KEPT INDICES, because the caller wants to map
+           back to the original lat/lon rather than to my rounded metres. */
+        function gpRdpKeep(xy, tol) {
+            var n = xy.length;
+            if (n < 3) { var all = []; for (var q = 0; q < n; q++) all.push(q); return all; }
+            var keep = new Uint8Array(n);
+            keep[0] = 1; keep[n - 1] = 1;
+            var stack = [[0, n - 1]];
+            while (stack.length) {
+                var seg = stack.pop(), a = seg[0], b = seg[1];
+                if (b <= a + 1) continue;
+                var ax = xy[a][0], ay = xy[a][1], bx = xy[b][0], by = xy[b][1];
+                var dx = bx - ax, dy = by - ay;
+                var len2 = dx * dx + dy * dy;
+                var best = -1, bestD = tol;
+                for (var i = a + 1; i < b; i++) {
+                    var px = xy[i][0] - ax, py = xy[i][1] - ay, d;
+                    if (len2 <= 1e-9) {
+                        d = Math.sqrt(px * px + py * py);
+                    } else {
+                        /* Perpendicular distance to the SEGMENT, clamped — an
+                           unclamped line distance lets a point far beyond an
+                           end look close to the infinite line through it. */
+                        var t = (px * dx + py * dy) / len2;
+                        t = t < 0 ? 0 : (t > 1 ? 1 : t);
+                        var qx = px - t * dx, qy = py - t * dy;
+                        d = Math.sqrt(qx * qx + qy * qy);
+                    }
+                    if (d > bestD) { bestD = d; best = i; }
+                }
+                if (best >= 0) { keep[best] = 1; stack.push([a, best], [best, b]); }
+            }
+            var out = [];
+            for (var k = 0; k < n; k++) if (keep[k]) out.push(k);
+            return out;
+        }
+
+        /* Simplify to at most GP_OUTLINE_MAX points, loosening the tolerance
+           until it fits rather than truncating. Truncation would delete the
+           END of the lap — a track missing its last corner, which is a far
+           worse answer than the same track drawn slightly coarser. */
+        function gpOutlineSimplify(pts) {
+            if (pts.length < 3) return pts.slice();
+            var xy = gpToLocalM(pts, pts[0]);
+            var tol = GP_OUTLINE_TOL_M, keep = gpRdpKeep(xy, tol), guard = 0;
+            while (keep.length > GP_OUTLINE_MAX && guard++ < 24) {
+                tol *= 1.5;
+                keep = gpRdpKeep(xy, tol);
+            }
+            return keep.map(function (i) {
+                /* 7 dp is ~11 mm and is exactly what the wire and the trace
+                   format already carry; more digits would only be noise
+                   inflating localStorage. */
+                return [Math.round(pts[i][0] * 1e7) / 1e7, Math.round(pts[i][1] * 1e7) / 1e7];
+            });
+        }
+
+        /* How long the outline is on the ground, and what it will cost the
+           dash. Both are things you want to see BEFORE pushing, and neither is
+           guessable from a point count alone. */
+        function gpOutlineStats(o) {
+            var pts = (o && o.pts) || [];
+            var m = 0;
+            for (var i = 1; i < pts.length; i++)
+                m += gpMetres({ lat: pts[i - 1][0], lon: pts[i - 1][1] },
+                              { lat: pts[i][0], lon: pts[i][1] });
+            return { n: pts.length, metres: m, bytes: pts.length * 8 + 64 };
+        }
+
+        /* ---- where an outline comes from ---------------------------------
+           The good source is a lap you already drove: it is the real line, at
+           25 Hz, already in the right place on Earth, and it costs one click.
+           Tracing exists for a track you have NOT driven yet. */
+        function gpOutlineFromRows(from, to) {
+            var rows = gp.trace;
+            if (!rows || to <= from) return null;
+            /* The smoothed path, not the raw fixes: gpSmoothPath already
+               removes receiver wobble with a curvature-bounded window, which
+               is exactly the noise RDP would otherwise preserve as detail. */
+            var P = gpSmoothPath();
+            var pts = [];
+            for (var i = from; i <= to; i++)
+                pts.push(P ? [P[i][0], P[i][1]] : [rows[i].lat, rows[i].lon]);
+            if (pts.length < 3) return null;
+            return gpOutlineSimplify(pts);
+        }
+
         /* ---- stored recordings --------------------------------------------
          * A downloaded recording used to live in gp.trace and nowhere else, so
          * quitting Studio threw it away and the only copy left was the node's
@@ -13247,6 +13374,9 @@
            call gpRefreshGate() instead and rebuild only on dragend. */
         function gpDrawEditor() {
             if (!gp.map) return;
+            /* The shape goes down first so the gate handles land on top of it
+               and stay grabbable — Leaflet draws in add order. */
+            gpDrawOutline();
             if (!gp.editLayer) gp.editLayer = L.layerGroup().addTo(gp.map);
             gp.editLayer.clearLayers();
             gp._gateViews = {};
@@ -13304,6 +13434,178 @@
                 gp._gateViews[String(g.key)] = view;
             });
         }
+
+        /* ---- the outline on the map --------------------------------------
+           Its own layer, added BEFORE the editor layer so gate handles stay
+           grabbable on top of it. Canvas rather than SVG for the same reason
+           the driven trace uses canvas: a few hundred SVG path nodes redrawn
+           on every pan is visibly slower than the thing it is drawing. */
+        function gpDrawOutline() {
+            if (!gp.map) return;
+            if (!gp.outlineLayer) gp.outlineLayer = L.layerGroup().addTo(gp.map);
+            gp.outlineLayer.clearLayers();
+            if (gp.view !== "tracks") return;
+            if (!gp._canvasRenderer) gp._canvasRenderer = L.canvas({ padding: 0.3 });
+
+            var t = gpActiveTrack();
+            var saved = t && t.outline && t.outline.pts;
+            var live = gp.tracing ? gp.tracePts : null;
+
+            if (saved && saved.length > 1 && !gp.tracing) {
+                /* Dark casing under a bright core: the same two-pass trick the
+                   gates use, so the outline stays readable over both grass and
+                   pale concrete in satellite imagery. */
+                L.polyline(saved, { color: "#0A0C0E", weight: 7, opacity: 0.45,
+                                    renderer: gp._canvasRenderer }).addTo(gp.outlineLayer);
+                L.polyline(saved, { color: "#D4B06A", weight: 3, opacity: 0.95,
+                                    renderer: gp._canvasRenderer }).addTo(gp.outlineLayer);
+            }
+
+            if (live && live.length) {
+                L.polyline(live, { color: "#0A0C0E", weight: 7, opacity: 0.45,
+                                   renderer: gp._canvasRenderer }).addTo(gp.outlineLayer);
+                L.polyline(live, { color: "#6FBF73", weight: 3, opacity: 1,
+                                   renderer: gp._canvasRenderer }).addTo(gp.outlineLayer);
+                /* Every placed point gets a handle: tracing without being able
+                   to see where your last click landed is guesswork. The first
+                   is bigger because clicking it is how you close the loop. */
+                live.forEach(function (p, i) {
+                    L.circleMarker(p, {
+                        radius: i === 0 ? 7 : 4,
+                        color: i === 0 ? "#6FBF73" : "#0A0C0E",
+                        weight: 2, fillColor: i === 0 ? "#0A0C0E" : "#6FBF73", fillOpacity: 1
+                    }).addTo(gp.outlineLayer);
+                });
+            }
+        }
+
+        /* Tracing: click to drop points, click the first one again to close.
+           Deliberately not free-hand drag — a dragged path over satellite
+           imagery produces a thousand points of hand-shake that then have to
+           be simplified back to the dozen the person meant. */
+        window.gpOutlineTrace = function (on) {
+            if (!gp.map) return;
+            if (on) {
+                var t = gpActiveTrack();
+                if (!t) return;
+                gp.tracing = true;
+                gp.tracePts = [];
+                if (!gp._traceClick) {
+                    gp._traceClick = function (e) {
+                        if (!gp.tracing) return;
+                        var p = [e.latlng.lat, e.latlng.lng];
+                        /* Within a handle's width of the first point closes the
+                           loop, in SCREEN space — at a metre threshold the same
+                           gesture would work zoomed in and be impossible
+                           zoomed out. */
+                        if (gp.tracePts.length > 2) {
+                            var a = gp.map.latLngToContainerPoint(gp.tracePts[0]);
+                            var b = gp.map.latLngToContainerPoint(e.latlng);
+                            if (Math.abs(a.x - b.x) < 12 && Math.abs(a.y - b.y) < 12) {
+                                gpOutlineTraceFinish(true);
+                                return;
+                            }
+                        }
+                        gp.tracePts.push(p);
+                        gpDrawOutline();
+                        gpRenderInspector();
+                    };
+                }
+                gp.map.on("click", gp._traceClick);
+                if (gp.map.getContainer) gp.map.getContainer().style.cursor = "crosshair";
+            } else {
+                gpOutlineTraceFinish(false);
+            }
+            gpDrawOutline();
+            gpRenderInspector();
+        };
+
+        function gpOutlineTraceFinish(close) {
+            if (!gp.tracing) return;
+            var t = gpActiveTrack();
+            var pts = (gp.tracePts || []).slice();
+            gp.tracing = false;
+            if (gp._traceClick) gp.map.off("click", gp._traceClick);
+            if (gp.map.getContainer) gp.map.getContainer().style.cursor = "";
+            if (t && pts.length > 2) {
+                if (close) pts.push([pts[0][0], pts[0][1]]);
+                t.outline = { pts: gpOutlineSimplify(pts), src: "traced", at: Date.now() };
+                gpTracksSave();
+                var st = gpOutlineStats(t.outline);
+                gpSetMsg("gpOutlineMsg", "Traced " + st.n + " points, " +
+                         (st.metres / 1000).toFixed(2) + " km.", "ok");
+            } else if (pts.length) {
+                gpSetMsg("gpOutlineMsg", "Need at least three points — nothing saved.", "warn");
+            }
+            gp.tracePts = null;
+            gpDrawOutline();
+            gpRenderInspector();
+        }
+
+        window.gpOutlineUndo = function () {
+            if (!gp.tracing || !gp.tracePts || !gp.tracePts.length) return;
+            gp.tracePts.pop();
+            gpDrawOutline();
+            gpRenderInspector();
+        };
+
+        /* The headline: the shape you already drove. Uses the SELECTED lap if
+           one is picked, otherwise the fastest — the fastest lap is the
+           cleanest line, which is the one worth keeping as the track's
+           shape. */
+        window.gpOutlineFromLap = function () {
+            var t = gpActiveTrack();
+            if (!t) return;
+            if (!gp.trace || !gp.trace.length) {
+                gpSetMsg("gpOutlineMsg", "Load a recording first — Session, then pick one.", "warn");
+                return;
+            }
+            var laps = (gp.traceLaps || []).filter(function (l) { return !l.ghost; });
+            var lap = null, why = "";
+            if (gp.selLap >= 0 && gp.traceLaps[gp.selLap] && !gp.traceLaps[gp.selLap].ghost) {
+                lap = gp.traceLaps[gp.selLap];
+                why = "the " + gpRunWord() + " you have selected";
+            } else if (laps.length) {
+                var best = laps[0], bt = Infinity;
+                laps.forEach(function (l) {
+                    var s = gpSecs(gp.trace, l.from, l.to);
+                    if (s < bt) { bt = s; best = l; }
+                });
+                lap = best;
+                why = "the fastest " + gpRunWord() + " (" + gpLapTime(bt) + ")";
+            }
+            /* No laps is not a dead end: the whole recording is still a shape,
+               and for a track with no line placed yet it is the ONLY shape
+               available — which is exactly when someone needs this most. */
+            var pts = lap ? gpOutlineFromRows(lap.from, lap.to)
+                          : gpOutlineFromRows(0, gp.trace.length - 1);
+            if (!pts) {
+                gpSetMsg("gpOutlineMsg", "That recording is too short to make a shape from.", "warn");
+                return;
+            }
+            t.outline = { pts: pts, src: "lap", at: Date.now() };
+            gpTracksSave();
+            var st = gpOutlineStats(t.outline);
+            gpSetMsg("gpOutlineMsg",
+                "Shape taken from " + (why || "the whole recording") + " — " +
+                st.n + " points, " + (st.metres / 1000).toFixed(2) + " km.", "ok");
+            gpDrawOutline();
+            gpRenderInspector();
+            gpBuildRail();
+        };
+
+        window.gpOutlineClear = function () {
+            var t = gpActiveTrack();
+            if (!t || !t.outline) return;
+            gpConfirm("Remove the shape from “" + t.name + "”?\n\nThe gates and lap times are untouched — only the drawn outline goes.").then(function (yes) {
+                if (!yes) return;
+                delete t.outline;
+                gpTracksSave();
+                gpDrawOutline();
+                gpRenderInspector();
+                gpBuildRail();
+            });
+        };
 
         /* Move existing geometry to match the gate's current values, without
            recreating anything. `dragging` names the handle the user is holding
@@ -16001,6 +16303,56 @@
                  (trial ? "Re-place finish" : "+ Finish line") + "</button></div>";
             h += "<div class='ws-note'>Drop a gate at the centre of the map, drag it onto the line, then drag its <b>end</b> to aim it the way the car travels and set how wide it is. " +
                  "The dash counts a crossing only inside that width.</div>";
+            h += "</div>";
+
+            /* ---- Shape ----------------------------------------------------
+               Separate group from Gates on purpose: gates are what a lap is
+               TIMED against, the shape is what the track LOOKS like, and they
+               go to different places for different reasons. Conflating them
+               is how someone ends up believing that drawing the outline moves
+               their start/finish line. */
+            h += "<div class='ws-grp'><div class='ws-gt'>Shape" +
+                 gpTip("The track's outline",
+                       "The line the dash draws, with the car's position moving along it. " +
+                       "It is <b>not</b> what times your laps — that is the gates above, and " +
+                       "changing one never touches the other.<br><br>The best source is a lap " +
+                       "you have already driven: it is the real line, at 25 Hz, already in the " +
+                       "right place. Tracing is for a circuit you have not driven yet.") +
+                 "</div>";
+
+            var ol = t.outline;
+            if (gp.tracing) {
+                var np = (gp.tracePts || []).length;
+                h += "<div class='ws-note'><b>Tracing.</b> Click along the track to drop points. " +
+                     (np > 2 ? "Click the first point again to close the loop, or press Finish."
+                             : "At least three points are needed.") + "</div>";
+                h += gpReadyRow("Points so far", String(np), np > 2 ? "ok" : null, "");
+                h += "<div class='lt-expbtns' style='margin-top:7px'>" +
+                     "<button class='ws-btn-line' onclick='gpOutlineUndo()'" + (np ? "" : " disabled") + ">Undo point</button>" +
+                     "<button class='ws-btn-line' onclick='gpOutlineTrace(false)'>Finish</button></div>";
+            } else {
+                if (ol && ol.pts && ol.pts.length > 1) {
+                    var st = gpOutlineStats(ol);
+                    h += "<div class='gp-rows'>" +
+                         gpReadyRow("Shape", "drawn", "ok",
+                             ol.src === "lap" ? "taken from a driven lap" : "traced by hand") +
+                         gpReadyRow("Points", String(st.n), null,
+                             (st.bytes / 1024).toFixed(1) + " KB on the dash") +
+                         gpReadyRow("Length", (st.metres / 1000).toFixed(2) + " km", null,
+                             "around the drawn line") +
+                         "</div>";
+                } else {
+                    h += "<div class='ws-note'>No shape yet. The dash cannot draw this track until it has one.</div>";
+                }
+                h += "<div class='lt-expbtns' style='margin-top:7px'>" +
+                     "<button class='ws-btn-line' onclick='gpOutlineFromLap()'>" +
+                     (ol ? "Re-take from a lap" : "Take from a lap") + "</button>" +
+                     "<button class='ws-btn-line' onclick='gpOutlineTrace(true)'>" +
+                     (ol ? "Re-trace" : "Trace it") + "</button></div>";
+                if (ol)
+                    h += "<button class='ws-btn-line' style='margin-top:6px' onclick='gpOutlineClear()'>Remove the shape</button>";
+            }
+            h += "<div class='gp-msg' id='gpOutlineMsg'></div>";
             h += "</div>";
 
             /* The stretches between the gates, which is what the split times
