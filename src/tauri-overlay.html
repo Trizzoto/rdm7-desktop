@@ -946,6 +946,28 @@
         .ws-item .tag { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted); }
         .ws-item .st { width: 7px; height: 7px; border-radius: 50%; background: var(--border-light); flex-shrink: 0; }
         .ws-item .st.on { background: #5d8a62; }
+        /* ---- Session rail tabs: Sessions / Laps --------------------------
+           These used to stack — every recording, then every lap of whatever
+           was loaded, one under the other. Fine with one session and three
+           laps; a shelf of real recordings and the lap list were fighting
+           for the same ~250px. Split into two panes so each gets the whole
+           rail when it's the one being read. */
+        .gp-rail-tabs { display: flex; gap: 2px; margin: 10px 6px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px; }
+        .gp-rail-tabs button {
+            flex: 1; font-family: 'Sora', sans-serif; font-size: 10.5px; font-weight: 600; color: var(--text-muted);
+            background: none; border: none; padding: 6px 4px; border-radius: 2px; cursor: pointer; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        .gp-rail-tabs button:hover { color: var(--text); }
+        .gp-rail-tabs button.on { background: var(--panel-elevated); color: var(--text); }
+        .gp-rail-pane { display: none; }
+        .gp-rail-pane.on { display: block; }
+        /* A session card's own lap times, smallest to none at all — not a
+           cross-session trend, just enough to see "was this a clean run or
+           a mess of outliers" before opening it. */
+        .gp-ses-trend { display: flex; align-items: flex-end; gap: 2px; height: 16px; margin-left: 6px; flex: none; }
+        .gp-ses-trend i { width: 3px; background: var(--border-light); border-radius: 1px; display: block; }
+        .gp-ses-trend i.best { background: #c98ae0; }
         .ws-stage { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: auto; background: var(--bg-canvas); }
         .ws-insp { width: 316px; min-height: 0; max-height: 100%; background: var(--panel); border-left: 1px solid var(--border); padding: 12px 14px; flex-shrink: 0; overflow-y: auto; }
         .ws-insp h2 { font-family: 'Sora', sans-serif; font-size: 12.5px; font-weight: 600; margin: 0 0 1px; }
@@ -1189,6 +1211,10 @@
         .gp-map-t > .fr > input.id:focus {
             outline: none; border-color: var(--accent); background: var(--bg); }
         .gp-map-t > .fr > .nm { color: var(--text); flex: 1; }
+        /* The Time frame's local-time aside: raw UTC on the wire reads as a
+           wrong clock to anyone who forgets it is UTC, so the block that
+           carries it says what it is next to what it looks like. */
+        .gp-map-t > .fr > .nm > i { font-style: normal; color: var(--text-muted); margin-left: 6px; }
         .gp-map-t > .fr > .dl { color: var(--text-muted); }
         .gp-map-t > .fr > .hz { color: var(--text-muted); }
         .gp-map-t > .by { color: var(--text-muted); }
@@ -1622,6 +1648,28 @@
         .gp-mapbtn.on { background: rgba(12,14,16,0.80); border-color: var(--border);
                         color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
         .gp-mapbtn:disabled { opacity: 0.5; cursor: default; }
+        /* Collapsed, Session-only: the ~252px square the map takes when
+           docked was the single biggest thing squeezing Sessions/Laps into
+           a sliver. Collapsed, it's the live readout alone — the same
+           position chip that already exists, just laid out as a line
+           instead of an overlay — and a click brings the square back. */
+        .gp-viewer.docked.gp-map-collapsed .gp-mapwrap { aspect-ratio: auto; height: auto; }
+        .gp-viewer.docked.gp-map-collapsed #gpMap,
+        .gp-viewer.docked.gp-map-collapsed .gp-mapbtns,
+        .gp-viewer.docked.gp-map-collapsed .gp-mapsearch { display: none; }
+        .gp-viewer.docked.gp-map-collapsed .gp-mapchip {
+            position: static; max-width: none; width: 100%; box-sizing: border-box;
+            display: flex; align-items: center; gap: 8px; cursor: pointer; pointer-events: auto;
+            border-radius: var(--radius-md); padding: 8px 10px;
+        }
+        .gp-viewer.docked.gp-map-collapsed .gp-mapchip:hover { border-color: var(--border-light); }
+        .gp-viewer.docked.gp-map-collapsed .gp-mapchip:empty::before {
+            content: "Attach the RDM GPS to see a position here"; color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 10.5px;
+        }
+        .gp-viewer.docked.gp-map-collapsed .gp-mapchip::after {
+            content: "Show map \25be"; margin-left: auto; color: var(--accent-hover); font-family: 'Sora', sans-serif;
+            font-size: 10px; font-weight: 600; white-space: nowrap;
+        }
         .gp-mapsearch { position: absolute; left: 10px; bottom: 10px; z-index: 500; display: flex; gap: 6px; width: min(360px, 60%); }
         .gp-mapsearch input {
             flex: 1; min-width: 0; background: rgba(12,14,16,0.88); border: 1px solid var(--border);
@@ -2227,7 +2275,7 @@
                 <div class="gp-viewer" id="gpViewer">
                 <div class="gp-mapwrap" id="gpMapWrap">
                     <div id="gpMap"></div>
-                    <div class="gp-mapchip" id="gpMapChip"></div>
+                    <div class="gp-mapchip" id="gpMapChip" onclick="gpMapCollapseToggle()"></div>
                     <div class="gp-mapsearch">
                         <input type="text" id="gpSearchInput" placeholder="Find a circuit or address&#8230;" autocomplete="off" spellcheck="false"
                                onkeydown="if(event.key==='Enter'){event.preventDefault();gpSearch();}">
@@ -2237,7 +2285,11 @@
                     <div class="gp-mapbtns">
                         <button class="gp-mapbtn" id="gpBtnLocate" onclick="gpLocate()" title="Centre on the car's current position">&#9678; My position</button>
                         <button class="gp-mapbtn on" id="gpBtnFollow" onclick="gpToggleFollow()" title="Keep the car centred">Follow</button>
+                        <button class="gp-mapbtn on" id="gpBtnCam" onclick="gpCameraCycle()" style="display:none"
+                                title="How the map follows the car during playback. Lock: centred on every sample. Auto: recentres only when it nears the edge. Free: never moves on its own — drag and zoom as you like. Click to cycle.">Auto</button>
                         <button class="gp-mapbtn" id="gpBtnTiles" onclick="gpTilesToggle()" title="Drop the satellite imagery and read the driven line on its own">Hide map</button>
+                        <button class="gp-mapbtn" id="gpBtnMapCollapse" onclick="gpMapCollapseToggle()" style="display:none"
+                                title="Collapse the map to a one-line position readout — click it again to bring the map back">Collapse</button>
                         <button class="gp-mapbtn" id="gpMapFocusBtn" style="display:none"
                                 onclick="gpViewFocus('map')" title="Map full width / side by side">&#x26F6;</button>
                     </div>
@@ -7320,6 +7372,202 @@
             return (n || "recording") + ext;
         }
 
+        /* ══════════════════════════════════════════════════════════════════
+         * VBO — the format every circuit-analysis tool already reads
+         *
+         * Racelogic's VBOX text format. Circuit Tools, Track Attack and
+         * DataSpeed all open it, so exporting it is what lets a recording
+         * off this puck be analysed in tools nobody here has to write.
+         *
+         * Three things in the format are traps, and all three are load-
+         * bearing — get one wrong and the file still imports, it just puts
+         * the car somewhere it never was:
+         *
+         *   1. Latitude and longitude are in MINUTES, not degrees.
+         *   2. Longitude is POSITIVE WEST. That is backwards from every
+         *      other convention on Earth, including the one the rest of
+         *      this file uses, so it is negated exactly once, here.
+         *   3. `time` is UTC seconds-since-midnight as HHMMSS.SS — a
+         *      number that looks like a float and is not one.
+         *
+         * Verified against a genuine VBOX-logged file (VBVDHD2 hardware)
+         * and against Circuit Tools' own export, not from memory.
+         * ═════════════════════════════════════════════════════════════════ */
+
+        /* ±, integer part zero-padded to `ip` digits, `dp` decimals. VBO is
+           whitespace-delimited so the widths are cosmetic, but matching what
+           the hardware emits keeps the file diffable against a real one. */
+        function gpVboNum(v, ip, dp) {
+            if (v === null || v === undefined || !isFinite(v)) v = 0;
+            var s = Math.abs(v).toFixed(dp), dot = s.indexOf(".");
+            var head = dot < 0 ? s : s.slice(0, dot);
+            while (head.length < ip) head = "0" + head;
+            return (v < 0 ? "-" : "+") + head + (dot < 0 ? "" : s.slice(dot));
+        }
+
+        /* Centiseconds-since-midnight → HHMMSS.SS. Built by division rather
+           than from Date fields so a value that rounds up through .995 rolls
+           the second (and the minute, and the hour) instead of printing
+           "…59.100", which is not a time. */
+        function gpVboClock(cs) {
+            cs = Math.max(0, Math.round(cs));
+            var p2 = function (n) { return (n < 10 ? "0" : "") + n; };
+            var c = cs % 100, s = Math.floor(cs / 100) % 60;
+            var m = Math.floor(cs / 6000) % 60, h = Math.floor(cs / 360000) % 24;
+            return p2(h) + p2(m) + p2(s) + "." + p2(c);
+        }
+
+        /* A gate as VBO wants it: longitude FIRST, then latitude, both in the
+           minutes/west-positive convention, twice — the two ends of the line.
+           gpGateEnds already gives us those ends in [lat, lon] pairs, which is
+           the same geometry the puck times against, so Circuit Tools splits
+           laps exactly where the dash did. */
+        function gpVboGate(kind, line, label) {
+            var e = gpGateEnds(line);
+            if (!e) return "";
+            var pt = function (p) {
+                return gpVboNum(-p[1] * 60, 5, 6) + " " + gpVboNum(p[0] * 60, 5, 6);
+            };
+            return kind + " " + pt(e[0]) + " " + pt(e[1]) +
+                   (label ? " " + label.replace(/\s+/g, " ").trim() : "") + "\n";
+        }
+
+        function gpVboBuild() {
+            var rows = gp.trace || [];
+            if (!rows.length) return null;
+            var meta = (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0] || null;
+            var ch = gpChannels() || {};
+            var t0 = rows[0].t;
+            /* A recording the node could date carries real UTC; one it could
+               not still exports, timed from midnight. Lap timing only needs
+               the clock to advance evenly, and saying "00:00:00" is honest
+               about not knowing rather than inventing a plausible morning. */
+            var dated = !!(meta && meta.dated === "gps" && t0 !== undefined);
+            var start = new Date(dated ? meta.recordedAt : ((meta && meta.recordedAt) || Date.now()));
+            var baseCs = dated
+                ? (start.getUTCHours() * 360000 + start.getUTCMinutes() * 6000 +
+                   start.getUTCSeconds() * 100 + Math.round(start.getUTCMilliseconds() / 10))
+                : 0;
+
+            var lanes = gpLaneRowsAll().filter(function (l) {
+                return l.id.indexOf("can_") === 0 && !l.pending && typeof l.get === "function";
+            });
+
+            /* Longitudinal and lateral g get VBOX's own channel names so
+               Circuit Tools shows them in its g-force views rather than as
+               two anonymous user channels. */
+            var extra = [
+                { name: "LongAcc", unit: "g", dp: 3, get: function (i) { return rows[i].g || 0; } },
+                { name: "LatAcc",  unit: "g", dp: 3, get: function (i) { return ch.glat ? ch.glat[i] : 0; } },
+                { name: "YawRate", unit: "deg/s", dp: 1, get: function (i) { return ch.yaw ? ch.yaw[i] : 0; } }
+            ];
+            lanes.forEach(function (l) {
+                extra.push({
+                    name: String(l.label).replace(/[^\w]+/g, "_").replace(/^_|_$/g, "") || "channel",
+                    unit: l.unit || "(null)", dp: l.dp === undefined ? 2 : l.dp,
+                    get: function (i) { return l.get(i); }
+                });
+            });
+
+            /* Data first, so the comments can report what the data turned out
+               to contain rather than guessing ahead of it.
+
+               A stale channel is the one place VBO gives no good answer. CSV
+               leaves the cell blank — a spreadsheet ignores a blank and
+               averages a zero — but VBO is POSITIONAL, so a blank would shift
+               every later column on that row and silently corrupt the file.
+               Zero is therefore not available either: a throttle that reads 0
+               for one sample is a lift that never happened. So hold the last
+               known value, which is what every logger does for a channel
+               slower than its sample rate, and count how often it happened so
+               the header can admit to it. Leading stales, with nothing to
+               hold, are the only zeroes. */
+            var last = [], gaps = 0, leading = 0;
+            for (var g0 = 0; g0 < extra.length; g0++) last.push(null);
+            var lines = [];
+            for (var i = 0; i < rows.length; i++) {
+                var r = rows[i];
+                var cs = baseCs + (dated ? (r.t - t0) / 10 : gpSecs(rows, 0, i) * 100);
+                /* Longitude negated HERE and nowhere else — see trap 2. */
+                var line = "010 " + gpVboClock(cs) + " " +
+                           gpVboNum(r.lat * 60, 5, 5) + " " +
+                           gpVboNum(-r.lon * 60, 5, 5) + " " +
+                           gpVboNum(r.kph, 3, 3).slice(1) + " " +
+                           gpVboNum(r.hdg, 3, 2).slice(1) + " " +
+                           gpVboNum(0, 5, 2);
+                for (var e = 0; e < extra.length; e++) {
+                    var v = extra[e].get(i);
+                    if (v === null || v === undefined || !isFinite(v)) {
+                        if (last[e] === null) { v = 0; leading++; }
+                        else { v = last[e]; gaps++; }
+                    } else {
+                        last[e] = v;
+                    }
+                    line += " " + gpVboNum(v, 1, extra[e].dp);
+                }
+                lines.push(line);
+            }
+
+            var p2 = function (n) { return (n < 10 ? "0" : "") + n; };
+            var out = "File created on " + p2(start.getUTCDate()) + "/" +
+                      p2(start.getUTCMonth() + 1) + "/" + start.getUTCFullYear() +
+                      " @ " + p2(start.getUTCHours()) + ":" + p2(start.getUTCMinutes()) +
+                      ":" + p2(start.getUTCSeconds()) + "\n\n";
+
+            out += "[header]\nsatellites\ntime\nlatitude\nlongitude\nvelocity kmh\nheading\nheight\n";
+            extra.forEach(function (e) { out += e.name + "\n"; });
+
+            out += "\n[channel units]\n";
+            extra.forEach(function (e) { out += e.unit + "\n"; });
+
+            /* Say plainly which columns are real and which are placeholders.
+               The puck's record is 12 bytes of lat/lon/speed/heading — it has
+               never logged altitude or a per-sample satellite count, and a
+               silent column of zeroes is how someone ends up trusting an
+               elevation plot that is not data. */
+            out += "\n[comments]\n";
+            out += "Exported by RDM Studio " + (typeof _DESKTOP_VERSION === "string" ? _DESKTOP_VERSION : "") + "\n";
+            out += "Source : RDM GPS, 25 Hz\n";
+            if (meta && meta.name) out += "Session : " + meta.name + "\n";
+            if (meta && meta.car) out += "Vehicle : " + meta.car + "\n";
+            if (meta && meta.driver) out += "Driver : " + meta.driver + "\n";
+            out += "Log Rate (Hz) : 25.00\n";
+            out += "NOTE height is always 0 - the RDM GPS record does not log altitude\n";
+            out += "NOTE sats is a fixed placeholder - not logged per sample\n";
+            if (!dated)
+                out += "NOTE this recording carried no GPS date; time runs from 00:00:00\n";
+            if (gaps)
+                out += "NOTE " + gaps + " channel sample(s) held their previous value while the source was quiet\n";
+            if (leading)
+                out += "NOTE " + leading + " channel sample(s) read 0 before that channel had ever reported\n";
+
+            /* The gates, so Circuit Tools opens with the track already set up
+               instead of asking someone to draw a start line over a satellite
+               photo they have never seen. Same geometry the puck timed with. */
+            var trk = gpActiveTrack();
+            if (trk && trk.start_finish) {
+                var lt = gpVboGate("Start", trk.start_finish,
+                                   gpIsTrial(trk) ? "Start" : "Start / Finish");
+                (trk.sectors || []).forEach(function (sg, i) {
+                    lt += gpVboGate("Split", sg, gpSectorName(trk, i + 1) || ("Split " + (i + 1)));
+                });
+                if (gpIsTrial(trk) && trk.finish) lt += gpVboGate("Split", trk.finish, "Finish");
+                if (lt) out += "\n[laptiming]\n" + lt;
+            }
+
+            out += "\n[column names]\nsats time lat long velocity heading height";
+            extra.forEach(function (e) { out += " " + e.name; });
+            out += "\n\n[data]\n";
+            return out + lines.join("\n") + "\n";
+        }
+
+        window.gpSessionExportVbo = function (id) {
+            if (id !== gp.sessionId || !gp.trace || !gp.trace.length) return;
+            var meta = (gp.sessions || []).filter(function (s) { return s.id === id; })[0];
+            var vbo = gpVboBuild();
+            if (vbo) _wsDownload(gpSesFilename(meta, ".vbo"), vbo, "text/plain");
+        };
+
         window.gpSessionExportCsv = function (id) {
             /* CSV is built from the LOADED rows (it needs g and the lap split),
                and the buttons only render on the loaded recording. */
@@ -7754,8 +8002,8 @@
         };
 
         function gpRecordingsHtml() {
-            var h = "<div class='ws-rail-title'>Recordings</div>";
-            if (gp.sessions === null) return h + "<div class='ws-note'>Reading\u2026</div>";
+            var h = "";
+            if (gp.sessions === null) return "<div class='ws-note'>Reading\u2026</div>";
             /* A trace on screen with nothing backing it: you deleted the saved
                copy, or the save failed. Either way the list must not claim
                nothing is loaded while a session is plainly showing below it. */
@@ -7764,7 +8012,7 @@
                   "<b>not saved</b> \u2014 it will be gone when Studio closes.</div>"
                 : "";
             if (!gp.sessions.length) {
-                return h + orphan + "<div class='ws-none' style='padding:14px 6px'>Nothing saved yet.<br>" +
+                return orphan + "<div class='ws-none' style='padding:14px 6px'>Nothing saved yet.<br>" +
                        "Downloads are kept here automatically.</div>" + gpSesImportHtml();
             }
             h += orphan;
@@ -7776,9 +8024,22 @@
                                gpEsc(gpSesDate(s.recordedAt)) + " (downloaded)</span>");
                 bits.push((s.durationS / 60).toFixed(1) + " min");
                 if (s.bestLapS) bits.push("best " + gpLapTime(s.bestLapS));
+                /* Its own lap times, shortest bar to tallest \u2014 not a
+                   cross-session trend, just enough to see "a clean run" or
+                   "a mess of outliers" before opening it. */
+                var trend = "";
+                if (s.lapTimesS && s.lapTimesS.length > 1) {
+                    var bT = Math.min.apply(null, s.lapTimesS), wT = Math.max.apply(null, s.lapTimesS);
+                    var tspan = wT - bT || 1;
+                    trend = "<span class='gp-ses-trend'>" + s.lapTimesS.map(function (t) {
+                        var bh = Math.round(5 + ((t - bT) / tspan) * 11);
+                        return "<i class='" + (t === bT ? "best" : "") + "' style='height:" + bh + "px'></i>";
+                    }).join("") + "</span>";
+                }
                 h += "<button class='ws-item" + (on ? " on" : "") + "' data-gp-ses='" + gpEsc(s.id) + "'>" +
                      "<span class='st" + (on ? " on" : "") + "'></span>" + gpEsc(s.name) +
                      "<span class='tag'>" + (s.lapCount || 0) + (s.trial ? " run" : " lap") + (s.lapCount === 1 ? "" : "s") + "</span>" +
+                     trend +
                      "<div class='gp-ses-n'>" + bits.join(" \u00b7 ") + "</div></button>";
                 if (on) {
                     h += "<div class='gp-ses-act'>" +
@@ -7788,6 +8049,7 @@
                          gpEsc(s.driver || "") + "' data-gp-ses-driver='" + gpEsc(s.id) + "'></div>";
                     h += "<div class='gp-ses-act'>" +
                          "<button class='ws-btn-line' data-gp-ses-ren='" + gpEsc(s.id) + "'>Rename</button>" +
+                         "<button class='ws-btn-line' data-gp-ses-vbo='" + gpEsc(s.id) + "' title='Racelogic VBO — opens in Circuit Tools, Track Attack and DataSpeed, with this track&#39;s start/finish and splits already in it'>VBO</button>" +
                          "<button class='ws-btn-line' data-gp-ses-csv='" + gpEsc(s.id) + "' title='one row per sample, for Excel / i2 / RaceRender'>CSV</button>" +
                          "<button class='ws-btn-line' data-gp-ses-file='" + gpEsc(s.id) + "' title='the whole recording as one file, for another PC running Studio'>Export</button>" +
                          "<button class='ws-btn-line' data-gp-ses-del='" + gpEsc(s.id) + "'>Delete</button></div>";
@@ -7803,6 +8065,7 @@
                     b.addEventListener("click", function (e) { e.stopPropagation(); fn(b.getAttribute(attr)); });
                 });
             };
+            bind("data-gp-tab", function (v) { window.gpRailTabSet(v); });
             bind("data-gp-lap", function (v) { window.gpSelectLap(v); });
             bind("data-gp-cmp", function (v) { window.gpCompareLap(v); });
             bind("data-gp-ghost", function (v) { window.gpCompareGhost(v); });
@@ -7823,25 +8086,23 @@
             };
             field("data-gp-ses-car", "car");
             field("data-gp-ses-driver", "driver");
+            bind("data-gp-ses-vbo", function (v) { window.gpSessionExportVbo(v); });
             bind("data-gp-ses-csv", function (v) { window.gpSessionExportCsv(v); });
             bind("data-gp-ses-file", function (v) { window.gpSessionExportFile(v); });
             bind("data-gp-ses-del", function (v) { window.gpSessionDelete(v); });
             bind("data-gp-ses", function (v) { if (v !== gp.sessionId) window.gpSessionLoad(v); });
         }
 
-        /* ---- Session rail: the laps in the recording ---------------------- */
-        function gpBuildSessionRail(rail) {
-            /* "Will this record laps?" is the question you have BEFORE the
-               drive, and it used to be answerable only at the foot of the
-               aside, under the recordings list and the lap list — below the
-               fold, under the things you read afterwards. It goes first. */
-            var h = "<div id='gpReadyCard'></div>";
-            h += gpRecordingsHtml();
-            h += "<div class='ws-rail-title'>Session</div>";
+        /* ---- Laps pane: everything about the recording that's loaded ------
+           Pick a lap, see the ideal, pick what to compare against — either
+           another lap here or the best from another day at the same track.
+           All of it was always here; now it's a pane of its own instead of
+           stacking under every recording in the Sessions list. */
+        function gpLapsPaneHtml() {
             if (!gp.trace || !gp.trace.length) {
-                h += "<div class='ws-none' style='padding:14px 6px'>Nothing loaded.<br>" +
+                var h0 = "<div class='ws-none' style='padding:14px 6px'>Nothing loaded.<br>" +
                      (gp.sessions && gp.sessions.length
-                        ? "Pick a recording above, or download a new one from the node."
+                        ? "Pick a recording in Sessions, or download a new one from the node."
                         : "Download a recording from the node.") + "</div>";
                 /* The sentence above names an action — put the action next to
                    it. The same button also lives in the checklist below, but
@@ -7849,14 +8110,12 @@
                    you to press a button it will not show you is a dead end. */
                 var dev0 = gpDev();
                 if (dev0 && dev0.traceRead)
-                    h += "<button class='ws-btn-line' style='margin:0 6px 8px' onclick='gpTraceDownload()'" +
+                    h0 += "<button class='ws-btn-line' style='margin:0 6px 8px' onclick='gpTraceDownload()'" +
                          (gp.traceBusy ? " disabled" : "") + ">" +
                          (gp.traceBusy ? "Downloading… " + gp.tracePct + "%" : "Download from node") + "</button>";
-                gpRailBody(rail).innerHTML = h + GP_ASIDE_SLOT;
-                gpBindSessionRail(rail);
-                gpRenderInspector();
-                return;
+                return h0;
             }
+            var h = "";
             var mins = gpSecs(gp.trace, 0, gp.trace.length - 1) / 60;
             h += "<button class='ws-item" + (gp.selLap < 0 ? " on" : "") + "' data-gp-lap='-1'>" +
                  "<span class='st'></span>Whole session<span class='tag'>" + mins.toFixed(1) + " min</span></button>";
@@ -7933,6 +8192,53 @@
                     });
                 }
             }
+            return h;
+        }
+
+        /* Which pane is showing — in memory only (resets with the app, like
+           plotMode does), defaulting to whichever answers the question
+           you're more likely to be asking: browse recordings with nothing
+           loaded, dig into laps once something is. */
+        function gpRailTab() {
+            if (gp.railTab !== "sessions" && gp.railTab !== "laps")
+                gp.railTab = (gp.trace && gp.trace.length) ? "laps" : "sessions";
+            return gp.railTab;
+        }
+        window.gpRailTabSet = function (t) {
+            if (t !== "sessions" && t !== "laps") return;
+            gp.railTab = t;
+            var rail = document.getElementById("gpRail");
+            if (!rail) return;
+            Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-tab]"), function (b) {
+                b.classList.toggle("on", b.getAttribute("data-gp-tab") === t);
+            });
+            Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-pane]"), function (p) {
+                p.classList.toggle("on", p.getAttribute("data-gp-pane") === t);
+            });
+        };
+
+        /* ---- Session rail: two panes, Sessions and Laps -------------------
+           Used to be one long stack — every saved recording, then the whole
+           lap-selection UI for whichever one was loaded, one under the
+           other. Fine with one recording and three laps; a real shelf of
+           recordings and a real lap list were fighting for the same ~250px.
+           Same content, same click targets, just each gets the full rail
+           when it's the one being read. */
+        function gpBuildSessionRail(rail) {
+            /* "Will this record laps?" is the question you have BEFORE the
+               drive — it goes first, above either pane. */
+            var h = "<div id='gpReadyCard'></div>";
+            var tab = gpRailTab();
+            var trk = gpActiveTrack();
+            h += "<div class='gp-rail-tabs'>" +
+                 "<button data-gp-tab='sessions' class='" + (tab === "sessions" ? "on" : "") + "'>Sessions</button>" +
+                 "<button data-gp-tab='laps' class='" + (tab === "laps" ? "on" : "") + "'>Laps" +
+                 (gp.trace && gp.trace.length && trk ? " · " + gpEsc(trk.name) : "") +
+                 "</button></div>";
+            h += "<div class='gp-rail-pane" + (tab === "sessions" ? " on" : "") + "' data-gp-pane='sessions'>" +
+                 gpRecordingsHtml() + "</div>";
+            h += "<div class='gp-rail-pane" + (tab === "laps" ? " on" : "") + "' data-gp-pane='laps'>" +
+                 gpLapsPaneHtml() + "</div>";
             /* The read-only panels are appended by gpRenderInspector, into a
                slot that is part of THIS markup — so any gpBuildRail() call
                refreshes both halves of the aside and they cannot drift. */
@@ -7992,9 +8298,9 @@
         function gpReadyRows() {
             var inf = gp.traceInfo, s = gp.status, trk = gpActiveTrack();
             var rows = [];
-            var add = function (k, v, tone, sub, fix, wait) {
+            var add = function (k, v, tone, sub, fix, wait, pin) {
                 rows.push({ k: k, v: v, tone: tone || null, sub: sub || "",
-                            fix: fix || null, wait: !!wait });
+                            fix: fix || null, wait: !!wait, pin: !!pin });
             };
 
             /* Fix — the one thing no amount of Studio can compensate for. */
@@ -8071,14 +8377,23 @@
                    disagree about what red means. The "off" sub-line follows
                    the power-on setting — "a power cycle fixes it" is only
                    true for a track-car config, and a daily's card must not
-                   hand out a remedy that stopped being one. */
+                   hand out a remedy that stopped being one.
+
+                   Not recording is not a defect — it is where every session
+                   starts. Tone "ok" (green, "ready") rather than "warn" keeps
+                   it out of the bad/warn count, so an idle puck with nothing
+                   else wrong reads as "Ready to record", not "one thing to
+                   fix". `pin` keeps the row and its Start button on screen
+                   even collapsed, since that verdict alone must not hide the
+                   button someone came here to press. */
                 var rbDef = !gp.node || gp.node.record_on_boot !== false;
-                add("Recording", inf.recording ? "on" : "off",
-                    inf.recording ? "rec" : "warn",
+                add("Recording", inf.recording ? "on" : "ready",
+                    inf.recording ? "rec" : "ok",
                     inf.recording ? "anything above 8 km/h"
                         : rbDef ? "press REC — a power cycle also starts it"
                                 : "press REC when the drive matters",
-                    inf.recording ? null : { label: "Start recording", call: "gpRecToggle()" });
+                    inf.recording ? null : { label: "Start recording", call: "gpRecToggle()" },
+                    false, !inf.recording);
 
                 /* Storage, said in minutes. Percent-full is not a unit anyone
                    plans a track day in. */
@@ -8102,10 +8417,13 @@
         }
 
         /* Worst-wins, with "not answered yet" ranking between good and bad —
-           it cannot say Ready, but it must not cry wolf either. */
+           it cannot say Ready, but it must not cry wolf either. Pinned rows
+           (the Recording status) sit outside this vote entirely — they are
+           the action you take once ready, not a fact that can be wrong. */
         function gpReadyVerdict(rows) {
             var bad = 0, warn = 0, wait = 0;
             rows.forEach(function (r) {
+                if (r.pin) return;
                 if (r.tone === "bad") bad++;
                 else if (r.tone === "warn") warn++;
                 else if (r.wait) wait++;
@@ -8114,10 +8432,13 @@
             return { tone: wait ? null : "ok", n: 0 };
         }
 
-        /* One line, and under it only what is WRONG. Expanded, everything that
-           was checked. Nine rows of mostly-fine was a panel you had to read to
-           learn nothing; this is a panel you read only when it has something
-           to say. */
+        /* One line, and under it only what is WRONG — plus the one row that
+           is always right to show: Recording, pinned, because "start the
+           recording" is the next thing to do on a good day, not a fault to
+           surface only when something else already is one. Expanded,
+           everything that was checked. Nine rows of mostly-fine was a panel
+           you had to read to learn nothing; this is a panel you read only
+           when it has something to say. */
         function gpReadyCardHtml() {
             var rows = gpReadyRows(), v = gpReadyVerdict(rows), trk = gpActiveTrack();
             var open = !!gp.readyOpen, title = "", sub = "";
@@ -8140,7 +8461,7 @@
                  "<span class='s'>" + (sub ? gpEsc(sub) + "  " : "") +
                  (open ? "▾" : "▸") + "</span></button>";
             var show = open ? rows : rows.filter(function (r) {
-                return r.tone === "warn" || r.tone === "bad";
+                return r.pin || r.tone === "warn" || r.tone === "bad";
             });
             if (show.length) {
                 h += "<div class='gp-rows'>";
@@ -9775,22 +10096,23 @@
                         g.fillStyle = lane.colour;
                         g.fillText(txt, GP_LANE_LBL - 6 - tw, ty);
                     });
-                } else
-                var LYp = gpLaneLayout();
-                gpLaneRows().forEach(function (lane, li) {
-                    if (lane.pending) return;
-                    var v = lane.get(pi);
-                    if (v === null || v === undefined || !isFinite(v)) return;
-                    var top = LYp.lanes[li].top;
-                    var txt = (lane.zero && v >= 0 ? "+" : "") + v.toFixed(lane.dp);
-                    g.font = "11px 'JetBrains Mono', monospace";
-                    var tw = g.measureText(txt).width;
-                    var bx = Math.min(px + 5, plotX + plotW - tw - 5);
-                    g.fillStyle = "rgba(8,9,10,0.88)";
-                    g.fillRect(bx - 3, top + 3, tw + 6, 14);
-                    g.fillStyle = lane.colour;
-                    g.fillText(txt, bx, top + 14);
-                });
+                } else {
+                    var LYp = gpLaneLayout();
+                    gpLaneRows().forEach(function (lane, li) {
+                        if (lane.pending) return;
+                        var v = lane.get(pi);
+                        if (v === null || v === undefined || !isFinite(v)) return;
+                        var top = LYp.lanes[li].top;
+                        var txt = (lane.zero && v >= 0 ? "+" : "") + v.toFixed(lane.dp);
+                        g.font = "11px 'JetBrains Mono', monospace";
+                        var tw = g.measureText(txt).width;
+                        var bx = Math.min(px + 5, plotX + plotW - tw - 5);
+                        g.fillStyle = "rgba(8,9,10,0.88)";
+                        g.fillRect(bx - 3, top + 3, tw + 6, 14);
+                        g.fillStyle = lane.colour;
+                        g.fillText(txt, bx, top + 14);
+                    });
+                }
             }
         }
 
@@ -11547,87 +11869,63 @@
                     if (rows[q].kph > hi) hi = rows[q].kph;
                 }
                 if (hi - lo < 5) hi = lo + 5;
-                value = function (idx) { return Math.round((rows[idx].kph - lo) / (hi - lo) * 12); };
-                colour = function (bkt) { return gpSpeedColour(bkt / 12); };
+                value = function (idx) { return Math.max(0, Math.min(1, (rows[idx].kph - lo) / (hi - lo))); };
+                colour = function (v) { return gpSpeedColour(v); };
             } else if (mode === "ref") {
                 var rate = gpDeltaRate();
                 var rspan = gpRateScale(rate);
-                value = function (idx) {
-                    var v = rate[idx - r.from] || 0;
-                    return Math.round(Math.max(-1, Math.min(1, v / rspan)) * 12);
-                };
+                value = function (idx) { return Math.max(-1, Math.min(1, (rate[idx - r.from] || 0) / rspan)); };
                 /* Losing time reads red, gaining green: the g-colour scale has
                    red at its negative end, so the rate goes in negated. */
-                colour = function (bkt) { return gpGColour(-bkt / 12, 1); };
+                colour = function (v) { return gpGColour(-v, 1); };
             } else {
-                value = function (idx) { return Math.round(Math.max(-1, Math.min(1, rows[idx].g / span)) * 12); };
-                colour = function (bkt) { return gpGColour(bkt / 12 * span, span); };
+                value = function (idx) { return Math.max(-1, Math.min(1, rows[idx].g / span)); };
+                colour = function (v) { return gpGColour(v * span, span); };
             }
 
             /* ---- drawn at the scale it is being LOOKED at --------------------
-               The line used to be split into one polyline per run of
-               same-coloured samples, at full 25 Hz resolution, with butt caps.
-               Zoomed in that is right: each run covers many pixels and the
-               colour boundaries are where the data says they are.
+               This used to round every sample into one of 25 discrete colour
+               "buckets", then merge same-bucket runs into flat blocks with a
+               hard seam at every boundary. Zoomed out, a value that idles
+               near a bucket edge flickers between two flat colours every few
+               samples, and the merged blocks turn that into a bead-chain —
+               a trace that reads as jittery dashes instead of one driven
+               line. Nothing was wrong with the data; rounding it first threw
+               away the gradient the colour ramps already know how to draw.
 
-               Zoomed out it fell apart. A lap is ~1,500 samples over a couple
-               of hundred pixels, so a run is a fraction of a pixel — and a
-               4 px wide stroke with butt caps, drawn a fraction of a pixel
-               long, several thousand times, at slightly different angles,
-               stacks up into a bead-chain with notches at every join. Nothing
-               was wrong with the data; it was being asked to draw detail
-               finer than the screen can hold.
-
-               So: decimate to the current scale, and never emit a run shorter
-               than a few pixels — merge it into its neighbour instead. The
-               colour of a merged run is the average of what went into it, so
-               a braking zone stays red rather than being dropped for being
-               brief. At high zoom the thresholds fall below the sample
-               spacing and this reduces to the old full-resolution path. */
+               So: no buckets. Decimate to about one point per screen pixel —
+               still necessary, since 1,500 raw samples is 1,500 seams no
+               screen can resolve — but carry the continuous mean value at
+               each kept point, and colour each short segment by the AVERAGE
+               of its own two ends. Neighbouring segments then differ by a
+               shade, not a step, and the whole lap fades smoothly instead of
+               strobing. */
             var mpp = gpMetresPerPixel();
             var stepM = mpp * 1.1;      /* keep a point about every pixel */
-            var minRunM = mpp * 5;      /* a colour run shorter than 5 px is noise at this scale */
             var SP = gpSmoothPath();
             var at = function (idx) { return SP ? SP[idx] : [rows[idx].lat, rows[idx].lon]; };
 
             /* Thin the samples to the screen's resolution, carrying the mean
-               colour bucket of everything each kept point stands for. */
+               value of everything each kept point stands for. */
             var keep = [], acc = 0, cnt = 0, run = 0;
             for (var i = r.from; i <= r.to; i++) {
                 acc += value(i); cnt++;
                 if (i > r.from) run += gpMetres(rows[i - 1], rows[i]);
                 if (i === r.from || i === r.to || run >= stepM) {
-                    keep.push({ i: i, b: acc / cnt });
+                    keep.push({ i: i, v: acc / cnt });
                     acc = 0; cnt = 0; run = 0;
                 }
             }
-            if (keep.length < 2) { keep = [{ i: r.from, b: value(r.from) }, { i: r.to, b: value(r.to) }]; }
+            if (keep.length < 2) { keep = [{ i: r.from, v: value(r.from) }, { i: r.to, v: value(r.to) }]; }
 
-            /* Group into colour runs, absorbing any run too short to be seen. */
-            var segs = [], cur = { from: 0, sum: keep[0].b, n: 1, m: 0 };
-            for (var q2 = 1; q2 < keep.length; q2++) {
-                var dM = gpMetres(rows[keep[q2 - 1].i], rows[keep[q2].i]);
-                var same = Math.round(keep[q2].b) === Math.round(cur.sum / cur.n);
-                if (same || cur.m < minRunM) {
-                    cur.sum += keep[q2].b; cur.n++; cur.m += dM;
-                } else {
-                    cur.to = q2; segs.push(cur);
-                    cur = { from: q2 - 1, sum: keep[q2].b, n: 1, m: dM };
-                }
-            }
-            cur.to = keep.length - 1; segs.push(cur);
-
-            segs.forEach(function (s) {
-                var seg = [];
-                for (var j = s.from; j <= s.to; j++) seg.push(at(keep[j].i));
-                if (seg.length < 2) return;
-                /* Round joins and caps: with runs now several pixels long the
-                   junction between two colours is a visible corner, and butt
-                   caps leave a notch in it at every direction change. */
-                L.polyline(seg, { color: colour(s.sum / s.n), weight: 4,
+            /* Round joins and caps so consecutive segments — each a shade
+               apart, not a colour apart — meet without a visible corner. */
+            for (var j = 1; j < keep.length; j++) {
+                var seg = [at(keep[j - 1].i), at(keep[j].i)];
+                L.polyline(seg, { color: colour((keep[j - 1].v + keep[j].v) / 2), weight: 4,
                                   opacity: 0.95, lineCap: "round", lineJoin: "round",
                                   smoothFactor: 1, renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
-            });
+            }
             gpSyncModeButtons();
             gpSyncScrub();
             gpDrawPlayhead();
@@ -11654,14 +11952,51 @@
             gpTcUpdate();
         }
 
-        /* Playback follows the car. Not by recentring on every sample — that
-           makes the whole map twitch under a stationary cursor and fights any
-           pan the user makes — but by keeping it inside the middle of the
-           view and recentring when it reaches the edge of that box. Zoom in
-           as far as you like and the car stays with you. */
+        /* Three ways to watch a replay, because "follow the car" is not one
+           preference: Lock centres it on every sample, for a fixed close-in
+           view of one corner. Auto — the old and still the default — keeps
+           it inside the middle of the view and only recentres at the edge,
+           so zooming in stays put under a stationary cursor instead of
+           twitching. Free never moves the map on its own at all, because
+           sometimes the point is to sit still and watch the whole circuit
+           while the marker crosses it. */
+        var GP_PLAYCAM_LS = "rdm7_gp_playcam";
+        var _gpPlayCamera = null;
+        function gpPlayCamera() {
+            if (_gpPlayCamera) return _gpPlayCamera;
+            var v = null;
+            try { v = window.localStorage.getItem(GP_PLAYCAM_LS); } catch (e) { }
+            _gpPlayCamera = (v === "lock" || v === "free") ? v : "auto";
+            return _gpPlayCamera;
+        }
+        window.gpCameraSet = function (v) {
+            if (v !== "lock" && v !== "auto" && v !== "free") return;
+            _gpPlayCamera = v;
+            try { window.localStorage.setItem(GP_PLAYCAM_LS, v); } catch (e) { }
+            gpSyncCamButtons();
+        };
+        /* One button, not three: the session map toolbar is a narrow strip
+           over a docked rail, and "My position / Lock / Auto / Free / Hide
+           map" would wrap or crowd off the edge. Click-to-cycle already has
+           a precedent here — the playback rate button does the same thing —
+           so the label just says which of the three is live. */
+        window.gpCameraCycle = function () {
+            var order = ["auto", "lock", "free"];
+            window.gpCameraSet(order[(order.indexOf(gpPlayCamera()) + 1) % order.length]);
+        };
+        function gpSyncCamButtons() {
+            var b = document.getElementById("gpBtnCam");
+            if (!b) return;
+            var m = gpPlayCamera();
+            b.textContent = m === "lock" ? "Lock" : m === "free" ? "Free" : "Auto";
+            b.classList.toggle("on", m !== "free");
+        }
+
         function gpFollowCar(ll) {
             if (!gp.map || gp.view !== "session" || !ll) return;
-            if (gp.followCar === false) return;
+            var mode = gpPlayCamera();
+            if (mode === "free") return;
+            if (mode === "lock") { gp.map.panTo(ll, { animate: false }); return; }
             var b = gp.map.getBounds(), c = gp.map.getCenter();
             var padY = (b.getNorth() - b.getSouth()) * 0.30;
             var padX = (b.getEast() - b.getWest()) * 0.30;
@@ -12609,8 +12944,13 @@
             if (gp.tilesOn) gp.tiles.addTo(gp.map);
             gp.carLayer = L.layerGroup().addTo(gp.map);
             gp.trail = L.polyline([], { color: "#7CC0FF", weight: 2, opacity: 0.55 }).addTo(gp.map);
-            /* Dragging the map is an explicit "stop following me". */
-            gp.map.on("dragstart", function () { if (gp.follow) window.gpToggleFollow(); });
+            /* Dragging the map is an explicit "stop following me" — in
+               Monitor that means the live-follow toggle, in Session it means
+               dropping to Free, whichever camera mode was driving it. */
+            gp.map.on("dragstart", function () {
+                if (gp.follow) window.gpToggleFollow();
+                if (gp.view === "session" && gpPlayCamera() !== "free") window.gpCameraSet("free");
+            });
             /* The drawn line is decimated to the CURRENT scale, so it has to be
                redrawn when the scale changes. Without this the line keeps
                whatever resolution it was built at and looks wrong at every
@@ -12647,6 +12987,28 @@
                 b.classList.toggle("on", !gp.tilesOn);
                 b.textContent = gp.tilesOn ? "Hide map" : "Show map";
             }
+        };
+
+        /* Docked (Session), the map used to always claim a ~252px square —
+           the single biggest thing squeezing the sessions/laps list into a
+           sliver. Collapsed by default: the same live position chip that
+           already existed, laid out as a bar instead of an overlay, with
+           the square one click away whenever it's actually wanted. */
+        var GP_MAPCOLLAPSE_LS = "rdm7_gp_mapcollapsed";
+        function gpMapCollapsed() {
+            var v = null;
+            try { v = window.localStorage.getItem(GP_MAPCOLLAPSE_LS); } catch (e) { }
+            return v === null ? true : v === "1";
+        }
+        window.gpMapCollapseToggle = function () {
+            if (gp.view !== "session") return;
+            var on = !gpMapCollapsed();
+            try { window.localStorage.setItem(GP_MAPCOLLAPSE_LS, on ? "1" : "0"); } catch (e) { }
+            var viewer = document.getElementById("gpViewer");
+            if (viewer) viewer.classList.toggle("gp-map-collapsed", on);
+            var b = document.getElementById("gpBtnMapCollapse");
+            if (b) b.classList.toggle("on", on);
+            if (!on && gp.map) setTimeout(function () { gp.map.invalidateSize({ animate: false }); }, 160);
         };
 
         /* Re-measure after the rail/stage splitter moves. Leaflet caches the
@@ -13017,12 +13379,21 @@
             var wrap = document.getElementById("gpMapWrap");
             var grid = document.getElementById("gpStage");
             var fb = document.getElementById("gpBtnFollow");
+            var cb = document.getElementById("gpBtnCam");
             var pb = document.getElementById("gpPlaybar");
             if (fb) fb.style.display = big ? "none" : "";
+            /* The camera-mode button is Session's own replacement for Follow —
+               Tracks has no playhead to follow, and Monitor already has
+               Follow for the live car. */
+            if (cb) { cb.style.display = gp.view === "session" ? "" : "none"; gpSyncCamButtons(); }
+            var mc = document.getElementById("gpBtnMapCollapse");
+            var collapsedNow = gp.view === "session" && gpMapCollapsed();
+            if (mc) { mc.style.display = gp.view === "session" ? "" : "none"; mc.classList.toggle("on", collapsedNow); }
             if (wrap) wrap.classList.toggle("tall", big);
             var viewer = document.getElementById("gpViewer");
             if (viewer) {
                 viewer.classList.toggle("tall", big);
+                viewer.classList.toggle("gp-map-collapsed", collapsedNow);
                 /* Setup has no use for a map at all. */
                 viewer.style.display = gp.view === "setup" ? "none" : "";
             }
@@ -14869,6 +15240,42 @@
             return "UTC" + s + String(Math.floor(a / 60)).padStart(2, "0") + ":" +
                    String(a % 60).padStart(2, "0");
         }
+        /* Same idea as GP_UNITS (km/h vs mph): a READING preference for the
+           hand-converted local-time spots below, stored on this PC, never
+           sent to the node. Session timestamps elsewhere already follow the
+           OS locale via toLocaleTimeString — this exists only where the
+           conversion is done by hand (an arbitrary tz_offset_min Intl can't
+           express), so those two spots don't silently disagree with it. */
+        var GP_TIMEFMT_LS = "rdm7_timefmt";
+        var _gpTimeFmt = null;
+        function gpTimeFmt() {
+            if (_gpTimeFmt) return _gpTimeFmt;
+            var v = null;
+            try { v = window.localStorage.getItem(GP_TIMEFMT_LS); } catch (e) { }
+            _gpTimeFmt = v === "12h" ? "12h" : "24h";
+            return _gpTimeFmt;
+        }
+        window.gpTimeFmtSet = function (v) {
+            if (v !== "12h" && v !== "24h") return;
+            _gpTimeFmt = v;
+            try { window.localStorage.setItem(GP_TIMEFMT_LS, v); } catch (e) { }
+            gpSyncTimeFmtBtns();
+            gpCanLiveUpdate();
+        };
+        function gpSyncTimeFmtBtns() {
+            var h24 = document.getElementById("gpBtnTime24"), h12 = document.getElementById("gpBtnTime12");
+            if (h24) h24.className = gpTimeFmt() === "24h" ? "on" : "";
+            if (h12) h12.className = gpTimeFmt() === "12h" ? "on" : "";
+        }
+        function gpFmtHM(h, m) {
+            var mm = String(m).padStart(2, "0");
+            if (gpTimeFmt() === "12h") {
+                var h12 = h % 12; if (h12 === 0) h12 = 12;
+                return h12 + ":" + mm + " " + (h < 12 ? "am" : "pm");
+            }
+            return String(h).padStart(2, "0") + ":" + mm;
+        }
+
         /* The node's own UTC, shifted. Shown next to the setting so the answer
            is checkable at a glance instead of on trust. */
         function gpNodeLocalTime() {
@@ -14877,8 +15284,16 @@
             var ms = Date.parse(s.utc);
             if (isNaN(ms)) return null;
             var d = new Date(ms + (gpN(gp.node.tz_offset_min) || 0) * 60000);
-            return String(d.getUTCHours()).padStart(2, "0") + ":" +
-                   String(d.getUTCMinutes()).padStart(2, "0");
+            return gpFmtHM(d.getUTCHours(), d.getUTCMinutes());
+        }
+
+        /* Same conversion, worded for the frame map: that table's Time block
+           is the one place raw UTC is unavoidable — it is what the wire
+           actually carries — so the aside next to its name is what stops an
+           hour that looks wrong from reading as a bug. */
+        function gpFrTzNoteText() {
+            var local = gpNodeLocalTime();
+            return local ? "wire carries UTC — reads " + local + " local" : "wire carries UTC";
         }
 
         function gpMountHtml() {
@@ -14945,7 +15360,13 @@
                             "</span>", sel) +
                    gpSetRow("Match this PC",
                             "<button class='ws-btn-line' style='width:144px' onclick='gpTzMatchPc()'>" +
-                            gpTzLabel(-new Date().getTimezoneOffset()) + "</button>");
+                            gpTzLabel(-new Date().getTimezoneOffset()) + "</button>") +
+                   gpSetRow("Clock",
+                            "<div class='ws-seg'>" +
+                            "<button id='gpBtnTime24' class='" + (gpTimeFmt() === "24h" ? "on" : "") +
+                            "' onclick=\"gpTimeFmtSet('24h')\">24h</button>" +
+                            "<button id='gpBtnTime12' class='" + (gpTimeFmt() === "12h" ? "on" : "") +
+                            "' onclick=\"gpTimeFmtSet('12h')\">12h</button></div>");
         }
 
         /* One row: label (with an optional second line) on the left, the
@@ -15336,7 +15757,9 @@
                       "' onchange='gpCanIdEdit(" + fr.off + ", this.value)'" +
                       " onkeydown='if(event.key===\"Enter\")this.blur()'>";
                 h += "<div class='fr" + (dim ? " dim" : "") + "'>" + idCell +
-                     "<span class='nm'>" + fr.name + "</span>" +
+                     "<span class='nm'>" + fr.name +
+                     (fr.off === 0x4 ? "<i id='gpFrTzNote'>" + gpFrTzNoteText() + "</i>" : "") +
+                     "</span>" +
                      "<span class='dl'>" + (fr.dlc || 8) + " bytes</span>" +
                      "<span class='hz'>" + rate + "</span></div>";
                 fr.s.forEach(function (sg, idx) {
@@ -15380,6 +15803,11 @@
                 var lc = gpNodeLocalTime();
                 var ltxt = lc ? "the node reads " + lc + " local" : "stored on the node";
                 if (tl.textContent !== ltxt) tl.textContent = ltxt;
+            }
+            var fz = document.getElementById("gpFrTzNote");
+            if (fz) {
+                var ftxt = gpFrTzNoteText();
+                if (fz.textContent !== ftxt) fz.textContent = ftxt;
             }
             var ctx = gpMapCtx();
             var patch = function (sg, key) {
