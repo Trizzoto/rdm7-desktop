@@ -7541,9 +7541,20 @@
             if (leading)
                 out += "NOTE " + leading + " channel sample(s) read 0 before that channel had ever reported\n";
 
-            /* The gates, so Circuit Tools opens with the track already set up
-               instead of asking someone to draw a start line over a satellite
-               photo they have never seen. Same geometry the puck timed with. */
+            /* The gates the puck timed with, in the format's own section.
+
+               Tested 2026-08-05 against Circuit Tools 3.2.120: it does NOT
+               read this on import. It identifies circuits from its own
+               location database and, failing that, says "Circuit Not
+               Recognised" and waits for a right-click → Set Start/Finish —
+               with or without this section, and whether it is written the way
+               we write it or byte-for-byte the way VBOX hardware writes it
+               (tested both, same result). So this does not save a step there.
+
+               It stays because it is part of the format, real hardware emits
+               it, other tools do read it, and it costs three lines. What must
+               not happen is a comment here claiming a convenience that was
+               measured not to exist. */
             var trk = gpActiveTrack();
             if (trk && trk.start_finish) {
                 var lt = gpVboGate("Start", trk.start_finish,
