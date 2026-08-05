@@ -7227,6 +7227,110 @@
             return { n: pts.length, metres: m, bytes: pts.length * 8 + 64 };
         }
 
+        /* ══════════════════════════════════════════════════════════════════
+         * RDMTRK — the outline as a device asset
+         *
+         * The dash stores this the way it stores an image: a named file in
+         * LittleFS, uploaded on its own, referenced by name from a widget.
+         * That is what makes pushing a track ONE action instead of re-pushing
+         * a whole layout — and it is why the human-readable name lives
+         * INSIDE the file rather than in the filename, which has to survive
+         * the device's own name rules (no dots, no slashes, 31 chars).
+         *
+         *   off  size  field
+         *     0     6  magic "RDMTRK"
+         *     6     1  u8  version   — the loader rejects anything it does
+         *                              not know, which RDMIMG cannot do
+         *                              because nothing ever reads its
+         *                              version byte
+         *     7     1  u8  flags     — bit0: the shape closes on itself
+         *     8    32  char name[32] — NUL-padded, what the dash prints
+         *    40     4  i32 lat0_1e7  — projection origin
+         *    44     4  i32 lon0_1e7
+         *    48     2  u16 n_points
+         *    50     2  u16 reserved  — pad, so the points land 4-ALIGNED.
+         *                              The ESP32-S3 would fault on an
+         *                              unaligned i32 read of the array.
+         *    52   8·n  i32 lat_1e7, i32 lon_1e7  × n_points
+         * ═════════════════════════════════════════════════════════════════ */
+        var GP_TRK_MAGIC = "RDMTRK";
+        var GP_TRK_VERSION = 1;
+        var GP_TRK_HEADER = 52;
+        var GP_TRK_NAME_LEN = 32;
+
+        /* The device's own name rules, applied here so the failure is visible
+           in Studio rather than as a 400 from the dash: no dots, no slashes,
+           no control characters, and short enough to survive `char name[32]`
+           AFTER percent-decoding. */
+        function gpTrackSlug(name) {
+            var s = String(name || "track")
+                .replace(/[^\w \-]+/g, "")     /* kills dots, slashes, controls */
+                .replace(/\s+/g, "_")
+                .replace(/^_+|_+$/g, "")
+                .slice(0, 31);
+            return s || "track";
+        }
+
+        /* UTF-8, truncated on a CHARACTER boundary. Cutting mid-sequence
+           would leave a partial code point the dash renders as a replacement
+           glyph — a track called "Nürburgring" should lose its tail, not turn
+           into mojibake. */
+        function gpTrkNameBytes(name) {
+            var full = new TextEncoder().encode(String(name || ""));
+            if (full.length <= GP_TRK_NAME_LEN - 1) return full;
+            var cut = GP_TRK_NAME_LEN - 1;
+            while (cut > 0 && (full[cut] & 0xC0) === 0x80) cut--;  /* back off continuation bytes */
+            return full.subarray(0, cut);
+        }
+
+        /* Is this shape a closed loop? Compared in METRES, not in degrees:
+           a traced loop closes exactly (the closing point is copied) but one
+           taken from a lap closes to wherever the car actually was, which is
+           a few metres out and still unambiguously a circuit. */
+        function gpOutlineClosed(pts) {
+            if (!pts || pts.length < 3) return false;
+            var a = { lat: pts[0][0], lon: pts[0][1] };
+            var b = { lat: pts[pts.length - 1][0], lon: pts[pts.length - 1][1] };
+            return gpMetres(a, b) < 25;
+        }
+
+        function gpTrackAssetBuild(t) {
+            var pts = t && t.outline && t.outline.pts;
+            if (!pts || pts.length < 2) return null;
+            var n = Math.min(pts.length, GP_OUTLINE_MAX);
+
+            /* Origin at the bounding-box centre, not the first point: the
+               tangent-plane error grows with distance from the origin, so
+               centring it halves the worst case — and the dash wants a centre
+               to fit the drawing around anyway. */
+            var la0 = pts[0][0], la1 = pts[0][0], lo0 = pts[0][1], lo1 = pts[0][1];
+            for (var i = 1; i < n; i++) {
+                if (pts[i][0] < la0) la0 = pts[i][0];
+                if (pts[i][0] > la1) la1 = pts[i][0];
+                if (pts[i][1] < lo0) lo0 = pts[i][1];
+                if (pts[i][1] > lo1) lo1 = pts[i][1];
+            }
+            var lat0 = Math.round((la0 + la1) / 2 * 1e7);
+            var lon0 = Math.round((lo0 + lo1) / 2 * 1e7);
+
+            var buf = new ArrayBuffer(GP_TRK_HEADER + n * 8);
+            var dv = new DataView(buf), u8 = new Uint8Array(buf);
+            for (var m = 0; m < GP_TRK_MAGIC.length; m++) u8[m] = GP_TRK_MAGIC.charCodeAt(m);
+            dv.setUint8(6, GP_TRK_VERSION);
+            dv.setUint8(7, gpOutlineClosed(pts) ? 1 : 0);
+            var nm = gpTrkNameBytes(t.name);
+            u8.set(nm, 8);                       /* rest stays 0 — NUL padding */
+            dv.setInt32(40, lat0, true);
+            dv.setInt32(44, lon0, true);
+            dv.setUint16(48, n, true);
+            dv.setUint16(50, 0, true);
+            for (var k = 0; k < n; k++) {
+                dv.setInt32(GP_TRK_HEADER + k * 8, Math.round(pts[k][0] * 1e7), true);
+                dv.setInt32(GP_TRK_HEADER + k * 8 + 4, Math.round(pts[k][1] * 1e7), true);
+            }
+            return u8;
+        }
+
         /* ---- where an outline comes from ---------------------------------
            The good source is a lap you already drove: it is the real line, at
            25 Hz, already in the right place on Earth, and it costs one click.
@@ -13620,6 +13724,58 @@
             gpBuildRail();
         };
 
+        /* What a shape can be pushed to right now, named the way the button
+           should read it. Null means nothing can take it. Offline counts:
+           the virtual dash serves the same routes, so a shape pushed there is
+           kept on this PC and can be transferred to a real dash later — which
+           is also what makes the whole flow testable with no hardware. */
+        function gpDashTarget() {
+            if (typeof RDM === "undefined" || !RDM.setTrackData) return null;
+            if (RDM.mode === "local") return "this PC";
+            return RDM.isDash && RDM.isDash() ? "the dash" : null;
+        }
+
+        /* Push the shape to the dash as a named asset.
+           Deliberately NOT gpSendTrack: that one talks to the PUCK and sends
+           gates so it can time laps. This talks to the DASH and sends an
+           outline so it can draw. Same track in Studio's library, two
+           consumers, two payloads, two transports — and a button that did
+           both would be a button nobody could reason about. */
+        window.gpOutlinePush = function () {
+            var t = gpActiveTrack();
+            if (!t || !t.outline) return;
+            /* The dash is the PRIMARY transport, not an attached role —
+               gpDash() is for a dash sitting alongside a puck. Going through
+               the RDM facade is also what makes Offline work: the virtual dash
+               serves the same /api/track/* routes, so a shape can be pushed,
+               kept and later transferred with no hardware present. */
+            if (!gpDashTarget()) {
+                gpSetMsg("gpOutlineMsg", "Nothing to push to. Connect the RDM-7 dash, or switch to Offline to keep it on this PC.", "warn");
+                return;
+            }
+            var bytes = gpTrackAssetBuild(t);
+            if (!bytes) {
+                gpSetMsg("gpOutlineMsg", "That shape is too short to send.", "warn");
+                return;
+            }
+            var slug = gpTrackSlug(t.name);
+            gpSetMsg("gpOutlineMsg", "Sending “" + gpEsc(slug) + "”···", "");
+            Promise.resolve(RDM.setTrackData(slug, gpB64(bytes))).then(function () {
+                /* Remember what it was pushed as: the widget on the dash
+                   references the SLUG, and a renamed track would otherwise
+                   leave someone hunting for why the map went blank. */
+                t.outline.pushed = slug;
+                t.outline.pushedAt = Date.now();
+                gpTracksSave();
+                gpSetMsg("gpOutlineMsg",
+                    "Sent. On the dash, set a Track Map widget's <b>Track</b> to “" +
+                    gpEsc(slug) + "”.", "ok");
+                gpRenderInspector();
+            }).catch(function (e) {
+                gpSetMsg("gpOutlineMsg", "Push failed: " + ((e && e.message) ? e.message : e), "bad");
+            });
+        };
+
         window.gpOutlineClear = function () {
             var t = gpActiveTrack();
             if (!t || !t.outline) return;
@@ -16376,6 +16532,7 @@
             } else {
                 if (ol && ol.pts && ol.pts.length > 1) {
                     var st = gpOutlineStats(ol);
+                    var slug = gpTrackSlug(t.name);
                     h += "<div class='gp-rows'>" +
                          gpReadyRow("Shape", "drawn", "ok",
                              ol.src === "lap" ? "taken from a driven lap" : "traced by hand") +
@@ -16383,6 +16540,14 @@
                              (st.bytes / 1024).toFixed(1) + " KB on the dash") +
                          gpReadyRow("Length", (st.metres / 1000).toFixed(2) + " km", null,
                              "around the drawn line") +
+                         /* The slug, always — it is what the widget on the dash
+                            has to be set to, and it is NOT the track's name once
+                            the name has a dot or an accent in it. */
+                         gpReadyRow("On the dash", ol.pushed ? gpEsc(ol.pushed) : "not sent",
+                             ol.pushed === slug ? "ok" : (ol.pushed ? "warn" : null),
+                             ol.pushed && ol.pushed !== slug
+                                 ? "renamed here since — push again as “" + gpEsc(slug) + "”"
+                                 : "as “" + gpEsc(slug) + "”") +
                          "</div>";
                 } else {
                     h += "<div class='ws-note'>No shape yet. The dash cannot draw this track until it has one.</div>";
@@ -16392,8 +16557,18 @@
                      (ol ? "Re-take from a lap" : "Take from a lap") + "</button>" +
                      "<button class='ws-btn-line' onclick='gpOutlineTrace(true)'>" +
                      (ol ? "Re-trace" : "Trace it") + "</button></div>";
-                if (ol)
+                if (ol) {
+                    var tgt = gpDashTarget();
+                    h += "<button class='ws-btn-line' style='margin-top:6px' onclick='gpOutlinePush()'" +
+                         (tgt ? "" : " disabled") + ">" +
+                         (ol.pushed ? "Push to " + gpEsc(tgt || "the dash") + " again"
+                                    : "Push to " + gpEsc(tgt || "the dash")) + "</button>";
+                    if (!tgt)
+                        h += "<div class='ws-note'>Connect the RDM-7 dash to push this shape to it, or switch to " +
+                             "<b>Offline</b> to keep it on this PC. The puck does not need it — it times laps " +
+                             "from the gates above.</div>";
                     h += "<button class='ws-btn-line' style='margin-top:6px' onclick='gpOutlineClear()'>Remove the shape</button>";
+                }
             }
             h += "<div class='gp-msg' id='gpOutlineMsg'></div>";
             h += "</div>";

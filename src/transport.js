@@ -71,13 +71,21 @@
 
     const _idb = (() => {
         const DB = 'rdm7_desktop_db';
-        const STORES = { images: 'image_data', fonts: 'font_data' };
+        const STORES = { images: 'image_data', fonts: 'font_data', tracks: 'track_data' };
+        /* Bumped to 2 for `track_data`. onupgradeneeded only fires when the
+           requested version EXCEEDS the stored one, so adding a store to the
+           map without moving this leaves every existing install without it —
+           and the failure is a NotFoundError deep inside a transaction, not
+           anywhere near the line that added the store. The loop below is
+           already additive, so an install at v1 gains the new store and keeps
+           its images and fonts. */
+        const DB_VERSION = 2;
         let _db = null;
 
         function open() {
             if (_db) return Promise.resolve(_db);
             return new Promise((res, rej) => {
-                const req = indexedDB.open(DB, 1);
+                const req = indexedDB.open(DB, DB_VERSION);
                 req.onupgradeneeded = () => {
                     const db = req.result;
                     for (const s of Object.values(STORES))
@@ -265,6 +273,41 @@
             await _idb.remove('images', name);
             try { localStorage.removeItem('rdm7_image_data_' + name); } catch (e) { }
             await this.removeImageMeta(name);
+        },
+
+        /* ── Track maps ──────────────────────────────────────────
+           The offline dash stores an .rdmtrk exactly the way the real one
+           does: bytes under a name, with the circuit's own name inside them.
+           Keeping the virtual dash honest here is what lets the whole push
+           flow be exercised with no hardware attached. */
+        async listTracks() {
+            const raw = localStorage.getItem('rdm7_tracks_assets');
+            return raw ? JSON.parse(raw) : [];
+        },
+
+        async _putTrackMeta(meta) {
+            let list = [];
+            try { const s = localStorage.getItem('rdm7_tracks_assets'); if (s) list = JSON.parse(s); } catch (e) { }
+            list = list.filter(t => (typeof t === 'string' ? t : t.name) !== meta.name);
+            list.push(meta);
+            localStorage.setItem('rdm7_tracks_assets', JSON.stringify(list));
+        },
+
+        async getTrackData(name) {
+            return await _idb.get('tracks', name) || null;
+        },
+
+        async setTrackData(name, b64, meta) {
+            await _idb.set('tracks', name, b64);
+            await this._putTrackMeta(Object.assign({ name }, meta || {}));
+        },
+
+        async deleteTrack(name) {
+            await _idb.remove('tracks', name);
+            let list = [];
+            try { const s = localStorage.getItem('rdm7_tracks_assets'); if (s) list = JSON.parse(s); } catch (e) { }
+            localStorage.setItem('rdm7_tracks_assets',
+                JSON.stringify(list.filter(t => (typeof t === 'string' ? t : t.name) !== name)));
         },
 
         /* ── Fonts ───────────────────────────────────────────────── */
@@ -573,6 +616,48 @@
                 await api('/api/image/delete?name=' + encodeURIComponent(name), {
                     method: 'POST',
                 });
+            },
+
+            /* ── Track maps ────────────────────────────────────── */
+            async listTracks() {
+                const r = await api('/api/track/list');
+                return Array.isArray(r) ? r : (r.tracks || []);
+            },
+
+            async getTrackData(name) {
+                const blob = await apiBlob('/api/track/data?name=' + encodeURIComponent(name));
+                return new Promise((res, rej) => {
+                    const reader = new FileReader();
+                    reader.onload = () => res(reader.result.split(',')[1]);
+                    reader.onerror = rej;
+                    reader.readAsDataURL(blob);
+                });
+            },
+
+            async setTrackData(name, b64) {
+                const binary = atob(b64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const url = baseUrl + '/api/track/upload?name=' + encodeURIComponent(name);
+                /* http_upload_binary hardcodes application/octet-stream and
+                   POSTs a raw byte array, so it is asset-type agnostic — no
+                   Rust change was needed for this path. */
+                if (_isTauri()) {
+                    await _tauriInvoke('http_upload_binary', {
+                        url, data: Array.from(bytes), timeout_ms: 30000,
+                    });
+                } else {
+                    await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/octet-stream' },
+                        body: bytes,
+                        signal: AbortSignal.timeout(30000),
+                    });
+                }
+            },
+
+            async deleteTrack(name) {
+                await api('/api/track/delete?name=' + encodeURIComponent(name), { method: 'POST' });
             },
 
             /* ── Fonts ─────────────────────────────────────────── */
@@ -981,6 +1066,29 @@
                 await rpc('image.delete', { name });
             },
 
+            /* ── Track maps ────────────────────────────────────── */
+            async listTracks() {
+                return await rpc('track.list') || [];
+            },
+
+            async getTrackData(name) {
+                return await _tauriInvoke('serial_download_base64', {
+                    downloadType: 'track', name,
+                });
+            },
+
+            async setTrackData() {
+                /* serial_commands_upload.c whitelists exactly image/font/ota.
+                   Refusing loudly here beats letting the node answer with an
+                   opaque rejection that surfaces as "upload failed" with no
+                   way to tell that the TRANSPORT, not the file, was wrong. */
+                throw new Error('Pushing a track over USB is not supported by this firmware yet — connect the dash over WiFi.');
+            },
+
+            async deleteTrack(name) {
+                await rpc('track.delete', { name });
+            },
+
             /* ── Fonts ─────────────────────────────────────────── */
             async listFonts() {
                 return await rpc('font.list') || [];
@@ -1373,6 +1481,16 @@
         }
         if (pathname === '/api/font/delete' && params.name) { await T.deleteFont(params.name); return ok(); }
         if (pathname === '/api/image/delete' && params.name) { await T.deleteImage(params.name); return ok(); }
+        if (pathname === '/api/track/list') return ok(await T.listTracks());
+        if (pathname === '/api/track/upload' && params.name) {
+            if (binBody && binBody.length) await T.setTrackData(params.name, _bytesToB64(binBody));
+            return ok();
+        }
+        if (pathname === '/api/track/data' && params.name) {
+            const b = await T.getTrackData(params.name);
+            return b ? _b64ToBytes(b) : notFound();
+        }
+        if (pathname === '/api/track/delete' && params.name) { await T.deleteTrack(params.name); return ok(); }
         if (pathname === '/api/signals/values') return ok({ signals: [] });
         /* Sim toggle. Without this the path fell through to the catch-all
          * `ok({ok:true})` at the bottom: the POST looked like it worked, but the
@@ -1401,7 +1519,10 @@
     /* Endpoint families that only a dash implements. On any other RDM node
      * these RPCs don't exist, so forwarding them just produces a stream of
      * "unknown method" errors from the editor's boot-time fetches. */
-    const _DASH_ONLY_API = /^\/api\/(layout|splash|image|font|signal|signals|fuel|sd|log|brightness|dimmer|ecu|indicator|warning|replay|gear|presets|screenshot|touch)\b/;
+    /* `track` belongs here: without it, a /api/track/* call made while a GPS
+       puck is attached gets forwarded to the PUCK, which answers "unknown
+       method" once per poll tick forever. */
+    const _DASH_ONLY_API = /^\/api\/(layout|splash|image|font|signal|signals|fuel|sd|log|brightness|dimmer|ecu|indicator|warning|replay|gear|presets|screenshot|touch|track)\b/;
 
     /* Replies for the editor's own background fetches while a non-dash node is
      * connected, so they degrade quietly instead of erroring every tick. */
@@ -1470,6 +1591,13 @@
         if (pathname === '/api/image/data' && params.name) { const b = await t.getImageData(params.name); return b ? _b64ToBytes(b) : null; }
         if (pathname === '/api/font/delete' && params.name) { await t.deleteFont(params.name); return { ok: true }; }
         if (pathname === '/api/image/delete' && params.name) { await t.deleteImage(params.name); return { ok: true }; }
+        if (pathname === '/api/track/list') return { tracks: await t.listTracks() };
+        if (pathname === '/api/track/upload' && params.name) {
+            if (binBody && binBody.length) await t.setTrackData(params.name, _bytesToB64(binBody));
+            return { ok: true };
+        }
+        if (pathname === '/api/track/data' && params.name) { const b = await t.getTrackData(params.name); return b ? _b64ToBytes(b) : null; }
+        if (pathname === '/api/track/delete' && params.name) { await t.deleteTrack(params.name); return { ok: true }; }
         if (pathname === '/api/storage/info') return t.getStorageInfo();
         if (pathname === '/api/signals/values') return t.getSignalValues();
         if (pathname === '/api/signal/simulate') {
@@ -1865,6 +1993,11 @@
         async getImageData(n) { return this._transport.getImageData(n); },
         async setImageData(n, d) { return this._transport.setImageData(n, d); },
         async deleteImage(n) { return this._transport.deleteImage(n); },
+
+        async listTracks() { return this._transport.listTracks(); },
+        async getTrackData(n) { return this._transport.getTrackData(n); },
+        async setTrackData(n, d, m) { return this._transport.setTrackData(n, d, m); },
+        async deleteTrack(n) { return this._transport.deleteTrack(n); },
 
         async listFonts() { return this._transport.listFonts(); },
         async addFontMeta(n) { return this._transport.addFontMeta(n); },
