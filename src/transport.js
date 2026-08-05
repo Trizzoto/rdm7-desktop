@@ -1077,12 +1077,19 @@
                 });
             },
 
-            async setTrackData() {
-                /* serial_commands_upload.c whitelists exactly image/font/ota.
-                   Refusing loudly here beats letting the node answer with an
-                   opaque rejection that surfaces as "upload failed" with no
-                   way to tell that the TRANSPORT, not the file, was wrong. */
-                throw new Error('Pushing a track over USB is not supported by this firmware yet — connect the dash over WiFi.');
+            async setTrackData(name, b64) {
+                const binary = atob(b64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                /* Same chunked session images and fonts use; the firmware's
+                   upload.start accepts type "track" as of the build that added
+                   serial_commands_tracks.c. A dash on a bench is on a cable,
+                   not on WiFi — this is the path that actually gets used. */
+                await _tauriInvoke('serial_upload_chunked', {
+                    uploadType: 'track',
+                    name,
+                    data: Array.from(bytes),
+                });
             },
 
             async deleteTrack(name) {
