@@ -1116,6 +1116,11 @@
         .gp-ready .ws-btn-line { margin-top: 7px; }
         .gp-ready-more { font-size: 9.5px; color: var(--text-muted); margin-top: 8px;
                          font-family: 'Sora', sans-serif; }
+        /* A track that carries a shape the dash can draw. Same gold as the
+           outline itself, so the badge and the line on the map are obviously
+           the same fact. */
+        .gp-shaped { width: 5px; height: 5px; border-radius: 50%; flex: none;
+                     background: #D4B06A; margin-left: 5px; display: inline-block; }
         /* ---- Tracks: the order of operations, said once ----------------------
            Three steps, struck through as each becomes true. It only exists
            while the track is unfinished, so a set-up track never carries
@@ -7093,6 +7098,22 @@
                 if (!t) return;
                 if (t.point_to_point === false) delete t.finish;
                 delete t.point_to_point;
+                /* An outline arrives from an import file or a hand-edited
+                   export as well as from this app, and it goes straight into
+                   L.polyline — which draws NOTHING for a malformed point and
+                   never throws, so a bad file would present as "the shape
+                   just doesn't appear" with no way to find out why. This is
+                   the one per-load hook, so it is where the shape is proved
+                   rather than assumed. */
+                if (t.outline) {
+                    var p = t.outline.pts;
+                    p = Array.isArray(p) ? p.filter(function (q) {
+                        return Array.isArray(q) && q.length === 2 &&
+                               isFinite(q[0]) && isFinite(q[1]) &&
+                               Math.abs(q[0]) <= 90 && Math.abs(q[1]) <= 180;
+                    }).slice(0, GP_OUTLINE_MAX) : [];
+                    if (p.length < 2) delete t.outline; else t.outline.pts = p;
+                }
             });
             return s;
         }
@@ -13086,6 +13107,11 @@
                Monitor that means the live-follow toggle, in Session it means
                dropping to Free, whichever camera mode was driving it. */
             gp.map.on("dragstart", function () {
+                /* …except while tracing an outline, where panning to reach the
+                   next corner is part of the job, not a statement about the
+                   camera. Without this, drawing a shape silently turns
+                   follow-me off. */
+                if (gp.tracing) return;
                 if (gp.follow) window.gpToggleFollow();
                 if (gp.view === "session" && gpPlayCamera() !== "free") window.gpCameraSet("free");
             });
@@ -14004,16 +14030,28 @@
                     var j = JSON.parse(rd.result);
                     var list = Array.isArray(j) ? j : (j && j.tracks);
                     if (!Array.isArray(list)) throw new Error("not a track file");
-                    var added = 0;
+                    var added = 0, skipped = 0;
                     list.forEach(function (t) {
-                        if (!t || !t.start_finish) return;
+                        /* A gate OR a shape is enough. Requiring a gate used
+                           to silently drop any track that had been traced but
+                           not yet timed — it exported fine, vanished on
+                           import, and reported "Imported 0 tracks" with
+                           nothing to explain it. Outline-only is a legal
+                           state everywhere else in the app, so it is legal
+                           here too. */
+                        if (!t || (!t.start_finish && !t.outline)) { skipped++; return; }
                         if (t.point_to_point === false) delete t.finish;
                         delete t.point_to_point;
                         t.id = gpTrackUid();
                         gp.tracks.tracks.push(t); added++;
                     });
+                    /* Normalise what just arrived: an imported outline has had
+                       no more validation than an imported anything else. */
+                    gpTracksNormalise(gp.tracks);
                     gpTracksSave(); gpBuildRail(); gpRenderInspector();
-                    gpSetMsg("gpTrackMsg", "Imported " + added + " track" + (added === 1 ? "" : "s") + ".", added ? "ok" : "warn");
+                    gpSetMsg("gpTrackMsg", "Imported " + added + " track" + (added === 1 ? "" : "s") +
+                        (skipped ? ", skipped " + skipped + " with neither a gate nor a shape" : "") + ".",
+                        added ? "ok" : "warn");
                 } catch (e) {
                     gpSetMsg("gpTrackMsg", "Import failed: " + e.message, "bad");
                 }
@@ -14130,9 +14168,14 @@
                 var onDash = live && live === t.name;
                 var tag = e.distM !== null ? gpFmtDistance(e.distM)
                         : (t.start_finish ? ((t.sectors || []).length + 1) + " sec" : "no line");
+                /* Which tracks the dash can actually draw is otherwise
+                   invisible from the list — you had to open each one. */
+                var shaped = !!(t.outline && t.outline.pts && t.outline.pts.length > 1);
                 h += "<button class='ws-item" + (on ? " on" : "") + "' data-gp-trk='" + gpEsc(t.id) + "'" +
-                     " title='" + gpEsc(t.name) + (e.distM !== null ? " — " + gpFmtDistance(e.distM) + " away" : "") + "'>" +
+                     " title='" + gpEsc(t.name) + (e.distM !== null ? " — " + gpFmtDistance(e.distM) + " away" : "") +
+                     (shaped ? " — has a shape the dash can draw" : "") + "'>" +
                      "<span class='st" + (onDash ? " on" : "") + "'></span>" + gpEsc(t.name) +
+                     (shaped ? "<i class='gp-shaped' title='has a shape'></i>" : "") +
                      "<span class='tag'>" + tag + "</span></button>";
             });
             h += "<div class='ws-rail-title'>Start from a circuit</div>";
