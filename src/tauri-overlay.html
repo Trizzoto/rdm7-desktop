@@ -2154,8 +2154,10 @@
         }
         #gpWorkspace .gp-splits tbody tr:hover td, #gpWorkspace .gp-chtab tbody tr:hover td { background: rgba(29,31,32,0.04); }
         #gpWorkspace .gp-splits tr.on td { background: rgba(29,31,32,0.06); }
-        #gpWorkspace .gp-splits td.p { color: var(--gpb-red-700); font-weight: 600; }
+        #gpWorkspace .gp-splits td.p { background: var(--gpb-red-100); color: var(--gpb-red-700); font-weight: 600; }
         #gpWorkspace .gp-splits tr.best td { background: var(--gpb-red-100); }
+        #gpWorkspace .gp-splits tr.on td:first-child { color: var(--gpb-red-700); }
+        #gpWorkspace .gp-splits tbody tr:hover td { filter: none; }
         #gpWorkspace .gp-seclegend { color: var(--gpb-muted); }
         #gpWorkspace .gp-seclegend b { color: var(--gpb-ink); }
 
@@ -2790,6 +2792,7 @@
             <div class="ws-rail" id="gpRail"></div>
             <div class="ws-stage" id="gpStageCol">
                 <div class="gp-hint" id="gpHint"></div>
+                <div class="gpb-ctx" id="gpCtx" style="display:none"></div>
                 <!-- Live position from the puck, plus the dash's track and
                      start/finish gate. Two devices, one picture — which is the
                      whole reason the transport registry exists.
@@ -9033,10 +9036,50 @@
            recordings and a real lap list were fighting for the same ~250px.
            Same content, same click targets, just each gets the full rail
            when it's the one being read. */
+        /* The context strip: whose drive this is, and what it came to
+           (design 2a). Rendered above the map in Analyse only. */
+        function gpRenderCtx() {
+            var el = document.getElementById("gpCtx");
+            if (!el) return;
+            var show = gp.view === "session" && gp.trace && gp.trace.length;
+            el.style.display = show ? "flex" : "none";
+            if (!show) { el.innerHTML = ""; return; }
+            var meNow = (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0];
+            var trk = gpActiveTrack();
+            var bits = [];
+            if (meNow) {
+                bits.push(gpSesDate(meNow.recordedAt));
+                if (meNow.driver) bits.push(meNow.driver);
+                if (meNow.car) bits.push(meNow.car);
+                bits.push("GPS 25 Hz" + (meNow.chanIds && meNow.chanIds.length
+                    ? " + " + meNow.chanIds.length + " CAN channel" + (meNow.chanIds.length === 1 ? "" : "s") : ""));
+            }
+            var laps = (gp.traceLaps || []).filter(function (l) { return !l.ghost; });
+            var times = laps.map(function (l) { return gpSecs(gp.trace, l.from, l.to); });
+            var tags = "";
+            if (times.length) {
+                var best = Math.min.apply(null, times);
+                tags += "<span class='gpb-tag red'>Session best " + gpLapTime(best) + "</span>";
+                var S = gpSessionSectors();
+                if (S && S.best && S.best.length > 1 && times.length > 1) {
+                    var ideal = S.best.reduce(function (a, b) { return a + b; }, 0);
+                    tags += "<span class='gpb-tag line'>Ideal " + gpLapTime(ideal) + "</span>";
+                }
+                if (times.length > 1) {
+                    var worst = Math.max.apply(null, times);
+                    tags += "<span class='gpb-tag grey'>Spread " + (worst - best).toFixed(2) + " s</span>";
+                }
+            }
+            el.innerHTML = "<h3>" + gpEsc(trk ? trk.name : (meNow ? meNow.name : "Recording")) + "</h3>" +
+                "<span class='m'>" + gpEsc(bits.join(" · ")) + "</span>" +
+                "<span class='sp'></span>" + tags;
+        }
+
         function gpBuildSessionRail(rail) {
             /* "Will this record laps?" is the question you have BEFORE the
                drive — it goes first. Recordings themselves live in the
                Sessions view now (ADR-0024); this rail is the lap picker. */
+            gpRenderCtx();
             var h = "<div id='gpReadyCard'></div>";
             var trk = gpActiveTrack();
             var meNow = (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0];
@@ -10658,18 +10701,18 @@
            picked them — so they cycle through a palette instead of each
            owning a named colour. Saturated and distinct at a glance, same
            idiom as the fixed lanes below. */
-        var GP_CHAN_COLOURS = ["#FF6FA8", "#5CE1C8", "#F0C93B", "#8E9CFF", "#FF9666", "#7BD9FF"];
+        var GP_CHAN_COLOURS = ["#b0316b", "#0f7a68", "#8a6d00", "#3f4bb8", "#b4551a", "#0b6f8f"];
 
         var GP_LANES = [
-            { id: "speed", label: "Speed", unit: function () { return gpSpdU(); }, dp: 0, colour: "#4FB3FF",
+            { id: "speed", label: "Speed", unit: function () { return gpSpdU(); }, dp: 0, colour: "#1d1f20",
               get: function (i) { return gpSpdN(gp.trace[i].kph); }, zero: false },
-            { id: "glong", label: "Braking / accel", unit: "g", dp: 2, colour: "#FFA23A",
+            { id: "glong", label: "Braking / accel", unit: "g", dp: 2, colour: "#c26a1e",
               get: function (i) { return gp.trace[i].g; }, zero: true },
-            { id: "glat", label: "Lateral", unit: "g", dp: 2, colour: "#CE86F5",
+            { id: "glat", label: "Lateral", unit: "g", dp: 2, colour: "#7d3fa8",
               get: function (i) { var c = gpChannels(); return c ? c.glat[i] : 0; }, zero: true },
-            { id: "yaw", label: "Yaw rate", unit: "\u00b0/s", dp: 0, colour: "#57D267",
+            { id: "yaw", label: "Yaw rate", unit: "\u00b0/s", dp: 0, colour: "#2e7d43",
               get: function (i) { var c = gpChannels(); return c ? c.yaw[i] : 0; }, zero: true },
-            { id: "delta", label: "Delta", unit: "s", dp: 2, colour: "#7CC0FF", zero: true,
+            { id: "delta", label: "Delta", unit: "s", dp: 2, colour: "#9c1a1f", zero: true,
               get: function (i) {
                   var d = gpDeltaSeries(); if (!d) return null;
                   var r = gpLapRange();
@@ -11103,20 +11146,20 @@
                than as one more thing inside a box. Near-black rather than a
                shade of the panel — a trace is only luminous if the thing
                behind it is not. */
-            g.fillStyle = "rgba(0,0,0,0.62)";
+            g.fillStyle = "rgba(255,255,255,0.60)";
             g.fillRect(plotX, 2, plotW, rackBottom - 2);
 
             /* Structure: the rule dividing names from traces, then a hairline
                between lanes, run across BOTH columns so the rack reads as one
                table rather than a list beside a chart. */
             g.lineWidth = hairV;
-            g.strokeStyle = "rgba(255,255,255,0.13)";
+            g.strokeStyle = "rgba(29,31,32,0.18)";
             g.beginPath();
             g.moveTo(snapX(plotX), 2); g.lineTo(snapX(plotX), rackBottom);
             g.stroke();
 
             g.lineWidth = hair;
-            g.strokeStyle = "rgba(255,255,255,0.07)";
+            g.strokeStyle = "rgba(29,31,32,0.09)";
             g.beginPath();
             for (var sep = 1; sep < rows.length; sep++) {
                 var ly = snapY(LY.lanes[sep].top - GP_LANE_GAP / 2);
@@ -11127,7 +11170,7 @@
             /* Gridlines under every trace, so the eye can run a tick straight
                down the stack. Only where there is a time axis to grid. */
             g.lineWidth = hairV;
-            g.strokeStyle = "rgba(255,255,255,0.08)";
+            g.strokeStyle = "rgba(29,31,32,0.08)";
             g.beginPath();
             ticks.forEach(function (tk) {
                 var tx = snapX(plotX + tk.frac * plotW);
@@ -11157,9 +11200,9 @@
                     var ty = snapT(14 + li * 13);
                     if (ty > rackBottom - 4) return;
                     var dim = live.indexOf(lane) < 0;
-                    g.fillStyle = dim ? "rgba(255,255,255,0.20)" : lane.colour;
+                    g.fillStyle = dim ? "rgba(29,31,32,0.20)" : lane.colour;
                     g.fillRect(6, ty - 7, 7, 7);
-                    g.fillStyle = dim ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.78)";
+                    g.fillStyle = dim ? "rgba(29,31,32,0.32)" : "rgba(29,31,32,0.80)";
                     g.font = "10px system-ui";
                     var lbl = lane.label.replace(/&amp;/g, "&");
                     var lu2 = typeof lane.unit === "function" ? lane.unit() : lane.unit;
@@ -11167,7 +11210,7 @@
                     g.fillText(lbl, 18, ty);
                 });
                 if (!live.length) {
-                    g.fillStyle = "rgba(255,255,255,0.30)";
+                    g.fillStyle = "rgba(29,31,32,0.40)";
                     g.font = "10px system-ui";
                     g.fillText(noData ? "" : "Nothing to plot yet.", plotX + 9, snapT(wellTop + wellH / 2));
                 }
@@ -11221,18 +11264,18 @@
                    not have — the source it is waiting on. Three facts in the
                    name column, one per place. Nothing that is not data ever
                    goes inside the well. */
-                g.fillStyle = absent ? "rgba(255,255,255,0.40)" : "rgba(255,255,255,0.74)";
+                g.fillStyle = absent ? "rgba(29,31,32,0.38)" : "rgba(29,31,32,0.82)";
                 g.font = "10px system-ui";
                 g.fillText(lane.label.replace(/&amp;/g, "&"), 6, snapT(top + 14));
-                g.fillStyle = "rgba(255,255,255,0.28)";
-                g.font = "9px system-ui";
+                g.fillStyle = "rgba(29,31,32,0.42)";
+                g.font = "9px 'Barlow', system-ui";
                 var lu = typeof lane.unit === "function" ? lane.unit() : lane.unit;
                 if (lu) g.fillText(lu, 6, snapT(top + 27));
 
                 if (lane.pending) {
                     var tag = "needs " + lane.pending;
-                    g.font = "8.5px 'JetBrains Mono', monospace";
-                    g.fillStyle = "rgba(255,255,255,0.30)";
+                    g.font = "8.5px 'Barlow', system-ui";
+                    g.fillStyle = "rgba(29,31,32,0.38)";
                     g.fillText(tag, plotX - 7 - g.measureText(tag).width, snapT(top + 27));
                 }
 
@@ -11244,7 +11287,7 @@
                        choosing something, which is worth saying where they
                        are looking. */
                     if (!noData && !lane.pending && lane.absentSay) {
-                        g.fillStyle = "rgba(255,255,255,0.30)";
+                        g.fillStyle = "rgba(29,31,32,0.42)";
                         g.font = "10px system-ui";
                         g.fillText(lane.absentSay, plotX + 9, snapT(mid + 3));
                     }
@@ -11260,7 +11303,7 @@
 
                 if (lane.zero) {
                     g.lineWidth = hair;
-                    g.strokeStyle = "rgba(255,255,255,0.17)";
+                    g.strokeStyle = "rgba(29,31,32,0.22)";
                     g.beginPath();
                     g.moveTo(plotX, snapY(y(0)));
                     g.lineTo(plotX + plotW, snapY(y(0)));
@@ -11315,8 +11358,8 @@
                    each other. Top of the scale sits on the lane's top line,
                    bottom of it on the lane's bottom line, so the numbers read
                    off the same edges they describe. */
-                g.fillStyle = "rgba(255,255,255,0.34)";
-                g.font = "8.5px 'JetBrains Mono', monospace";
+                g.fillStyle = "rgba(29,31,32,0.48)";
+                g.font = "8.5px 'Barlow', system-ui";
                 /* toFixed keeps the sign of a negative zero, so a stationary
                    car labels its speed lane "0" over "-0". */
                 var nz = function (v) { return v === 0 ? 0 : v; };
@@ -11329,8 +11372,8 @@
             /* Axis labels below the stack. The first is anchored left and the
                last right, so neither hangs off the end of the plot. */
             var step = ticks.length > 1 ? ticks[1].s - ticks[0].s : 1;
-            g.fillStyle = "rgba(255,255,255,0.38)";
-            g.font = "9px 'JetBrains Mono', monospace";
+            g.fillStyle = "rgba(29,31,32,0.52)";
+            g.font = "9px 'Barlow', system-ui";
             ticks.forEach(function (tk, ti) {
                 var tx = plotX + tk.frac * plotW;
                 var lab = gpAxisLabel(tk.s, step);
@@ -11345,8 +11388,8 @@
                statement of why the whole rack is empty — said once, in the
                place that answers "what is the x-axis showing", instead of
                repeated into every lane. */
-            g.fillStyle = "rgba(255,255,255,0.30)";
-            g.font = "9px system-ui";
+            g.fillStyle = "rgba(29,31,32,0.45)";
+            g.font = "9px 'Barlow', system-ui";
             g.fillText(noData ? "no recording loaded"
                               : gp.liveMode ? "live · last " + GP_LIVE_SECS + " s"
                               : (gp.stripZoom ? "corner" : "lap"),
@@ -11444,7 +11487,7 @@
                    playhead that straddles two pixel columns reads as a soft
                    blue band rather than a cursor. */
                 var pxs = (Math.round(px * wDev / w) + 0.5) / (wDev / w);
-                g.strokeStyle = "rgba(124,192,255,0.92)";
+                g.strokeStyle = "rgba(29,31,32,0.85)";
                 g.lineWidth = w / wDev;
                 g.beginPath(); g.moveTo(pxs, 2); g.lineTo(pxs, h - GP_AXIS_H); g.stroke();
 
@@ -11452,12 +11495,12 @@
                    thing you actually want when scrubbing a timeline. */
                 var el = gpSecs(gp.trace, rng.from, pi);
                 var lab = gpAxisLabel(el, 0.5);
-                g.font = "9.5px 'JetBrains Mono', monospace";
+                g.font = "9.5px 'Barlow', system-ui";
                 var lw = g.measureText(lab).width;
                 var lx = Math.max(GP_LANE_LBL, Math.min(px - lw / 2, w - 6 - lw));
-                g.fillStyle = "rgba(124,192,255,0.95)";
+                g.fillStyle = "rgba(29,31,32,0.92)";
                 g.fillRect(lx - 3, h - GP_AXIS_H + 1, lw + 6, 12);
-                g.fillStyle = "#0c0e10";
+                g.fillStyle = "#f2f2f3";
                 g.fillText(lab, lx, h - GP_AXIS_H + 10);
 
                 /* Combined puts every reading in the legend gutter instead of
@@ -11471,9 +11514,9 @@
                         var v = lane.get(pi);
                         if (v === null || v === undefined || !isFinite(v)) return;
                         var txt = (lane.zero && v >= 0 ? "+" : "") + v.toFixed(lane.dp);
-                        g.font = "10px 'JetBrains Mono', monospace";
+                        g.font = "10px 'Barlow', system-ui";
                         var tw = g.measureText(txt).width;
-                        g.fillStyle = "rgba(8,9,10,0.88)";
+                        g.fillStyle = "rgba(255,255,255,0.92)";
                         g.fillRect(GP_LANE_LBL - 9 - tw, ty - 9, tw + 6, 12);
                         g.fillStyle = lane.colour;
                         g.fillText(txt, GP_LANE_LBL - 6 - tw, ty);
@@ -11486,10 +11529,10 @@
                         if (v === null || v === undefined || !isFinite(v)) return;
                         var top = LYp.lanes[li].top;
                         var txt = (lane.zero && v >= 0 ? "+" : "") + v.toFixed(lane.dp);
-                        g.font = "11px 'JetBrains Mono', monospace";
+                        g.font = "11px 'Barlow', system-ui";
                         var tw = g.measureText(txt).width;
                         var bx = Math.min(px + 5, plotX + plotW - tw - 5);
-                        g.fillStyle = "rgba(8,9,10,0.88)";
+                        g.fillStyle = "rgba(255,255,255,0.92)";
                         g.fillRect(bx - 3, top + 3, tw + 6, 14);
                         g.fillStyle = lane.colour;
                         g.fillText(txt, bx, top + 14);
@@ -11549,13 +11592,13 @@
                eye — a navigator that does not line up with what it navigates
                is a second thing to mentally align rather than a control. */
             var plotX = GP_LANE_LBL, plotW = w - GP_LANE_LBL - 6;
-            g.fillStyle = "rgba(0,0,0,0.62)";
+            g.fillStyle = "rgba(255,255,255,0.60)";
             g.fillRect(plotX, 2, plotW, GP_NAV_H - 4);
 
-            g.fillStyle = "rgba(255,255,255,0.40)";
-            g.font = "9px system-ui";
+            g.fillStyle = "rgba(29,31,32,0.55)";
+            g.font = "9px 'Barlow', system-ui";
             g.fillText(gpRunWord(true) + (gp.selLap >= 0 ? " " + (gp.selLap + 1) : ""), 6, 15);
-            g.fillStyle = "rgba(255,255,255,0.26)";
+            g.fillStyle = "rgba(29,31,32,0.35)";
             g.fillText("drag to move", 6, 27);
 
             /* Speed is the shape everyone recognises a lap by — the straights
@@ -11569,7 +11612,7 @@
             }
             if (!(hi > lo)) { lo = 0; hi = 1; }
             var cols = Math.max(1, Math.round(plotW * sx));
-            g.strokeStyle = "rgba(120,170,215,0.85)";
+            g.strokeStyle = "rgba(29,31,32,0.42)";
             g.lineWidth = 1 / sx;
             g.lineCap = "butt";
             g.beginPath();
@@ -11597,7 +11640,7 @@
                starts. */
             var marks = gp.selLap >= 0 ? gpSectorMarks(lap) : null;
             if (marks && marks.length) {
-                g.strokeStyle = "rgba(255,255,255,0.22)";
+                g.strokeStyle = "rgba(29,31,32,0.30)";
                 g.lineWidth = 1 / sx;
                 g.beginPath();
                 marks.forEach(function (ci) {
@@ -11613,15 +11656,15 @@
                which is what it is. */
             var win = gpNavWin();
             var xa = plotX + win.a * plotW, xb = plotX + win.b * plotW;
-            g.fillStyle = "rgba(6,8,10,0.62)";
+            g.fillStyle = "rgba(242,242,243,0.78)";
             if (xa > plotX) g.fillRect(plotX, 2, xa - plotX, GP_NAV_H - 4);
             if (xb < plotX + plotW) g.fillRect(xb, 2, plotX + plotW - xb, GP_NAV_H - 4);
-            g.strokeStyle = "rgba(124,192,255,0.85)";
+            g.strokeStyle = "rgba(210,35,42,0.90)";
             g.lineWidth = 1 / sx;
             g.strokeRect((Math.round(xa * sx) + 0.5) / sx, 2.5,
                          Math.max(2 / sx, xb - xa), GP_NAV_H - 5);
             /* Grab handles, so the edges look like edges you can take hold of. */
-            g.fillStyle = "rgba(124,192,255,0.85)";
+            g.fillStyle = "rgba(210,35,42,0.90)";
             g.fillRect(xa - 1, GP_NAV_H / 2 - 7, 2, 14);
             g.fillRect(xb - 1, GP_NAV_H / 2 - 7, 2, 14);
 
@@ -11629,7 +11672,7 @@
                readable against each other. */
             if (gp.playIdx >= lap.from && gp.playIdx <= lap.to) {
                 var pxn = plotX + (gp.playIdx - lap.from) / span * plotW;
-                g.strokeStyle = "rgba(255,255,255,0.55)";
+                g.strokeStyle = "rgba(29,31,32,0.60)";
                 g.beginPath();
                 g.moveTo((Math.round(pxn * sx) + 0.5) / sx, 2);
                 g.lineTo((Math.round(pxn * sx) + 0.5) / sx, GP_NAV_H - 2);
@@ -12229,11 +12272,18 @@
                    Math.round(150 + 90 * k2) + "," + Math.round(150 - 110 * k2) + ")";
         }
 
-        /* Sequential ramp for the speed view: cool blue at the slow end,
-           through green and amber, to red flat out. */
+        /* Sequential ramp for the speed view: the brand's red tonal ramp,
+           light at the slow end, near-black red flat out (ADR-0024). One hue,
+           so speed reads as intensity rather than as a rainbow. */
+        var GP_SPEED_RAMP = [[245,175,170],[236,129,123],[221,75,69],[192,32,38],[156,26,31],[110,19,23],[68,12,15]];
         function gpSpeedColour(x) {
             x = Math.max(0, Math.min(1, x));
-            return "hsl(" + Math.round(215 - 200 * x) + ", 75%, " + Math.round(42 + 14 * x) + "%)";
+            var f = x * (GP_SPEED_RAMP.length - 1);
+            var i = Math.min(GP_SPEED_RAMP.length - 2, Math.floor(f));
+            var t = f - i, a = GP_SPEED_RAMP[i], b = GP_SPEED_RAMP[i + 1];
+            return "rgb(" + Math.round(a[0] + (b[0] - a[0]) * t) + "," +
+                            Math.round(a[1] + (b[1] - a[1]) * t) + "," +
+                            Math.round(a[2] + (b[2] - a[2]) * t) + ")";
         }
 
         /* "vs Ref" only means something with a lap and a comparison chosen;
@@ -13220,7 +13270,7 @@
                 var tp = [], TP = gpSmoothPath();
                 for (var tq = 0; tq < gp.trace.length; tq += 2)
                     tp.push(TP ? TP[tq] : [gp.trace[tq].lat, gp.trace[tq].lon]);
-                L.polyline(tp, { color: "#7CC0FF", weight: 3, opacity: 0.55,
+                L.polyline(tp, { color: gp.tilesOn ? "#f2f2f3" : "#5d5d60", weight: 3, opacity: 0.7,
                                  renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
                 return;
             }
@@ -13237,7 +13287,7 @@
             if (gp.cmpLap >= 0 && gp.traceLaps[gp.cmpLap] && gp.cmpLap !== gp.selLap) {
                 var c = gp.traceLaps[gp.cmpLap], pts = [], P = gpSmoothPath();
                 for (var k = c.from; k <= c.to; k++) pts.push(P ? P[k] : [rows[k].lat, rows[k].lon]);
-                L.polyline(pts, { color: "#7CC0FF", weight: 5, opacity: 0.5,
+                L.polyline(pts, { color: gp.tilesOn ? "#f2f2f3" : "#98989b", weight: 5, opacity: 0.55,
                                   renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
             }
 
@@ -13402,7 +13452,7 @@
             if (!ll) return;
             if (!gp.playMarker) {
                 gp.playMarker = L.circleMarker(ll, {
-                    radius: 6, color: "#fff", weight: 2, fillColor: "#7CC0FF", fillOpacity: 1
+                    radius: 6, color: "#fff", weight: 2, fillColor: "#d2232a", fillOpacity: 1
                 }).addTo(gp.traceLayer);
             } else {
                 gp.playMarker.setLatLng(ll);
@@ -14325,7 +14375,7 @@
             });
             if (gp.tilesOn) gp.tiles.addTo(gp.map);
             gp.carLayer = L.layerGroup().addTo(gp.map);
-            gp.trail = L.polyline([], { color: "#7CC0FF", weight: 2, opacity: 0.55 }).addTo(gp.map);
+            gp.trail = L.polyline([], { color: "#d2232a", weight: 2.5, opacity: 0.75 }).addTo(gp.map);
             /* Dragging the map is an explicit "stop following me" — in
                Monitor that means the live-follow toggle, in Session it means
                dropping to Free, whichever camera mode was driving it. */
@@ -15042,6 +15092,7 @@
             gpDrawTrace();
             gpStripBind(); gpNavBind(); gpDrawStrip();
             gpBuildRail();
+            gpRenderCtx();
             /* Gates are drawn in ONE place: the Tracks editor. */
             gpDrawEditor();
             gpDrawCornerBadges();
