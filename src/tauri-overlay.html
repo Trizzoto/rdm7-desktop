@@ -2418,7 +2418,10 @@
 
         /* corners view */
         #gpWorkspace .gpb-cornerswrap { display: flex; flex: 1; min-height: 0; }
-        #gpWorkspace .gpb-cornersmap { width: 42%; min-width: 320px; border-right: 1px solid var(--gpb-div); display: flex; flex-direction: column; padding: 12px; gap: 8px; }
+        #gpWorkspace .gpb-cornersmap { width: 340px; flex-shrink: 0; border-right: 1px solid var(--gpb-div); display: flex; flex-direction: column; padding: 12px; gap: 8px; }
+        @media (min-width: 1500px) { #gpWorkspace .gpb-cornersmap { width: 440px; } }
+        @media (min-width: 1900px) { #gpWorkspace .gpb-cornersmap { width: 540px; } }
+        #gpWorkspace .gpb-ab .sw select { border: none; background: transparent; font: inherit; font-weight: 600; padding: 0; max-width: 220px; color: inherit; cursor: pointer; }
         #gpWorkspace .gpb-cornersmap .gp-viewer { flex: 1; min-height: 0; margin: 0; }
         #gpWorkspace .gpb-corners { flex: 1; min-width: 0; overflow: auto; padding: 12px 16px 16px; }
         #gpWorkspace .gpb-cornlegend { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--gpb-muted); }
@@ -9404,19 +9407,31 @@
             var avail = ranked.filter(function (o) { return o.total_s > 0; })
                               .reduce(function (a, o) { return a + o.total_s; }, 0);
             var h = "";
-            /* the A/B strip: what is being analysed against what */
+            /* the A/B strip: what is being analysed against what — both are
+               pickable right here (design 4a's "Analyse L3 against best") */
+            var lapOpts = function (cur, skipGhost) {
+                var o = "";
+                gp.traceLaps.forEach(function (l, i) {
+                    if (l.ghost && skipGhost) return;
+                    var lbl = l.ghost ? gpEsc(gpRefName()) : word + " " + (i + 1);
+                    o += "<option value='" + i + "'" + (i === cur ? " selected" : "") + ">" +
+                         lbl + " · " + gpLapTime(gpSecs(gp.trace, l.from, l.to)) + "</option>";
+                });
+                return o;
+            };
             h += "<div class='gpb-ab' style='padding:0 0 10px;border-bottom:1px solid var(--gpb-div)'>" +
-                 "<span class='w'>Analyse</span><span class='sw'>" + word + " " + (gp.selLap + 1) +
-                 " · " + gpLapTime(selT) + "</span>" +
-                 "<span class='w'>against</span><span class='sw ink'>" + gpEsc(gpRefName()) +
-                 " · " + gpLapTime(gpSecs(gp.trace, refLap.from, refLap.to)) + "</span>" +
+                 "<span class='w'>Analyse</span>" +
+                 "<span class='sw'><select data-gp-csel>" + lapOpts(gp.selLap, true) + "</select></span>" +
+                 "<span class='w'>against</span>" +
+                 "<span class='sw ink'><select data-gp-cref>" + lapOpts(gp.cmpLap, false) + "</select></span>" +
                  "<span class='gpb-tag red gpb-avail'>" + avail.toFixed(2) + " s available" +
                  (ranked.length && ranked[0].total_s > 0 ? " · " + ranked[0].total_s.toFixed(2) + " s in one corner" : "") +
                  "</span></div>";
             h += "<table class='gpb-table' style='margin-top:10px'><thead><tr>" +
                  "<th>Rank</th><th>Corner</th><th class='n'>Time lost</th>" +
-                 "<th class='n'>Min speed</th><th class='n'>Ref</th><th class='n'>Brake point</th>" +
-                 "<th style='width:150px'>Opportunity</th><th>What to change</th></tr></thead><tbody>";
+                 "<th class='n' title='slowest point through the corner, this " + gpRunWord() + " then the reference'>Min speed</th>" +
+                 "<th class='n'>Brake point</th>" +
+                 "<th style='width:96px'>Opportunity</th><th style='min-width:150px'>What to change</th></tr></thead><tbody>";
             var mx = Math.max(0.01, ranked[0] ? ranked[0].total_s : 0);
             ranked.forEach(function (o, ri) {
                 var lost = o.total_s;
@@ -9433,13 +9448,13 @@
                 var hot = o.n === gp.cornerSel;
                 h += "<tr class='" + (hot ? "hot" : "") + "' data-gp-corner='" + o.n + "' style='cursor:pointer'>" +
                      "<td class='" + (ri === 0 && lost > 0.03 ? "red" : "mut") + "'>" + (ri + 1) + "</td>" +
-                     "<td>Turn " + o.n + "</td>" +
+                     "<td style='white-space:nowrap'>Turn " + o.n + "</td>" +
                      "<td class='n " + (lost > 0.08 ? "red" : gain ? "" : "mut") + "'" +
                      (gain ? " style='color:var(--gpb-ok)'" : "") + ">" +
                      (lost > 0 ? "+" : "") + lost.toFixed(2) + "</td>" +
-                     "<td class='n'>" + (minSel === null ? "—" : minSel) + "</td>" +
-                     "<td class='n mut'>" + (minRef === null ? "—" : minRef) + "</td>" +
-                     "<td class='n mut'>" + brake + "</td>" +
+                     "<td class='n' style='white-space:nowrap'>" + (minSel === null ? "—" : minSel) +
+                     (minRef === null ? "" : " <span style='color:var(--gpb-muted)'>· " + minRef + "</span>") + "</td>" +
+                     "<td class='n mut' style='white-space:nowrap'>" + brake + "</td>" +
                      "<td><span style='display:block;height:6px;background:var(--gpb-n200)'>" +
                      "<i style='display:block;height:100%;width:" + barW + "%;background:" +
                      (lost > 0.25 ? "var(--gpb-red)" : lost > 0.08 ? "var(--gpb-red-400)" : "var(--gpb-n400)") +
@@ -9467,6 +9482,18 @@
                     window.gpCornerPick(parseInt(tr.getAttribute("data-gp-corner"), 10));
                 });
             });
+            var csel = el.querySelector("[data-gp-csel]"), cref = el.querySelector("[data-gp-cref]");
+            var reroll = function () {
+                gp.cornerSel = null;
+                gpDrawTrace(); gpDrawCornerBadges();
+                gpRenderCorners(); gpRenderInspector();
+            };
+            if (csel) csel.addEventListener("change", function () {
+                window.gpSelectLap(csel.value); reroll();
+            });
+            if (cref) cref.addEventListener("change", function () {
+                window.gpCompareLap(parseInt(cref.value, 10)); reroll();
+            });
         }
 
         window.gpCornerToAnalyse = function () {
@@ -9489,8 +9516,8 @@
             var lost = o.total_s;
             var h = "<h2>Turn " + o.n + "</h2>" +
                     "<div class='ws-sub'>vs " + gpEsc(gpRefName()) + "</div>";
-            h += "<div style='display:flex;align-items:baseline;gap:8px;margin:8px 0 2px'>" +
-                 "<span style='font-family:var(--gpb-head);font-weight:600;font-size:30px;line-height:1;color:" +
+            h += "<div style='display:flex;align-items:baseline;gap:8px;margin:8px 0 2px;flex-wrap:nowrap'>" +
+                 "<span style='font-family:var(--gpb-head);font-weight:600;font-size:30px;line-height:1;white-space:nowrap;color:" +
                  (lost > 0.03 ? "var(--gpb-red-700)" : "var(--gpb-ok)") + ";font-variant-numeric:tabular-nums'>" +
                  (lost > 0 ? "+" : "") + lost.toFixed(2) + " s</span>" +
                  "<span class='gp-ses-n'>" + (lost > 0.03 ? "lost in this corner" : lost < -0.03 ? "gained here" : "level") + "</span></div>";
@@ -9525,8 +9552,10 @@
                  "</div></div>";
             var rx = gpPrescribe(o);
             if (rx && lost > 0.03) {
+                /* rx.why is a fragment for the coach card header; the note
+                   reads as one sentence, so it carries only the advice. */
                 h += "<div class='ws-grp'><div class='gpb-coachnote'><span class='k'>Coaching note</span>" +
-                     "<p>" + gpEsc(rx.why) + " " + gpEsc(rx.try) + "</p></div></div>";
+                     "<p>" + gpEsc(rx.try) + "</p></div></div>";
             }
             h += "<button class='ws-btn-line' style='margin-top:10px' onclick='gpCornerToAnalyse()'>Watch it in Analyse</button>";
             box.innerHTML = h;
@@ -13310,7 +13339,7 @@
                                  renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
                 return;
             }
-            if (gp.view !== "session") return;
+            if (gp.view !== "session" && gp.view !== "corners") return;
 
             /* Canvas, not SVG: 30,000 points of SVG path is a slideshow. */
             if (!gp._canvasRenderer) gp._canvasRenderer = L.canvas({ padding: 0.3 });
@@ -15143,10 +15172,20 @@
                 viewer.style.display = mapless ? "none" : "";
             }
             var railEl = document.getElementById("gpRail");
-            if (railEl) railEl.classList.remove("gp-onecol");
+            if (railEl) {
+                railEl.classList.remove("gp-onecol");
+                /* Corners is map + table + detail (design 4a): the lap and the
+                   reference are picked in the strip above the table, so the
+                   rail would only repeat them. */
+                railEl.style.display = view === "corners" ? "none" : "";
+                var split = railEl.nextElementSibling;
+                if (split && split.classList.contains("ws-split"))
+                    split.style.display = view === "corners" ? "none" : "";
+            }
             /* BEFORE gpBuildRail below: rail rebuilds by innerHTML would take
                a docked map's DOM with it. */
             gpDockViewer(view === "corners" ? "corners" : "stage");
+            gpCurCardUpdate();
             /* The report column: hidden only on the Sessions library. */
             var insp = document.getElementById("gpInspector");
             if (insp) insp.style.display = view === "sessions" ? "none" : "";
