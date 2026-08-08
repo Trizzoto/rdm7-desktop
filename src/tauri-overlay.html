@@ -2296,7 +2296,12 @@
 
         /* Analyse: the map rides above the rack at a working height (2a);
            Corners: the map fills its own left column (4a). */
-        #gpWorkspace .gp-viewer.analyse { flex: 0 1 auto; margin: 10px 14px 0; }
+        /* flex:none, NOT 0 1 auto — the base .gp-viewer sets flex-shrink:0 for
+           a reason the original comment spells out: when the rack is tall the
+           map is what gets squeezed, and it collapses to a 40 px sliver with
+           nothing overflowing to scroll. The rack shrinks instead (gpFitLaneH
+           clamps lane height 34–92 px and the stage column scrolls). */
+        #gpWorkspace .gp-viewer.analyse { flex: none; margin: 10px 14px 0; }
         #gpWorkspace .gp-viewer.analyse .gp-mapwrap { display: flex; flex-direction: column; }
         #gpWorkspace .gp-viewer.analyse #gpMap { height: 32vh; min-height: 200px; }
         #gpWorkspace .gp-viewer.incorners { margin: 0; flex: 1; min-height: 0; }
@@ -8829,7 +8834,11 @@
                     t2b.sort(function (a, b) { return a[0] - b[0]; });
                     gp.selLap = t2b.length > 1 ? t2b[1][1] : t2b[0][1];
                 }
-                gp.playIdx = 0;
+                /* The playhead belongs to the lap that was just selected, not
+                   to sample 0 — a cursor parked outside the selected range
+                   reads the wrong speed and indexes the delta series out of
+                   bounds, so the at-cursor card loses its Δ entirely. */
+                gp.playIdx = gpLapRange().from;
                 /* The card must agree with what just split. An imported file
                    carries whatever its exporter knew (often "0 laps"), and a
                    session saved before a start line existed splits
