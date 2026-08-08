@@ -19974,11 +19974,15 @@
 
 ##[ block import-rdm-tail ]##
 ##[ anchor ]##
+                    updateStatus('Failed to import .rdm: ' + err.message, true);
+                    showToast('Import failed: ' + err.message, 'error');
                 }
             };
             input.click();
         }
 ##[ replace-with ]##
+                    updateStatus('Failed to import .rdm: ' + err.message, true);
+                    showToast('Import failed: ' + err.message, 'error');
                 }
             }
         }

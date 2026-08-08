@@ -4277,6 +4277,7 @@
                     <div class="layout-menu-item" onclick="layoutEditorNew(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New Layout...</div>
                     <div class="layout-menu-item" onclick="layoutEditorSaveAs(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Save As...</div>
                     <div class="layout-menu-item" onclick="renameCurrentLayout(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>Rename...</div>
+                    <div class="layout-menu-item" onclick="resetDefaultLayout(); closeLayoutMenu()" style="color:hsl(0,70%,60%)"><svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Reset Default Layout</div>
                     <div class="layout-menu-item" onclick="deleteCurrentLayout(); closeLayoutMenu()" style="color:hsl(0,70%,60%)"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>Delete Layout</div>
                 </div>
             </div>
@@ -4404,11 +4405,6 @@
                 <div class="card-body">Browse and download community layouts and presets.</div>
                 <div class="card-stat">Community</div>
             </div>
-            <div class="setup-card" onclick="openLapTiming && openLapTiming()">
-                <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="13" x2="15" y2="15"/><line x1="9" y1="2" x2="15" y2="2"/></svg>Lap Timing</div>
-                <div class="card-body">GPS lap timer with an RDM GPS puck. Drive across your start/finish line and capture it — no coordinates, no PC.</div>
-                <div class="card-stat" id="setupLapStat">RDM GPS</div>
-            </div>
         </div>
 
         <div class="setup-section-title" style="margin-top:30px;">Files &amp; storage</div>
@@ -4432,6 +4428,16 @@
                 <div class="card-title"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Export Screenshot</div>
                 <div class="card-body">Grab a still of the live dash screen as a JPEG.</div>
                 <div class="card-stat">JPEG</div>
+            </div>
+            <div class="setup-card" onclick="backupChannels && backupChannels()">
+                <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Backup Channels</div>
+                <div class="card-body">Download this dash's channel setup (CAN decode, thresholds, units) as a file.</div>
+                <div class="card-stat">channels.json</div>
+            </div>
+            <div class="setup-card" onclick="restoreChannels && restoreChannels()">
+                <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Restore Channels</div>
+                <div class="card-body">Load a saved channel setup onto this dash. Replaces the current setup and reboots.</div>
+                <div class="card-stat">Reboots dash</div>
             </div>
             <div class="setup-card" onclick="openStorageManager && openStorageManager()">
                 <div class="card-title"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>File Manager</div>
@@ -4586,7 +4592,7 @@
     <div id="channelsModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.78); align-items:center; justify-content:center;" onclick="closeChannelsModal()">
         <div class="ch2-shell" onclick="event.stopPropagation()">
             <div class="ch2-topbar">
-                <span style="font-weight:600; font-size:14px;">Channels</span>
+                <span style="font-weight:600; font-size:14px;">Channels <span id="chCount" style="font-weight:400; font-size:12px; color:var(--text-muted);"></span></span>
                 <button class="close-btn" onclick="closeChannelsModal()" style="font-size:18px;">&times;</button>
             </div>
             <div class="ch2-body">
@@ -4598,11 +4604,24 @@
                             <button class="ch2-filter-btn active" data-f="all" onclick="_setChFilter('all')">All</button>
                             <button class="ch2-filter-btn" data-f="configured" onclick="_setChFilter('configured')">Configured</button>
                             <button class="ch2-filter-btn" data-f="unconfigured" onclick="_setChFilter('unconfigured')">Available</button>
+                            <button class="ch2-filter-btn" id="chSelectModeBtn" onclick="_chToggleSelectMode()" title="Tick several custom channels and delete them in one go">Select</button>
                         </div>
                     </div>
                     <div id="chList" class="ch2-list"></div>
+                    <div id="chBulkBar" style="display:none; align-items:center; gap:8px; padding:8px 10px; border-top:1px solid rgba(255,255,255,0.08); background:rgba(0,0,0,0.25); flex-shrink:0;">
+                        <span id="chBulkCount" style="font-size:12px; color:var(--text-muted); flex:1;">0 selected</span>
+                        <button class="ch2-filter-btn" onclick="_chBulkSelectAllCustom()" title="Select every custom channel (e.g. everything a DBC import created)">All custom</button>
+                        <button class="ch2-filter-btn" id="chBulkDeleteBtn" style="color:#ef4444; border-color:#ef4444;" onclick="_chBulkDelete()">Delete</button>
+                    </div>
                 </div>
-                <div id="chDetail" class="ch2-detail-pane"></div>
+                <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+                    <div id="chDetail" class="ch2-detail-pane" style="flex:1;"></div>
+                    <div id="chDirtyBar" style="display:none; align-items:center; gap:10px; padding:9px 14px; border-top:1px solid rgba(255,255,255,0.1); background:rgba(20,26,20,0.95); flex-shrink:0;">
+                        <span id="chDirtyLabel" style="font-size:12px; color:var(--text-muted); flex:1;">Unsaved changes</span>
+                        <button class="btn" onclick="_chDiscardEdits()">Cancel</button>
+                        <button class="btn btn-primary" onclick="_flushChannelEdits()">Save</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -5254,6 +5273,63 @@
                 <label style="font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:6px; margin-top:4px;">
                     <input id="fuelSetupEnabled" type="checkbox" style="width:14px; height:14px;"> Enabled &mdash; publish calibrated FUEL_SENDER_V
                 </label>
+
+                <!-- Forward over CAN: send the reading to the ECU. Collapsed
+                     Advanced section per the plain-English setup directive. -->
+                <details id="fuelFwdSection" style="margin-top:8px; border:1px solid var(--border); border-radius:4px; padding:8px 10px; background:var(--bg);">
+                    <summary style="font-size:11px; color:var(--text-muted); cursor:pointer; user-select:none;">
+                        Send to ECU over CAN <span id="fuelFwdStateBadge" style="margin-left:6px; font-size:10px;"></span>
+                    </summary>
+                    <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+                        <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+                            Broadcasts the fuel reading as a CAN frame so your ECU can use the
+                            dash's fuel input as its own (e.g. MaxxECU "CAN input"). Match the
+                            frame details to what the ECU expects.
+                        </div>
+                        <label style="font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+                            <input id="fuelFwdEnabled" type="checkbox" style="width:14px; height:14px;"> Enabled
+                        </label>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                            <label style="font-size:11px; color:var(--text-muted);">CAN ID (hex)
+                                <input id="fuelFwdCanId" type="text" placeholder="6F0" style="width:100%; margin-top:2px; padding:5px; background:var(--panel-elevated); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px; font-family:monospace;">
+                            </label>
+                            <label style="font-size:11px; color:var(--text-muted);">Rate
+                                <select id="fuelFwdRate" style="width:100%; margin-top:2px; padding:5px; background:var(--panel-elevated); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
+                                    <option value="2">2 Hz</option>
+                                    <option value="5">5 Hz</option>
+                                    <option value="10" selected>10 Hz</option>
+                                    <option value="20">20 Hz</option>
+                                </select>
+                            </label>
+                            <label style="font-size:11px; color:var(--text-muted);">What to send
+                                <select id="fuelFwdMode" style="width:100%; margin-top:2px; padding:5px; background:var(--panel-elevated); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
+                                    <option value="0">Calibrated level</option>
+                                    <option value="1">Raw voltage (V)</option>
+                                </select>
+                            </label>
+                            <label style="font-size:11px; color:var(--text-muted);">Byte order
+                                <select id="fuelFwdEndian" style="width:100%; margin-top:2px; padding:5px; background:var(--panel-elevated); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
+                                    <option value="1" selected>Intel (LE)</option>
+                                    <option value="0">Motorola (BE)</option>
+                                </select>
+                            </label>
+                            <label style="font-size:11px; color:var(--text-muted);">Start bit
+                                <input id="fuelFwdBitStart" type="number" min="0" max="63" value="0" style="width:100%; margin-top:2px; padding:5px; background:var(--panel-elevated); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
+                            </label>
+                            <label style="font-size:11px; color:var(--text-muted);">Bit length
+                                <input id="fuelFwdBitLen" type="number" min="1" max="32" value="16" style="width:100%; margin-top:2px; padding:5px; background:var(--panel-elevated); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
+                            </label>
+                            <label style="font-size:11px; color:var(--text-muted);" title="On-wire value = reading &times; scale + offset. E.g. scale 10 sends % in 0.1% steps; scale 1000 sends volts as millivolts.">Scale
+                                <input id="fuelFwdScale" type="number" step="any" value="1" style="width:100%; margin-top:2px; padding:5px; background:var(--panel-elevated); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
+                            </label>
+                            <label style="font-size:11px; color:var(--text-muted);">Offset
+                                <input id="fuelFwdOffset" type="number" step="any" value="0" style="width:100%; margin-top:2px; padding:5px; background:var(--panel-elevated); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
+                            </label>
+                        </div>
+                        <div id="fuelFwdHealth" style="font-size:10px; color:var(--text-ghost);"></div>
+                    </div>
+                </details>
+
                 <button class="btn" style="margin-top:6px; padding:8px;" onclick="saveFuelSenderSetup()">Save</button>
             </div>
         </div>
@@ -5326,70 +5402,6 @@
                     <input id="devDash" type="checkbox" style="width:16px; height:16px;" onchange="devToggleDash(this.checked)">
                 </label>
                 <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">Simulate the real dash in the offline preview: RGB565 colour banding + firmware-feasible glow (no Gaussian blur / radial halos). Editor preview only.</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Lap Timing modal (Setup ▸ Lap Timing). Configure the GPS lap timer:
-         capture the start/finish line and sector splits from the car's live
-         position, watch lap state, reset the session. Backed by /api/lap/*
-         (main/net/web_server_lap.c, ADR-0008). -->
-    <div id="lapTimingModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeLapTiming()">
-        <div class="dbc-modal-content" style="width:min(520px, 92vw);" onclick="event.stopPropagation()">
-            <div class="signal-modal-header">
-                <span>Lap Timing</span>
-                <button class="close-btn" onclick="closeLapTiming()">&times;</button>
-            </div>
-            <div class="dbc-form">
-                <!-- Live status strip -->
-                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                    <span id="lapGpsBadge" style="font-size:11px; font-weight:700; padding:3px 8px; border-radius:var(--radius-sm); background:var(--bg); border:1px solid var(--border); color:var(--text-muted);">GPS: —</span>
-                    <span id="lapFixBadge" style="font-size:11px; padding:3px 8px; border-radius:var(--radius-sm); background:var(--bg); border:1px solid var(--border); color:var(--text-muted);"></span>
-                    <span id="lapTrackBadge" style="font-size:11px; padding:3px 8px; border-radius:var(--radius-sm); background:var(--bg); border:1px solid var(--border); color:var(--text-muted);">No track configured</span>
-                </div>
-                <!-- Live timing (hidden until armed) -->
-                <div id="lapLiveRow" style="display:none; font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px;"></div>
-
-                <div style="border-top:1px solid var(--border); margin:4px 0;"></div>
-
-                <!-- Capture flow -->
-                <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">
-                    <b>Setting up a track:</b> drive across the start/finish line at speed and
-                    tap Capture — the line's position <i>and direction</i> come from the live GPS.
-                    Then do the same at each sector split, in driving order. A stationary
-                    capture works but cannot know the crossing direction, so prefer a moving one.
-                </div>
-                <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-                    <div style="flex:0 0 110px;">
-                        <label>Line half-width (m)</label>
-                        <input type="text" id="lapHalfWidth" value="15" inputmode="numeric">
-                    </div>
-                    <button class="btn" onclick="lapCapture('start_finish')">Capture Start/Finish</button>
-                    <button class="btn btn-secondary" id="lapCaptureSectorBtn" onclick="lapCapture('sector')">Capture Sector</button>
-                </div>
-
-                <div style="border-top:1px solid var(--border); margin:4px 0;"></div>
-
-                <!-- Track details -->
-                <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-                    <div style="flex:1 1 140px;">
-                        <label>Track name</label>
-                        <input type="text" id="lapTrackName" placeholder="e.g. Mallala">
-                    </div>
-                    <div style="flex:0 0 110px;">
-                        <label>Min lap time (s)</label>
-                        <input type="text" id="lapMinLap" placeholder="10" inputmode="numeric">
-                    </div>
-                    <button class="btn btn-secondary" onclick="lapSaveTrackMeta()">Save</button>
-                </div>
-                <div id="lapSectorSummary" style="font-size:11px; color:var(--text-muted);"></div>
-            </div>
-            <div class="dbc-footer" style="justify-content:space-between;">
-                <div style="display:flex; gap:8px;">
-                    <button class="btn btn-secondary" onclick="lapResetSession()">Reset Session</button>
-                    <button class="btn btn-secondary" style="color:hsl(0,70%,60%);" onclick="lapClearTrack()">Clear Track</button>
-                </div>
-                <button class="btn" onclick="closeLapTiming()">Close</button>
             </div>
         </div>
     </div>
@@ -6003,7 +6015,7 @@
         }
 
         async function deleteCustomEcuVersion(ecu, version) {
-            if (!confirm(`Delete "${ecu} ${version}" and all its signals?`)) return;
+            if (!(await confirmAsync('Delete Preset', `Delete "${ecu} ${version}" and all its signals?`, 'Delete'))) return;
             try {
                 await fetch(`/api/presets/custom/delete?ecu=${encodeURIComponent(ecu)}&version=${encodeURIComponent(version)}`, { method: 'POST' });
                 await fetchPresets();
@@ -6018,7 +6030,7 @@
         }
 
         async function deleteCustomEcu(ecu) {
-            if (!confirm(`Delete custom ECU "${ecu}" and all its signals?`)) return;
+            if (!(await confirmAsync('Delete Custom ECU', `Delete custom ECU "${ecu}" and all its signals?`, 'Delete'))) return;
             const versions = [...new Set(customPresets.filter(p => p.ecu === ecu).map(p => p.version))];
             try {
                 for (const ver of versions) {
@@ -6667,7 +6679,7 @@
             const editing = document.getElementById('presetAuthorModal').dataset.editing === '1';
             const clash = (typeof customPresets !== 'undefined') && Array.isArray(customPresets) &&
                           customPresets.some(p => p.ecu === ecu && p.version === version);
-            if (clash && !editing && !confirm(`A preset "${ecu} ${version}" already exists — overwrite it?`)) return;
+            if (clash && !editing && !(await confirmAsync('Overwrite Preset', `A preset "${ecu} ${version}" already exists — overwrite it?`, 'Overwrite'))) return;
             const btn = document.getElementById('paSaveBtn'); btn.disabled = true; btn.textContent = 'Saving…';
             try {
                 const resp = await fetch('/api/presets/custom/save', {
@@ -6858,30 +6870,57 @@
             setTimeout(() => inp.focus(), 50);
         }
 
-        /* ── Styled Confirm Overlay (replaces browser confirm()) ── */
-        function _showConfirmOverlay(title, message, confirmLabel, onConfirm) {
+        /* ── Styled Confirm Overlay (replaces browser confirm()) ──
+         * window.confirm cannot be trusted here: under the Tauri desktop
+         * webview the dialog plugin remaps it to an async function whose
+         * Promise is always truthy, so an `if (!confirm(...))` guard never
+         * blocks and Cancel does not cancel (ADR-0016). Destructive actions
+         * must use this overlay — this callback form, or confirmAsync(). */
+        function _showConfirmOverlay(title, message, confirmLabel, onConfirm, onCancel, cancelLabel) {
             const overlay = document.createElement('div');
             overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,8,0.82);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
             overlay.innerHTML = `
                 <div style="background:#1a1b1e;border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:320px;max-width:400px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
                     <div style="font-size:13px;font-weight:600;color:#e0e0e0;margin-bottom:8px;letter-spacing:0.03em;">${title}</div>
-                    <div style="font-size:12px;color:#999;margin-bottom:18px;line-height:1.5;">${message}</div>
+                    <div style="font-size:12px;color:#999;margin-bottom:18px;line-height:1.5;">${String(message).replace(/\n/g, '<br>')}</div>
                     <div style="display:flex;gap:8px;justify-content:flex-end;">
-                        <button id="_confirmCancel" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:#999;font-size:12px;">Cancel</button>
+                        <button id="_confirmCancel" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:#999;font-size:12px;">${cancelLabel || 'Cancel'}</button>
                         <button id="_confirmOk" style="padding:7px 16px;cursor:pointer;background:#ef4444;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:500;">${confirmLabel}</button>
                     </div>
                 </div>`;
             document.body.appendChild(overlay);
-            const cancel = () => overlay.remove();
-            document.getElementById('_confirmCancel').onclick = cancel;
-            overlay.addEventListener('click', e => { if (e.target === overlay) cancel(); });
-            document.getElementById('_confirmOk').onclick = () => {
+            /* One exit for every path: Confirm, Cancel, backdrop and Escape
+             * all come through here, the key hook is always unhooked, and a
+             * stray second event can't fire a callback twice. */
+            const close = (confirmed) => {
+                if (!overlay.parentNode) return;
                 overlay.remove();
-                onConfirm();
+                document.removeEventListener('keydown', onKey, true);
+                if (confirmed) { if (onConfirm) onConfirm(); }
+                else if (onCancel) onCancel();
             };
-            document.addEventListener('keydown', function handler(e) {
-                if (e.key === 'Escape') { cancel(); document.removeEventListener('keydown', handler); }
-            });
+            /* Capture phase: the editor has its own Escape/Enter handlers
+             * (deselect, modal close) that must not also fire. Enter is
+             * swallowed because the button that opened this overlay may still
+             * hold focus — Enter would "click" it again through the dialog. */
+            const onKey = (e) => {
+                if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(false); }
+                else if (e.key === 'Enter') { e.stopPropagation(); e.preventDefault(); }
+            };
+            document.addEventListener('keydown', onKey, true);
+            document.getElementById('_confirmCancel').onclick = () => close(false);
+            document.getElementById('_confirmOk').onclick = () => close(true);
+            overlay.addEventListener('mousedown', e => { if (e.target === overlay) close(false); });
+            document.getElementById('_confirmCancel').focus();
+        }
+
+        /* Promise form — `if (!(await confirmAsync(...))) return;` reads like
+         * the confirm() guard it replaces. Resolves true only on the red
+         * button; Cancel, Escape and the backdrop all resolve false. */
+        function confirmAsync(title, message, confirmLabel, cancelLabel) {
+            return new Promise(resolve => _showConfirmOverlay(
+                title, message, confirmLabel || 'Confirm',
+                () => resolve(true), () => resolve(false), cancelLabel));
         }
 
         function layoutEditorNew() {
@@ -7639,7 +7678,7 @@
                         ]
                     },
                     "indicator": {
-                        displayName: "Turn Indicator", defW: 50, defH: 50,
+                        displayName: "Turn Indicator", defW: 40, defH: 40,
                         fields: [
                             { name: "slot", label: "Side", type: "select", def: 0, cat: "data", group: "Value", help: "Which side of the screen this light sits on.",
                               options: [
@@ -7651,12 +7690,12 @@
                                   { v: 0, l: "Wire" },
                                   { v: 1, l: "CAN" }
                               ] },
-                            { name: "color_on", label: "Active Color", type: "color", def: 0xFFBF00, cat: "appearance", group: "Fill", help: "Colour when the light is on.", nightOverridable: true },
+                            { name: "color_on", label: "Active Color", type: "color", def: 0x00C853, cat: "appearance", group: "Fill", help: "Colour when the light is on.", nightOverridable: true },
                             { name: "opa_on", label: "Active Opacity", type: "stepper", def: 255, cat: "appearance", group: "Fill", help: "How bright it is when on (0-255).", min: 0, max: 255 },
-                            { name: "color_off", label: "Inactive Color", type: "color", def: 0x333333, cat: "appearance", group: "Fill", help: "Colour when the light is off.", nightOverridable: true },
-                            { name: "opa_off", label: "Inactive Opacity", type: "stepper", def: 70, cat: "appearance", group: "Fill", help: "How bright it is when off (0-255).", min: 0, max: 255 },
+                            { name: "color_off", label: "Inactive Color", type: "color", def: 0x06300A, cat: "appearance", group: "Fill", help: "Colour when the light is off.", nightOverridable: true },
+                            { name: "opa_off", label: "Inactive Opacity", type: "stepper", def: 255, cat: "appearance", group: "Fill", help: "How bright it is when off (0-255).", min: 0, max: 255 },
                             { name: "animation", label: "Anim Enabled", type: "checkbox", def: true, cat: "data", group: "Behaviour", help: "Fade smoothly between on and off." },
-                            { name: "is_momentary", label: "Momentary", type: "checkbox", def: false, cat: "data", group: "Behaviour", help: "Only stay on while the signal is active, instead of latching on." }
+                            { name: "is_momentary", label: "Momentary", type: "checkbox", def: true, cat: "data", group: "Behaviour", help: "Only stay on while the signal is active, instead of latching on." }
                         ]
                     },
                     "warning": {
@@ -8213,6 +8252,25 @@
                             { name: "threshold", label: "Threshold", type: "number", def: 6000, cat: "data", group: "Behaviour", help: "Loop mode: the animation plays while the reading is at or above this value." },
                             { name: "loop_fps", label: "Loop Speed (fps)", type: "stepper", def: 12, cat: "data", group: "Behaviour", help: "Loop mode: how fast the frames play, in frames per second.", min: 1, max: 30 },
                             { name: "hyst_pct", label: "Hysteresis %", type: "slider", def: 2, cat: "data", group: "Behaviour", help: "Stops the animation flickering when the reading sits right on a frame boundary or the threshold. Raise it if the frame chatters.", min: 0, max: 10, step: 1 }
+                        ]
+                    },
+                    "track_map": {
+                        displayName: "Track Map", defW: 320, defH: 240,
+                        fields: [
+                            { name: "track_asset", label: "Track", type: "text", def: "", cat: "data", group: "Track", help: "Which track shape to draw. Push one from RDM Studio (GPS workspace -> Tracks -> Shape) and type its name here. The circuit's own name is stored inside the file, so this is just the filename." },
+                            { name: "rotation", label: "Rotation", type: "slider", def: 0, cat: "appearance", group: "Track", help: "Turn the whole circuit on screen. 0 puts north at the top.", min: 0, max: 359, step: 1 },
+                            { name: "line_color", label: "Track Color", type: "color", def: 0x5A6472, cat: "appearance", group: "Track", help: "Colour of the circuit outline.", nightOverridable: true },
+                            { name: "line_width", label: "Track Width", type: "stepper", def: 3, cat: "appearance", group: "Track", help: "How thick the outline is drawn.", min: 1, max: 20 },
+                            { name: "show_start_finish", label: "Show Start/Finish", type: "checkbox", def: true, cat: "appearance", group: "Track", help: "Draw a tick across the track where the lap starts." },
+                            { name: "sf_color", label: "Start/Finish Color", type: "color", def: 0xF5F7FA, cat: "appearance", group: "Track", help: "Colour of the start/finish tick.", enabledBy: "show_start_finish", nightOverridable: true },
+                            { name: "show_dot", label: "Show Car", type: "checkbox", def: true, cat: "appearance", group: "Car", help: "Show where the car is on the track. Needs an RDM GPS on the bus; the marker dims when the position goes stale." },
+                            { name: "dot_color", label: "Car Color", type: "color", def: 0xFF453A, cat: "appearance", group: "Car", help: "Colour of the moving car marker.", enabledBy: "show_dot", nightOverridable: true },
+                            { name: "show_trail", label: "Show Trail", type: "checkbox", def: true, cat: "appearance", group: "Car", help: "Draw a short fading tail behind the car, so you can see the line you just took.", enabledBy: "show_dot" },
+                            { name: "dot_radius", label: "Car Size", type: "stepper", def: 5, cat: "appearance", group: "Car", help: "Radius of the car marker in pixels.", min: 2, max: 24, enabledBy: "show_dot" },
+                            { name: "lat_channel", label: "Latitude Channel", type: "text", def: "gps_latitude", cat: "data", group: "Car", help: "Channel carrying latitude. The default matches the RDM GPS; change it only if your position comes from something else.", enabledBy: "show_dot" },
+                            { name: "lon_channel", label: "Longitude Channel", type: "text", def: "gps_longitude", cat: "data", group: "Car", help: "Channel carrying longitude.", enabledBy: "show_dot" },
+                            { name: "show_name", label: "Show Track Name", type: "checkbox", def: true, cat: "appearance", group: "Label", help: "Print the circuit's name under the map. The name comes from the track file, not from this layout." },
+                            { name: "name_color", label: "Name Color", type: "color", def: 0x8A93A0, cat: "appearance", group: "Label", help: "Colour of the track name.", enabledBy: "show_name", nightOverridable: true }
                         ]
                     }
                 };
@@ -9482,13 +9540,26 @@
         }
 
         function _pvIndicator(w, c){
-            const p = devToWeb(w.x, w.y), s2 = Math.min(w.w, w.h) / 2;
+            /* Drawn turn-signal arrow — same head/tail proportions the
+             * firmware rasterises in _indicator_draw_arrow()
+             * (widget_indicator.c), which in turn came from the original
+             * indicator PNG: head = 62.5% of width and full height, tail =
+             * 46.7% of height. SVG handles concave polygons fine, so this
+             * stays one path; the firmware splits it into a triangle + rect
+             * because LVGL's polygon fill only does convex shapes.
+             * Rendered in its idle state: dark dark green, solid. */
+            const p = devToWeb(w.x, w.y);
             const left = _pvNum(c.slot, 0) === 0;
-            const col = _pvColor(c.color_on, '#FFBF00'), opa = (_pvNum(c.opa_on, 255) / 255).toFixed(3);
-            const x = p.x, y = p.y;
+            const col = _pvColor(c.color_off, '#06300A'), opa = (_pvNum(c.opa_off, 255) / 255).toFixed(3);
+            const x0 = p.x - w.w / 2, y0 = p.y - w.h / 2, cy = p.y;
+            const headW = w.w * 0.625, th = w.h * 0.2333;
             const pts = left
-                ? [[x - s2, y], [x, y - s2], [x, y - s2 / 2], [x + s2, y - s2 / 2], [x + s2, y + s2 / 2], [x, y + s2 / 2], [x, y + s2]]
-                : [[x + s2, y], [x, y - s2], [x, y - s2 / 2], [x - s2, y - s2 / 2], [x - s2, y + s2 / 2], [x, y + s2 / 2], [x, y + s2]];
+                ? [[x0, cy], [x0 + headW, y0], [x0 + headW, cy - th],
+                   [x0 + w.w, cy - th], [x0 + w.w, cy + th],
+                   [x0 + headW, cy + th], [x0 + headW, y0 + w.h]]
+                : [[x0 + w.w, cy], [x0 + w.w - headW, y0], [x0 + w.w - headW, cy - th],
+                   [x0, cy - th], [x0, cy + th],
+                   [x0 + w.w - headW, cy + th], [x0 + w.w - headW, y0 + w.h]];
             return `<polygon points="${pts.map(a => a[0].toFixed(1) + ',' + a[1].toFixed(1)).join(' ')}" fill="${col}" fill-opacity="${opa}"/>`;
         }
 
@@ -13902,7 +13973,7 @@
                 showToast('No image selected to delete', 'error');
                 return;
             }
-            if (!confirm(`Delete image "${name}" from device storage?`)) return;
+            if (!(await confirmAsync('Delete Image', `Delete image "${name}" from device storage?`, 'Delete'))) return;
             try {
                 const resp = await fetch(`/api/image/delete?name=${encodeURIComponent(name)}`, { method: 'POST' });
                 if (!resp.ok) throw new Error(await resp.text());
@@ -15220,12 +15291,12 @@
              * it. Avoids tearing the input focus on every keystroke. */
         }
 
-        function deleteSignal(idx) {
+        async function deleteSignal(idx) {
             if (!currentLayout.signals) return;
             const sig = currentLayout.signals[idx];
             const boundWidgets = (currentLayout.widgets || []).filter(w => w.signal === sig.name);
             if (boundWidgets.length > 0) {
-                if (!confirm(`Signal "${sig.name}" is bound to ${boundWidgets.length} widget(s). Delete anyway?`)) return;
+                if (!(await confirmAsync('Delete Signal', `Signal "${sig.name}" is bound to ${boundWidgets.length} widget(s). Delete anyway?`, 'Delete'))) return;
             }
             pushHistory();
             currentLayout.signals.splice(idx, 1);
@@ -15321,6 +15392,38 @@
                             fetchLayouts();
                         } else throw new Error();
                     } catch (e) { showToast('Delete failed', 'error'); }
+                }
+            );
+        }
+
+        /* ── Reset factory default layout ─────────────────────────────
+         * Regenerates default.json from the compiled-in factory layout
+         * (the dash re-applies its remembered ECU preset itself). Other
+         * layouts, forks and channel config are untouched. */
+        async function resetDefaultLayout() {
+            _showConfirmOverlay(
+                'Reset Default Layout',
+                'Restores the factory <strong style="color:#e0e0e0;">"default"</strong> layout. ' +
+                'Your other layouts and your channel setup are not touched. This cannot be undone.',
+                'Reset',
+                async () => {
+                    try {
+                        const response = await fetch('/api/layout/reset_default', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: '{}'
+                        });
+                        if (!response.ok) throw new Error();
+                        showToast('Default layout reset', 'success');
+                        await fetchLayouts();
+                        /* If the editor is ON "default", reload it NOW —
+                         * loadLayout resets _baselineWidgetsFp, so a queued
+                         * auto-save of the old content can't immediately
+                         * rewrite the freshly regenerated file. */
+                        if ((currentLayout.name || '') === 'default') {
+                            await loadLayout('default');
+                        }
+                    } catch (e) { showToast('Reset failed', 'error'); }
                 }
             );
         }
@@ -15703,7 +15806,7 @@
             return `${base}_${Date.now()}`;
         }
 
-        function _resolveProtectedName(intendedName, isSplash, silent) {
+        async function _resolveProtectedName(intendedName, isSplash, silent) {
             const dashGuarded = (!isSplash && intendedName === 'default');
             const splashGuarded = (isSplash && intendedName === '_splash_Default');
             if (!dashGuarded && !splashGuarded) return intendedName;
@@ -15740,13 +15843,14 @@
                 const msg = isSplash
                     ? `Save widget changes to a new splash layout "${displayName}"?\n\nFactory "_splash_Default" stays untouched.`
                     : `Save widget changes to a new layout "${displayName}"?\n\nFactory "default" stays untouched.`;
-                return confirm(msg) ? base : null;
+                return (await confirmAsync('Save to New Layout', msg, 'Save')) ? base : null;
             }
-            /* base already exists → overwrite vs. next-numbered. */
-            const overwrite = confirm(
-                `"${displayName}" already exists.\n\n` +
-                `OK  = Overwrite "${displayName}"\n` +
-                `Cancel = Save as "${displayNext}" instead`
+            /* base already exists → overwrite vs. next-numbered. Both buttons
+             * save; Escape/backdrop takes the safe branch (the fresh name). */
+            const overwrite = await confirmAsync(
+                'Layout Already Exists',
+                `"${displayName}" already exists.\nOverwrite it, or save as "${displayNext}" instead?`,
+                'Overwrite', `Save as "${displayNext}"`
             );
             return overwrite ? base : nextFree;
         }
@@ -15774,7 +15878,7 @@
              * widget changes are about to overwrite a factory file. Null
              * return = user cancelled the manual save prompt. */
             const intended = payload.name;
-            const resolved = _resolveProtectedName(intended, isSplash, silent);
+            const resolved = await _resolveProtectedName(intended, isSplash, silent);
             if (resolved === null) {
                 updateStatus('Save cancelled');
                 return;
@@ -15803,7 +15907,7 @@
             if (!isSplash && !silent && !wasRedirected) {
                 const deviceActive = layoutSelect.value || '';
                 if (deviceActive && deviceActive !== layoutName) {
-                    if (!confirm(`This will save and overwrite "${layoutName}" (not "${deviceActive}"). Continue?`)) return;
+                    if (!(await confirmAsync('Overwrite Layout', `This will save and overwrite "${layoutName}" (not "${deviceActive}"). Continue?`, 'Overwrite'))) return;
                 }
             }
 
@@ -16625,7 +16729,7 @@
         }
 
         async function _smDeleteFromSD(type, name) {
-            if (!confirm(`Delete ${name} from SD card?`)) return;
+            if (!(await confirmAsync('Delete from SD Card', `Delete ${name} from SD card?`, 'Delete'))) return;
             try {
                 const resp = await fetch('/api/sd/delete', {
                     method: 'POST',
@@ -16642,7 +16746,7 @@
 
         async function _smDeleteInternal(type, name) {
             const typeLabel = type === 'layout' ? 'layout' : type === 'image' ? 'image' : 'font';
-            if (!confirm(`Delete ${typeLabel} "${name}" from internal storage?`)) return;
+            if (!(await confirmAsync('Delete from Internal Storage', `Delete ${typeLabel} "${name}" from internal storage?`, 'Delete'))) return;
             try {
                 let url;
                 if (type === 'layout') {
@@ -17059,7 +17163,12 @@
          *     [8-15]  Reserved (zeros)
          *
          *   Per entry:
-         *     [0]       Type: uint8 (0 = layout JSON, 1 = image, 2 = font TTF)
+         *     [0]       Type: uint8 (0 = layout JSON, 1 = image, 2 = font TTF,
+         *                           3 = channels.json — device channel registry,
+         *                           added 2026-08 so a bundle saved at the car
+         *                           carries the CAN decode/threshold setup for
+         *                           offline editing; older importers skip
+         *                           unknown types gracefully)
          *     [1]       Name length: uint8
          *     [2..N]    Name: UTF-8 (name_length bytes)
          *     [N..N+4]  Data length: uint32 LE
@@ -17133,16 +17242,32 @@
                 }
             }
 
+            /* Channel registry (CAN decode + thresholds live in channels.json
+             * since ADR-0005 — without this entry a round-tripped bundle loses
+             * the whole CAN setup). Offline export just skips it. */
+            let channelsBytes = null;
+            try {
+                updateStatus('Fetching channel setup...');
+                const resp = await fetch('/api/channels/export');
+                if (resp.ok) channelsBytes = new Uint8Array(await resp.arrayBuffer());
+                else updateStatus('Warning: could not fetch channel setup', true);
+            } catch (e) {
+                updateStatus('Warning: channel setup not included (offline?)', true);
+            }
+
             /* Serialize layout as firmware-ready JSON (RGB565, signal_name mapped) */
             const payload = buildFirmwarePayload();
             const layoutJson = JSON.stringify(payload, null, 2);
             const layoutBytes = new TextEncoder().encode(layoutJson);
 
             /* Calculate total size */
-            const entryCount = 1 + images.length + fonts.length;
+            const entryCount = 1 + images.length + fonts.length + (channelsBytes ? 1 : 0);
             let totalSize = 16; /* header */
             const nameBytes = new TextEncoder().encode(name);
             totalSize += 1 + 1 + nameBytes.length + 4 + layoutBytes.length;
+            const channelsNameBytes = new TextEncoder().encode('channels.json');
+            if (channelsBytes)
+                totalSize += 1 + 1 + channelsNameBytes.length + 4 + channelsBytes.length;
             const imageEntries = images.map(img => {
                 const nb = new TextEncoder().encode(img.name);
                 return { nameBytes: nb, data: img.data };
@@ -17195,6 +17320,15 @@
                 u8.set(entry.data, off); off += entry.data.length;
             }
 
+            /* Channels entry */
+            if (channelsBytes) {
+                u8[off++] = 3; /* type = channels.json */
+                u8[off++] = channelsNameBytes.length;
+                u8.set(channelsNameBytes, off); off += channelsNameBytes.length;
+                view.setUint32(off, channelsBytes.length, true); off += 4;
+                u8.set(channelsBytes, off); off += channelsBytes.length;
+            }
+
             /* Download */
             const blob = new Blob([buf], { type: 'application/octet-stream' });
             const url = URL.createObjectURL(blob);
@@ -17206,6 +17340,7 @@
             const parts = [];
             if (images.length > 0) parts.push(`${images.length} image${images.length > 1 ? 's' : ''}`);
             if (fonts.length > 0) parts.push(`${fonts.length} font${fonts.length > 1 ? 's' : ''}`);
+            if (channelsBytes) parts.push('channel setup');
             const assetMsg = parts.length > 0 ? ` with ${parts.join(', ')}` : '';
             updateStatus(`Exported ${name}.rdm${assetMsg}`);
             showToast(`Exported ${name}.rdm${assetMsg}`, 'success');
@@ -17239,6 +17374,7 @@
                     let layoutName = '';
                     const images = [];
                     const fonts = [];
+                    let channelsData = null;
 
                     /* Parse entries */
                     for (let i = 0; i < entryCount; i++) {
@@ -17262,6 +17398,8 @@
                             images.push({ name: entryName, data: data });
                         } else if (entryType === 2) {
                             fonts.push({ name: entryName, data: data });
+                        } else if (entryType === 3) {
+                            channelsData = data; /* device channel registry */
                         }
                     }
 
@@ -17318,7 +17456,7 @@
                         for (const fnt of fonts) {
                             const exists = existingFonts.includes(fnt.name);
                             if (exists) {
-                                const overwrite = confirm(`Font "${fnt.name}" already exists on device. Overwrite it?`);
+                                const overwrite = await confirmAsync('Font Already Exists', `Font "${fnt.name}" already exists on device. Overwrite it?`, 'Overwrite');
                                 if (!overwrite) {
                                     uploadedFonts++;
                                     continue;
@@ -17382,9 +17520,94 @@
                     const assetMsg = parts.length > 0 ? ` + ${parts.join(', ')}` : '';
                     updateStatus(`Imported ${file.name}${assetMsg}`);
                     showToast(`Imported ${file.name}${assetMsg}`, 'success');
+
+                    /* Channel setup travels in the bundle too (type 3). Offer
+                     * it LAST — restoring replaces the dash's channels.json
+                     * wholesale and reboots the device, so everything above
+                     * must already be safely uploaded. */
+                    if (channelsData && channelsData.length) {
+                        const doRestore = await confirmAsync(
+                            'Restore Channel Setup',
+                            'This bundle includes the saved channel setup (CAN decode, thresholds, units). ' +
+                            'Restoring REPLACES this dash’s current channel setup and reboots it. Restore now?',
+                            'Restore');
+                        if (doRestore) {
+                            try {
+                                const r = await fetch('/api/channels/import', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: channelsData
+                                });
+                                if (r.ok) {
+                                    showToast('Channel setup restored — dash is rebooting', 'success');
+                                    updateStatus('Dash rebooting to apply channel setup...');
+                                } else {
+                                    showToast('Channel restore failed: ' + (await r.text()).slice(0, 80), 'error');
+                                }
+                            } catch (e) {
+                                showToast('Channel restore failed (device offline?)', 'error');
+                            }
+                        }
+                    }
                 } catch (err) {
                     updateStatus('Failed to import .rdm: ' + err.message, true);
                     showToast('Import failed: ' + err.message, 'error');
+                }
+            };
+            input.click();
+        }
+
+        /* ── Channel setup backup / restore (channels.json) ─────────────
+         * The channel registry is device-local (ADR-0005) and used to be
+         * trapped on-device — the endpoints existed but nothing called
+         * them. Backup = plain download; Restore = whole-file replace +
+         * reboot, so it confirms first. */
+        async function backupChannels() {
+            try {
+                const r = await fetch('/api/channels/export');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const blob = await r.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const serial = (window._deviceSerial || 'dash').replace(/[^A-Za-z0-9-]/g, '');
+                a.href = url; a.download = `channels_${serial}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('Channel setup downloaded', 'success');
+            } catch (e) {
+                showToast('Backup failed (device offline?)', 'error');
+            }
+        }
+
+        function restoreChannels() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json,application/json';
+            input.onchange = async () => {
+                const file = input.files[0];
+                if (!file) return;
+                let text;
+                try { text = await file.text(); JSON.parse(text); }
+                catch (e) { showToast('Not a valid channels.json file', 'error'); return; }
+                const ok = await confirmAsync('Restore Channel Setup',
+                    'REPLACES this dash’s entire channel setup (CAN decode, thresholds, units) ' +
+                    'with the file’s contents, then reboots the dash. This cannot be undone.',
+                    'Restore');
+                if (!ok) return;
+                try {
+                    const r = await fetch('/api/channels/import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: text
+                    });
+                    if (r.ok) {
+                        showToast('Channel setup restored — dash is rebooting', 'success');
+                        updateStatus('Dash rebooting to apply channel setup...');
+                    } else {
+                        showToast('Restore failed: ' + (await r.text()).slice(0, 80), 'error');
+                    }
+                } catch (e) {
+                    showToast('Restore failed (device offline?)', 'error');
                 }
             };
             input.click();
@@ -17396,7 +17619,7 @@
             /* Warn if there are unsaved edits */
             if (hasUnsavedEdits()) {
                 const prevName = currentLayout.name || 'default';
-                if (!confirm(`You have unsaved changes to "${prevName}". Switch to "${name}" and lose them?`)) {
+                if (!(await confirmAsync('Unsaved Changes', `You have unsaved changes to "${prevName}". Switch to "${name}" and lose them?`, 'Switch'))) {
                     /* Revert dropdown selection */
                     layoutSelect.value = prevName;
                     return;
@@ -18174,7 +18397,7 @@
             const confirmMsg = isRdmInternal
                 ? 'Switch to RDM-7 Internal? Your existing signals are preserved; the Gear Setup will open so you can configure ratios.'
                 : `Apply ${make} ${version}? This overwrites your layout's signals with the ECU's default decode.`;
-            if (!confirm(confirmMsg)) return;
+            if (!(await confirmAsync(isRdmInternal ? 'Switch to RDM-7 Internal' : 'Apply ECU Preset', confirmMsg, isRdmInternal ? 'Switch' : 'Apply'))) return;
             try {
                 const r = await fetch('/api/ecu/set', {
                     method: 'POST',
@@ -18775,10 +18998,84 @@
             }
             document.getElementById('fuelSetupEnabled').checked = (cal.enabled !== false);
             _fuelSetupRender();
+            _fuelFwdLoad();
 
             _fuelSetupPollLive();
             if (_fuelSetupPollTimer) clearInterval(_fuelSetupPollTimer);
             _fuelSetupPollTimer = setInterval(_fuelSetupPollLive, 500);
+        }
+
+        /* ── Fuel-over-CAN forward (device-level, NVS-persisted) ────────── */
+        /* Whether this dash actually has /api/fuel/forward. Older firmware
+         * 404s it; without this flag every fuel-calibration Save popped an
+         * error toast about a feature the user never touched. */
+        let _fuelFwdAvailable = false;
+        async function _fuelFwdLoad() {
+            _fuelFwdAvailable = false;
+            const section = document.getElementById('fuelFwdSection');
+            try {
+                const r = await fetch('/api/fuel/forward');
+                if (!r.ok) {
+                    /* Older firmware — hide the section rather than offering
+                     * a control that silently does nothing. */
+                    if (section) section.style.display = 'none';
+                    return;
+                }
+                if (section) section.style.display = '';
+                _fuelFwdAvailable = true;
+                const d = await r.json();
+                document.getElementById('fuelFwdEnabled').checked = !!d.enabled;
+                document.getElementById('fuelFwdCanId').value = (d.can_id ?? 0x6F0).toString(16).toUpperCase();
+                document.getElementById('fuelFwdRate').value = String(d.rate_hz ?? 10);
+                document.getElementById('fuelFwdMode').value = String(d.mode ?? 0);
+                document.getElementById('fuelFwdEndian').value = String(d.endian ?? 1);
+                document.getElementById('fuelFwdBitStart').value = d.bit_start ?? 0;
+                document.getElementById('fuelFwdBitLen').value = d.bit_length ?? 16;
+                document.getElementById('fuelFwdScale').value = d.scale ?? 1;
+                document.getElementById('fuelFwdOffset').value = d.offset ?? 0;
+                const badge = document.getElementById('fuelFwdStateBadge');
+                if (badge) badge.textContent = d.enabled ? 'ON' : '';
+                if (badge) badge.style.color = d.enabled ? 'hsl(140,60%,55%)' : '';
+                const health = document.getElementById('fuelFwdHealth');
+                if (health && d.enabled)
+                    health.textContent = `Sent ${d.tx_ok ?? 0} frames since boot` +
+                        (d.tx_fail ? ` · ${d.tx_fail} failed (bus not ACKing?)` : '');
+            } catch (e) { /* offline */ }
+        }
+        async function _fuelFwdSave() {
+            /* No endpoint on this firmware — nothing to save, and nothing to
+             * complain about (the section is hidden in that case). */
+            if (!_fuelFwdAvailable) return true;
+            const canId = parseInt(document.getElementById('fuelFwdCanId').value, 16);
+            /* NOT `|| 1`: a typed 0 must survive (parseFloat('0') is falsy). */
+            const scaleV = parseFloat(document.getElementById('fuelFwdScale').value);
+            const offsetV = parseFloat(document.getElementById('fuelFwdOffset').value);
+            const cfg = {
+                enabled: document.getElementById('fuelFwdEnabled').checked,
+                can_id: isFinite(canId) ? canId : 0x6F0,
+                extd: isFinite(canId) ? canId > 0x7FF : false,
+                endian: parseInt(document.getElementById('fuelFwdEndian').value, 10) || 0,
+                bit_start: parseInt(document.getElementById('fuelFwdBitStart').value, 10) || 0,
+                bit_length: parseInt(document.getElementById('fuelFwdBitLen').value, 10) || 16,
+                rate_hz: parseInt(document.getElementById('fuelFwdRate').value, 10) || 10,
+                mode: parseInt(document.getElementById('fuelFwdMode').value, 10) || 0,
+                scale: Number.isFinite(scaleV) ? scaleV : 1,
+                offset: Number.isFinite(offsetV) ? offsetV : 0,
+            };
+            try {
+                const r = await fetch('/api/fuel/forward', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(cfg)
+                });
+                if (!r.ok) {
+                    const msg = await r.text();
+                    if (typeof showToast === 'function')
+                        showToast('CAN forward not saved: ' + msg.slice(0, 80), 'error');
+                    return false;
+                }
+                return true;
+            } catch (e) { return false; /* offline / old firmware */ }
         }
 
         async function saveFuelSenderSetup() {
@@ -18828,6 +19125,9 @@
                     body: JSON.stringify({ enabled, points: valid })
                 });
             } catch (e) { /* non-fatal — layout save will reapply on reload */ }
+
+            /* Device-level CAN forward config rides the same Save click. */
+            await _fuelFwdSave();
 
             try {
                 if (typeof saveActiveLayout === 'function') {
@@ -19459,10 +19759,10 @@
             updateStatus('Custom PID saved — Save Layout to push to device');
         }
 
-        function customPidDelete(index) {
+        async function customPidDelete(index) {
             const arr = _customPidsArray();
             if (index < 0 || index >= arr.length) return;
-            if (!confirm('Delete ' + (arr[index].signal_name || 'this PID') + '?')) return;
+            if (!(await confirmAsync('Delete Custom PID', 'Delete ' + (arr[index].signal_name || 'this PID') + '?', 'Delete'))) return;
             arr.splice(index, 1);
             _renderCustomPidsTable();
             updateStatus('Custom PID deleted — Save Layout to push to device');
@@ -19866,8 +20166,9 @@
          *   GET    /api/channels/canonical   (read-only catalog of 90)
          *   POST   /api/channels/activate    ({"id":"rpm"})
          *   POST   /api/channels/update      ({"id":"rpm","fields":{...}})
-         *   POST   /api/channels/delete      ({"id":"custom_x"})
-         * Auto-save is debounced 400ms per channel. */
+         *   POST   /api/channels/delete      ({"id":"custom_x"} or {"ids":[...]})
+         * Edits BUFFER locally until the user hits Save (or confirms the
+         * save prompt when navigating away) — nothing auto-applies. */
 
         const _CH_GROUP_LABELS = {
             0: 'Engine — Core', 1: 'Engine — Exhaust', 2: 'Drivetrain',
@@ -19885,19 +20186,39 @@
         let _chTimer = null;
         let _chCache = [];        /* active channels (last fetched) */
         let _chCanonical = [];    /* canonical registry (fetched once per open) */
+        let _chCapacity = 128;    /* firmware CHM_MAX (from GET /api/channels) */
         let _chSelectedId = null;
-        let _chSaveTimer = null;  /* per-channel debounced PUT */
-        let _chPendingFields = {}; /* fields queued for the next PUT */
+        let _chSaveTimer = null;  /* legacy handle — cleared on discard */
+        let _chPendingFields = {}; /* buffered edits awaiting explicit Save */
+        let _chPendingDecode = null; /* buffered CAN-decode patch awaiting Save */
+        let _chPendingId = null;   /* channel the buffer belongs to (NOT the
+                                    * selected row — selection can move while
+                                    * edits are still pending) */
         let _chFilter = 'all';    /* list status filter: all | configured | unconfigured */
         let _chSignalValuesCache = {}; /* signal-name → {value, stale, unit} */
+        let _chSelectMode = false; /* bulk-select mode for multi-delete */
+        let _chSelected = new Set(); /* ids ticked while in select mode */
 
         async function openChannelsModal() {
             document.getElementById('channelsModal').style.display = 'flex';
             await Promise.all([_fetchChannelsActive(), _fetchChannelsCanonical(), _fetchSignalValues()]);
             _refreshChannelsList();
             _renderChannelDetail();
-            if (_chTimer) clearInterval(_chTimer);
-            _chTimer = setInterval(_pollChannelLive, 500);
+            _chSchedulePoll();
+        }
+
+        /* Self-rescheduling live poll with an in-flight guard — NEVER
+         * setInterval against the dash: /api/channels takes ~1 s near the
+         * cap, so a fixed interval overlaps itself and triples request
+         * latency (see channels-create-endpoint-and-probe). */
+        function _chSchedulePoll() {
+            if (_chTimer) clearTimeout(_chTimer);
+            _chTimer = setTimeout(async () => {
+                const modal = document.getElementById('channelsModal');
+                if (!modal || modal.style.display === 'none') { _chTimer = null; return; }
+                try { await _pollChannelLive(); } catch (e) { /* offline tick */ }
+                if (_chTimer !== null) _chSchedulePoll();
+            }, 500);
         }
 
         /* Open the Channels modal and jump straight to a specific channel.
@@ -20077,20 +20398,27 @@
             });
             /* Poll channels (which carries live values) every 1 s while the
              * picker is open, then patch only the value cells in-place so
-             * scroll position + focus + selection state are preserved. */
-            if (_wChPickerPollTimer) clearInterval(_wChPickerPollTimer);
-            _wChPickerPollTimer = setInterval(async () => {
-                const modal = document.getElementById('widgetChannelPicker');
-                if (!modal || !modal.classList.contains('open')) return;
-                try {
-                    await _fetchChannelsActive();
-                    _wChPickerPatchLive();
-                } catch (e) { /* offline — skip this tick */ }
-            }, 1000);
+             * scroll position + focus + selection state are preserved.
+             * Self-rescheduling timeout, NOT setInterval — a fixed interval
+             * overlaps in-flight requests against the dash and triples
+             * latency (see channels-create-endpoint-and-probe). */
+            const schedule = () => {
+                if (_wChPickerPollTimer) clearTimeout(_wChPickerPollTimer);
+                _wChPickerPollTimer = setTimeout(async () => {
+                    const modal = document.getElementById('widgetChannelPicker');
+                    if (!modal || !modal.classList.contains('open')) { _wChPickerPollTimer = null; return; }
+                    try {
+                        await _fetchChannelsActive();
+                        _wChPickerPatchLive();
+                    } catch (e) { /* offline — skip this tick */ }
+                    if (_wChPickerPollTimer !== null) schedule();
+                }, 1000);
+            };
+            schedule();
         }
         function _closeWidgetChannelPicker() {
             document.getElementById('widgetChannelPicker').classList.remove('open');
-            if (_wChPickerPollTimer) { clearInterval(_wChPickerPollTimer); _wChPickerPollTimer = null; }
+            if (_wChPickerPollTimer) { clearTimeout(_wChPickerPollTimer); _wChPickerPollTimer = null; }
         }
 
         /* ── Source classification ─────────────────────────────────────
@@ -20359,10 +20687,16 @@
             if (typeof saveLayout === 'function') saveLayout();
         }
 
-        function closeChannelsModal() {
+        async function closeChannelsModal() {
+            if (_chTimer) { clearTimeout(_chTimer); _chTimer = null; }
+            if (!(await _chConfirmPendingEdits())) {
+                /* Save failed — keep the modal open with the edits intact
+                 * rather than closing over unsaved (and now unreachable) work. */
+                _chSchedulePoll();
+                return;
+            }
             document.getElementById('channelsModal').style.display = 'none';
-            if (_chTimer) { clearInterval(_chTimer); _chTimer = null; }
-            _flushChannelEdits();
+            if (_chSelectMode) _chToggleSelectMode();
         }
 
 
@@ -20387,7 +20721,20 @@
                 if (!r.ok) return;
                 const data = await r.json();
                 _chCache = Array.isArray(data.channels) ? data.channels : [];
-                document.getElementById('chCount').textContent = `(${_chCache.length} active)`;
+                if (typeof data.capacity === 'number' && data.capacity > 0)
+                    _chCapacity = data.capacity;
+                const el = document.getElementById('chCount');
+                if (el) {
+                    const n = _chCache.length;
+                    el.textContent = `(${n} of ${_chCapacity} used)`;
+                    /* Warn as the registry fills — a full registry silently
+                     * broke activation before; make it visible early. */
+                    el.style.color = n >= _chCapacity ? '#ef4444'
+                                   : n >= _chCapacity - 12 ? 'hsl(40,80%,60%)' : '';
+                    el.title = n >= _chCapacity - 12
+                        ? 'Channel registry is nearly full — use Select to delete unused channels'
+                        : '';
+                }
             } catch (e) { /* silent */ }
         }
 
@@ -20683,11 +21030,21 @@
                          * Unbound rows still get "— rpm" so the user sees
                          * what kind of channel this is at a glance. */
                         const valHtml = `${_chFmtPlain(c, c.current_value, c.is_stale)}<span class="unit">${unit}</span>`;
-                        return `<div id="chRow_${c.id}" class="ch2-row ${sel} ${inact}" onclick="_selectChannel('${c.id}')">
-                            <div>
+                        /* Bulk-select mode: only custom channels are deletable,
+                         * so only they get a checkbox; canonical rows dim out. */
+                        const deletable = c.is_active && !c.is_canonical;
+                        const check = (_chSelectMode && deletable)
+                            ? `<input type="checkbox" ${_chSelected.has(c.id) ? 'checked' : ''} style="margin-right:8px; pointer-events:none;">`
+                            : '';
+                        const dimmed = (_chSelectMode && !deletable) ? 'opacity:0.35; pointer-events:none;' : '';
+                        const click = _chSelectMode
+                            ? (deletable ? `_chToggleRowSelect('${c.id}')` : '')
+                            : `_selectChannel('${c.id}')`;
+                        return `<div id="chRow_${c.id}" class="ch2-row ${sel} ${inact}" style="${dimmed}" onclick="${click}">
+                            <div style="display:flex; align-items:center;">${check}<div>
                                 <div class="ch2-row-name">${c.label || c.id}</div>
                                 ${sub ? `<div class="ch2-row-sub">${_chSourceBadge(c)} ${sub}</div>` : ''}
-                            </div>
+                            </div></div>
                             <div class="ch2-row-val ${cls}">${valHtml}</div>
                         </div>`;
                     }).join('');
@@ -20744,22 +21101,30 @@
          * the user's channels.json yet), activate it AND try to auto-bind
          * a signal. Then render the detail panel. */
         async function _selectChannel(id) {
-            _flushChannelEdits();
+            if (!(await _chConfirmPendingEdits())) return; /* save failed — stay put */
             _chMathFormOpen = false;
             const isActive = !!_chCache.find(c => c.id === id);
             const canonical = _chCanonical.find(d => d.id === id);
             if (!isActive && canonical) {
                 try {
-                    await fetch('/api/channels/activate', {
+                    const r = await fetch('/api/channels/activate', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({id}),
                     });
+                    if (!r.ok) {
+                        /* A full registry used to fail here in total silence —
+                         * the row just stayed grey. Surface the firmware's
+                         * reason (e.g. "Channel limit reached (128 max)"). */
+                        let msg = 'Could not activate channel';
+                        try { msg = (await r.text()).replace(/^.*"message":"([^"]*)".*$/, '$1') || msg; } catch (_) {}
+                        if (typeof updateStatus === 'function') updateStatus(msg, true);
+                    }
                     await Promise.all([_fetchChannelsActive(), _fetchSignalValues()]);
                     /* Auto-bind only on strict match. Suggestion-quality
                      * matches stay visible in the picker for the user. */
                     const match = _strictSignalMatch(id);
-                    if (match) {
+                    if (match && _chCache.find(c => c.id === id)) {
                         await fetch('/api/channels/update', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
@@ -20770,6 +21135,80 @@
                 } catch(e) { console.warn('activate failed', e); }
             }
             _chSelectedId = id;
+            _refreshChannelsList();
+            _renderChannelDetail();
+        }
+
+        /* ── Bulk select + delete (DBC-import cleanup) ──────────────────── */
+
+        function _chToggleSelectMode() {
+            _chSelectMode = !_chSelectMode;
+            if (!_chSelectMode) _chSelected.clear();
+            const btn = document.getElementById('chSelectModeBtn');
+            if (btn) btn.classList.toggle('active', _chSelectMode);
+            const bar = document.getElementById('chBulkBar');
+            if (bar) bar.style.display = _chSelectMode ? 'flex' : 'none';
+            _chUpdateBulkBar();
+            _refreshChannelsList();
+        }
+
+        function _chToggleRowSelect(id) {
+            if (_chSelected.has(id)) _chSelected.delete(id);
+            else _chSelected.add(id);
+            _chUpdateBulkBar();
+            _refreshChannelsList();
+        }
+
+        function _chBulkSelectAllCustom() {
+            (_chCache || []).forEach(c => {
+                const canonical = _chCanonical.find(d => d.id === c.id);
+                if (!canonical) _chSelected.add(c.id);
+            });
+            _chUpdateBulkBar();
+            _refreshChannelsList();
+        }
+
+        function _chUpdateBulkBar() {
+            const n = _chSelected.size;
+            const count = document.getElementById('chBulkCount');
+            if (count) count.textContent = n === 1 ? '1 selected' : `${n} selected`;
+            const del = document.getElementById('chBulkDeleteBtn');
+            if (del) del.disabled = n === 0;
+        }
+
+        async function _chBulkDelete() {
+            const ids = Array.from(_chSelected);
+            if (!ids.length) return;
+            const ok = await confirmAsync(
+                `Delete ${ids.length} Channel${ids.length === 1 ? '' : 's'}`,
+                'Deletes the selected custom channels (their CAN decode included). Widgets bound to them will show "—". This cannot be undone.',
+                'Delete');
+            if (!ok) return;
+            try {
+                const r = await fetch('/api/channels/delete', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ids}),
+                });
+                if (r.ok) {
+                    const res = await r.json();
+                    if (typeof updateStatus === 'function')
+                        updateStatus(`Deleted ${res.deleted ?? ids.length} channel(s)` +
+                                     (res.skipped ? ` · ${res.skipped} skipped` : ''));
+                } else if (typeof updateStatus === 'function') {
+                    updateStatus('Bulk delete failed', true);
+                }
+            } catch (e) { console.warn('bulk delete error', e); }
+            if (ids.includes(_chSelectedId)) _chSelectedId = null;
+            /* Deleting the channel a buffer belongs to supersedes its edits —
+             * else the dirty bar lingers with a Save that can never land. */
+            if (_chPendingId && ids.includes(_chPendingId)) _chClearPending();
+            _chSelected.clear();
+            _chSelectMode = false;
+            const btn = document.getElementById('chSelectModeBtn');
+            if (btn) btn.classList.remove('active');
+            const bar = document.getElementById('chBulkBar');
+            if (bar) bar.style.display = 'none';
+            await _fetchChannelsActive();
             _refreshChannelsList();
             _renderChannelDetail();
         }
@@ -20835,7 +21274,11 @@
             };
         }
 
-        function _chOpenNew() {
+        async function _chOpenNew() {
+            /* Resolve pending edits FIRST. Entering the form while dirty used
+             * to carry the old channel's buffer across, and the post-Create
+             * re-select then posted those edits onto the brand-new channel. */
+            if (!(await _chConfirmPendingEdits())) return;
             _chNewMode = true;
             _chNewDraft = _chNewDefaults();
             _chSelectedId = null;
@@ -20858,7 +21301,10 @@
          * bit offset is exactly the case that used to force people to hijack a
          * canonical channel. The label gets a " copy" suffix because the id is
          * derived from it and a bare duplicate would 400 on the name clash. */
-        function _chDuplicate(id) {
+        async function _chDuplicate(id) {
+            /* Same reason as _chOpenNew: never carry one channel's unsaved
+             * buffer into the new-channel form. */
+            if (!(await _chConfirmPendingEdits())) return;
             const src = _chCache.find(c => c.id === id);
             if (!src) { showToast('Channel not found', 'error'); return; }
             const dec = src.decode || {};
@@ -21220,10 +21666,21 @@
             if (!wrap) return;
             if (_chNewMode) { _renderChNewForm(wrap); return; }
             _chStopNewProbe();
-            const c = _chCache.find(x => x.id === _chSelectedId);
+            let c = _chCache.find(x => x.id === _chSelectedId);
             if (!c) {
                 wrap.innerHTML = `<div class="ch2-detail-empty">${_chCache.length ? 'Pick a channel from the list.' : ''}</div>`;
+                _chUpdateDirtyBar();
                 return;
+            }
+            /* Overlay any UNSAVED buffered edits onto the display copy, so a
+             * re-render mid-edit doesn't visually revert what the user typed
+             * (the buffer itself is untouched — Save still posts it).
+             * Only when the buffer belongs to THIS channel — a buffer left
+             * dirty by a failed save must never paint onto another row. */
+            if (_chIsDirty() && _chPendingId === c.id) {
+                c = Object.assign({}, c, _chPendingFields);
+                if (_chPendingDecode)
+                    c.decode = Object.assign({}, c.decode || {}, _chPendingDecode);
             }
             const def = _chCanonical.find(x => x.id === c.id);
             const unit = c.units_display || c.units_native || '';
@@ -21413,13 +21870,13 @@
             _refreshChannelsList();
         }
 
-        /* Unbind helper — awaits the flush before re-rendering so the
-         * detail panel sees the cleared state (otherwise the cached
-         * channel.signal would still show the old source). */
+        /* Unbind helper — buffers the clear like every other field edit, so
+         * the dirty bar's Save/Cancel governs it too. The pending overlay in
+         * _renderChannelDetail shows the cleared source immediately; the old
+         * inline flush would also have pushed any buffered CAN-decode patch
+         * live, which the decode editor promises not to do until Save. */
         async function _unbindChannelSource(id) {
             _chEdit(id, 'signal', null);
-            await _flushChannelEdits();
-            await _fetchChannelsActive();
             _renderChannelDetail();
             _refreshChannelsList();
             /* NOTE: layout-reload removed — see _applySrcPickerSelection comment. */
@@ -21892,7 +22349,7 @@
             const disp = v => _chDispRound(_chToDisplay(c, v));
             const numField = (key, val, placeholder) => `
                 <input type="number" step="any" value="${disp(val) ?? ''}" placeholder="${disp(placeholder) ?? '—'}"
-                       onchange="_chEditDisp('${c.id}','${key}', this.value); _flushChannelEdits(); _renderChannelDetail();">`;
+                       onchange="_chEditDisp('${c.id}','${key}', this.value); _renderChannelDetail();">`;
             const canFill = def && (def.low_warn != null || def.high_warn != null);
             const hasAnyT = c.low_warn != null || c.high_warn != null;
             const min = c.min ?? def?.min_default ?? 0;
@@ -21927,7 +22384,7 @@
                     <div class="ch2-num-row">
                         <div class="ch2-num"><span class="ch2-num-label" title="What to convert the value to for display.">Display as</span>${_chUnitFieldHTML(c)}</div>
                         <div class="ch2-num"><span class="ch2-num-label">Decimals</span>
-                            <input type="number" min="0" max="3" value="${c.decimals||0}" onchange="_chEdit('${c.id}','decimals', Number(this.value)); _flushChannelEdits(); _renderChannelDetail();"></div>
+                            <input type="number" min="0" max="3" value="${c.decimals||0}" onchange="_chEdit('${c.id}','decimals', Number(this.value)); _renderChannelDetail();"></div>
                     </div>
                 </div>`;
         }
@@ -22015,7 +22472,7 @@
                     <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
                         <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
                             CAN decode — ${c.signal}
-                            <span style="font-size:10px; color:var(--text-ghost); margin-left:6px;">(applies live)</span>
+                            <span style="font-size:10px; color:var(--text-ghost); margin-left:6px;">(applies when you Save)</span>
                         </div>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                             <div class="ch2-num">
@@ -22113,9 +22570,11 @@
              * native unit literal rather than clearing the field. */
             if (!value) value = c?.units_native || '';
             _chEdit(id, 'units_display', value);
-            /* Flush now and re-render so the value, range and threshold
-             * fields all flip to the new unit immediately. */
-            await _flushChannelEdits();
+            /* Re-render only — the buffered value feeds the pending overlay,
+             * so the value/range/threshold fields flip to the new unit right
+             * away WITHOUT applying to the dash. Flushing here used to also
+             * push the buffered CAN-decode patch live, breaking the
+             * "applies when you Save" promise the decode editor makes. */
             _renderChannelDetail();
             _refreshChannelsList();
         }
@@ -22135,7 +22594,9 @@
         async function _chSourceSelect(id, value) {
             if (!value) return;
             _chEdit(id, 'units_native', value);
-            await _flushChannelEdits();
+            /* Buffered like every other field (see _chUnitSelect). The
+             * firmware re-expresses range + thresholds into the new native
+             * unit when the batch is Saved; the refetch then shows them. */
             _renderChannelDetail();
             _refreshChannelsList();
         }
@@ -22215,14 +22676,18 @@
                     else sg[field] = value;
                 }
             }
-            /* POST ONLY the changed field — the firmware decode handler fills
-             * missing sub-fields from the channel's CURRENT values, so editing
-             * one field never zeroes can_id (was: sending a full object built
-             * from base={} wiped can_id to 0 and killed the binding). */
-            fetch('/api/channels/update', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
-                body: JSON.stringify({ id: channelId, fields: { decode: patch } })
-            }).catch(() => {});
+            /* BUFFER the changed field — decode edits used to POST live per
+             * keystroke (with a swallowed .catch), which meant a half-typed
+             * CAN id was already live on the dash and there was no way back.
+             * They now join the channel's pending batch and apply on Save;
+             * the firmware decode handler fills missing sub-fields from the
+             * channel's CURRENT values, so a partial patch never zeroes
+             * can_id. The client-side bit preview keeps working off the
+             * local cache while you type. */
+            if (_chPendingId && _chPendingId !== channelId) return; /* never mix channels */
+            _chPendingId = channelId;
+            _chPendingDecode = Object.assign(_chPendingDecode || {}, patch);
+            _chUpdateDirtyBar();
         }
         /* Push a full decode (built from a layout-signal shape) onto a channel.
          * Used by the fork / add-CAN flows so the freshly-created decode lands
@@ -22445,36 +22910,88 @@
             _refreshChannelsList();
         }
 
-        /* Debounced field-edit handler. Coalesces multiple edits to the
-         * same channel into one POST so a slider doesn't hammer the dash. */
+        /* Buffered field-edit handler. Edits accumulate locally and are
+         * POSTed as ONE update when the user hits Save (the dirty bar) or
+         * confirms the save prompt while navigating away. Nothing applies
+         * to the dash until then.
+         *
+         * The buffer is KEYED to _chPendingId, not to whatever row happens
+         * to be selected. Selection can move on while a buffer is still
+         * dirty (a failed save, a delete, the New-channel form), and an
+         * unkeyed buffer would then be rendered onto — and Saved onto — the
+         * wrong channel. */
         function _chEdit(id, field, value) {
-            if (id !== _chSelectedId) return;
+            if (!id) return;
+            if (_chPendingId && _chPendingId !== id) return; /* never mix channels */
+            _chPendingId = id;
             _chPendingFields[field] = (value === '' ? null : value);
-            if (_chSaveTimer) clearTimeout(_chSaveTimer);
-            _chSaveTimer = setTimeout(_flushChannelEdits, 400);
+            _chUpdateDirtyBar();
         }
 
+        function _chIsDirty() {
+            return Object.keys(_chPendingFields).length > 0 || _chPendingDecode !== null;
+        }
+
+        /* Drop the buffer without touching the network or re-rendering.
+         * Used by paths that supersede the edits outright (delete, reset). */
+        function _chClearPending() {
+            _chPendingFields = {};
+            _chPendingDecode = null;
+            _chPendingId = null;
+            if (_chSaveTimer) { clearTimeout(_chSaveTimer); _chSaveTimer = null; }
+            _chUpdateDirtyBar();
+        }
+
+        function _chUpdateDirtyBar() {
+            const bar = document.getElementById('chDirtyBar');
+            if (!bar) return;
+            const dirty = _chIsDirty();
+            bar.style.display = dirty ? 'flex' : 'none';
+            if (dirty) {
+                const c = (_chCache || []).find(x => x.id === _chPendingId);
+                const label = document.getElementById('chDirtyLabel');
+                if (label) label.textContent =
+                    `Unsaved changes to ${c ? (c.label || c.id) : (_chPendingId || 'this channel')}`;
+            }
+        }
+
+        /* If the user edited without saving and is about to navigate away
+         * (another channel, modal close), ask once: Save applies the batch,
+         * Cancel discards it.
+         *
+         * Returns TRUE when it's safe to proceed. A failed Save returns
+         * FALSE with the buffer intact so the caller aborts navigation —
+         * otherwise the selection moves on while the edits are still
+         * pending against the previous channel. */
+        async function _chConfirmPendingEdits() {
+            if (!_chIsDirty()) return true;
+            const c = (_chCache || []).find(x => x.id === _chPendingId);
+            const name = c ? (c.label || c.id) : 'this channel';
+            const save = await confirmAsync('Unsaved Changes',
+                `Save your changes to ${name}? Choosing Cancel discards them.`, 'Save');
+            if (!save) { await _chDiscardEdits(); return true; }
+            await _flushChannelEdits();
+            if (_chIsDirty()) {
+                /* Save failed — stay on the channel that still owns the edits. */
+                if (_chPendingId) _chSelectedId = _chPendingId;
+                _refreshChannelsList();
+                _renderChannelDetail();
+                return false;
+            }
+            return true;
+        }
+
+        /* Save — POST every buffered field (and the buffered decode patch)
+         * as one /api/channels/update. On failure the buffer is kept so the
+         * user can hit Save again; nothing is silently lost. */
         async function _flushChannelEdits() {
             if (_chSaveTimer) { clearTimeout(_chSaveTimer); _chSaveTimer = null; }
-            if (!_chSelectedId || !Object.keys(_chPendingFields).length) return;
-            const id = _chSelectedId;
-            const fields = _chPendingFields;
-            _chPendingFields = {};
-            /* Re-queue the in-flight fields on failure so a dropped POST doesn't
-             * silently lose a threshold/decode edit (the input keeps showing the
-             * typed value while _chCache reverts on next render — the most
-             * safety-relevant editor in the app). Newer edits made during the
-             * fetch take precedence; older failed fields only fill the gaps. */
-            const _requeue = () => {
-                for (const k in fields)
-                    if (!(k in _chPendingFields)) _chPendingFields[k] = fields[k];
-                if (_chSelectedId === id && Object.keys(_chPendingFields).length) {
-                    if (_chSaveTimer) clearTimeout(_chSaveTimer);
-                    _chSaveTimer = setTimeout(_flushChannelEdits, 1500);
-                }
-                if (typeof updateStatus === 'function')
-                    updateStatus('Channel save failed — retrying', true);
-            };
+            if (!_chIsDirty()) return;
+            /* Post to the channel that OWNS the buffer. */
+            const id = _chPendingId;
+            if (!id) { _chClearPending(); return; }
+            const fields = Object.assign({}, _chPendingFields);
+            if (_chPendingDecode) fields.decode = Object.assign({}, _chPendingDecode);
             try {
                 const r = await fetch('/api/channels/update', {
                     method: 'POST',
@@ -22482,21 +22999,45 @@
                     body: JSON.stringify({id, fields}),
                 });
                 if (r.ok) {
+                    _chPendingFields = {};
+                    _chPendingDecode = null;
+                    _chPendingId = null;
+                    _chUpdateDirtyBar();
                     const data = await r.json();
                     if (data.channel) {
                         const idx = _chCache.findIndex(c => c.id === id);
                         if (idx >= 0) _chCache[idx] = data.channel;
                         _refreshChannelsList();
                     }
+                    if (typeof updateStatus === 'function') updateStatus('Channel saved');
                 } else {
                     console.warn('channel update failed', r.status, await r.text());
-                    _requeue();
+                    if (typeof updateStatus === 'function')
+                        updateStatus('Channel save failed — hit Save to retry', true);
+                    _chUpdateDirtyBar();
                 }
-            } catch (e) { console.warn('channel update error', e); _requeue(); }
+            } catch (e) {
+                console.warn('channel update error', e);
+                if (typeof updateStatus === 'function')
+                    updateStatus('Channel save failed — hit Save to retry', true);
+                _chUpdateDirtyBar();
+            }
+        }
+
+        /* Cancel — throw the buffered edits away and re-render from the
+         * dash's actual state (refetch restores any locally-mutated decode
+         * display values too). */
+        async function _chDiscardEdits() {
+            _chClearPending();
+            await _fetchChannelsActive();
+            _refreshChannelsList();
+            _renderChannelDetail();
         }
 
         async function _chResetDefaults(id) {
-            if (!confirm('Reset this channel to canonical defaults?')) return;
+            if (!(await confirmAsync('Reset Channel', 'Reset this channel to canonical defaults?', 'Reset'))) return;
+            /* Any buffered (unsaved) edits are superseded by the reset. */
+            _chClearPending();
             /* No dedicated endpoint yet — emulate by sending nulls for every
              * field that has a canonical default. Server resolves "null" as
              * "clear back to default" for thresholds + colors. Range is
@@ -22522,8 +23063,9 @@
         }
 
         async function _chDelete(id) {
-            if (!confirm('Delete this custom channel? Widgets bound to it will show "—".')) return;
+            if (!(await confirmAsync('Delete Custom Channel', 'Delete this custom channel? Widgets bound to it will show "—".', 'Delete'))) return;
             await fetch('/api/channels/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+            if (_chPendingId === id) _chClearPending();  /* edits superseded */
             _chSelectedId = null;
             await _fetchChannelsActive();
             _refreshChannelsList();
@@ -22670,7 +23212,7 @@
         }
 
         async function deleteLogFile(name) {
-            if (!confirm(`Delete ${name}?`)) return;
+            if (!(await confirmAsync('Delete Log File', `Delete ${name}?`, 'Delete'))) return;
             try {
                 /* Firmware expects ?name= as a query param (not a JSON body). */
                 await fetch('/api/log/delete?name=' + encodeURIComponent(name), {
@@ -22930,7 +23472,7 @@
         }
 
         async function fuelSetEmpty() {
-            if (!confirm('Set current raw reading as empty calibration?')) return;
+            if (!(await confirmAsync('Fuel Calibration', 'Set current raw reading as empty calibration?', 'Set Empty'))) return;
             try {
                 const r = await fetch('/api/fuel/set-empty', { method: 'POST' });
                 if (!r.ok) throw new Error(r.status);
@@ -22940,7 +23482,7 @@
         }
 
         async function fuelSetFull() {
-            if (!confirm('Set current raw reading as full calibration?')) return;
+            if (!(await confirmAsync('Fuel Calibration', 'Set current raw reading as full calibration?', 'Set Full'))) return;
             try {
                 const r = await fetch('/api/fuel/set-full', { method: 'POST' });
                 if (!r.ok) throw new Error(r.status);
@@ -23272,6 +23814,7 @@
                     { type: 'button', label: 'Keyboard Shortcuts', icon: 'help',  onclick: "document.getElementById('helpModal').style.display='flex'" }
                 ]},
                 { heading: 'Danger zone', items: [
+                    { type: 'button', label: 'Reset Default Layout', icon: 'reset', onclick: 'resetDefaultLayout()', danger: true },
                     { type: 'button', label: 'Delete Layout', icon: 'trash', onclick: 'deleteCurrentLayout()', danger: true }
                 ]}
             ];
@@ -23956,185 +24499,6 @@
 
         /* Re-sync on viewport change (rotation / resize) */
         window.addEventListener('resize', _wstUpdate);
-
-        /* ── Lap Timing modal ───────────────────────────────────────────
-         * Configuration + live view for the GPS lap timer. Bound to:
-         *   GET  /api/lap/status         presence, fix, track, live timing
-         *   GET  /api/lap/track          full track detail
-         *   POST /api/lap/track          replace track / {"clear":true}
-         *   POST /api/lap/capture        set a line from the car's position
-         *   POST /api/lap/session/reset  clear times, keep track
-         * The capture flow is the product: no coordinate entry, no map. */
-        let _lapTimer = null;
-        let _lapTrack = null;   /* last GET /api/lap/track payload, or null */
-        let _lapPollInFlight = false;   /* guard: never stack /api/lap/status calls */
-        let _lapModalOpen = false;      /* drives the self-rescheduling poll loop */
-
-        function _lapFmtTime(s) {
-            if (!s || s <= 0) return '—';
-            const m = Math.floor(s / 60);
-            const r = s - m * 60;
-            return m > 0 ? `${m}:${r.toFixed(3).padStart(6, '0')}` : r.toFixed(3);
-        }
-
-        async function _lapRefreshTrack() {
-            try {
-                const r = await fetch('/api/lap/track');
-                if (!r.ok) return;
-                const t = await r.json();
-                _lapTrack = t.empty ? null : t;
-                const nameEl = document.getElementById('lapTrackName');
-                const minEl  = document.getElementById('lapMinLap');
-                /* Don't clobber in-progress typing: only fill when blank/unfocused */
-                if (_lapTrack) {
-                    if (document.activeElement !== nameEl) nameEl.value = _lapTrack.name || '';
-                    if (document.activeElement !== minEl)  minEl.value  = _lapTrack.min_lap_time_s || '';
-                }
-                const n = _lapTrack ? (_lapTrack.sectors || []).length : 0;
-                document.getElementById('lapSectorSummary').textContent = _lapTrack
-                    ? `Start/finish set · ${n} sector split${n === 1 ? '' : 's'} (${n + 1} sector${n ? 's' : ''} per lap, max 8 splits)`
-                    : 'No track yet — capture a start/finish line to begin.';
-            } catch (e) { /* silent */ }
-        }
-
-        async function _lapPoll() {
-            /* In-flight guard + self-reschedule instead of setInterval: the dash
-             * round-trips at ~1-1.5 s under load, and a fixed 1 s interval would
-             * stack requests and multiply device latency (see the channels-probe
-             * lesson). Only the NEXT poll is scheduled once this one settles. */
-            if (_lapPollInFlight) return;
-            _lapPollInFlight = true;
-            try {
-                const r = await fetch('/api/lap/status');
-                if (!r.ok) return;
-                const st = await r.json();
-
-                const gps = document.getElementById('lapGpsBadge');
-                gps.textContent = st.gps_present ? 'GPS: connected' : 'GPS: not detected';
-                gps.style.color = st.gps_present ? 'hsl(152,60%,55%)' : 'hsl(0,60%,60%)';
-
-                const fix = document.getElementById('lapFixBadge');
-                if (st.fix) {
-                    fix.style.display = '';
-                    fix.textContent = `${st.fix.speed_kph.toFixed(1)} km/h · hdg ${Math.round(st.fix.heading)}°`;
-                } else {
-                    fix.style.display = st.gps_present ? '' : 'none';
-                    fix.textContent = 'no fix yet';
-                }
-
-                document.getElementById('lapTrackBadge').textContent =
-                    st.has_track ? `Track: ${st.track_name}` : 'No track configured';
-
-                const live = document.getElementById('lapLiveRow');
-                const t = st.timing || {};
-                if (t.armed) {
-                    live.style.display = '';
-                    const delta = (t.lap_delta === undefined) ? '—'
-                        : (t.lap_delta >= 0 ? '+' : '') + t.lap_delta.toFixed(2);
-                    live.textContent =
-                        `Lap ${t.lap_number}  cur ${_lapFmtTime(t.lap_time_current)}  ` +
-                        `last ${_lapFmtTime(t.lap_time_last)}  best ${_lapFmtTime(t.lap_time_best)}  Δ ${delta}`;
-                } else {
-                    live.style.display = 'none';
-                }
-
-                const stat = document.getElementById('setupLapStat');
-                if (stat) stat.textContent = st.gps_present
-                    ? (st.has_track ? st.track_name : 'GPS connected')
-                    : 'RDM GPS';
-            } catch (e) { /* silent */ }
-            finally {
-                _lapPollInFlight = false;
-                /* Reschedule only while the modal is open — a settled poll queues
-                 * the next one 1 s out, so calls never overlap. */
-                if (_lapModalOpen) _lapTimer = setTimeout(_lapPoll, 1000);
-            }
-        }
-
-        function openLapTiming() {
-            document.getElementById('lapTimingModal').style.display = 'flex';
-            _lapModalOpen = true;
-            _lapRefreshTrack();
-            if (_lapTimer) { clearTimeout(_lapTimer); _lapTimer = null; }
-            _lapPoll();   /* self-reschedules while _lapModalOpen */
-        }
-
-        function closeLapTiming() {
-            document.getElementById('lapTimingModal').style.display = 'none';
-            _lapModalOpen = false;
-            if (_lapTimer) { clearTimeout(_lapTimer); _lapTimer = null; }
-        }
-
-        async function lapCapture(what) {
-            const hw = parseFloat(document.getElementById('lapHalfWidth').value) || 15;
-            try {
-                const r = await fetch('/api/lap/capture', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({what, half_width_m: hw}),
-                });
-                if (!r.ok) {
-                    const msg = await r.text().catch(() => '');
-                    throw new Error(msg || ('HTTP ' + r.status));
-                }
-                const d = await r.json();
-                const label = what === 'start_finish' ? 'Start/finish' : `Sector split ${d.sector_count}`;
-                showToast(`${label} captured`, 'success');
-                if (d.heading_reliable === false) {
-                    showToast('Captured while stationary — direction unknown. Re-capture while driving across the line.', 'info');
-                }
-                _lapRefreshTrack();
-            } catch (e) {
-                showToast('Capture failed: ' + e.message, 'error');
-            }
-        }
-
-        async function lapSaveTrackMeta() {
-            if (!_lapTrack) { showToast('Capture a start/finish line first', 'error'); return; }
-            /* Empty field → keep the current value; an explicit "0" must pass
-             * through (firmware reads 0 as "use the default gate"), so don't let
-             * the falsy-OR chain swallow a typed zero. */
-            const _mlRaw = document.getElementById('lapMinLap').value.trim();
-            const _ml = _mlRaw === '' ? (_lapTrack.min_lap_time_s || 0)
-                                      : (parseFloat(_mlRaw) || 0);
-            const body = Object.assign({}, _lapTrack, {
-                name: document.getElementById('lapTrackName').value.trim() || _lapTrack.name,
-                min_lap_time_s: _ml,
-            });
-            try {
-                const r = await fetch('/api/lap/track', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(body),
-                });
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                showToast('Track saved', 'success');
-                _lapRefreshTrack();
-            } catch (e) { showToast('Save failed: ' + e.message, 'error'); }
-        }
-
-        async function lapClearTrack() {
-            if (!confirm('Remove the configured track? Lap and sector times will be lost.')) return;
-            try {
-                const r = await fetch('/api/lap/track', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({clear: true}),
-                });
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                showToast('Track cleared', 'success');
-                _lapRefreshTrack(); _lapPoll();
-            } catch (e) { showToast('Clear failed: ' + e.message, 'error'); }
-        }
-
-        async function lapResetSession() {
-            try {
-                const r = await fetch('/api/lap/session/reset', {method: 'POST'});
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                showToast('Session reset — best times cleared', 'success');
-                _lapPoll();
-            } catch (e) { showToast('Reset failed: ' + e.message, 'error'); }
-        }
 
     </script>
 </body>
