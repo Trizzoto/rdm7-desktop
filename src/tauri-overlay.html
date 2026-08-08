@@ -1929,6 +1929,522 @@
         .ws-kv { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); padding: 3px 0; line-height: 1.45; }
         .ws-kv i { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 
+        /* ================================================================
+           GPS workspace — Industry light / RDM brand (ADR-0024).
+           Scoped to #gpWorkspace: the other workspaces keep the dark chrome.
+           Ground #f2f2f3, ink #1d1f20, hairline dividers, square corners,
+           Barlow + Barlow Condensed (bundled — the track has no internet),
+           RDM red as the ONLY accent, spent where it means something:
+           best lap, active view, time lost, REC.
+           ================================================================ */
+        @font-face { font-family: 'Barlow'; src: url('fonts/Barlow-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+        @font-face { font-family: 'Barlow'; src: url('fonts/Barlow-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+        @font-face { font-family: 'Barlow'; src: url('fonts/Barlow-600.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
+        @font-face { font-family: 'Barlow'; src: url('fonts/Barlow-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+        @font-face { font-family: 'Barlow Condensed'; src: url('fonts/BarlowCondensed-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+        @font-face { font-family: 'Barlow Condensed'; src: url('fonts/BarlowCondensed-600.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
+        @font-face { font-family: 'Barlow Condensed'; src: url('fonts/BarlowCondensed-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+
+        #gpWorkspace {
+            /* Industry tokens, gpb- prefixed so nothing leaks */
+            --gpb-bg: #f2f2f3;          --gpb-surface: #ffffff;
+            --gpb-ink: #1d1f20;         --gpb-muted: rgba(29,31,32,0.55);
+            --gpb-soft: rgba(29,31,32,0.72);
+            --gpb-div: rgba(29,31,32,0.16);  --gpb-div-lt: rgba(29,31,32,0.08);
+            --gpb-red: #d2232a;  --gpb-red-100: #fdeeec; --gpb-red-200: #fbd6d3;
+            --gpb-red-300: #f5afaa; --gpb-red-400: #ec817b; --gpb-red-500: #dd4b45;
+            --gpb-red-600: #c02026; --gpb-red-700: #9c1a1f; --gpb-red-800: #6e1317;
+            --gpb-red-900: #440c0f;
+            --gpb-n100: #f5f5f8; --gpb-n200: #e7e7ea; --gpb-n300: #d4d4d7;
+            --gpb-n400: #b7b7ba; --gpb-n500: #98989b; --gpb-n600: #7a7a7d;
+            --gpb-n700: #5d5d60; --gpb-n800: #424244; --gpb-n900: #2b2b2d;
+            --gpb-bar: #0c0d0e;  --gpb-bar-muted: #9a9a9e; --gpb-bar-div: #26282a;
+            --gpb-ok: #2e7d43;   --gpb-warn: #a06508;  --gpb-bad: #c02026;
+            --gpb-head: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
+            --gpb-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+            background: var(--gpb-bg);
+            color: var(--gpb-ink);
+            font-family: var(--gpb-body);
+        }
+        #gpWorkspace * { border-radius: 0 !important; }
+        #gpWorkspace ::selection { background: rgba(210,35,42,0.25); }
+
+        /* ---- the black brand bar ---- */
+        #gpWorkspace .ws-topbar {
+            background: var(--gpb-bar); border-bottom: none; box-shadow: none;
+            padding: 0 14px 0 10px; gap: 12px; min-height: 50px; flex-wrap: nowrap;
+        }
+        #gpWorkspace .ws-topbar > .btn:first-child {
+            background: transparent; border: none; color: var(--gpb-bar-muted);
+            font-size: 15px; height: 30px;
+        }
+        #gpWorkspace .ws-topbar > .btn:first-child:hover { color: #fff; }
+        #gpWorkspace .ws-brand span {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 13px;
+            letter-spacing: 0.14em; text-transform: uppercase; color: var(--gpb-bar-muted);
+        }
+        #gpWorkspace .ws-modes {
+            background: transparent; border: none; height: 50px; overflow: visible;
+            margin: 0 auto 0 4px; align-self: stretch; align-items: stretch; gap: 2px;
+        }
+        #gpWorkspace .ws-modes button {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 13px;
+            letter-spacing: 0.1em; text-transform: uppercase;
+            color: var(--gpb-bar-muted); padding: 0 15px; height: 100%;
+        }
+        #gpWorkspace .ws-modes button:hover { color: #d8d8db; background: transparent; }
+        #gpWorkspace .ws-modes button.on {
+            background: transparent; color: #fff;
+            box-shadow: inset 0 -3px 0 var(--gpb-red);
+        }
+        #gpWorkspace .ws-chip {
+            background: transparent; border: 1px solid var(--gpb-bar-div);
+            color: var(--gpb-bar-muted); font-family: var(--gpb-body);
+            font-variant-numeric: tabular-nums; font-size: 11px; height: 28px;
+        }
+        #gpWorkspace .ws-chip b { color: #e6e6e8; }
+        #gpWorkspace .ws-chip.rec-on { border-color: var(--gpb-red); color: #ff6b64; background: rgba(210,35,42,0.12); }
+        #gpWorkspace #gpConnectBtn {
+            background: transparent; border: 1px solid #3a3d40; color: #e6e6e8;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 12px;
+            letter-spacing: 0.08em; text-transform: uppercase; height: 28px; padding: 0 14px;
+        }
+        #gpWorkspace #gpConnectBtn:hover { border-color: #6a6e72; }
+        #gpWorkspace .gpb-export {
+            background: var(--gpb-red); border: 1px solid var(--gpb-red); color: #fff;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 12.5px;
+            letter-spacing: 0.08em; text-transform: uppercase;
+            height: 28px; padding: 0 16px; cursor: pointer;
+        }
+        #gpWorkspace .gpb-export:hover { background: var(--gpb-red-600); }
+        #gpWorkspace .gpb-export:disabled { opacity: 0.4; cursor: default; }
+
+        /* ---- columns ---- */
+        #gpWorkspace .ws-rail {
+            background: var(--gpb-bg); border-right: 1px solid var(--gpb-div);
+            width: 250px; padding: 12px 12px;
+        }
+        #gpWorkspace .ws-rail-title {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 11.5px;
+            letter-spacing: 0.1em; color: var(--gpb-n600);
+        }
+        #gpWorkspace .ws-stage { background: var(--gpb-bg); }
+        #gpWorkspace .ws-insp {
+            background: var(--gpb-bg); border-left: 1px solid var(--gpb-div); width: 330px;
+        }
+        #gpWorkspace .ws-insp h2 {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 17px;
+            letter-spacing: 0.01em; color: var(--gpb-ink);
+        }
+        #gpWorkspace .ws-sub { font-family: var(--gpb-body); font-size: 11px; color: var(--gpb-muted); }
+        #gpWorkspace .ws-split::after { background: var(--gpb-div); }
+        #gpWorkspace .ws-split:hover::after, #gpWorkspace .ws-split.on::after { background: var(--gpb-red); }
+
+        /* ---- rail rows ---- */
+        #gpWorkspace .ws-item {
+            color: var(--gpb-soft); font-family: var(--gpb-body); font-size: 12px;
+            border: 1px solid transparent;
+        }
+        #gpWorkspace .ws-item:hover { background: rgba(29,31,32,0.05); }
+        #gpWorkspace .ws-item.on {
+            background: rgba(29,31,32,0.04); color: var(--gpb-ink);
+            box-shadow: inset 2px 0 0 var(--gpb-red);
+        }
+        #gpWorkspace .ws-item .tag { color: var(--gpb-muted); font-family: var(--gpb-body); font-variant-numeric: tabular-nums; }
+        #gpWorkspace .ws-item .st { background: var(--gpb-n300); }
+        #gpWorkspace .ws-item .st.on { background: var(--gpb-ok); }
+
+        /* ---- groups, fields, notes, buttons ---- */
+        #gpWorkspace .ws-grp { border-top: 1px solid var(--gpb-div); }
+        #gpWorkspace .ws-gt {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 11.5px;
+            letter-spacing: 0.1em; color: var(--gpb-n600);
+        }
+        #gpWorkspace .ws-field label { color: var(--gpb-muted); font-size: 11px; }
+        #gpWorkspace .ws-field input, #gpWorkspace .ws-field select,
+        #gpWorkspace .gp-ses-field, #gpWorkspace .gp-place-search input {
+            background: var(--gpb-surface); border: 1px solid var(--gpb-div);
+            color: var(--gpb-ink); font-family: var(--gpb-body); font-size: 12px;
+            caret-color: var(--gpb-red);
+        }
+        #gpWorkspace .ws-field input:focus, #gpWorkspace .ws-field select:focus,
+        #gpWorkspace .gp-ses-field:focus, #gpWorkspace .gp-place-search input:focus {
+            border-color: var(--gpb-red); outline: none;
+        }
+        #gpWorkspace .ws-seg { border: 1px solid var(--gpb-div); background: transparent; }
+        #gpWorkspace .ws-seg button { color: var(--gpb-soft); font-family: var(--gpb-body); font-weight: 500; }
+        #gpWorkspace .ws-seg button:hover { background: rgba(29,31,32,0.06); }
+        #gpWorkspace .ws-seg button.on { background: var(--gpb-red); color: #fff; box-shadow: none; }
+        #gpWorkspace .ws-slider input { accent-color: var(--gpb-red); }
+        #gpWorkspace .ws-note {
+            background: transparent; border: 1px solid var(--gpb-div-lt);
+            border-left: 3px solid var(--gpb-n300); color: var(--gpb-muted);
+        }
+        #gpWorkspace .ws-none { color: var(--gpb-muted); }
+        #gpWorkspace .ws-btn-line {
+            background: transparent; border: 1px solid var(--gpb-div); color: var(--gpb-ink);
+            font-family: var(--gpb-head); font-weight: 600; font-size: 12px;
+            letter-spacing: 0.05em; text-transform: uppercase;
+        }
+        #gpWorkspace .ws-btn-line:hover { border-color: var(--gpb-ink); background: rgba(29,31,32,0.04); }
+        #gpWorkspace .ws-btn-line:disabled { opacity: 0.4; }
+        #gpWorkspace .ws-kv { color: var(--gpb-muted); }
+        #gpWorkspace .btn, #gpWorkspace .btn-secondary {
+            font-family: var(--gpb-body);
+        }
+        #gpWorkspace .ws-body .btn {
+            background: transparent; border: 1px solid var(--gpb-div); color: var(--gpb-ink);
+        }
+        #gpWorkspace .ws-body .btn:hover { border-color: var(--gpb-ink); }
+
+        /* ---- monitor cards ---- */
+        #gpWorkspace .gp-card {
+            background: transparent; border: 1px solid var(--gpb-div); box-shadow: none;
+        }
+        #gpWorkspace .gp-card h3 {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 14px;
+            letter-spacing: 0.04em; text-transform: uppercase; color: var(--gpb-ink);
+            border-bottom: 1px solid var(--gpb-div-lt);
+        }
+        #gpWorkspace .gp-row { border-bottom: 1px solid var(--gpb-div-lt); }
+        #gpWorkspace .gp-row .k { color: var(--gpb-muted); font-size: 11.5px; }
+        #gpWorkspace .gp-row .v {
+            color: var(--gpb-ink); font-family: var(--gpb-body);
+            font-variant-numeric: tabular-nums; font-weight: 500;
+        }
+        #gpWorkspace .gp-row .v.ok { color: var(--gpb-ok); }
+        #gpWorkspace .gp-row .v.warn { color: var(--gpb-warn); }
+        #gpWorkspace .gp-row .v.bad { color: var(--gpb-bad); }
+        #gpWorkspace .gp-row .s { color: var(--gpb-muted); font-family: var(--gpb-body); }
+        #gpWorkspace .gp-note { color: var(--gpb-muted); }
+        #gpWorkspace .gp-lamp { background: var(--gpb-n300); }
+        #gpWorkspace .gp-lamp.on { background: var(--gpb-ok); }
+        #gpWorkspace .gp-lamp.warn { background: var(--gpb-warn); }
+        #gpWorkspace .gp-lamp.carry { background: var(--gpb-warn); }
+
+        /* ---- hint, messages, ready card ---- */
+        #gpWorkspace .gp-hint {
+            background: transparent; border: 1px solid var(--gpb-div-lt);
+            border-left: 3px solid var(--gpb-warn); color: var(--gpb-soft);
+        }
+        #gpWorkspace .gp-msg.ok { color: var(--gpb-ok); }
+        #gpWorkspace .gp-msg.warn { color: var(--gpb-warn); }
+        #gpWorkspace .gp-msg.bad { color: var(--gpb-bad); }
+        #gpWorkspace .gp-ready { background: transparent; border: 1px solid var(--gpb-div); }
+        #gpWorkspace .gp-ready.warn { border-left: 3px solid var(--gpb-warn); background: transparent; }
+        #gpWorkspace .gp-ready.bad { border-left: 3px solid var(--gpb-red); background: var(--gpb-red-100); }
+        #gpWorkspace .gp-ready-hd .t { color: var(--gpb-ink); font-weight: 600; }
+        #gpWorkspace .gp-ready-hd .s { color: var(--gpb-muted); }
+        #gpWorkspace .gp-steps { border-left: 3px solid var(--gpb-red); }
+        #gpWorkspace .gp-step { color: var(--gpb-soft); }
+        #gpWorkspace .gp-step.done { color: var(--gpb-muted); }
+        #gpWorkspace .gp-step.done .n { color: var(--gpb-ok); }
+
+        /* ---- tables (splits, sectors, channel list, frame map) ---- */
+        #gpWorkspace .gp-splits th, #gpWorkspace .gp-chtab th, #gpWorkspace .gp-bustab th,
+        #gpWorkspace .gp-map-t th {
+            font-family: var(--gpb-body); font-weight: 600; font-size: 10px;
+            letter-spacing: 0.08em; text-transform: uppercase; color: var(--gpb-muted);
+            border-bottom: 1px solid var(--gpb-div);
+        }
+        #gpWorkspace .gp-splits td, #gpWorkspace .gp-chtab td, #gpWorkspace .gp-bustab td,
+        #gpWorkspace .gp-map-t td {
+            border-bottom: 1px solid var(--gpb-div-lt); color: var(--gpb-ink);
+            font-variant-numeric: tabular-nums;
+        }
+        #gpWorkspace .gp-splits tbody tr:hover td, #gpWorkspace .gp-chtab tbody tr:hover td { background: rgba(29,31,32,0.04); }
+        #gpWorkspace .gp-splits tr.on td { background: rgba(29,31,32,0.06); }
+        #gpWorkspace .gp-splits td.p { color: var(--gpb-red-700); font-weight: 600; }
+        #gpWorkspace .gp-splits tr.best td { background: var(--gpb-red-100); }
+        #gpWorkspace .gp-seclegend { color: var(--gpb-muted); }
+        #gpWorkspace .gp-seclegend b { color: var(--gpb-ink); }
+
+        /* ---- glance tiles / legends / sector chips ---- */
+        #gpWorkspace .gp-glance .t { background: transparent; border: 1px solid var(--gpb-div); }
+        #gpWorkspace .gp-glance .t span { color: var(--gpb-muted); }
+        #gpWorkspace .gp-glance .t b {
+            font-family: var(--gpb-head); font-weight: 600; color: var(--gpb-ink);
+            font-variant-numeric: tabular-nums;
+        }
+        #gpWorkspace .gp-glance .t i { color: var(--gpb-muted); }
+        #gpWorkspace .gp-glegend { color: var(--gpb-muted); }
+        #gpWorkspace .gp-secs span { color: var(--gpb-soft); }
+        #gpWorkspace .gp-secs .p { color: var(--gpb-red-700); }
+        #gpWorkspace .gp-secs .g { color: var(--gpb-ok); }
+        #gpWorkspace .gp-secs .r { color: var(--gpb-bad); }
+        #gpWorkspace .ws-item .tag.gp-best { color: var(--gpb-red-700); }
+        #gpWorkspace .gp-ideal { color: var(--gpb-muted); }
+        #gpWorkspace .gp-ses-trend i { background: var(--gpb-n300); }
+        #gpWorkspace .gp-ses-trend i.best { background: var(--gpb-red); }
+
+        /* ---- lap list (legacy rail rows) ---- */
+        #gpWorkspace .gp-lap.best { background: var(--gpb-red-100); }
+        #gpWorkspace .gp-lap.best .t { color: var(--gpb-red-700); }
+
+        /* ---- coach ---- */
+        #gpWorkspace .gp-coach-hd b.bad { color: var(--gpb-bad); }
+        #gpWorkspace .gp-coach-hd b.ok { color: var(--gpb-ok); }
+        #gpWorkspace .gp-op { border: 1px solid var(--gpb-div); background: transparent; }
+        #gpWorkspace .gp-op:hover { border-color: var(--gpb-n500); }
+        #gpWorkspace .gp-op.open { border-left: 3px solid var(--gpb-red); }
+        #gpWorkspace .gp-op-n { color: var(--gpb-muted); }
+        #gpWorkspace .gp-op-t { color: var(--gpb-ink); }
+        #gpWorkspace .gp-op-loc { color: var(--gpb-muted); }
+        #gpWorkspace .gp-op-d.bad { color: var(--gpb-bad); }
+        #gpWorkspace .gp-op-d.ok { color: var(--gpb-ok); }
+        #gpWorkspace .gp-op-ph span { background: rgba(29,31,32,0.05); color: var(--gpb-soft); }
+        #gpWorkspace .gp-op-ph span.bad { background: var(--gpb-red-100); color: var(--gpb-red-700); }
+        #gpWorkspace .gp-op-ph span.ok { background: rgba(46,125,67,0.1); color: var(--gpb-ok); }
+        #gpWorkspace .gp-op-why { color: var(--gpb-muted); }
+        #gpWorkspace .gp-op-try { color: var(--gpb-ink); }
+        #gpWorkspace .gp-op-note { color: var(--gpb-muted); }
+
+        /* ---- transport / playbar ---- */
+        #gpWorkspace .gp-playbar {
+            background: var(--gpb-bg); border-top: 1px solid var(--gpb-div);
+            box-shadow: none;
+        }
+        #gpWorkspace .gp-sep { background: var(--gpb-div); }
+        #gpWorkspace .gp-tbtn { background: transparent; border: 1px solid var(--gpb-div); }
+        #gpWorkspace .gp-tbtn svg { fill: var(--gpb-soft); }
+        #gpWorkspace .gp-tbtn:hover { border-color: var(--gpb-ink); }
+        #gpWorkspace .gp-tbtn:hover svg { fill: var(--gpb-ink); }
+        #gpWorkspace .gp-tbtn-play { background: var(--gpb-ink); border-color: var(--gpb-ink); }
+        #gpWorkspace .gp-tbtn-play svg { fill: var(--gpb-bg); }
+        #gpWorkspace .gp-tc { color: var(--gpb-ink); font-family: var(--gpb-body); font-variant-numeric: tabular-nums; }
+        #gpWorkspace .gp-tc em { color: var(--gpb-muted); }
+        #gpWorkspace .gp-rate, #gpWorkspace .gp-lanesbtn {
+            background: transparent; border: 1px solid var(--gpb-div); color: var(--gpb-soft);
+            font-family: var(--gpb-body);
+        }
+        #gpWorkspace .gp-rate:hover, #gpWorkspace .gp-lanesbtn:hover { border-color: var(--gpb-ink); color: var(--gpb-ink); }
+        #gpWorkspace .gp-modes { border: 1px solid var(--gpb-div); background: transparent; }
+        #gpWorkspace .gp-modes button { color: var(--gpb-soft); font-family: var(--gpb-body); }
+        #gpWorkspace .gp-modes button:hover { background: rgba(29,31,32,0.06); }
+        #gpWorkspace .gp-modes button.on { background: var(--gpb-red); color: #fff; }
+        #gpWorkspace .gp-playbar input[type="range"]::-webkit-slider-runnable-track {
+            background: linear-gradient(to right, var(--gpb-red) 0%, var(--gpb-red) var(--p, 0%), var(--gpb-n300) var(--p, 0%), var(--gpb-n300) 100%);
+        }
+        #gpWorkspace .gp-playbar input[type="range"]::-webkit-slider-thumb { background: var(--gpb-ink); border: 2px solid var(--gpb-bg); }
+
+        /* ---- map chrome ---- */
+        #gpWorkspace .gp-mapwrap { background: var(--gpb-n200); border: 1px solid var(--gpb-div); }
+        #gpWorkspace #gpMap.gp-notiles {
+            background: var(--gpb-n200);
+            background-image: linear-gradient(rgba(29,31,32,0.05) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(29,31,32,0.05) 1px, transparent 1px);
+            background-size: 44px 44px;
+        }
+        #gpWorkspace .gp-mapbtn {
+            background: rgba(255,255,255,0.92); border: 1px solid var(--gpb-div);
+            color: var(--gpb-soft); font-family: var(--gpb-body); font-weight: 500;
+        }
+        #gpWorkspace .gp-mapbtn:hover { color: var(--gpb-ink); border-color: var(--gpb-ink); }
+        #gpWorkspace .gp-mapbtn.on { background: var(--gpb-ink); border-color: var(--gpb-ink); color: #fff; }
+        #gpWorkspace .gp-mapchip {
+            background: rgba(255,255,255,0.92); border: 1px solid var(--gpb-div);
+            color: var(--gpb-soft); font-variant-numeric: tabular-nums;
+        }
+        #gpWorkspace .gp-mapchip b { color: var(--gpb-ink); }
+        #gpWorkspace .gp-mapsearch input {
+            background: rgba(255,255,255,0.94); border: 1px solid var(--gpb-div); color: var(--gpb-ink);
+        }
+        #gpWorkspace .gp-searchresults { background: var(--gpb-surface); border: 1px solid var(--gpb-div); }
+        #gpWorkspace .gp-searchresults button { color: var(--gpb-ink); }
+        #gpWorkspace .gp-searchresults button:hover { background: rgba(29,31,32,0.05); }
+        #gpWorkspace .gp-car { border-bottom-color: var(--gpb-red); }
+        #gpWorkspace .gp-vtile { background: #0c0d0e; border: 1px solid var(--gpb-div); }
+
+        /* Analyse: the map rides above the rack at a working height (2a);
+           Corners: the map fills its own left column (4a). */
+        #gpWorkspace .gp-viewer.analyse { flex: 0 1 auto; margin: 10px 14px 0; }
+        #gpWorkspace .gp-viewer.analyse .gp-mapwrap { display: flex; flex-direction: column; }
+        #gpWorkspace .gp-viewer.analyse #gpMap { height: 32vh; min-height: 200px; }
+        #gpWorkspace .gp-viewer.incorners { margin: 0; flex: 1; min-height: 0; }
+        #gpWorkspace .gp-viewer.incorners .gp-mapwrap { display: flex; flex-direction: column; }
+        #gpWorkspace .gp-viewer.incorners #gpMap { flex: 1; height: auto; min-height: 240px; }
+
+        /* ---- rail tabs (Analyse rail) ---- */
+        #gpWorkspace .gp-rail-tabs { border-bottom: 1px solid var(--gpb-div); }
+        #gpWorkspace .gp-rail-tabs button {
+            color: var(--gpb-muted); font-family: var(--gpb-head); font-weight: 600;
+            font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+        }
+        #gpWorkspace .gp-rail-tabs button:hover { color: var(--gpb-ink); }
+        #gpWorkspace .gp-rail-tabs button.on { color: var(--gpb-ink); box-shadow: inset 0 -2px 0 var(--gpb-red); }
+
+        /* ---- channel list / popover / confirm ---- */
+        #gpWorkspace .gp-chpop { background: var(--gpb-bg); border: 1px solid var(--gpb-div); box-shadow: 0 12px 32px rgba(43,43,45,0.22); }
+        #gpWorkspace .gp-chtab tr.off .nm { color: var(--gpb-muted); }
+        #gpWorkspace .gp-chtab .un, #gpWorkspace .gp-chtab .sub { color: var(--gpb-muted); }
+        #gpWorkspace .gp-chsearch { background: var(--gpb-surface); border: 1px solid var(--gpb-div); color: var(--gpb-ink); }
+        #gpWorkspace .gp-confirm-box { background: var(--gpb-bg); border: 1px solid var(--gpb-div); box-shadow: 0 12px 32px rgba(43,43,45,0.3); }
+        #gpWorkspace .gp-confirm-box .t { color: var(--gpb-ink); font-family: var(--gpb-head); font-weight: 600; }
+        #gpWorkspace .gp-confirm-box .b { color: var(--gpb-soft); }
+        #gpWorkspace .gp-confirm-box button { border: 1px solid var(--gpb-div); background: transparent; color: var(--gpb-ink); }
+        #gpWorkspace .gp-confirm-box button.o { background: var(--gpb-red); border-color: var(--gpb-red); color: #fff; }
+
+        /* ---- setup ---- */
+        #gpWorkspace .gp-set .l { color: var(--gpb-soft); }
+        #gpWorkspace .gp-set .l b { color: var(--gpb-ink); }
+        #gpWorkspace .gp-set-v { color: var(--gpb-ink); }
+        #gpWorkspace .gp-set-na, #gpWorkspace .gp-set-note { color: var(--gpb-muted); }
+
+        /* ---- tooltips (rendered at body level, gp-tip class is gp-scoped) ---- */
+        .gp-tip { background: #1d1f20; color: #f2f2f3; border: none; font-family: 'Barlow', 'Segoe UI', sans-serif; }
+        .gp-tip b { color: #fff; }
+        .gp-tip .k { background: rgba(255,255,255,0.14); color: #fff; }
+
+        /* ================================================================
+           New design-language components (gpb-*)
+           ================================================================ */
+        /* context strip under the brand bar */
+        #gpWorkspace .gpb-ctx {
+            display: flex; align-items: baseline; gap: 14px; padding: 12px 16px 10px;
+            border-bottom: 1px solid var(--gpb-div); flex-shrink: 0; flex-wrap: wrap;
+        }
+        #gpWorkspace .gpb-ctx h3 {
+            margin: 0; font-family: var(--gpb-head); font-weight: 600; font-size: 22px;
+            letter-spacing: -0.01em; color: var(--gpb-ink); line-height: 1.1;
+        }
+        #gpWorkspace .gpb-ctx .m { font-size: 12px; color: var(--gpb-muted); font-variant-numeric: tabular-nums; }
+        #gpWorkspace .gpb-ctx .sp { margin-left: auto; }
+        #gpWorkspace .gpb-tag {
+            display: inline-flex; align-items: center; font-size: 11px; padding: 3px 10px;
+            font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+        }
+        #gpWorkspace .gpb-tag.red { background: var(--gpb-red-100); color: var(--gpb-red-800); }
+        #gpWorkspace .gpb-tag.line { border: 1px solid var(--gpb-red); color: var(--gpb-red-700); }
+        #gpWorkspace .gpb-tag.grey { background: var(--gpb-n200); color: var(--gpb-n800); }
+
+        /* lap cards in the Analyse rail */
+        #gpWorkspace .gpb-lap {
+            display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
+            border: 1px solid var(--gpb-div); background: transparent; cursor: pointer;
+            width: 100%; text-align: left; font-family: var(--gpb-body); color: var(--gpb-ink);
+        }
+        #gpWorkspace .gpb-lap:hover { border-color: var(--gpb-n500); }
+        #gpWorkspace .gpb-lap .r1 { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-lap .r1 .nm { font-weight: 500; }
+        #gpWorkspace .gpb-lap .tm {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 20px; line-height: 1.15;
+            font-variant-numeric: tabular-nums; color: var(--gpb-ink);
+        }
+        #gpWorkspace .gpb-lap .bar { height: 3px; background: var(--gpb-n200); }
+        #gpWorkspace .gpb-lap .bar i { display: block; height: 100%; background: var(--gpb-n400); }
+        #gpWorkspace .gpb-lap.best { border-color: var(--gpb-red); }
+        #gpWorkspace .gpb-lap.best .r1 .nm, #gpWorkspace .gpb-lap.best .r1 .d,
+        #gpWorkspace .gpb-lap.best .tm { color: var(--gpb-red-700); }
+        #gpWorkspace .gpb-lap.best .bar { background: var(--gpb-red-200); }
+        #gpWorkspace .gpb-lap.best .bar i { background: var(--gpb-red); }
+        #gpWorkspace .gpb-lap.sel { background: rgba(29,31,32,0.05); border-left: 3px solid var(--gpb-n900); }
+        #gpWorkspace .gpb-lap.sel .r1 .nm { color: var(--gpb-ink); font-weight: 600; }
+        #gpWorkspace .gpb-lap.ghost .tm { color: var(--gpb-n600); }
+
+        /* stat tiles (report column) */
+        #gpWorkspace .gpb-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        #gpWorkspace .gpb-tile { border: 1px solid var(--gpb-div); padding: 8px 10px; display: flex; flex-direction: column; gap: 0; }
+        #gpWorkspace .gpb-tile .k {
+            font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gpb-red-700);
+        }
+        #gpWorkspace .gpb-tile .v {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 21px; line-height: 1.2;
+            color: var(--gpb-ink); font-variant-numeric: tabular-nums;
+        }
+        #gpWorkspace .gpb-tile .v small { font-size: 11px; font-family: var(--gpb-body); color: var(--gpb-n600); font-weight: 400; }
+        #gpWorkspace .gpb-tile .s { font-size: 10.5px; color: var(--gpb-muted); font-variant-numeric: tabular-nums; }
+
+        /* ruled data table (sector table, corner detail) */
+        #gpWorkspace .gpb-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+        #gpWorkspace .gpb-table th {
+            text-align: left; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--gpb-muted); padding: 5px 6px; border-bottom: 1px solid var(--gpb-div); font-weight: 600;
+        }
+        #gpWorkspace .gpb-table td { padding: 5px 6px; border-bottom: 1px solid var(--gpb-div-lt); color: var(--gpb-ink); }
+        #gpWorkspace .gpb-table th.n, #gpWorkspace .gpb-table td.n { text-align: right; }
+        #gpWorkspace .gpb-table td.mut { color: var(--gpb-muted); }
+        #gpWorkspace .gpb-table td.red { color: var(--gpb-red-700); font-weight: 500; }
+        #gpWorkspace .gpb-table tbody tr:hover td { background: rgba(29,31,32,0.04); }
+        #gpWorkspace .gpb-table tr.hot td { background: var(--gpb-red-100); }
+
+        /* "where the lap lost time" bars */
+        #gpWorkspace .gpb-loss { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+        #gpWorkspace .gpb-loss .row { display: flex; gap: 8px; align-items: center; cursor: pointer; background: transparent; border: none; padding: 0; width: 100%; font: inherit; color: inherit; }
+        #gpWorkspace .gpb-loss .row:hover .l { color: var(--gpb-ink); }
+        #gpWorkspace .gpb-loss .l { width: 76px; color: var(--gpb-muted); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #gpWorkspace .gpb-loss .track { flex: 1; height: 5px; background: var(--gpb-n200); }
+        #gpWorkspace .gpb-loss .track i { display: block; height: 100%; background: var(--gpb-red); }
+        #gpWorkspace .gpb-loss .d { width: 48px; text-align: right; color: var(--gpb-ink); }
+
+        /* coaching note card */
+        #gpWorkspace .gpb-coachnote { border: 1px solid var(--gpb-div); border-left: 3px solid var(--gpb-red); padding: 8px 10px; }
+        #gpWorkspace .gpb-coachnote .k { font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gpb-red-700); }
+        #gpWorkspace .gpb-coachnote p { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--gpb-ink); }
+
+        /* A/B reference strip */
+        #gpWorkspace .gpb-ab {
+            display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+            border-bottom: 1px solid var(--gpb-div); font-size: 12px; flex-shrink: 0; flex-wrap: wrap;
+        }
+        #gpWorkspace .gpb-ab .w { color: var(--gpb-muted); }
+        #gpWorkspace .gpb-ab select {
+            background: var(--gpb-surface); border: 1px solid var(--gpb-div); color: var(--gpb-ink);
+            font: inherit; font-variant-numeric: tabular-nums; padding: 3px 8px; max-width: 240px;
+        }
+        #gpWorkspace .gpb-ab .sw { border-left: 3px solid var(--gpb-red); padding-left: 6px; font-weight: 500; }
+        #gpWorkspace .gpb-ab .sw.ink { border-left-color: var(--gpb-n900); }
+
+        /* sessions library */
+        #gpWorkspace .gpb-sess { padding: 16px 20px; overflow: auto; }
+        #gpWorkspace .gpb-sess h3 { margin: 0 0 4px; font-family: var(--gpb-head); font-weight: 600; font-size: 22px; }
+        #gpWorkspace .gpb-sess .sub { font-size: 12px; color: var(--gpb-muted); margin-bottom: 14px; }
+        #gpWorkspace .gpb-sesstable { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+        #gpWorkspace .gpb-sesstable th {
+            text-align: left; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--gpb-muted); padding: 7px 8px; border-bottom: 1px solid var(--gpb-div); font-weight: 600;
+        }
+        #gpWorkspace .gpb-sesstable td { padding: 7px 8px; border-bottom: 1px solid var(--gpb-div-lt); }
+        #gpWorkspace .gpb-sesstable tbody tr { cursor: pointer; }
+        #gpWorkspace .gpb-sesstable tbody tr:hover td { background: rgba(29,31,32,0.04); }
+        #gpWorkspace .gpb-sesstable tr.sel td { background: var(--gpb-red-100); }
+        #gpWorkspace .gpb-sesstable td.n { text-align: right; }
+        #gpWorkspace .gpb-sesstable td.best { color: var(--gpb-red-700); font-weight: 600; }
+        #gpWorkspace .gpb-sesstable .open { color: var(--gpb-red-700); font-weight: 500; background: none; border: none; cursor: pointer; font: inherit; }
+        #gpWorkspace .gpb-badge { display: inline-block; font-size: 9.5px; letter-spacing: 0.04em; padding: 2px 8px; }
+        #gpWorkspace .gpb-badge.red { background: var(--gpb-red-100); color: var(--gpb-red-800); }
+        #gpWorkspace .gpb-badge.grey { background: var(--gpb-n200); color: var(--gpb-n800); }
+
+        /* corners view */
+        #gpWorkspace .gpb-cornerswrap { display: flex; flex: 1; min-height: 0; }
+        #gpWorkspace .gpb-cornersmap { width: 42%; min-width: 320px; border-right: 1px solid var(--gpb-div); display: flex; flex-direction: column; padding: 12px; gap: 8px; }
+        #gpWorkspace .gpb-cornersmap .gp-viewer { flex: 1; min-height: 0; margin: 0; }
+        #gpWorkspace .gpb-corners { flex: 1; min-width: 0; overflow: auto; padding: 12px 16px 16px; }
+        #gpWorkspace .gpb-cornlegend { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-cornlegend i { width: 10px; height: 10px; display: inline-block; }
+        #gpWorkspace .gpb-avail { margin-left: auto; }
+        #gpWorkspace .gpb-corner-badge {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 100%; font-family: var(--gpb-body); font-weight: 600;
+            background: var(--gpb-n200); color: var(--gpb-ink); border: 1px solid rgba(29,31,32,0.25);
+            font-size: 11px; box-sizing: border-box; border-radius: 50% !important;
+        }
+        #gpWorkspace .gpb-corner-badge.l1 { background: var(--gpb-red-300); color: var(--gpb-red-900); }
+        #gpWorkspace .gpb-corner-badge.l2 { background: var(--gpb-red); color: #fff; border-color: var(--gpb-red-700); }
+
+        /* export popover */
+        #gpWorkspace .gpb-exppop {
+            position: fixed; z-index: 16000; background: var(--gpb-bg);
+            border: 1px solid var(--gpb-div); box-shadow: 0 12px 32px rgba(43,43,45,0.25);
+            display: flex; flex-direction: column; min-width: 220px;
+        }
+        #gpWorkspace .gpb-exppop button {
+            background: none; border: none; text-align: left; padding: 9px 14px;
+            font: 12.5px var(--gpb-body); color: var(--gpb-ink); cursor: pointer;
+        }
+        #gpWorkspace .gpb-exppop button:hover { background: rgba(29,31,32,0.05); }
+        #gpWorkspace .gpb-exppop button small { display: block; color: var(--gpb-muted); font-size: 10.5px; }
+        #gpWorkspace .gpb-exppop button + button { border-top: 1px solid var(--gpb-div-lt); }
+
     </style>
 
     <div id="suiteSplash">
@@ -2256,16 +2772,19 @@
         <div class="ws-topbar">
             <button class="btn btn-secondary" style="font-size:13px; padding:0 10px;" onclick="_gpClose()" title="Home (Esc)">&#8962;</button>
             <span class="ws-brand" id="gpBrand"></span>
+            <div class="ws-modes" role="group" aria-label="View">
+                <button id="gpBtnSessions" onclick="gpSetView('sessions')">Sessions</button>
+                <button id="gpBtnMonitor" class="on" onclick="gpSetView('monitor')">Live</button>
+                <button id="gpBtnSession" onclick="gpSetView('session')">Analyse</button>
+                <button id="gpBtnCorners" onclick="gpSetView('corners')">Corners</button>
+                <button id="gpBtnTracks" onclick="gpSetView('tracks')">Tracks</button>
+                <button id="gpBtnSetup" onclick="gpSetView('setup')">Setup</button>
+            </div>
             <span class="ws-chip" id="gpChipDev">no node linked</span>
             <span class="ws-chip" id="gpChipFix">&#8212;</span>
             <button class="ws-chip" id="gpChipRec" style="display:none" onclick="gpRecToggle()"></button>
-            <button class="btn" id="gpConnectBtn" style="font-size:11px; padding:0 14px; display:none;" onclick="gpConnect()">Connect over USB</button>
-            <div class="ws-modes" role="group" aria-label="View">
-                <button id="gpBtnMonitor" class="on" onclick="gpSetView('monitor')">Monitor</button>
-                <button id="gpBtnTracks" onclick="gpSetView('tracks')">Tracks</button>
-                <button id="gpBtnSession" onclick="gpSetView('session')">Session</button>
-                <button id="gpBtnSetup" onclick="gpSetView('setup')">Setup</button>
-            </div>
+            <button class="btn" id="gpConnectBtn" style="display:none;" onclick="gpConnect()">Connect over USB</button>
+            <button class="gpb-export" id="gpExportBtn" style="display:none;" onclick="gpExportPop(event)">Export</button>
         </div>
         <div class="ws-body">
             <div class="ws-rail" id="gpRail"></div>
@@ -2354,6 +2873,11 @@
                        <span class='k'>Double-click</span> the rack to leave a corner"></i>
                 </div>
                 <div class="gp-grid" id="gpStage"></div>
+                <div class="gpb-sess" id="gpSessionsWrap" style="display:none"></div>
+                <div class="gpb-cornerswrap" id="gpCornersWrap" style="display:none">
+                    <div class="gpb-cornersmap" id="gpCornersMapCell"></div>
+                    <div class="gpb-corners" id="gpCorners"></div>
+                </div>
             </div>
             <div class="ws-insp" id="gpInspector"></div>
         </div>
@@ -8186,7 +8710,7 @@
             /* Opening a recording is the end of streaming: one rack cannot be
                both the last minute of now and a lap you drove on Tuesday. */
             gpLiveStop();
-            Promise.all([gpStore.meta(id), gpStore.rows(id)]).then(function (r) {
+            return Promise.all([gpStore.meta(id), gpStore.rows(id)]).then(function (r) {
                 var meta = r[0], rows = gpRowsUnpack(r[1]);
                 if (!meta || !rows.length) throw new Error("the samples for this recording are missing");
                 /* Load the track it was recorded against, or the laps come out
@@ -8233,6 +8757,8 @@
                 }
                 gpDrawTrace(); gpFitTrace();
                 gpBuildRail(); gpRenderInspector();
+                gpSyncExportBtn();
+                if (gp.view === "sessions") gpRenderSessions();
                 if (said) gpSetMsg("gpTraceMsg", said, "ok");
             }).catch(function (e) {
                 gpSetMsg("gpTraceMsg", "Could not open that recording: " + (e && e.message ? e.message : e), "bad");
@@ -8380,24 +8906,44 @@
             }
             var h = "";
             var mins = gpSecs(gp.trace, 0, gp.trace.length - 1) / 60;
+            var word = gpRunWord(true);
+            var realN = gp.traceLaps.filter(function (l) { return !l.ghost; }).length;
+            h += "<div class='ws-rail-title' style='display:flex;justify-content:space-between;align-items:baseline'>" +
+                 word + "s · " + realN +
+                 "<span style='font-family:var(--gpb-body);font-weight:400;font-size:10px;letter-spacing:0;text-transform:none'>&Delta; vs best</span></div>";
             h += "<button class='ws-item" + (gp.selLap < 0 ? " on" : "") + "' data-gp-lap='-1'>" +
                  "<span class='st'></span>Whole session<span class='tag'>" + mins.toFixed(1) + " min</span></button>";
             if (!gp.traceLaps.length) h += "<div class='ws-note'>" + gpNoLapsWhy() + "</div>";
             var S = gpSessionSectors();
-            var word = gpRunWord(true);
-            var bestLap = -1, bestT = Infinity;
+            var bestLap = -1, bestT = Infinity, worstT = 0;
             gp.traceLaps.forEach(function (l, i) {
                 if (l.ghost) return;
                 var s = gpSecs(gp.trace, l.from, l.to);
                 if (s < bestT) { bestT = s; bestLap = i; }
+                if (s > worstT) worstT = s;
             });
             gp.traceLaps.forEach(function (l, i) {
                 if (l.ghost) return;
                 var secs = gpSecs(gp.trace, l.from, l.to);
-                h += "<button class='ws-item" + (gp.selLap === i ? " on" : "") + "' data-gp-lap='" + i + "'>" +
-                     "<span class='st" + (gp.cmpLap === i ? " on" : "") + "'></span>" + word + " " + (i + 1) +
-                     "<span class='tag" + (i === bestLap ? " gp-best" : "") + "'>" +
-                     gpLapTime(secs) + "</span>" + gpSectorChips(i) + "</button>";
+                var isBest = i === bestLap;
+                var cls = "gpb-lap" + (isBest ? " best" : "") +
+                          (gp.selLap === i ? " sel" : "");
+                var d = isBest ? "&mdash;" : "+" + (secs - bestT).toFixed(2);
+                /* pace bar: best fills the track, the rest in proportion to
+                   how close they came */
+                var frac = (worstT - bestT) > 0.001
+                    ? Math.max(0.06, (worstT - secs) / (worstT - bestT) * 0.82 + 0.18)
+                    : 1;
+                var tagBits = [];
+                if (isBest) tagBits.push("best");
+                if (gp.cmpLap === i) tagBits.push("ref");
+                h += "<button class='" + cls + "' data-gp-lap='" + i + "'>" +
+                     "<span class='r1'><span class='nm'>" + word + " " + (i + 1) +
+                     (tagBits.length ? " · " + tagBits.join(" · ") : "") + "</span>" +
+                     "<span class='d'>" + d + "</span></span>" +
+                     "<span class='tm'>" + gpLapTime(secs) + "</span>" +
+                     "<span class='bar'><i style='width:" + Math.round(frac * 100) + "%'></i></span>" +
+                     "</button>";
             });
             /* The ideal lap: every sector at its session best. Shown, not
                selectable — it is a target nobody drove, and offering it as a
@@ -8489,23 +9035,18 @@
            when it's the one being read. */
         function gpBuildSessionRail(rail) {
             /* "Will this record laps?" is the question you have BEFORE the
-               drive — it goes first, above either pane. */
+               drive — it goes first. Recordings themselves live in the
+               Sessions view now (ADR-0024); this rail is the lap picker. */
             var h = "<div id='gpReadyCard'></div>";
-            var tab = gpRailTab();
             var trk = gpActiveTrack();
-            h += "<div class='gp-rail-tabs'>" +
-                 "<button data-gp-tab='sessions' class='" + (tab === "sessions" ? "on" : "") + "'>Sessions</button>" +
-                 "<button data-gp-tab='laps' class='" + (tab === "laps" ? "on" : "") + "'>Laps" +
-                 (gp.trace && gp.trace.length && trk ? " · " + gpEsc(trk.name) : "") +
-                 "</button></div>";
-            h += "<div class='gp-rail-pane" + (tab === "sessions" ? " on" : "") + "' data-gp-pane='sessions'>" +
-                 gpRecordingsHtml() + "</div>";
-            h += "<div class='gp-rail-pane" + (tab === "laps" ? " on" : "") + "' data-gp-pane='laps'>" +
-                 gpLapsPaneHtml() + "</div>";
-            /* The read-only panels are appended by gpRenderInspector, into a
-               slot that is part of THIS markup — so any gpBuildRail() call
-               refreshes both halves of the aside and they cannot drift. */
-            gpRailBody(rail).innerHTML = h + GP_ASIDE_SLOT;
+            var meNow = (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0];
+            if (meNow || (gp.trace && gp.trace.length)) {
+                h += "<div class='gp-ses-n' style='margin:2px 6px 6px'>" +
+                     (meNow ? gpEsc(meNow.name) : "unsaved recording") +
+                     (trk ? " · " + gpEsc(trk.name) : "") + "</div>";
+            }
+            h += gpLapsPaneHtml();
+            gpRailBody(rail).innerHTML = h;
             gpBindSessionRail(rail);
             gpRenderInspector();
         }
@@ -8533,6 +9074,453 @@
         }
 
         var GP_ASIDE_SLOT = "<div class='gp-sess-aside' id='gpSessAside'></div>";
+
+        /* ════════════════════════════════════════════════════════════════
+         * Sessions — the landing view (ADR-0024, design 1c under the brand)
+         * Every saved recording as a table row; search; per-track best.
+         * One click on a row selects it, Open loads it into Analyse.
+         * ════════════════════════════════════════════════════════════════ */
+        function gpSessFiltered() {
+            var list = gp.sessions || [];
+            var f = gp.sessFilter || (gp.sessFilter = { q: "", track: null });
+            return list.filter(function (s) {
+                if (f.track && s.trackName !== f.track) return false;
+                if (f.q) {
+                    var hay = [s.name, s.trackName, s.car, s.driver].join(" ").toLowerCase();
+                    if (hay.indexOf(f.q.toLowerCase()) < 0) return false;
+                }
+                return true;
+            });
+        }
+
+        function gpBuildSessionsRail(rail) {
+            var f = gp.sessFilter || (gp.sessFilter = { q: "", track: null });
+            var list = gp.sessions || [];
+            var tracks = [];
+            list.forEach(function (s) {
+                if (s.trackName && tracks.indexOf(s.trackName) < 0) tracks.push(s.trackName);
+            });
+            var h = "<div class='ws-rail-title'>Find a session</div>";
+            h += "<div class='ws-field' style='margin:0 4px 10px'><input type='text' id='gpSessQ' placeholder='track, driver, car…' value='" +
+                 gpEsc(f.q || "") + "'></div>";
+            h += "<div class='ws-rail-title'>Track</div>";
+            h += "<button class='ws-item" + (!f.track ? " on" : "") + "' data-gp-strack=''>" +
+                 "<span class='st'></span>All tracks<span class='tag'>" + list.length + "</span></button>";
+            tracks.forEach(function (t) {
+                var n = list.filter(function (s) { return s.trackName === t; }).length;
+                h += "<button class='ws-item" + (f.track === t ? " on" : "") + "' data-gp-strack='" + gpEsc(t) + "'>" +
+                     "<span class='st'></span>" + gpEsc(t) + "<span class='tag'>" + n + "</span></button>";
+            });
+            /* personal best for the narrowed track */
+            var pool = f.track ? list.filter(function (s) { return s.trackName === f.track; }) : list;
+            var pb = null;
+            pool.forEach(function (s) {
+                if (s.bestLapS && (!pb || s.bestLapS < pb.bestLapS)) pb = s;
+            });
+            if (pb) {
+                h += "<div class='ws-grp' style='margin-top:12px'><div class='ws-gt'>Personal best" +
+                     (f.track ? " · " + gpEsc(f.track) : "") + "</div>" +
+                     "<div style='font-family:var(--gpb-head);font-weight:600;font-size:26px;font-variant-numeric:tabular-nums'>" +
+                     gpLapTime(pb.bestLapS) + "</div>" +
+                     "<div class='gp-ses-n'>" + gpEsc([gpSesDay(pb.recordedAt), pb.driver, pb.car].filter(Boolean).join(" · ")) +
+                     (f.track ? "" : (pb.trackName ? " · " + gpEsc(pb.trackName) : "")) + "</div></div>";
+            }
+            rail.innerHTML = h;
+            /* the stage table reads the same state — keep the pair in step
+               whenever anything rebuilds the rail (list refresh, load, save) */
+            gpRenderSessions();
+            var q = rail.querySelector("#gpSessQ");
+            if (q) q.addEventListener("input", function () {
+                gp.sessFilter.q = q.value;
+                gpRenderSessions();
+            });
+            Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-strack]"), function (b) {
+                b.addEventListener("click", function () {
+                    var t = b.getAttribute("data-gp-strack");
+                    gp.sessFilter.track = t || null;
+                    gpBuildRail(); gpRenderSessions();
+                });
+            });
+        }
+
+        window.gpSessOpen = function (id) {
+            var go = function () { window.gpSetView("session"); };
+            if (id === gp.sessionId && gp.trace && gp.trace.length) { go(); return; }
+            Promise.resolve(window.gpSessionLoad(id)).then(go);
+        };
+
+        function gpRenderSessions() {
+            var wrap = document.getElementById("gpSessionsWrap");
+            if (!wrap || gp.view !== "sessions") return;
+            var list = gpSessFiltered();
+            var dev = gpDev();
+            var h = "<h3>Sessions</h3><div class='sub'>every recording on this PC · " +
+                    "open one, or plug the node in and download the latest drive</div>";
+            if (gp.sessions === null) {
+                h += "<div class='ws-note'>Reading…</div>";
+                wrap.innerHTML = h; return;
+            }
+            /* a loaded-but-unsaved trace must not look saved */
+            if (gp.trace && gp.trace.length && !gp.sessionId) {
+                h += "<div class='ws-note' style='border-left-color:var(--gpb-warn);margin-bottom:10px'>" +
+                     "The recording open in Analyse is <b>not saved</b> — it will be gone when Studio closes.</div>";
+            }
+            if (!list.length) {
+                h += "<div class='ws-none' style='padding:40px 0'>" +
+                     ((gp.sessions || []).length ? "Nothing matches that filter."
+                        : "Nothing saved yet.<br>Plug the RDM GPS in over USB and the last drive is one Download away.") +
+                     "</div>";
+            } else {
+                h += "<table class='gpb-sesstable'><thead><tr>" +
+                     "<th>Date</th><th>Session</th><th>Track</th><th>Driver</th><th>Car</th>" +
+                     "<th class='n'>" + gpRunWord(true) + "s</th><th class='n'>Best</th><th class='n'>Average</th>" +
+                     "<th>Data</th><th></th></tr></thead><tbody>";
+                list.forEach(function (s) {
+                    var sel = s.id === (gp.sessSel || gp.sessionId);
+                    var avg = null;
+                    if (s.lapTimesS && s.lapTimesS.length) {
+                        avg = s.lapTimesS.reduce(function (a, b) { return a + b; }, 0) / s.lapTimesS.length;
+                    }
+                    var open = s.id === gp.sessionId && gp.trace && gp.trace.length;
+                    h += "<tr class='" + (sel ? "sel" : "") + "' data-gp-srow='" + gpEsc(s.id) + "'>" +
+                         "<td>" + gpEsc(gpSesDay(s.recordedAt)) + (s.dated === "gps" ? "" :
+                             " <span title='the node had no fix when this was downloaded'>*</span>") + "</td>" +
+                         "<td>" + gpEsc(s.name) + "</td>" +
+                         "<td>" + gpEsc(s.trackName || "—") + "</td>" +
+                         "<td>" + gpEsc(s.driver || "—") + "</td>" +
+                         "<td>" + gpEsc(s.car || "—") + "</td>" +
+                         "<td class='n'>" + (s.lapCount || 0) + "</td>" +
+                         "<td class='n" + (s.bestLapS ? " best" : "") + "'>" + (s.bestLapS ? gpLapTime(s.bestLapS) : "—") + "</td>" +
+                         "<td class='n'>" + (avg ? gpLapTime(avg) : "—") + "</td>" +
+                         "<td><span class='gpb-badge " + (s.chanIds && s.chanIds.length ? "red'>GPS + CAN" : "grey'>GPS") + "</span></td>" +
+                         "<td class='n'><button class='open' data-gp-sopen='" + gpEsc(s.id) + "'>" +
+                         (open ? "Open ·" : "Open") + "</button></td></tr>";
+                });
+                h += "</tbody></table>";
+            }
+            /* actions for the highlighted row */
+            var cur = (gp.sessions || []).filter(function (s) { return s.id === (gp.sessSel || gp.sessionId); })[0];
+            if (cur) {
+                h += "<div class='gp-ses-act' style='margin-top:12px;max-width:560px'>" +
+                     "<input type='text' class='gp-ses-field' placeholder='Car' maxlength='24' value='" +
+                     gpEsc(cur.car || "") + "' data-gp-ses-car='" + gpEsc(cur.id) + "'>" +
+                     "<input type='text' class='gp-ses-field' placeholder='Driver' maxlength='24' value='" +
+                     gpEsc(cur.driver || "") + "' data-gp-ses-driver='" + gpEsc(cur.id) + "'>" +
+                     "<button class='ws-btn-line' data-gp-ses-ren='" + gpEsc(cur.id) + "'>Rename</button>" +
+                     "<button class='ws-btn-line' data-gp-ses-del='" + gpEsc(cur.id) + "'>Delete</button></div>";
+            }
+            h += "<div style='display:flex;gap:8px;margin-top:14px;max-width:560px;align-items:center'>";
+            if (dev && dev.traceRead) {
+                h += "<button class='ws-btn-line' onclick='gpTraceDownload()'" + (gp.traceBusy ? " disabled" : "") + ">" +
+                     (gp.traceBusy ? "Downloading… " + gp.tracePct + "%" : "Download from node") + "</button>";
+            }
+            h += gpSesImportHtml() + "</div>";
+            wrap.innerHTML = h;
+            /* binds — same handlers the old rail used */
+            Array.prototype.forEach.call(wrap.querySelectorAll("[data-gp-srow]"), function (tr) {
+                tr.addEventListener("click", function () {
+                    gp.sessSel = tr.getAttribute("data-gp-srow");
+                    gpRenderSessions();
+                });
+                tr.addEventListener("dblclick", function () {
+                    window.gpSessOpen(tr.getAttribute("data-gp-srow"));
+                });
+            });
+            Array.prototype.forEach.call(wrap.querySelectorAll("[data-gp-sopen]"), function (b) {
+                b.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    window.gpSessOpen(b.getAttribute("data-gp-sopen"));
+                });
+            });
+            var bindA = function (attr, fn) {
+                Array.prototype.forEach.call(wrap.querySelectorAll("[" + attr + "]"), function (b) {
+                    b.addEventListener("click", function (e) { e.stopPropagation(); fn(b.getAttribute(attr)); });
+                });
+            };
+            bindA("data-gp-ses-ren", function (v) { window.gpSessionRename(v); });
+            bindA("data-gp-ses-del", function (v) { window.gpSessionDelete(v); });
+            var fieldA = function (attr, key) {
+                Array.prototype.forEach.call(wrap.querySelectorAll("[" + attr + "]"), function (inp) {
+                    inp.addEventListener("click", function (e) { e.stopPropagation(); });
+                    inp.addEventListener("change", function () {
+                        var c = (gp.sessions || []).filter(function (s) { return s.id === inp.getAttribute(attr); })[0];
+                        if (!c) return;
+                        c[key] = String(inp.value || "").trim().slice(0, 24);
+                        gpStore.putMeta(c);
+                        gpRenderSessions();
+                    });
+                });
+            };
+            fieldA("data-gp-ses-car", "car");
+            fieldA("data-gp-ses-driver", "driver");
+        }
+
+        /* ════════════════════════════════════════════════════════════════
+         * Corners — where the time is (ADR-0024, design 4a)
+         * Every corner of the analysed lap ranked by time lost against the
+         * reference. All numbers come from the coach's existing comparison;
+         * this view is the front door it never had.
+         * ════════════════════════════════════════════════════════════════ */
+        function gpCornerOps() {
+            if (!(gp.trace && gp.trace.length) || !gp.traceLaps.length) return null;
+            /* the view needs a lap AND a reference; pick sensible ones */
+            if (gp.cmpLap < 0 || !gp.traceLaps[gp.cmpLap]) return null;
+            if (gp.selLap < 0 || gp.selLap === gp.cmpLap) {
+                /* analyse the closest challenger against the reference */
+                var bi = -1, bt = Infinity;
+                gp.traceLaps.forEach(function (l, i) {
+                    if (l.ghost || i === gp.cmpLap) return;
+                    var s = gpSecs(gp.trace, l.from, l.to);
+                    if (s < bt) { bt = s; bi = i; }
+                });
+                if (bi < 0) return null;
+                gp.selLap = bi;
+            }
+            return gpCoachOps();
+        }
+
+        function gpCornerLossClass(t) {
+            if (t > 0.25) return "l2";
+            if (t > 0.08) return "l1";
+            return "";
+        }
+
+        window.gpCornerPick = function (n) {
+            gp.cornerSel = n;
+            gpRenderCorners();
+            gpRenderInspector();
+            gpDrawCornerBadges();
+            var ops = gpCoachOps() || [];
+            var o = ops.filter(function (x) { return x.n === n; })[0];
+            if (o && gp.map) {
+                var pts = [];
+                for (var i = o.selEntry; i <= o.selExit && i < gp.trace.length; i += 2)
+                    pts.push(gpDrawnAt(i));
+                if (pts.length > 1) gp.map.fitBounds(L.latLngBounds(pts).pad(0.5));
+            }
+        };
+
+        function gpRenderCorners() {
+            var el = document.getElementById("gpCorners");
+            if (!el || gp.view !== "corners") return;
+            var word = gpRunWord(true);
+            if (!(gp.trace && gp.trace.length)) {
+                el.innerHTML = "<div class='ws-none' style='padding:40px 20px'>Nothing loaded.<br>" +
+                    "Open a session first — this view ranks its corners by where the time went.</div>";
+                return;
+            }
+            var ops = gpCornerOps();
+            if (!ops || !ops.length) {
+                var why = gp.traceLaps.filter(function (l) { return !l.ghost; }).length < 2
+                    ? "This recording has only one timed " + gpRunWord() + " — compare against another day in the Analyse rail, then come back."
+                    : "Pick a comparison " + gpRunWord() + " in the Analyse rail and this becomes a ranked list of corners.";
+                el.innerHTML = "<div class='ws-none' style='padding:40px 20px'>" + why + "</div>";
+                return;
+            }
+            var sel = gp.traceLaps[gp.selLap], refLap = gp.traceLaps[gp.cmpLap];
+            var selT = gpSecs(gp.trace, sel.from, sel.to);
+            var ranked = ops.slice().sort(function (a, b) { return b.total_s - a.total_s; });
+            if (gp.cornerSel == null || !ranked.filter(function (o) { return o.n === gp.cornerSel; }).length)
+                gp.cornerSel = ranked.length ? ranked[0].n : null;
+            var avail = ranked.filter(function (o) { return o.total_s > 0; })
+                              .reduce(function (a, o) { return a + o.total_s; }, 0);
+            var h = "";
+            /* the A/B strip: what is being analysed against what */
+            h += "<div class='gpb-ab' style='padding:0 0 10px;border-bottom:1px solid var(--gpb-div)'>" +
+                 "<span class='w'>Analyse</span><span class='sw'>" + word + " " + (gp.selLap + 1) +
+                 " · " + gpLapTime(selT) + "</span>" +
+                 "<span class='w'>against</span><span class='sw ink'>" + gpEsc(gpRefName()) +
+                 " · " + gpLapTime(gpSecs(gp.trace, refLap.from, refLap.to)) + "</span>" +
+                 "<span class='gpb-tag red gpb-avail'>" + avail.toFixed(2) + " s available" +
+                 (ranked.length && ranked[0].total_s > 0 ? " · " + ranked[0].total_s.toFixed(2) + " s in one corner" : "") +
+                 "</span></div>";
+            h += "<table class='gpb-table' style='margin-top:10px'><thead><tr>" +
+                 "<th>Rank</th><th>Corner</th><th class='n'>Time lost</th>" +
+                 "<th class='n'>Min speed</th><th class='n'>Ref</th><th class='n'>Brake point</th>" +
+                 "<th style='width:150px'>Opportunity</th><th>What to change</th></tr></thead><tbody>";
+            var mx = Math.max(0.01, ranked[0] ? ranked[0].total_s : 0);
+            ranked.forEach(function (o, ri) {
+                var lost = o.total_s;
+                var onPace = lost <= 0.03 && lost >= -0.03;
+                var gain = lost < -0.03;
+                var minSel = gp.trace[o.selApex] ? Math.round(gpSpdN(gp.trace[o.selApex].kph)) : null;
+                var minRef = gp.trace[o.apex] ? Math.round(gpSpdN(gp.trace[o.apex].kph)) : null;
+                var bl = gpN(o.brakeLater_m);
+                var brake = bl === null ? "—"
+                    : Math.abs(bl) < 3 ? "on point"
+                    : Math.abs(Math.round(bl)) + " m " + (bl > 0 ? "late" : "early");
+                var say = onPace ? "On pace" : gain ? "Faster here — keep it" : gpEsc(gpPrescribe(o).try);
+                var barW = lost > 0 ? Math.max(5, Math.round(lost / mx * 100)) : 0;
+                var hot = o.n === gp.cornerSel;
+                h += "<tr class='" + (hot ? "hot" : "") + "' data-gp-corner='" + o.n + "' style='cursor:pointer'>" +
+                     "<td class='" + (ri === 0 && lost > 0.03 ? "red" : "mut") + "'>" + (ri + 1) + "</td>" +
+                     "<td>Turn " + o.n + "</td>" +
+                     "<td class='n " + (lost > 0.08 ? "red" : gain ? "" : "mut") + "'" +
+                     (gain ? " style='color:var(--gpb-ok)'" : "") + ">" +
+                     (lost > 0 ? "+" : "") + lost.toFixed(2) + "</td>" +
+                     "<td class='n'>" + (minSel === null ? "—" : minSel) + "</td>" +
+                     "<td class='n mut'>" + (minRef === null ? "—" : minRef) + "</td>" +
+                     "<td class='n mut'>" + brake + "</td>" +
+                     "<td><span style='display:block;height:6px;background:var(--gpb-n200)'>" +
+                     "<i style='display:block;height:100%;width:" + barW + "%;background:" +
+                     (lost > 0.25 ? "var(--gpb-red)" : lost > 0.08 ? "var(--gpb-red-400)" : "var(--gpb-n400)") +
+                     "'></i></span></td>" +
+                     "<td class='" + (onPace ? "mut" : "") + "' style='font-size:11.5px'>" + say + "</td></tr>";
+            });
+            h += "</tbody></table>";
+            var top2 = ranked.filter(function (o) { return o.total_s > 0.03; }).slice(0, 2);
+            if (top2.length) {
+                var gainS = top2.reduce(function (a, o) { return a + o.total_s; }, 0);
+                var names = top2.map(function (o) { return "Turn " + o.n; }).join(" + ");
+                h += "<div style='display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap'>" +
+                     "<button class='ws-btn-line' style='width:auto;padding:6px 14px' onclick='gpCornerToAnalyse()'>Watch the worst corner in Analyse</button>" +
+                     "<span class='gp-ses-n gpb-avail'>fix " + names + " alone → " +
+                     gpLapTime(selT - gainS) + ", a " + gainS.toFixed(2) + " s gain</span></div>";
+            }
+            h += "<div class='gpb-cornlegend' style='margin-top:10px'>" +
+                 "<i style='background:var(--gpb-red)'></i>most time lost" +
+                 "<i style='background:var(--gpb-red-300);margin-left:8px'></i>some" +
+                 "<i style='background:var(--gpb-n200);margin-left:8px'></i>on pace" +
+                 "<span class='gpb-avail'>speeds in " + gpSpdU() + " · numbers vs " + gpEsc(gpRefName()) + "</span></div>";
+            el.innerHTML = h;
+            Array.prototype.forEach.call(el.querySelectorAll("[data-gp-corner]"), function (tr) {
+                tr.addEventListener("click", function () {
+                    window.gpCornerPick(parseInt(tr.getAttribute("data-gp-corner"), 10));
+                });
+            });
+        }
+
+        window.gpCornerToAnalyse = function () {
+            var ops = gpCoachOps() || [];
+            var o = ops.filter(function (x) { return x.n === gp.cornerSel; })[0] ||
+                    ops.slice().sort(function (a, b) { return b.total_s - a.total_s; })[0];
+            window.gpSetView("session");
+            if (o) window.gpCoachJump(o.selApex, o.selEntry, o.selExit);
+        };
+
+        function gpRenderCornerInspector(box) {
+            var ops = (gp.view === "corners" ? gpCornerOps() : gpCoachOps()) || [];
+            var o = ops.filter(function (x) { return x.n === gp.cornerSel; })[0];
+            if (!o) {
+                box.innerHTML = "<h2>Corners</h2><div class='ws-sub'>ranked by time lost</div>" +
+                    "<div class='ws-note'>Pick a corner in the table and its full story lands here: " +
+                    "the four phases, the brake point, and what to try next time out.</div>";
+                return;
+            }
+            var lost = o.total_s;
+            var h = "<h2>Turn " + o.n + "</h2>" +
+                    "<div class='ws-sub'>vs " + gpEsc(gpRefName()) + "</div>";
+            h += "<div style='display:flex;align-items:baseline;gap:8px;margin:8px 0 2px'>" +
+                 "<span style='font-family:var(--gpb-head);font-weight:600;font-size:30px;line-height:1;color:" +
+                 (lost > 0.03 ? "var(--gpb-red-700)" : "var(--gpb-ok)") + ";font-variant-numeric:tabular-nums'>" +
+                 (lost > 0 ? "+" : "") + lost.toFixed(2) + " s</span>" +
+                 "<span class='gp-ses-n'>" + (lost > 0.03 ? "lost in this corner" : lost < -0.03 ? "gained here" : "level") + "</span></div>";
+            h += "<div class='ws-grp'><div class='ws-gt'>The four phases</div>" +
+                 "<table class='gpb-table'><thead><tr><th></th><th class='n'>This " + gpRunWord() + "</th>" +
+                 "<th class='n'>Ref</th><th class='n'>&Delta;</th></tr></thead><tbody>";
+            (o.phases || []).forEach(function (p) {
+                var worst = Math.abs(p.delta_s) > 0.02 && p.delta_s > 0 &&
+                            p.delta_s === Math.max.apply(null, o.phases.map(function (x) { return x.delta_s; }));
+                h += "<tr><td class='mut'>" + gpEsc(p.name) + "</td>" +
+                     "<td class='n'>" + p.sel_s.toFixed(2) + "</td>" +
+                     "<td class='n mut'>" + p.ref_s.toFixed(2) + "</td>" +
+                     "<td class='n" + (worst ? " red" : " mut") + "'>" +
+                     (p.delta_s > 0 ? "+" : "") + p.delta_s.toFixed(2) + "</td></tr>";
+            });
+            h += "</tbody></table></div>";
+            var minSel = gp.trace[o.selApex] ? gpSpd(gp.trace[o.selApex].kph) : "—";
+            var minRef = gp.trace[o.apex] ? gpSpd(gp.trace[o.apex].kph) : "—";
+            var bl = gpN(o.brakeLater_m);
+            h += "<div class='ws-grp'><div class='ws-gt'>The numbers</div><div class='gp-rows'>" +
+                 "<div class='gp-row'><span class='k'>Slowest point</span><span class='v'>" + minSel + "</span>" +
+                 "<span class='s'>ref " + minRef + "</span></div>" +
+                 (bl !== null ? "<div class='gp-row'><span class='k'>Brake point</span><span class='v'>" +
+                     (Math.abs(bl) < 3 ? "on point" : Math.abs(Math.round(bl)) + " m " + (bl > 0 ? "later" : "earlier")) +
+                     "</span></div>" : "") +
+                 (gpN(o.exitKph_d) !== null ? "<div class='gp-row'><span class='k'>Exit speed</span><span class='v" +
+                     (o.exitKph_d < -1 ? " bad" : "") + "'>" + (o.exitKph_d > 0 ? "+" : "") +
+                     Math.round(gpSpdN(o.exitKph_d)) + " " + gpSpdU() + "</span></div>" : "") +
+                 (gpN(o.coast_d) !== null && Math.abs(o.coast_d) > 0.05
+                     ? "<div class='gp-row'><span class='k'>Coasting</span><span class='v'>" +
+                       (o.coast_d > 0 ? "+" : "") + o.coast_d.toFixed(2) + " s</span></div>" : "") +
+                 "</div></div>";
+            var rx = gpPrescribe(o);
+            if (rx && lost > 0.03) {
+                h += "<div class='ws-grp'><div class='gpb-coachnote'><span class='k'>Coaching note</span>" +
+                     "<p>" + gpEsc(rx.why) + " " + gpEsc(rx.try) + "</p></div></div>";
+            }
+            h += "<button class='ws-btn-line' style='margin-top:10px' onclick='gpCornerToAnalyse()'>Watch it in Analyse</button>";
+            box.innerHTML = h;
+            gpTipInit();
+        }
+
+        /* corner badges on the map — numbered, coloured by loss */
+        function gpDrawCornerBadges() {
+            if (!gp.map) return;
+            if (gp.cornerLayer) { gp.cornerLayer.clearLayers(); }
+            if (gp.view !== "corners") return;
+            var ops = gpCoachOps();
+            if (!ops || !ops.length || !(gp.trace && gp.trace.length)) return;
+            if (!gp.cornerLayer) gp.cornerLayer = L.layerGroup().addTo(gp.map);
+            ops.forEach(function (o) {
+                var s = gp.trace[o.selApex];
+                if (!s) return;
+                var cls = gpCornerLossClass(o.total_s);
+                var hot = o.n === gp.cornerSel;
+                var d = hot ? 30 : 24;
+                var icon = L.divIcon({
+                    className: "",
+                    html: "<div class='gpb-corner-badge " + cls + "'" +
+                          (hot ? " style='box-shadow:0 0 0 2.5px #fff, 0 1px 6px rgba(0,0,0,0.45)'" : "") +
+                          ">" + o.n + "</div>",
+                    iconSize: [d, d], iconAnchor: [d / 2, d / 2]
+                });
+                var m = L.marker(gpDrawnAt(o.selApex), { icon: icon, keyboard: false });
+                m.on("click", function () { window.gpCornerPick(o.n); });
+                gp.cornerLayer.addLayer(m);
+            });
+        }
+
+        /* ---- Export: one red button, three formats ---- */
+        function gpSyncExportBtn() {
+            var b = document.getElementById("gpExportBtn");
+            if (!b) return;
+            var have = !!(gp.sessionId || (gp.view === "sessions" && gp.sessSel) || (gp.trace && gp.trace.length));
+            b.style.display = have ? "" : "none";
+        }
+
+        window.gpExportPop = function (ev) {
+            var old = document.getElementById("gpExpPop");
+            if (old) { old.remove(); return; }
+            var id = (gp.view === "sessions" && gp.sessSel) ? gp.sessSel : gp.sessionId;
+            if (!id) return;
+            var pop = document.createElement("div");
+            pop.className = "gpb-exppop";
+            pop.id = "gpExpPop";
+            pop.innerHTML =
+                "<button data-x='vbo'>VBO<small>opens in Circuit Tools, Track Attack, DataSpeed</small></button>" +
+                "<button data-x='csv'>CSV<small>one row per sample — Excel, i2, RaceRender</small></button>" +
+                "<button data-x='file'>.rdmsession<small>the whole recording, for another PC running Studio</small></button>";
+            var ws = document.getElementById("gpWorkspace");
+            ws.appendChild(pop);
+            var r = ev.target.getBoundingClientRect();
+            pop.style.top = (r.bottom + 6) + "px";
+            pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+            Array.prototype.forEach.call(pop.querySelectorAll("[data-x]"), function (b) {
+                b.addEventListener("click", function () {
+                    pop.remove();
+                    if (b.getAttribute("data-x") === "vbo") window.gpSessionExportVbo(id);
+                    else if (b.getAttribute("data-x") === "csv") window.gpSessionExportCsv(id);
+                    else window.gpSessionExportFile(id);
+                });
+            });
+            setTimeout(function () {
+                var close = function (e) {
+                    if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener("mousedown", close); }
+                };
+                document.addEventListener("mousedown", close);
+            }, 0);
+        };
 
         /* ---- Session inspector -------------------------------------------- */
         /* ---- Is this thing going to record? --------------------------------
@@ -8753,9 +9741,139 @@
             box.innerHTML = (dev && dev.traceRead) ? gpReadyCardHtml() : "";
         }
 
+        /* ---- The report column (ADR-0024, design 2a) ----------------------
+           Lap report header, sector table, stat tiles, "where the time
+           went" — then the coach, the splits grid, history, video and the
+           recording actions. Everything is derived from what is already
+           measured; nothing here invents a number. */
+        function gpLapReportHtml() {
+            if (!(gp.trace && gp.trace.length)) return "";
+            var word = gpRunWord(true);
+            if (gp.selLap < 0 || !gp.traceLaps[gp.selLap]) {
+                return "<h2>Session report</h2><div class='ws-sub'>the whole recording — pick a " +
+                       gpRunWord() + " on the left for its report</div>";
+            }
+            var l = gp.traceLaps[gp.selLap];
+            var t = gpSecs(gp.trace, l.from, l.to);
+            var bestT = Infinity;
+            gp.traceLaps.forEach(function (x) {
+                if (x.ghost) return;
+                var s = gpSecs(gp.trace, x.from, x.to);
+                if (s < bestT) bestT = s;
+            });
+            var d = t - bestT;
+            return "<div class='ws-gt' style='margin-bottom:2px'>" + word + " " + (gp.selLap + 1) + " report</div>" +
+                   "<div style='display:flex;align-items:baseline;gap:10px;flex-wrap:wrap'>" +
+                   "<span style='font-family:var(--gpb-head);font-weight:600;font-size:32px;line-height:1;font-variant-numeric:tabular-nums'>" +
+                   gpLapTime(t) + "</span>" +
+                   (d > 0.004
+                       ? "<span style='font-size:12px;color:var(--gpb-red-700);font-variant-numeric:tabular-nums'>+" + d.toFixed(2) + " vs best</span>"
+                       : "<span class='gpb-tag red'>session best</span>") +
+                   "</div>";
+        }
+
+        function gpSectorTableHtml() {
+            if (gp.selLap < 0) return "";
+            var S = gpSessionSectors();
+            if (!S || !S.best || S.best.length < 2) return "";
+            var mine = S.per[gp.selLap];
+            var trk = gpActiveTrack();
+            var h = "<div class='ws-grp'><div class='ws-gt'>Sectors</div>" +
+                    "<table class='gpb-table'><thead><tr><th>Sector</th>" +
+                    "<th class='n'>This " + gpRunWord() + "</th><th class='n'>Best</th><th class='n'>&Delta;</th></tr></thead><tbody>";
+            S.best.forEach(function (b, i) {
+                var v = mine ? mine[i] : null;
+                var isBest = v !== null && Math.abs(v - b) < 0.0005;
+                h += "<tr><td class='mut'>" + gpEsc(gpSectorName(trk, i)) + "</td>" +
+                     "<td class='n" + (isBest ? " red" : "") + "'>" + (v === null ? "&mdash;" : v.toFixed(2) + (isBest ? " ●" : "")) + "</td>" +
+                     "<td class='n mut'>" + b.toFixed(2) + "</td>" +
+                     "<td class='n mut'>" + (v === null || isBest ? "&mdash;" : "+" + (v - b).toFixed(2)) + "</td></tr>";
+            });
+            h += "</tbody></table></div>";
+            return h;
+        }
+
+        function gpStatTilesHtml() {
+            if (!(gp.trace && gp.trace.length)) return "";
+            var r = gpLapRange();
+            if (r.to - r.from < 10) return "";
+            var ch = gpChannels();
+            var top = 0, lo = Infinity, sum = 0, n = 0, maxB = 0, maxLat = 0, coastS = 0, i, s;
+            var totS = gpSecs(gp.trace, r.from, r.to) || 1;
+            for (i = r.from; i <= r.to; i++) {
+                s = gp.trace[i];
+                if (s.kph > top) top = s.kph;
+                if (s.kph < lo) lo = s.kph;
+                sum += s.kph; n++;
+                if (s.g < maxB) maxB = s.g;
+                var la = Math.abs(ch.glat[i] || 0);
+                if (la > maxLat) maxLat = la;
+                if (Math.abs(s.g) < GP_COAST_G && s.kph > 8) coastS += gpStep(gp.trace, i);
+            }
+            var tiles = [];
+            tiles.push({ k: "Top speed", v: Math.round(gpSpdN(top)), u: gpSpdU(),
+                         s: "min " + Math.round(gpSpdN(lo)) + " · avg " + Math.round(gpSpdN(sum / n)) });
+            /* CAN lanes, when the recording carries them */
+            var lanes = gpLaneRowsAll().filter(function (L) {
+                return L.id.indexOf("can_") === 0 && !L.pending && typeof L.get === "function";
+            });
+            lanes.forEach(function (L) {
+                var lbl = String(L.label || "");
+                var isRpm = /rpm/i.test(lbl), isThr = /thr/i.test(lbl);
+                if (!isRpm && !isThr) return;
+                var mx = -Infinity, smm = 0, cnt = 0, full = 0, j, v;
+                for (j = r.from; j <= r.to; j++) {
+                    v = L.get(j);
+                    if (v === null || v === undefined) continue;
+                    if (v > mx) mx = v;
+                    smm += v; cnt++;
+                    if (isThr && v >= 90) full++;
+                }
+                if (!cnt) return;
+                if (isRpm) tiles.push({ k: "Max RPM", v: Math.round(mx), u: "",
+                                        s: "avg " + Math.round(smm / cnt) });
+                else tiles.push({ k: "Full throttle", v: Math.round(full / cnt * 100), u: "%",
+                                  s: "avg pedal " + Math.round(smm / cnt) + "%" });
+            });
+            tiles.push({ k: "Peak brake", v: (-maxB).toFixed(2), u: "g", s: "hardest stop" });
+            tiles.push({ k: "Max lateral", v: maxLat.toFixed(2), u: "g", s: "cornering" });
+            tiles.push({ k: "Coasting", v: (coastS / totS * 100).toFixed(1), u: "%", s: "off both pedals" });
+            var h = "<div class='ws-grp'><div class='ws-gt'>This " + (gp.selLap < 0 ? "session" : gpRunWord()) + "</div><div class='gpb-tiles'>";
+            tiles.slice(0, 6).forEach(function (t) {
+                h += "<div class='gpb-tile'><span class='k'>" + t.k + "</span>" +
+                     "<span class='v'>" + t.v + (t.u ? " <small>" + t.u + "</small>" : "") + "</span>" +
+                     "<span class='s'>" + t.s + "</span></div>";
+            });
+            h += "</div></div>";
+            return h;
+        }
+
+        function gpLossBarsHtml() {
+            var ops = gpCoachOps();
+            if (!ops || !ops.length) return "";
+            var hot = ops.filter(function (o) { return o.total_s > 0.02; })
+                         .sort(function (a, b) { return b.total_s - a.total_s; })
+                         .slice(0, 5);
+            if (!hot.length) return "";
+            var mx = hot[0].total_s;
+            var h = "<div class='ws-grp'><div class='ws-gt'>Where the time went</div><div class='gpb-loss'>";
+            hot.forEach(function (o) {
+                h += "<button class='row' data-gp-focus='" + o.selApex + "' data-gp-a='" + o.selEntry +
+                     "' data-gp-b='" + o.selExit + "'>" +
+                     "<span class='l'>Turn " + o.n + "</span>" +
+                     "<span class='track'><i style='width:" + Math.max(6, Math.round(o.total_s / mx * 100)) + "%'></i></span>" +
+                     "<span class='d'>+" + o.total_s.toFixed(2) + "</span></button>";
+            });
+            h += "</div><div class='gp-note' style='margin-top:4px'>against " + gpRefName() +
+                 " · the full story is in <b>Corners</b></div></div>";
+            return h;
+        }
+
         function gpRenderSessionInspector(box) {
             var dev = gpDev();
-            var head = "<h2>Session</h2><div class='ws-sub'>the line you actually drove</div>";
+            var head = (gp.trace && gp.trace.length)
+                ? gpLapReportHtml()
+                : "<h2>Analyse</h2><div class='ws-sub'>the line you actually drove</div>";
             var h = "";
 
             h += "<div class='ws-grp'><div class='ws-gt'>Recording</div>";
@@ -8841,7 +9959,8 @@
                 h += "";
                 h += "</div>";
 
-                h = gpGlanceHtml() + gpSplitsHtml() + gpHistoryHtml() + gpRenderCoach() + h;
+                h = gpSectorTableHtml() + gpStatTilesHtml() + gpLossBarsHtml() +
+                    gpRenderCoach() + gpSplitsHtml() + gpHistoryHtml() + h;
             }
             box.innerHTML = head + h;
             /* Same 1 Hz beat as this panel: the card is elsewhere in the DOM
@@ -13831,16 +14950,19 @@
             var v = document.getElementById("gpViewer");
             if (!v) return;
             var rail = document.getElementById("gpRail");
+            var cornerCell = document.getElementById("gpCornersMapCell");
             if (!gp._viewerHome) {
                 gp._viewerHome = { parent: v.parentNode, next: v.nextSibling };
             }
-            var want = (where === "rail" && rail) ? rail : gp._viewerHome.parent;
-            var first = want === rail ? rail.firstChild : gp._viewerHome.next;
+            var want = (where === "rail" && rail) ? rail
+                     : (where === "corners" && cornerCell) ? cornerCell
+                     : gp._viewerHome.parent;
             if (v.parentNode === want && (want !== rail || rail.firstChild === v)) {
                 v.classList.toggle("docked", want === rail);
                 return;
             }
-            if (want === rail) rail.insertBefore(v, first);
+            if (want === rail) rail.insertBefore(v, rail.firstChild);
+            else if (want === cornerCell) cornerCell.appendChild(v);
             else want.insertBefore(v, gp._viewerHome.next || null);
             v.classList.toggle("docked", want === rail);
             /* The container just changed size and Leaflet has no way to know.
@@ -13863,75 +14985,82 @@
         }
 
         window.gpSetView = function (v) {
-            gp.view = (v === "tracks" || v === "session" || v === "setup") ? v : "monitor";
-            var big = (gp.view === "tracks" || gp.view === "session");   /* the map-led views */
-            [["gpBtnMonitor", "monitor"], ["gpBtnTracks", "tracks"],
-             ["gpBtnSession", "session"], ["gpBtnSetup", "setup"]]
+            var KNOWN = ["sessions", "monitor", "session", "corners", "tracks", "setup"];
+            gp.view = KNOWN.indexOf(v) >= 0 ? v : "monitor";
+            var view = gp.view;
+            var big = (view === "tracks");                 /* full-height map view */
+            var mapless = (view === "setup" || view === "sessions");
+            [["gpBtnSessions", "sessions"], ["gpBtnMonitor", "monitor"],
+             ["gpBtnSession", "session"], ["gpBtnCorners", "corners"],
+             ["gpBtnTracks", "tracks"], ["gpBtnSetup", "setup"]]
                 .forEach(function (b) {
                     var el = document.getElementById(b[0]);
-                    if (el) el.classList.toggle("on", gp.view === b[1]);
+                    if (el) el.classList.toggle("on", view === b[1]);
                 });
             var wrap = document.getElementById("gpMapWrap");
             var grid = document.getElementById("gpStage");
             var fb = document.getElementById("gpBtnFollow");
             var cb = document.getElementById("gpBtnCam");
             var pb = document.getElementById("gpPlaybar");
-            if (fb) fb.style.display = big ? "none" : "";
-            /* The camera-mode button is Session's own replacement for Follow —
-               Tracks has no playhead to follow, and Monitor already has
-               Follow for the live car. */
-            if (cb) { cb.style.display = gp.view === "session" ? "" : "none"; gpSyncCamButtons(); }
+            /* Follow is for the live car; the analysis views have a playhead. */
+            if (fb) fb.style.display = view === "monitor" ? "" : "none";
+            if (cb) { cb.style.display = view === "session" ? "" : "none"; gpSyncCamButtons(); }
+            /* Map-collapse belonged to the old rail-docked layout. In the
+               brand layout the map is structural — the button stays retired. */
             var mc = document.getElementById("gpBtnMapCollapse");
-            var collapsedNow = gp.view === "session" && gpMapCollapsed();
-            if (mc) { mc.style.display = gp.view === "session" ? "" : "none"; mc.classList.toggle("on", collapsedNow); }
+            if (mc) { mc.style.display = "none"; mc.classList.remove("on"); }
             if (wrap) wrap.classList.toggle("tall", big);
             var viewer = document.getElementById("gpViewer");
             if (viewer) {
                 viewer.classList.toggle("tall", big);
-                viewer.classList.toggle("gp-map-collapsed", collapsedNow);
-                /* Setup has no use for a map at all. */
-                viewer.style.display = gp.view === "setup" ? "none" : "";
+                viewer.classList.remove("gp-map-collapsed");
+                viewer.classList.toggle("analyse", view === "session");
+                viewer.classList.toggle("incorners", view === "corners");
+                viewer.style.display = mapless ? "none" : "";
             }
-            /* Session collapses to a single aside: the rail widens to carry
-               what the inspector used to, and the inspector column goes. */
             var railEl = document.getElementById("gpRail");
-            if (railEl) railEl.classList.toggle("gp-onecol", gp.view === "session");
-            /* BEFORE gpBuildRail below: every other view rebuilds the rail by
-               innerHTML, which would take the docked map's DOM with it. */
-            gpDockViewer(gp.view === "session" ? "rail" : "stage");
+            if (railEl) railEl.classList.remove("gp-onecol");
+            /* BEFORE gpBuildRail below: rail rebuilds by innerHTML would take
+               a docked map's DOM with it. */
+            gpDockViewer(view === "corners" ? "corners" : "stage");
+            /* The report column: hidden only on the Sessions library. */
             var insp = document.getElementById("gpInspector");
-            if (insp) insp.style.display = gp.view === "session" ? "none" : "";
+            if (insp) insp.style.display = view === "sessions" ? "none" : "";
             gpViewerSync();
             var su = document.getElementById("gpSetupWrap");
-            if (su) su.style.display = gp.view === "setup" ? "flex" : "none";
-            if (grid) grid.style.display = (big || gp.view === "setup") ? "none" : "";
-            /* The playback bar is part of the structure: visible in Session
-               either way, idle until a recording gives it something to play.
-               Whether it is IDLE is decided in gpDrawStrip, which runs every
-               time the rack redraws — switching view is not the only way to
-               acquire a recording. */
-            if (pb) pb.style.display = gp.view === "session" ? "flex" : "none";
-            if (gp.view !== "session") gpPlayStop();
-            /* The channel popover is anchored to a button in the playbar, so it
-               cannot outlive the view that shows it — it would float over the
-               Tracks map with nothing underneath it to explain itself. */
-            if (gp.view !== "session" && gp.chanPop) { gp.chanPop = false; gpChanPopRender(); }
+            if (su) su.style.display = view === "setup" ? "flex" : "none";
+            var sw = document.getElementById("gpSessionsWrap");
+            if (sw) sw.style.display = view === "sessions" ? "block" : "none";
+            var cw = document.getElementById("gpCornersWrap");
+            if (cw) cw.style.display = view === "corners" ? "flex" : "none";
+            if (grid) grid.style.display = view === "monitor" ? "" : "none";
+            /* The playback bar is part of Analyse's structure: visible either
+               way, idle until a recording gives it something to play. */
+            if (pb) pb.style.display = view === "session" ? "flex" : "none";
+            if (view !== "session") gpPlayStop();
+            if (view !== "session" && gp.chanPop) { gp.chanPop = false; gpChanPopRender(); }
             gpDrawTrace();
             gpStripBind(); gpNavBind(); gpDrawStrip();
             gpBuildRail();
-            /* Gates are drawn in ONE place: the Tracks editor. The map in
-               Monitor is the car and its trail, nothing else. */
+            /* Gates are drawn in ONE place: the Tracks editor. */
             gpDrawEditor();
+            gpDrawCornerBadges();
+            if (view === "sessions") gpRenderSessions();
+            if (view === "corners") gpRenderCorners();
             gpRenderInspector();
+            gpSyncExportBtn();
             if (gp.map) setTimeout(function () { if (gp.map) gp.map.invalidateSize(); }, 60);
             /* Put the map where the work is. */
-            if (gp.view === "monitor" && gp.follow && gp.map && gp._lastLL) {
+            if (view === "monitor" && gp.follow && gp.map && gp._lastLL) {
                 gp.map.panTo(gp._lastLL, { animate: false });
             }
             var t = gpActiveTrack();
-            if (gp.view === "tracks" && gp.map && t) {
+            if (view === "tracks" && gp.map && t) {
                 if (t.start_finish) gp.map.setView([t.start_finish.lat, t.start_finish.lon], Math.max(gp.map.getZoom(), 18));
                 else if (t.center) gp.map.setView(t.center, t.zoom || 16);
+            }
+            if ((view === "session" || view === "corners") && gp.map && gp.trace && gp.trace.length) {
+                setTimeout(function () { if (gp.map && gp.trace && gp.trace.length) gpFitTrace(); }, 80);
             }
         };
 
@@ -14221,7 +15350,8 @@
             var rail = document.getElementById("gpRail");
             if (!rail) return;
             if (gp.view === "tracks") { gpBuildTrackRail(rail); return; }
-            if (gp.view === "session") { gpBuildSessionRail(rail); return; }
+            if (gp.view === "session" || gp.view === "corners") { gpBuildSessionRail(rail); return; }
+            if (gp.view === "sessions") { gpBuildSessionsRail(rail); return; }
             if (gp.view === "setup") {
                 /* This list is matched to the groups BY POSITION, so it has to
                    name every one of them in order — Channels was missing,
@@ -14412,19 +15542,12 @@
         /* ---- inspector: identity + Identify + WiFi ---- */
         function gpRenderInspector() {
             var box = document.getElementById("gpInspector");
-            if (gp.view === "session") {
-                /* Session has no right-hand inspector: its panels live at the
-                   foot of the single aside. Clear the old column so the ids
-                   inside it cannot shadow the live ones. */
-                var aside = document.getElementById("gpSessAside");
-                if (aside) {
-                    if (box && box.innerHTML) box.innerHTML = "";
-                    gpRenderSessionInspector(aside);
-                    return;
-                }
-            }
             if (!box) return;
+            /* Analyse: the report column IS the inspector again (ADR-0024) —
+               sector table, stat tiles, where the time went, coach. */
             if (gp.view === "session") { gpRenderSessionInspector(box); return; }
+            if (gp.view === "corners") { gpRenderCornerInspector(box); return; }
+            if (gp.view === "sessions") { box.innerHTML = ""; return; }
             if (gp.view === "tracks") { gpRenderTrackInspector(box); return; }
             if (gp.view === "setup") {
                 gpRenderSetup();
@@ -17537,6 +18660,13 @@
             gpMapInit();
             if (gp.map) setTimeout(function () { if (gp.map) gp.map.invalidateSize(); }, 60);
             window.gpClearTrail();
+            /* First open of the app lands on the shelf of recordings unless a
+               node is already talking — Circuit Tools' rule: open, see your
+               sessions, one click to the analysis (ADR-0024). */
+            if (!gp._viewedOnce) {
+                gp._viewedOnce = true;
+                if (!gpLinked()) gp.view = "sessions";
+            }
             window.gpSetView(gp.view);
             if (gp.timer) clearTimeout(gp.timer);
             gp.timer = null;
