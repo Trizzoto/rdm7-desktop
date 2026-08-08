@@ -9345,7 +9345,7 @@
             }
             h += "<div style='display:flex;gap:8px;margin-top:14px;max-width:560px;align-items:center'>";
             if (dev && dev.traceRead) {
-                h += "<button class='ws-btn-line' onclick='gpTraceDownload()'" + (gp.traceBusy ? " disabled" : "") + ">" +
+                h += "<button class='ws-btn-line' id='gpSessDlBtn' onclick='gpTraceDownload()'" + (gp.traceBusy ? " disabled" : "") + ">" +
                      (gp.traceBusy ? "Downloading… " + gp.tracePct + "%" : "Download from node") + "</button>";
             }
             h += gpSesImportHtml() + "</div>";
@@ -9355,6 +9355,7 @@
                 tr.addEventListener("click", function () {
                     gp.sessSel = tr.getAttribute("data-gp-srow");
                     gpRenderSessions();
+                    gpSyncExportBtn();
                 });
                 tr.addEventListener("dblclick", function () {
                     window.gpSessOpen(tr.getAttribute("data-gp-srow"));
@@ -9544,7 +9545,14 @@
                 window.gpSelectLap(csel.value); reroll();
             });
             if (cref) cref.addEventListener("change", function () {
-                window.gpCompareLap(parseInt(cref.value, 10)); reroll();
+                var pick = parseInt(cref.value, 10);
+                /* Picking the ghost again must not run gpCompareLap — that
+                   drops the ghost first, which would delete the very lap
+                   just chosen and leave the view pointing at nothing. */
+                var l = gp.traceLaps[pick];
+                if (l && l.ghost) { gp.cmpLap = pick; gpDrawStrip(); }
+                else window.gpCompareLap(pick);
+                reroll();
             });
         }
 
@@ -9721,7 +9729,7 @@
 
             /* Fix — the one thing no amount of Studio can compensate for. */
             if (!s) {
-                add("Fix", "not reported", null, "open Monitor to see it live", null, true);
+                add("Fix", "not reported", null, "open Live to see it", null, true);
             } else if (s.link === false) {
                 /* Not "no fix": the receiver isn't SAYING anything, which is
                    a different failure with a different remedy. The node now
@@ -14552,7 +14560,7 @@
                redrawn when the scale changes. Without this the line keeps
                whatever resolution it was built at and looks wrong at every
                other zoom. */
-            gp.map.on("zoomend", function () { if (gp.view === "session") gpDrawTrace(); });
+            gp.map.on("zoomend", function () { if (gp.view === "session" || gp.view === "corners") gpDrawTrace(); });
             window.__gpMap = gp.map;   /* debug/automation handle */
         }
 
@@ -14656,7 +14664,7 @@
                times a second, which beat the playhead's own follow every
                time. While STREAMING it is right again, because then the live
                car is the subject. */
-            var mayMoveMap = gp.view !== "tracks" &&
+            var mayMoveMap = gp.view !== "tracks" && gp.view !== "corners" &&
                              (gp.view !== "session" || gp.liveMode);
             if (!gp.carMarker) {
                 gp.carMarker = L.marker(ll, { icon: gpCarIcon(headDeg), interactive: false, zIndexOffset: 900 })
@@ -15189,7 +15197,8 @@
                     gp.map.invalidateSize({ animate: false });
                     gpDrawTrace();
                     gpDrawEditor();
-                    if (gp.trace && gp.trace.length && !gp.stripZoom) gpFitTrace();
+                    if ((gp.view === "session" || gp.view === "corners") &&
+                        gp.trace && gp.trace.length && !gp.stripZoom) gpFitTrace();
                 }, d);
             });
         }
@@ -15775,7 +15784,17 @@
                sector table, stat tiles, where the time went, coach. */
             if (gp.view === "session") { gpRenderSessionInspector(box); return; }
             if (gp.view === "corners") { gpRenderCornerInspector(box); return; }
-            if (gp.view === "sessions") { box.innerHTML = ""; return; }
+            if (gp.view === "sessions") {
+                box.innerHTML = "";
+                /* download progress publishes through this renderer — keep
+                   the Sessions view's own button honest during a transfer */
+                var dl = document.getElementById("gpSessDlBtn");
+                if (dl) {
+                    dl.disabled = !!gp.traceBusy;
+                    dl.textContent = gp.traceBusy ? "Downloading… " + gp.tracePct + "%" : "Download from node";
+                }
+                return;
+            }
             if (gp.view === "tracks") { gpRenderTrackInspector(box); return; }
             if (gp.view === "setup") {
                 gpRenderSetup();
@@ -18599,12 +18618,12 @@
            Only the views you actually WATCH get the fast rate. Polling at
            10 Hz while you drag a gate around the Tracks map buys nothing and
            shares one serial port with the trace download. */
-        var GP_LIVE_MS = 100;                  /* 10 Hz target */
+        var GP_FAST_MS = 100;                  /* 10 Hz target */
         var GP_LIVE_SECS = 60;                 /* rolling window kept on screen */
 
         function gpPollTarget() {
             if (!gpLinked()) return GP_POLL_MS;
-            return (gp.view === "monitor" || gp.view === "session") ? GP_LIVE_MS : GP_POLL_MS;
+            return (gp.view === "monitor" || gp.view === "session" || gp.liveMode) ? GP_FAST_MS : GP_POLL_MS;
         }
 
         /* Self-clocking: the next request goes out when the last REPLY lands,
@@ -18663,8 +18682,14 @@
                 t: Date.now(),
                 g: 0
             });
-            var cap = Math.max(60, Math.round(GP_LIVE_SECS * 1000 / gpPollTarget()));
-            if (rows.length > cap) rows.splice(0, rows.length - cap);
+            /* Trim by CLOCK, not by a sample count derived from the poll
+               rate: the rate changes with the view, so a count computed at
+               2 Hz threw away 48 s of a 10 Hz minute the moment you glanced
+               at Tracks. Every row carries its own t. */
+            var cut = rows[rows.length - 1].t - GP_LIVE_SECS * 1000;
+            var drop = 0;
+            while (drop < rows.length - 2 && rows[drop].t < cut) drop++;
+            if (drop) rows.splice(0, drop);
             /* Both derived channels are windowed, so they are recomputed over
                the buffer rather than extended — 600 samples at 10 Hz is noise
                next to one canvas repaint. */
