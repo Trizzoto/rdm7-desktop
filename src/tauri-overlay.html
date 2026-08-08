@@ -1710,6 +1710,11 @@
         .gp-handle.centre { background: #F5F7FA; }
         .gp-handle.centre.sel { background: var(--accent); box-shadow: 0 0 0 2px #fff; }
         .gp-handle.end { background: var(--accent); width: 11px; height: 11px; }
+        /* shape editing: a node you placed, and the ghost between two of them
+           that becomes a node when you drag it */
+        .gp-handle.node { background: #D4B06A; width: 11px; height: 11px; }
+        .gp-handle.mid { background: rgba(212,176,106,0.55); width: 8px; height: 8px;
+                         border-width: 1.5px; }
         .gp-gatelist { display: flex; flex-direction: column; gap: 3px; }
         .gp-gate {
             display: flex; align-items: center; gap: 7px; width: 100%; box-sizing: border-box;
@@ -7832,6 +7837,88 @@
                    inflating localStorage. */
                 return [Math.round(pts[i][0] * 1e7) / 1e7, Math.round(pts[i][1] * 1e7) / 1e7];
             });
+        }
+
+        /* ---- corner rounding ------------------------------------------------
+         * Clicking your way round a circuit gives a POLYGON, and no track has
+         * a 90-degree corner in it. Each vertex becomes a quadratic fillet:
+         * cut back along both edges by the same distance, then curve between
+         * the two cut points with the original vertex as the control point.
+         *
+         * The cut distance is bounded (never more than 45% of either edge, so
+         * short links between corners cannot swallow each other) which makes
+         * the RADIUS fall out of the geometry: r = cut * tan(theta/2). A
+         * square corner at 20 m cut rounds at 20 m; a hairpin at the same
+         * setting comes out far tighter. That is the right way round — a
+         * hairpin IS tighter than a kink — and it means one number rounds a
+         * whole circuit sensibly.
+         *
+         * Kept separate from the DERIVED outline: the nodes are what the user
+         * placed and can still drag, `pts` is what this produces and what the
+         * dash is sent. Re-rounding is therefore always from the original
+         * clicks, never from an already-rounded line (which would creep
+         * inwards every time the slider moved).
+         */
+        var GP_ROUND_DEFAULT_M = 20;
+        var GP_ROUND_MAX_M = 80;
+
+        function gpRoundRing(nodes, closed, cutM) {
+            var n = nodes.length;
+            if (n < 3 || !(cutM > 0)) return nodes.slice();
+            var md = gpMetresPerDeg(nodes[0][0]);
+            var X = function (p) { return [p[1] * md.lo, p[0] * md.la]; };
+            var LL = function (q) {
+                return [Math.round((q[1] / md.la) * 1e7) / 1e7,
+                        Math.round((q[0] / md.lo) * 1e7) / 1e7];
+            };
+            var P = nodes.map(X), out = [], i;
+            for (i = 0; i < n; i++) {
+                var isEnd = !closed && (i === 0 || i === n - 1);
+                if (isEnd) { out.push(nodes[i]); continue; }
+                var V = P[i];
+                var A0 = P[(i - 1 + n) % n], B0 = P[(i + 1) % n];
+                var ax = A0[0] - V[0], ay = A0[1] - V[1];
+                var bx = B0[0] - V[0], by = B0[1] - V[1];
+                var la = Math.sqrt(ax * ax + ay * ay), lb = Math.sqrt(bx * bx + by * by);
+                if (la < 0.01 || lb < 0.01) { out.push(nodes[i]); continue; }
+                var cut = Math.min(cutM, la * 0.45, lb * 0.45);
+                if (cut < 0.5) { out.push(nodes[i]); continue; }
+                var A = [V[0] + ax / la * cut, V[1] + ay / la * cut];
+                var B = [V[0] + bx / lb * cut, V[1] + by / lb * cut];
+                /* Eight samples: enough that RDP keeps the arc's shape at the
+                   1.5 m tolerance below, few enough that a 30-node circuit
+                   stays well inside the 400-point budget. */
+                for (var k = 0; k <= 8; k++) {
+                    var tq = k / 8, u = 1 - tq;
+                    out.push(LL([u * u * A[0] + 2 * u * tq * V[0] + tq * tq * B[0],
+                                 u * u * A[1] + 2 * u * tq * V[1] + tq * tq * B[1]]));
+                }
+            }
+            return out;
+        }
+
+        /* The outline the rest of the app reads, rebuilt from the nodes the
+           user can still drag. Everything downstream (stats, the dash asset,
+           the drawn line) keeps reading `pts` and does not know or care that
+           it is derived. */
+        function gpOutlineFromNodes(nodes, closed, roundM, prev) {
+            var ring = gpRoundRing(nodes, closed, roundM);
+            if (closed && ring.length > 1) ring = ring.concat([ring[0]]);
+            var o = {
+                pts: gpOutlineSimplify(ring),
+                nodes: nodes.map(function (p) {
+                    return [Math.round(p[0] * 1e7) / 1e7, Math.round(p[1] * 1e7) / 1e7];
+                }),
+                closed: !!closed,
+                round: roundM,
+                src: "traced",
+                at: (prev && prev.at) || Date.now()
+            };
+            /* A shape that has already been pushed keeps saying so — the row
+               that compares it against the slug on the dash is what tells you
+               it needs pushing AGAIN after an edit. */
+            if (prev && prev.pushed) { o.pushed = prev.pushed; o.pushedAt = prev.pushedAt; }
+            return o;
         }
 
         /* How long the outline is on the ground, and what it will cost the
@@ -14999,8 +15086,11 @@
                 });
                 centre.on("dragend", function () {
                     /* Landing NEAR the line is landing ON it — the snap eats
-                       the last few metres of aim so the mouse doesn't have to. */
-                    gpSnapGate(g.line);
+                       the last few metres of aim so the mouse doesn't have to.
+                       A few metres ONLY: with a wide reach the gate springs
+                       back to the shape however far you drag it, and cannot be
+                       positioned at all. */
+                    gpSnapGate(g.line, 12);
                     gpTracksSave();
                     /* Dragging a split past another one changes which is
                        first, so the numbering (and the names that hang off
@@ -15027,6 +15117,11 @@
                 }
                 gp._gateViews[String(g.key)] = view;
             });
+            /* The gate handles and the shape handles are one picture of one
+               track. Drawing them together means no caller has to remember
+               both — and every path that rebuilds gates (view switch, gate
+               select, track select, a dragend) already comes through here. */
+            gpDrawShapeEditor();
         }
 
         /* ---- the outline on the map --------------------------------------
@@ -15084,6 +15179,8 @@
                 if (!t) return;
                 gp.tracing = true;
                 gp.tracePts = [];
+                gp.shapeEdit = false;
+                gpDrawShapeEditor();
                 if (!gp._traceClick) {
                     gp._traceClick = function (e) {
                         if (!gp.tracing) return;
@@ -15122,18 +15219,131 @@
             if (gp._traceClick) gp.map.off("click", gp._traceClick);
             if (gp.map.getContainer) gp.map.getContainer().style.cursor = "";
             if (t && pts.length > 2) {
-                if (close) pts.push([pts[0][0], pts[0][1]]);
-                t.outline = { pts: gpOutlineSimplify(pts), src: "traced", at: Date.now() };
+                /* The clicks are kept as NODES and the drawn line is derived
+                   from them — so the corners can be rounded, and any node can
+                   still be dragged afterwards. */
+                t.outline = gpOutlineFromNodes(pts, close, GP_ROUND_DEFAULT_M, null);
+                gp.shapeEdit = true;    /* you have just drawn it: show the handles */
                 gpTracksSave();
+                gpDrawShapeEditor();
                 var st = gpOutlineStats(t.outline);
-                gpSetMsg("gpOutlineMsg", "Traced " + st.n + " points, " +
-                         (st.metres / 1000).toFixed(2) + " km.", "ok");
+                gpSetMsg("gpOutlineMsg", "Traced " + pts.length + " points, rounded to " +
+                         (st.metres / 1000).toFixed(2) + " km. Drag any point, or the " +
+                         "small handles between them, to reshape it.", "ok");
             } else if (pts.length) {
                 gpSetMsg("gpOutlineMsg", "Need at least three points — nothing saved.", "warn");
             }
             gp.tracePts = null;
             gpDrawOutline();
             gpRenderInspector();
+        }
+
+        /* ---- reshaping a traced outline ------------------------------------
+         * The nodes are the clicks; `pts` is what the rounding makes of them.
+         * Every edit here rewrites the nodes and re-derives pts, so rounding
+         * is always applied to the original corners rather than compounding
+         * on an already-rounded line.
+         */
+        function gpOutlineRebuild(t, nodes) {
+            if (!t || !t.outline) return;
+            var o = t.outline;
+            o = gpOutlineFromNodes(nodes || o.nodes || [], o.closed,
+                                   gpN(o.round) === null ? GP_ROUND_DEFAULT_M : o.round, o);
+            t.outline = o;
+        }
+
+        window.gpOutlineRound = function (v) {
+            var t = gpActiveTrack();
+            if (!t || !t.outline || !t.outline.nodes) return;
+            t.outline.round = Math.max(0, Math.min(GP_ROUND_MAX_M, Number(v) || 0));
+            gpOutlineRebuild(t);
+            gpTracksSave();
+            gpDrawOutline();
+            gpDrawShapeEditor();
+            gpRenderInspector();
+        };
+
+        window.gpShapeEditToggle = function () {
+            gp.shapeEdit = !gp.shapeEdit;
+            gpDrawShapeEditor();
+            gpRenderInspector();
+        };
+
+        /* Draggable nodes, plus a smaller handle at the middle of every
+           segment: drag one of those and it becomes a new node, which is how
+           a straight run between two clicks gets bent into the curve the
+           track actually has. Same drag discipline as the gate handles —
+           never rebuild the layer from inside a drag, or the marker being
+           held is destroyed mid-gesture. */
+        function gpDrawShapeEditor() {
+            if (!gp.map) return;
+            if (!gp.shapeLayer) gp.shapeLayer = L.layerGroup().addTo(gp.map);
+            gp.shapeLayer.clearLayers();
+            if (gp.view !== "tracks" || gp.tracing || !gp.shapeEdit) return;
+            var t = gpActiveTrack();
+            var o = t && t.outline;
+            var nodes = o && o.nodes;
+            if (!nodes || nodes.length < 2) return;
+
+            var live = nodes.map(function (p) { return [p[0], p[1]]; });
+            var redrawLine = function () {
+                gpOutlineRebuild(t, live);
+                gpDrawOutline();
+            };
+
+            live.forEach(function (p, i) {
+                var m = L.marker(p, { icon: gpHandleIcon("node"), draggable: true, zIndexOffset: 700 })
+                          .addTo(gp.shapeLayer);
+                m.on("drag", function (e) {
+                    live[i] = [e.target.getLatLng().lat, e.target.getLatLng().lng];
+                    redrawLine();
+                });
+                m.on("dragend", function () {
+                    gpTracksSave();
+                    gpDrawShapeEditor(); gpRenderInspector();
+                });
+                /* Right-click removes a point — three is the fewest a shape
+                   can be made of. */
+                m.on("contextmenu", function () {
+                    if (live.length <= 3) return;
+                    live.splice(i, 1);
+                    gpOutlineRebuild(t, live);
+                    gpTracksSave();
+                    gpDrawOutline(); gpDrawShapeEditor(); gpRenderInspector();
+                });
+                m.bindTooltip("Drag to move · right-click to remove",
+                              { direction: "top", offset: [0, -10] });
+            });
+
+            var segs = o.closed ? live.length : live.length - 1;
+            var mk = function (i) {
+                var a = live[i], b = live[(i + 1) % live.length];
+                return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+            };
+            for (var s = 0; s < segs; s++) {
+                (function (si) {
+                    var m = L.marker(mk(si), { icon: gpHandleIcon("mid"), draggable: true, zIndexOffset: 600 })
+                              .addTo(gp.shapeLayer);
+                    var idx = -1;
+                    m.on("dragstart", function () {
+                        /* becomes a real node the moment it is moved */
+                        idx = si + 1;
+                        live.splice(idx, 0, mk(si));
+                    });
+                    m.on("drag", function (e) {
+                        if (idx < 0) return;
+                        live[idx] = [e.target.getLatLng().lat, e.target.getLatLng().lng];
+                        redrawLine();
+                    });
+                    m.on("dragend", function () {
+                        idx = -1;
+                        gpTracksSave();
+                        gpDrawShapeEditor(); gpRenderInspector();
+                    });
+                    m.bindTooltip("Drag to bend this section",
+                                  { direction: "top", offset: [0, -8] });
+                })(s);
+            }
         }
 
         window.gpOutlineUndo = function () {
@@ -15241,6 +15451,7 @@
         };
 
         window.gpOutlineClear = function () {
+            gp.shapeEdit = false;
             var t = gpActiveTrack();
             if (!t || !t.outline) return;
             gpConfirm("Remove the shape from “" + t.name + "”?\n\nThe gates and lap times are untouched — only the drawn outline goes.").then(function (yes) {
@@ -15430,6 +15641,7 @@
 
         window.gpTrackSelect = function (id) {
             gp.tracks.active = id;
+            gp.shapeEdit = false;
             gp.selGate = "sf";
             gpTracksSave();
             gpBuildRail(); gpDrawEditor(); gpRenderInspector();
@@ -15480,10 +15692,17 @@
            against satellite imagery that may be years stale, was the single
            hardest gesture in this workspace — and a near-miss produced laps
            with no splits and no reason why. */
-        function gpSnapGate(line) {
+        /* maxM is the reach, and the two callers want very different ones.
+           PLACING drops a gate at the map centre, which on a freshly traced
+           circuit is routinely a couple of hundred metres off the shape, so
+           it reaches far. DRAGGING is aiming: the snap may only eat the last
+           few metres, or the gate can never be put anywhere the snap does not
+           already want it — which is exactly what a wide reach on drag did. */
+        function gpSnapGate(line, maxM) {
             var rows = gp.trace;
+            var reach = maxM || 60;
             if (rows && rows.length) {
-                var best = -1, bd = 60, i, d;
+                var best = -1, bd = Math.min(reach, 60), i, d;
                 for (i = 0; i < rows.length; i += 3) {
                     d = gpMetres(line, rows[i]);
                     if (d < bd) { bd = d; best = i; }
@@ -15500,39 +15719,41 @@
             /* No driven lap: snap to the TRACED shape instead. A track drawn
                before it has ever been lapped is exactly the case where aiming
                a gate by hand is hardest — the outline is the only statement
-               of where the tarmac runs, so it is what the gate should land
-               on. Heading comes from the direction the shape runs there,
-               which is the direction the car will cross it. */
-            return gpSnapGateToOutline(line);
+               of where the tarmac runs. */
+            return gpSnapGateToOutline(line, reach);
         }
 
-        function gpSnapGateToOutline(line) {
+        /* Onto the LINE, not onto its corners. Snapping to the nearest vertex
+           put the gate on one of the handful of points the shape happens to
+           be stored as — on a hand-traced circuit that is a few corners, so
+           the start/finish line jumped to a corner and could not be dragged
+           anywhere else. Projecting onto each segment lets it sit anywhere
+           along the drawn track, which is what "on the line" means. */
+        function gpSnapGateToOutline(line, maxM) {
             var t = gpActiveTrack();
             var pts = t && t.outline && t.outline.pts;
             if (!pts || pts.length < 2) return false;
-            /* Far wider than the driven-line snap's 60 m. That number is for
-               "I have zoomed onto the tarmac and dropped a gate near the
-               line I drove". This is the other case: the shape is the ONLY
-               statement of where the track is, the gate has to be on it, and
-               a gate dropped at the map centre of a freshly traced circuit
-               is routinely a couple of hundred metres out. Anywhere within
-               sight of the shape beats leaving it in the next paddock. */
-            var best = -1, bd = 500, i, d;
-            for (i = 0; i < pts.length; i++) {
-                d = gpMetres(line, { lat: pts[i][0], lon: pts[i][1] });
-                if (d < bd) { bd = d; best = i; }
+            var md = gpMetresPerDeg(pts[0][0]);
+            var px = line.lon * md.lo, py = line.lat * md.la;
+            var bd = maxM || 60, bx = 0, by = 0, bdx = 0, bdy = 0, found = false;
+            for (var i = 0; i + 1 < pts.length; i++) {
+                var ax = pts[i][1] * md.lo, ay = pts[i][0] * md.la;
+                var cx = pts[i + 1][1] * md.lo, cy = pts[i + 1][0] * md.la;
+                var vx = cx - ax, vy = cy - ay;
+                var L2 = vx * vx + vy * vy;
+                if (L2 < 1e-6) continue;
+                /* foot of the perpendicular, clamped to the segment */
+                var u = ((px - ax) * vx + (py - ay) * vy) / L2;
+                u = Math.max(0, Math.min(1, u));
+                var qx = ax + vx * u, qy = ay + vy * u;
+                var d = Math.sqrt((px - qx) * (px - qx) + (py - qy) * (py - qy));
+                if (d < bd) { bd = d; bx = qx; by = qy; bdx = vx; bdy = vy; found = true; }
             }
-            if (best < 0) return false;
-            var a = pts[best];
-            var b = pts[(best + 1) % pts.length];
-            /* The last point of a closed shape repeats the first, which has no
-               direction of its own — step back instead. */
-            if (b[0] === a[0] && b[1] === a[1]) b = pts[(best - 1 + pts.length) % pts.length];
-            var md = gpMetresPerDeg(a[0]);
-            var dx = (b[1] - a[1]) * md.lo, dy = (b[0] - a[0]) * md.la;
-            line.lat = a[0];
-            line.lon = a[1];
-            if (dx || dy) line.heading = ((Math.atan2(dx, dy) / (Math.PI / 180)) % 360 + 360) % 360;
+            if (!found) return false;
+            line.lat = Math.round((by / md.la) * 1e7) / 1e7;
+            line.lon = Math.round((bx / md.lo) * 1e7) / 1e7;
+            /* The way the shape runs here is the way the car will cross it. */
+            if (bdx || bdy) line.heading = ((Math.atan2(bdx, bdy) / (Math.PI / 180)) % 360 + 360) % 360;
             return true;
         }
 
@@ -15543,7 +15764,7 @@
             if (!t || !gp.map) return;
             var c = gp.map.getCenter();
             var line = { lat: c.lat, lon: c.lng, heading: 0, half_width_m: 15 };
-            var snapped = gpSnapGate(line);
+            var snapped = gpSnapGate(line, 600);
             if (what === "sf") {
                 t.start_finish = line;
                 gp.selGate = "sf";
@@ -18127,6 +18348,29 @@
                          "</div>";
                 } else {
                     h += "<div class='ws-note'>No shape yet. The dash cannot draw this track until it has one.</div>";
+                }
+                /* Rounding and point-editing only mean anything for a shape
+                   that still HAS its clicks. A lap-derived outline is a
+                   driven line at 25 Hz — already the real shape, with
+                   hundreds of points and no corners to round. */
+                if (ol && ol.nodes && ol.nodes.length > 2) {
+                    var rnd = gpN(ol.round) === null ? GP_ROUND_DEFAULT_M : ol.round;
+                    h += "<div class='ws-slider' style='margin-top:8px'>" +
+                         "<label style='display:block;font-size:11px;color:var(--gpb-muted);margin-bottom:3px'>" +
+                         "Corner rounding</label>" +
+                         "<input type='range' min='0' max='" + GP_ROUND_MAX_M + "' step='1' value='" + rnd +
+                         "' oninput='gpOutlineRound(this.value)'>" +
+                         "<span class='val'>" + gpDist(rnd, 0) + "</span></div>";
+                    h += "<div class='ws-note'>No circuit has square corners. Every point you " +
+                         "clicked is rounded off by this much — a sharp corner comes out tighter " +
+                         "than a gentle one on the same setting. Set it to zero to keep the " +
+                         "straight lines you drew.</div>";
+                    h += "<button class='ws-btn-line' style='margin-top:6px' onclick='gpShapeEditToggle()'>" +
+                         (gp.shapeEdit ? "Done editing points" : "Edit the points") + "</button>";
+                    if (gp.shapeEdit)
+                        h += "<div class='ws-note'>Drag a <b>gold point</b> to move it, or a " +
+                             "<b>small handle between two</b> to bend that section — it becomes a " +
+                             "new point where you drop it. Right-click a point to remove it.</div>";
                 }
                 h += "<div class='lt-expbtns' style='margin-top:7px'>" +
                      "<button class='ws-btn-line' onclick='gpOutlineFromLap()'>" +
