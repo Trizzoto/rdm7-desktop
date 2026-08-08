@@ -1946,6 +1946,22 @@
         @font-face { font-family: 'Barlow Condensed'; src: url('fonts/BarlowCondensed-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
 
         #gpWorkspace {
+            /* THE structural move: the firmware's dark theme variables are
+               re-bound to light values inside this workspace, so every
+               existing gp-* rule that says var(--text) or var(--panel)
+               resolves to the Industry ground without being rewritten.
+               The other workspaces never see this — it is scoped. */
+            --bg: #ffffff;            --bg-sidebar: #f2f2f3;
+            --bg-toolbar: #f2f2f3;    --bg-canvas: #f2f2f3;
+            --panel: #ffffff;         --panel-elevated: #e9e9ea;
+            --border: rgba(29,31,32,0.16);
+            --border-light: rgba(29,31,32,0.34);
+            --highlight: rgba(29,31,32,0.06);
+            --text: #1d1f20;          --text-muted: rgba(29,31,32,0.55);
+            --accent: #d2232a;        --accent-hover: #c02026;
+            --shadow-sm: 0 1px 2px rgba(43,43,45,0.14);
+            --shadow-md: 0 3px 10px rgba(43,43,45,0.16);
+            --shadow-inset: none;
             /* Industry tokens, gpb- prefixed so nothing leaks */
             --gpb-bg: #f2f2f3;          --gpb-surface: #ffffff;
             --gpb-ink: #1d1f20;         --gpb-muted: rgba(29,31,32,0.55);
@@ -1967,7 +1983,28 @@
             font-family: var(--gpb-body);
         }
         #gpWorkspace * { border-radius: 0 !important; }
+        /* the marks that are round BECAUSE they are round things */
+        #gpWorkspace .gp-handle, #gpWorkspace .gp-lamp, #gpWorkspace .ws-item .st,
+        #gpWorkspace .gp-chdot, #gpWorkspace .gp-recdot, #gpWorkspace .ws-kv i,
+        #gpWorkspace .gp-playbar input[type="range"]::-webkit-slider-thumb { border-radius: 50% !important; }
         #gpWorkspace ::selection { background: rgba(210,35,42,0.25); }
+        /* the rack/nav canvases sit directly on the ground — the old rules
+           put a dark panel behind their transparent gutters */
+        #gpWorkspace .gp-strip, #gpWorkspace .gp-nav { background: transparent; border-color: var(--gpb-div); }
+        /* leftover purples and dark chips the variable re-bind cannot reach */
+        #gpWorkspace .gp-lap.best { background: var(--gpb-red-100); }
+        #gpWorkspace .gp-lap.best .t { color: var(--gpb-red-700); }
+        #gpWorkspace .gp-secs span { background: var(--gpb-n200); color: var(--gpb-n700); }
+        #gpWorkspace .gp-secs span.p { background: var(--gpb-red-100); color: var(--gpb-red-700); }
+        #gpWorkspace .gp-secs span.g { background: rgba(46,125,67,0.12); color: var(--gpb-ok); }
+        #gpWorkspace .gp-secs span.r { background: var(--gpb-red-100); color: var(--gpb-bad); }
+        #gpWorkspace .gp-place-search { background: var(--gpb-surface); border: 1px solid var(--gpb-div); color: var(--gpb-ink); }
+        #gpWorkspace .gp-place-search:focus { border-color: var(--gpb-red); outline: none; }
+        #gpWorkspace .gp-op-n { background: var(--gpb-red-100); color: var(--gpb-red-700); }
+        #gpWorkspace .leaflet-container .leaflet-control-attribution {
+            background: rgba(255,255,255,0.8); color: var(--gpb-muted);
+        }
+        #gpWorkspace .leaflet-container .leaflet-control-attribution a { color: var(--gpb-soft); }
 
         /* ---- the black brand bar ---- */
         #gpWorkspace .ws-topbar {
@@ -2275,16 +2312,29 @@
         #gpWorkspace .gp-rail-tabs button:hover { color: var(--gpb-ink); }
         #gpWorkspace .gp-rail-tabs button.on { color: var(--gpb-ink); box-shadow: inset 0 -2px 0 var(--gpb-red); }
 
-        /* ---- channel list / popover / confirm ---- */
-        #gpWorkspace .gp-chpop { background: var(--gpb-bg); border: 1px solid var(--gpb-div); box-shadow: 0 12px 32px rgba(43,43,45,0.22); }
-        #gpWorkspace .gp-chtab tr.off .nm { color: var(--gpb-muted); }
-        #gpWorkspace .gp-chtab .un, #gpWorkspace .gp-chtab .sub { color: var(--gpb-muted); }
-        #gpWorkspace .gp-chsearch { background: var(--gpb-surface); border: 1px solid var(--gpb-div); color: var(--gpb-ink); }
-        #gpWorkspace .gp-confirm-box { background: var(--gpb-bg); border: 1px solid var(--gpb-div); box-shadow: 0 12px 32px rgba(43,43,45,0.3); }
-        #gpWorkspace .gp-confirm-box .t { color: var(--gpb-ink); font-family: var(--gpb-head); font-weight: 600; }
-        #gpWorkspace .gp-confirm-box .b { color: var(--gpb-soft); }
-        #gpWorkspace .gp-confirm-box button { border: 1px solid var(--gpb-div); background: transparent; color: var(--gpb-ink); }
-        #gpWorkspace .gp-confirm-box button.o { background: var(--gpb-red); border-color: var(--gpb-red); color: #fff; }
+        /* ---- channel popover + confirm dialog ----
+           BOTH mount at document.body (they must float over everything), so
+           a #gpWorkspace scope never reaches them. They are gp-exclusive
+           classes, so they get the light re-bind directly. */
+        .gp-chpop, .gp-confirm {
+            --bg: #ffffff; --bg-sidebar: #f2f2f3; --bg-toolbar: #f2f2f3;
+            --panel: #ffffff; --panel-elevated: #e9e9ea;
+            --border: rgba(29,31,32,0.16); --border-light: rgba(29,31,32,0.34);
+            --highlight: rgba(29,31,32,0.06);
+            --text: #1d1f20; --text-muted: rgba(29,31,32,0.55);
+            --accent: #d2232a; --accent-hover: #c02026;
+            font-family: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+            color: #1d1f20;
+        }
+        .gp-chpop { background: #f2f2f3; border: 1px solid rgba(29,31,32,0.16); box-shadow: 0 12px 32px rgba(43,43,45,0.22); border-radius: 0; }
+        .gp-chpop .gp-chtab tr.off .nm { color: rgba(29,31,32,0.55); }
+        #gpWorkspace .gp-chsearch, .gp-chpop .gp-chsearch { background: #ffffff; border: 1px solid rgba(29,31,32,0.16); color: #1d1f20; }
+        .gp-confirm-box { background: #f2f2f3; border: 1px solid rgba(29,31,32,0.16); box-shadow: 0 12px 32px rgba(43,43,45,0.3); border-radius: 0; }
+        .gp-confirm-box .t { color: #1d1f20; font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 600; }
+        .gp-confirm-box .b { color: rgba(29,31,32,0.72); }
+        .gp-confirm-box button { border: 1px solid rgba(29,31,32,0.16); background: transparent; color: #1d1f20; border-radius: 0; }
+        .gp-confirm-box button.c { color: rgba(29,31,32,0.55); }
+        .gp-confirm-box button.o { background: #d2232a; border-color: #d2232a; color: #fff; }
 
         /* ---- setup ---- */
         #gpWorkspace .gp-set .l { color: var(--gpb-soft); }
@@ -2292,10 +2342,9 @@
         #gpWorkspace .gp-set-v { color: var(--gpb-ink); }
         #gpWorkspace .gp-set-na, #gpWorkspace .gp-set-note { color: var(--gpb-muted); }
 
-        /* ---- tooltips (rendered at body level, gp-tip class is gp-scoped) ---- */
-        .gp-tip { background: #1d1f20; color: #f2f2f3; border: none; font-family: 'Barlow', 'Segoe UI', sans-serif; }
-        .gp-tip b { color: #fff; }
-        .gp-tip .k { background: rgba(255,255,255,0.14); color: #fff; }
+        /* Tooltips (.gp-tip) mount at body and are shared with the other
+           workspaces' [data-tip] lamps — they keep their original dark look,
+           which reads fine over either ground. */
 
         /* ================================================================
            New design-language components (gpb-*)
@@ -9228,7 +9277,10 @@
         window.gpSessOpen = function (id) {
             var go = function () { window.gpSetView("session"); };
             if (id === gp.sessionId && gp.trace && gp.trace.length) { go(); return; }
-            Promise.resolve(window.gpSessionLoad(id)).then(go);
+            if (gp.traceBusy) return;          /* a download owns the trace right now */
+            Promise.resolve(window.gpSessionLoad(id)).then(function () {
+                if (gp.sessionId === id) go(); /* only navigate if it actually loaded */
+            });
         };
 
         function gpRenderSessions() {
@@ -9593,7 +9645,9 @@
         function gpSyncExportBtn() {
             var b = document.getElementById("gpExportBtn");
             if (!b) return;
-            var have = !!(gp.sessionId || (gp.view === "sessions" && gp.sessSel) || (gp.trace && gp.trace.length));
+            /* Exports read the SAVED copy — an unsaved live trace has nothing
+               behind the button yet, so the button stays away. */
+            var have = !!(gp.sessionId || (gp.view === "sessions" && gp.sessSel));
             b.style.display = have ? "" : "none";
         }
 
@@ -9624,7 +9678,10 @@
             });
             setTimeout(function () {
                 var close = function (e) {
-                    if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener("mousedown", close); }
+                    /* the Export button itself toggles — closing on its
+                       mousedown would make the click reopen it instantly */
+                    if (pop.contains(e.target) || e.target.id === "gpExportBtn") return;
+                    pop.remove(); document.removeEventListener("mousedown", close);
                 };
                 document.addEventListener("mousedown", close);
             }, 0);
@@ -9972,7 +10029,7 @@
                      "<span class='track'><i style='width:" + Math.max(6, Math.round(o.total_s / mx * 100)) + "%'></i></span>" +
                      "<span class='d'>+" + o.total_s.toFixed(2) + "</span></button>";
             });
-            h += "</div><div class='gp-note' style='margin-top:4px'>against " + gpRefName() +
+            h += "</div><div class='gp-note' style='margin-top:4px'>against " + gpEsc(gpRefName()) +
                  " · the full story is in <b>Corners</b></div></div>";
             return h;
         }
@@ -10015,7 +10072,7 @@
                 var mmode = gpEffectiveMapMode(), i;
                 h += "<div class='ws-grp'><div class='ws-gt'>" +
                      (mmode === "speed" ? "Speed" :
-                      mmode === "ref" ? "Time against " + gpRefName() :
+                      mmode === "ref" ? "Time against " + gpEsc(gpRefName()) :
                       "Braking &amp; acceleration") +
                      "<i class='gp-lamp info' data-tip=\"" + (
                        mmode === "speed"
@@ -12161,7 +12218,7 @@
             var refT = gpSecs(gp.trace, gp.traceLaps[gp.cmpLap].from, gp.traceLaps[gp.cmpLap].to);
             var h = "<div class='ws-grp'><div class='ws-gt'>Coach</div>";
             h += "<div class='gp-coach-hd'>" + gpRunWord(true) + " " + (gp.selLap + 1) + " against " +
-                 gpRefName() + "<b class='" + (selT > refT ? "bad" : "ok") + "'>" +
+                 gpEsc(gpRefName()) + "<b class='" + (selT > refT ? "bad" : "ok") + "'>" +
                  gpSigned(selT - refT, 2, " s") + "</b></div>";
 
             var all = gpCoachInsights() || [];
@@ -15132,7 +15189,7 @@
                     gp.map.invalidateSize({ animate: false });
                     gpDrawTrace();
                     gpDrawEditor();
-                    if (gp.trace && gp.trace.length) gpFitTrace();
+                    if (gp.trace && gp.trace.length && !gp.stripZoom) gpFitTrace();
                 }, d);
             });
         }
@@ -15202,6 +15259,9 @@
             if (pb) pb.style.display = view === "session" ? "flex" : "none";
             if (view !== "session") gpPlayStop();
             if (view !== "session" && gp.chanPop) { gp.chanPop = false; gpChanPopRender(); }
+            /* Corners may re-point gp.selLap (analyse the challenger, not the
+               reference) — settle that BEFORE the map draws the lap's line. */
+            if (view === "corners") gpCornerOps();
             gpDrawTrace();
             gpStripBind(); gpNavBind(); gpDrawStrip();
             gpBuildRail();
@@ -15224,7 +15284,11 @@
                 else if (t.center) gp.map.setView(t.center, t.zoom || 16);
             }
             if ((view === "session" || view === "corners") && gp.map && gp.trace && gp.trace.length) {
-                setTimeout(function () { if (gp.map && gp.trace && gp.trace.length) gpFitTrace(); }, 80);
+                /* …unless something already framed a corner (a coach jump, a
+                   corner pick): a whole-lap fit would throw that framing away. */
+                setTimeout(function () {
+                    if (gp.map && gp.trace && gp.trace.length && !gp.stripZoom) gpFitTrace();
+                }, 80);
             }
         };
 
