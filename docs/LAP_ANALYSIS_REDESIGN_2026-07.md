@@ -1,5 +1,14 @@
 # Lap recording and telemetry analysis — the redesign (2026-07-29)
 
+> **Status 2026-08-09:** The workspace now wears the brand (ADR-0024,
+> `RDM-7_Dash/docs/adr/0024-the-lap-timer-wears-the-brand.md`): Industry
+> light ground, black brand bar, Barlow type, RDM red as the only accent,
+> and six flat views — Sessions (library landing), Live, Analyse,
+> **Corners** (every corner ranked by time lost, on the coach engine),
+> Tracks, Setup. Sourced from the claude.ai/design "RDM Studio Redesign"
+> project, turns 2–4. Everything below this line predates that skin and
+> still describes the machinery underneath it.
+
 > **Status 2026-07-30:** Stages 0–4 built and verified live (Stage 3's
 > live-bus bit-extraction still wants a moving car). Stage 4 shipped with
 > the split-times grid, stats, ideal lap and click-to-zoom. The same pass

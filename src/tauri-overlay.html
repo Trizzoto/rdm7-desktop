@@ -2433,6 +2433,29 @@
         #gpWorkspace .gpb-corner-badge.l1 { background: var(--gpb-red-300); color: var(--gpb-red-900); }
         #gpWorkspace .gpb-corner-badge.l2 { background: var(--gpb-red); color: #fff; border-color: var(--gpb-red-700); }
 
+        /* the at-cursor card on the map (design 2a/3a) */
+        #gpWorkspace .gpb-curcard {
+            position: absolute; top: 46px; right: 10px; z-index: 600;
+            background: rgba(255,255,255,0.94); border: 1px solid var(--gpb-div);
+            padding: 8px 12px; min-width: 132px; max-width: 200px;
+            display: flex; flex-direction: column; gap: 3px;
+            font-variant-numeric: tabular-nums; pointer-events: none;
+        }
+        #gpWorkspace .gpb-curcard .r1 { display: flex; align-items: baseline; gap: 6px; }
+        #gpWorkspace .gpb-curcard .r1 b {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 27px; line-height: 1; color: var(--gpb-ink);
+        }
+        #gpWorkspace .gpb-curcard .r1 span { font-size: 10px; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-curcard .r1 em { margin-left: auto; font-style: normal; font-size: 12px; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-curcard .r1 em.lose { color: var(--gpb-red-700); }
+        #gpWorkspace .gpb-curcard .r1 em.gain { color: var(--gpb-ok); }
+        #gpWorkspace .gpb-curcard .kv { display: flex; justify-content: space-between; gap: 8px; font-size: 10.5px; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-curcard .kv b { color: var(--gpb-ink); font-weight: 500; }
+        #gpWorkspace .gpb-curcard .bar { display: flex; align-items: center; gap: 5px; font-size: 9px; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-curcard .bar span { width: 24px; }
+        #gpWorkspace .gpb-curcard .bar i { flex: 1; height: 4px; background: var(--gpb-n200); display: block; }
+        #gpWorkspace .gpb-curcard .bar i b { display: block; height: 100%; background: var(--gpb-ink); }
+
         /* export popover */
         #gpWorkspace .gpb-exppop {
             position: fixed; z-index: 16000; background: var(--gpb-bg);
@@ -2803,6 +2826,7 @@
                 <div class="gp-mapwrap" id="gpMapWrap">
                     <div id="gpMap"></div>
                     <div class="gp-mapchip" id="gpMapChip" onclick="gpMapCollapseToggle()"></div>
+                    <div class="gpb-curcard" id="gpCurCard" style="display:none"></div>
                     <div class="gp-mapsearch">
                         <input type="text" id="gpSearchInput" placeholder="Find a circuit or address&#8230;" autocomplete="off" spellcheck="false"
                                onkeydown="if(event.key==='Enter'){event.preventDefault();gpSearch();}">
@@ -13452,10 +13476,48 @@
             }
         }
 
+        /* The at-cursor card on the map (design 2a/3a): the speed you are
+           looking at, the delta, and the first CAN channels — the numbers a
+           driver reads off the map without hunting the rack gutter. */
+        function gpCurCardUpdate() {
+            var el = document.getElementById("gpCurCard");
+            if (!el) return;
+            var show = gp.view === "session" && gp.trace && gp.trace.length && !gp.liveMode;
+            el.style.display = show ? "" : "none";
+            if (!show) return;
+            var i = Math.max(0, Math.min(gp.playIdx, gp.trace.length - 1));
+            var s = gp.trace[i];
+            var h = "<div class='r1'><b>" + Math.round(gpSpdN(s.kph)) + "</b><span>" + gpSpdU() + "</span>";
+            var d = gpDeltaSeries();
+            if (d) {
+                var r = gpLapRange(), dv = d[i - r.from];
+                if (dv !== undefined && isFinite(dv))
+                    h += "<em class='" + (dv > 0.005 ? "lose" : dv < -0.005 ? "gain" : "") + "'>" +
+                         (dv >= 0 ? "+" : "") + dv.toFixed(2) + "</em>";
+            }
+            h += "</div>";
+            gpLaneRowsAll().filter(function (L) {
+                return L.id.indexOf("can_") === 0 && !L.pending && typeof L.get === "function";
+            }).slice(0, 2).forEach(function (L) {
+                var v = L.get(i);
+                if (v === null || v === undefined || !isFinite(v)) return;
+                var u = typeof L.unit === "function" ? L.unit() : L.unit;
+                if (u === "%" && v >= -1 && v <= 110) {
+                    h += "<div class='bar'><span>" + gpEsc(String(L.label).slice(0, 3).toUpperCase()) +
+                         "</span><i><b style='width:" + Math.max(0, Math.min(100, v)).toFixed(0) + "%'></b></i></div>";
+                } else {
+                    h += "<div class='kv'><span>" + gpEsc(String(L.label).slice(0, 14)) + "</span><b>" +
+                         v.toFixed(L.dp) + (u ? " " + gpEsc(u) : "") + "</b></div>";
+                }
+            });
+            el.innerHTML = h;
+        }
+
         function gpDrawPlayhead() {
             gpVideoFollowSeek();
             gpVideoDrawOverlay();
             gpDrawStrip();
+            gpCurCardUpdate();
             if (!gp.map || !gp.trace || !gp.trace.length) return;
             /* On the line the user can SEE, not on the raw fix half a metre
                off it — a car that floats beside its own trace is worse than a
