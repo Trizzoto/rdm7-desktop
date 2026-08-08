@@ -108,6 +108,17 @@ let tms = Date.UTC(2026, 6, 25, 3, 12, 0) % 4294967295;   /* fits the u32 t fiel
 let clock = Date.UTC(2026, 6, 25, 3, 12, 0);
 const LAPS = 5;
 const SCALES = [0.02, -0.01, 0, 0.008, 0.03];
+/* Nobody drives the same line twice. Each lap gets a smooth lateral offset
+   from the base curve — a couple of metres at most, three "corners' worth"
+   of variation around the lap, a different phase each time. Without this
+   every lap traces the IDENTICAL path and the Line map mode is a flat grey
+   ribbon that proves nothing: the honest answer for "no line difference"
+   looks exactly like a broken offset series. Lap 1 stays on the base curve
+   so there is a clean reference to compare against. Two metres against a
+   40 m minimum corner radius does not meaningfully change curvature, so the
+   speed profile above stays valid. */
+const LINE_A = [0, 1.7, -1.3, 2.1, -0.9];      /* metres, per lap */
+const LINE_PH = [0, 0.4, 1.9, 3.1, 5.0];       /* radians, per lap */
 let prevV = null;
 {
     /* Integrate position from speed at 25 Hz along the arc-length table.
@@ -128,13 +139,20 @@ let prevV = null;
            rate and lateral g identically zero, which reads as a car that
            never turned — and would let a broken channel look fine. */
         const P1 = atArc(s + 0.5);
-        const hdgDeg = (Math.atan2(P1.x - P0.x, P1.y - P0.y) / D + 360) % 360;
+        /* This lap's line: the base curve pushed sideways by a smooth
+           offset, perpendicular to the direction of travel. */
+        const dx = P1.x - P0.x, dy = P1.y - P0.y;
+        const dl = Math.hypot(dx, dy) || 1;
+        const off = LINE_A[lap] * Math.sin(2 * Math.PI * 3 * frac + LINE_PH[lap]);
+        const px = -dy / dl * off, py = dx / dl * off;   /* left-hand normal */
+        const X = P0.x + px, Y = P0.y + py;
+        const hdgDeg = (Math.atan2(dx, dy) / D + 360) % 360;
         /* Throttle from the acceleration this speed trace implies: hard on
            where it is gaining, closed where it is losing. */
         const accel = prevV === null ? 0 : (v - prevV) * 25;      /* m/s^2 */
         prevV = v;
         const throttle = Math.max(0, Math.min(100, 50 + accel * 14));
-        rows.push({ lat: CENTRE[0] + P0.y / mLat, lon: CENTRE[1] + P0.x / mLon,
+        rows.push({ lat: CENTRE[0] + Y / mLat, lon: CENTRE[1] + X / mLon,
                     kph: v * 3.6, hdg: hdgDeg, t: tms,
                     /* Raw counts, exactly as the puck stores them: the scale
                        lives in the channel definition, not in the data. */

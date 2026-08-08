@@ -2922,6 +2922,8 @@
                                 title="Colour the line by speed">Speed</button>
                         <button data-m="ref" onclick="gpMapModeSet('ref')"
                                 title="Colour the line by time gained or lost against the comparison lap">vs Ref</button>
+                        <button data-m="line" onclick="gpMapModeSet('line')"
+                                title="Colour the line by how far it ran from the comparison lap's line, and which side">Line</button>
                     </div>
                     <button class="gp-lanesbtn" id="gpPlotBtn" onclick="gpPlotModeToggle()"></button>
                     <button class="gp-lanesbtn" id="gpLanesBtn" onclick="gpChanPopToggle()"></button>
@@ -10090,6 +10092,7 @@
                 h += "<div class='ws-grp'><div class='ws-gt'>" +
                      (mmode === "speed" ? "Speed" :
                       mmode === "ref" ? "Time against " + gpEsc(gpRefName()) :
+                      mmode === "line" ? "Line against " + gpEsc(gpRefName()) :
                       "Braking &amp; acceleration") +
                      "<i class='gp-lamp info' data-tip=\"" + (
                        mmode === "speed"
@@ -10116,6 +10119,19 @@
                         h += "<i style='background:" + gpGColour(-i / 6, 1) + "'></i>";
                     h += "</div><div class='gp-glegend-lab'><span>gaining</span>" +
                          "<span>even</span><span>losing</span></div>";
+                } else if (mmode === "line") {
+                    /* Metres, printed — the colour is only worth reading if the
+                       distance behind it is stated. */
+                    var osp = gpLineScale(gpLineOffset());
+                    h += "<div class='gp-glegend'>";
+                    for (i = -6; i <= 6; i++)
+                        h += "<i style='background:" + gpLineColour(i / 6) + "'></i>";
+                    h += "</div><div class='gp-glegend-lab'><span>" + gpDist(osp, 1) + " left</span>" +
+                         "<span>same line</span><span>" + gpDist(osp, 1) + " right</span></div>";
+                    h += "<div class='gp-note' style='margin-top:6px'>Where the two laps ran the same line the " +
+                         "trace goes grey; colour is how far from " + gpEsc(gpRefName()) +
+                         " you were, and which side. At this zoom the lines themselves are closer " +
+                         "together than one pixel — the colour is what makes the difference visible.</div>";
                 } else {
                     /* The legend prints real numbers so an adaptive scale cannot
                        quietly make a gentle lap look heroic. */
@@ -10690,7 +10706,7 @@
         };
 
         window.gpMapModeSet = function (m) {
-            gp.mapMode = (m === "speed" || m === "ref") ? m : "pace";
+            gp.mapMode = (m === "speed" || m === "ref" || m === "line") ? m : "pace";
             try { window.localStorage.setItem("rdm7_gp_mapmode", gp.mapMode); } catch (e) {}
             gpDrawTrace();
             gpRenderInspector();
@@ -10707,6 +10723,12 @@
                     b.classList.toggle("na", !refOk);
                     b.title = refOk
                         ? "Colour the line by time gained or lost against the comparison lap"
+                        : "Pick a lap and a comparison lap first";
+                }
+                if (m === "line") {
+                    b.classList.toggle("na", !refOk);
+                    b.title = refOk
+                        ? "Colour the line by how far it ran from the comparison lap's line, and which side"
                         : "Pick a lap and a comparison lap first";
                 }
             });
@@ -12425,13 +12447,88 @@
                             Math.round(a[2] + (b[2] - a[2]) * t) + ")";
         }
 
-        /* "vs Ref" only means something with a lap and a comparison chosen;
-           anything else falls back to pace rather than drawing a lie. */
+        /* Diverging ramp for the LINE view: which side of the reference lap
+           you were on. Teal one side, brand red the other, neutral where the
+           two lines coincide. Both ends hold up over satellite imagery. */
+        function gpLineColour(x) {
+            x = Math.max(-1, Math.min(1, x));
+            var a = Math.abs(x);
+            var to = x < 0 ? [15, 122, 104] : [192, 32, 38];
+            return "rgb(" + Math.round(152 + (to[0] - 152) * a) + "," +
+                            Math.round(152 + (to[1] - 152) * a) + "," +
+                            Math.round(152 + (to[2] - 152) * a) + ")";
+        }
+
+        /* ---- how far off the reference line you were, in metres -------------
+         * Zoomed out to the whole circuit one screen pixel is several metres,
+         * so two laps a car's width apart are drawn on top of each other and
+         * the difference is invisible no matter how thin the stroke. The line
+         * cannot show it; colour can. For every sample of the analysed lap:
+         * the nearest point on the reference lap, then the perpendicular
+         * distance to the reference's direction of travel there, SIGNED —
+         * positive left of the reference, negative right of it.
+         *
+         * This is measured, not exaggerated (ADR-0011): the number the colour
+         * stands for is printed on the legend in metres.
+         *
+         * Same forward-only sliding window as gpDeltaSeries, and the same
+         * reason: O(n), and a hairpin cannot match the far side of the track.
+         */
+        function gpLineOffset() {
+            if (gp.selLap < 0 || gp.cmpLap < 0 || gp.selLap === gp.cmpLap) return null;
+            var key = gp.selLap + ":" + gp.cmpLap;
+            if (gp.lineKey === key && gp.lineOff) return gp.lineOff;
+
+            var sel = gp.traceLaps[gp.selLap], ref = gp.traceLaps[gp.cmpLap];
+            if (!sel || !ref) return null;
+            var n = sel.to - sel.from + 1, out = new Float32Array(n);
+            var j = ref.from, i, k;
+
+            for (i = 0; i < n; i++) {
+                var s = gp.trace[sel.from + i];
+                var lo = Math.max(ref.from, j - 25), hi = Math.min(ref.to, j + 120);
+                var best = lo, bd = Infinity;
+                for (k = lo; k <= hi; k++) {
+                    var d = gpMetres(gp.trace[k], s);
+                    if (d < bd) { bd = d; best = k; }
+                }
+                j = best;
+                /* Local tangent plane at the reference point: degrees are not
+                   metres and a lat degree is not a lon degree. */
+                var b0 = gp.trace[best];
+                var b1 = gp.trace[Math.min(best + 1, ref.to)];
+                if (b1 === b0) b1 = gp.trace[Math.max(best - 1, ref.from)];
+                var md = gpMetresPerDeg(b0.lat);
+                var dirX = (b1.lon - b0.lon) * md.lo, dirY = (b1.lat - b0.lat) * md.la;
+                var vX = (s.lon - b0.lon) * md.lo, vY = (s.lat - b0.lat) * md.la;
+                var len = Math.sqrt(dirX * dirX + dirY * dirY);
+                /* Stationary reference sample: no direction, so no side. Fall
+                   back to the unsigned distance rather than inventing a sign. */
+                out[i] = len < 1e-6 ? bd : (dirX * vY - dirY * vX) / len;
+            }
+            gp.lineKey = key; gp.lineOff = out;
+            return out;
+        }
+
+        /* The scale is the lap's own 95th percentile, so the colours mean the
+           metres printed under them instead of a fixed benchmark. Floored at
+           half a metre — below that it is receiver noise, not a line. */
+        function gpLineScale(off) {
+            if (!off || !off.length) return 1;
+            var a = [], i;
+            for (i = 0; i < off.length; i++) a.push(Math.abs(off[i]));
+            a.sort(function (x, y) { return x - y; });
+            var p = a[Math.floor(a.length * 0.95)] || 1;
+            return Math.max(0.5, Math.min(12, p));
+        }
+
+        /* "vs Ref" and "Line" only mean something with a lap and a comparison
+           chosen; anything else falls back to pace rather than drawing a lie. */
         function gpEffectiveMapMode() {
             var m = gp.mapMode;
-            if (m === "ref" &&
+            if ((m === "ref" || m === "line") &&
                 !(gp.selLap >= 0 && gp.cmpLap >= 0 && gp.cmpLap !== gp.selLap)) return "pace";
-            return (m === "speed" || m === "ref") ? m : "pace";
+            return (m === "speed" || m === "ref" || m === "line") ? m : "pace";
         }
 
         /* Where time is being gained or lost, as a rate: the slope of the
@@ -12706,7 +12803,7 @@
             gp.coach = null; gp.delta = null; gp.deltaKey = "";
             gp.stripCache = null; gp.stripZoom = null; gp.sectors = null; gp.secKey = "";
             gp.scaleCache = null;
-            gp.rate = null; gp.rateKey = ""; gp.insightCursor = -1;
+            gp.rate = null; gp.rateKey = ""; gp.lineOff = null; gp.lineKey = ""; gp.insightCursor = -1;
             gp.chan = null; gp.chanKey = "";
             gp.traceLaps = gpSplitRows(gp.trace || []);
             /* Circuit Tools auto-selects the fastest lap as the reference and
@@ -13421,12 +13518,19 @@
             var span = gpGScale();
             var rows = gp.trace;
 
-            /* The comparison lap first, underneath, in a flat colour — the point
-               of it is the LINE, and colouring both by g makes neither readable. */
+            /* The comparison lap, in a flat colour — the point of it is the
+               LINE, and colouring both by g makes neither readable.
+               THIN and DASHED, not a fat underlay: at weight 5 under a weight
+               4 subject the reference was a shadow the selected lap covered
+               completely, so two laps that genuinely took a corner a metre
+               apart still drew as one line. Dashes read as "the other lap"
+               wherever the two coincide, and separate visibly wherever they
+               do not. */
             if (gp.cmpLap >= 0 && gp.traceLaps[gp.cmpLap] && gp.cmpLap !== gp.selLap) {
                 var c = gp.traceLaps[gp.cmpLap], pts = [], P = gpSmoothPath();
                 for (var k = c.from; k <= c.to; k++) pts.push(P ? P[k] : [rows[k].lat, rows[k].lon]);
-                L.polyline(pts, { color: gp.tilesOn ? "#f2f2f3" : "#98989b", weight: 5, opacity: 0.55,
+                L.polyline(pts, { color: gp.tilesOn ? "#ffffff" : "#5d5d60", weight: 2.5, opacity: 0.9,
+                                  dashArray: "6 5", lineCap: "butt",
                                   renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
             }
 
@@ -13449,6 +13553,11 @@
                 /* Losing time reads red, gaining green: the g-colour scale has
                    red at its negative end, so the rate goes in negated. */
                 colour = function (v) { return gpGColour(-v, 1); };
+            } else if (mode === "line") {
+                var off = gpLineOffset();
+                var ospan = gpLineScale(off);
+                value = function (idx) { return Math.max(-1, Math.min(1, (off[idx - r.from] || 0) / ospan)); };
+                colour = function (v) { return gpLineColour(v); };
             } else {
                 value = function (idx) { return Math.max(-1, Math.min(1, rows[idx].g / span)); };
                 colour = function (v) { return gpGColour(v * span, span); };
@@ -18902,7 +19011,7 @@
             gp.selLap = -1; gp.cmpLap = -1; gp.playIdx = 0; gp.tracePct = 0;
             gp.coach = null; gp.coachAll = false;
             gp.delta = null; gp.deltaKey = ""; gp.stripZoom = null;
-            gp.rate = null; gp.rateKey = ""; gp.insightCursor = -1;
+            gp.rate = null; gp.rateKey = ""; gp.lineOff = null; gp.lineKey = ""; gp.insightCursor = -1;
             gp.sectors = null; gp.secKey = "";
             gp.chan = null; gp.chanKey = "";
             if (!gp.cam) gp.cam = gpCamLoad();
