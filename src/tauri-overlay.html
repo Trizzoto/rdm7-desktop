@@ -2173,6 +2173,15 @@
         #gpWorkspace .gp-ready-hd .t { color: var(--gpb-ink); font-weight: 600; }
         #gpWorkspace .gp-ready-hd .s { color: var(--gpb-muted); }
         #gpWorkspace .gp-steps { border-left: 3px solid var(--gpb-red); }
+        /* a step that DOES something looks like it does something */
+        #gpWorkspace .gp-step.act {
+            background: transparent; border: none; padding: 3px 4px; margin: -3px -4px;
+            font: inherit; font-size: 10.5px; text-align: left; width: calc(100% + 8px);
+            color: var(--gpb-ink); cursor: pointer;
+        }
+        #gpWorkspace .gp-step.act:hover { background: rgba(210,35,42,0.08); }
+        #gpWorkspace .gp-step.act .n { color: var(--gpb-red-700); font-weight: 600; }
+        #gpWorkspace .gp-step.act b { font-weight: 600; }
         #gpWorkspace .gp-step { color: var(--gpb-soft); }
         #gpWorkspace .gp-step.done { color: var(--gpb-muted); }
         #gpWorkspace .gp-step.done .n { color: var(--gpb-ok); }
@@ -15473,18 +15482,57 @@
            with no splits and no reason why. */
         function gpSnapGate(line) {
             var rows = gp.trace;
-            if (!rows || !rows.length) return false;
-            var best = -1, bd = 60, i, d;
-            for (i = 0; i < rows.length; i += 3) {
-                d = gpMetres(line, rows[i]);
+            if (rows && rows.length) {
+                var best = -1, bd = 60, i, d;
+                for (i = 0; i < rows.length; i += 3) {
+                    d = gpMetres(line, rows[i]);
+                    if (d < bd) { bd = d; best = i; }
+                }
+                if (best >= 0) {
+                    line.lat = rows[best].lat;
+                    line.lon = rows[best].lon;
+                    var hdg = gpN(rows[best].hdg);
+                    if (hdg === null) hdg = gpHeadingAt(rows, best, 5);
+                    line.heading = ((hdg % 360) + 360) % 360;
+                    return true;
+                }
+            }
+            /* No driven lap: snap to the TRACED shape instead. A track drawn
+               before it has ever been lapped is exactly the case where aiming
+               a gate by hand is hardest — the outline is the only statement
+               of where the tarmac runs, so it is what the gate should land
+               on. Heading comes from the direction the shape runs there,
+               which is the direction the car will cross it. */
+            return gpSnapGateToOutline(line);
+        }
+
+        function gpSnapGateToOutline(line) {
+            var t = gpActiveTrack();
+            var pts = t && t.outline && t.outline.pts;
+            if (!pts || pts.length < 2) return false;
+            /* Far wider than the driven-line snap's 60 m. That number is for
+               "I have zoomed onto the tarmac and dropped a gate near the
+               line I drove". This is the other case: the shape is the ONLY
+               statement of where the track is, the gate has to be on it, and
+               a gate dropped at the map centre of a freshly traced circuit
+               is routinely a couple of hundred metres out. Anywhere within
+               sight of the shape beats leaving it in the next paddock. */
+            var best = -1, bd = 500, i, d;
+            for (i = 0; i < pts.length; i++) {
+                d = gpMetres(line, { lat: pts[i][0], lon: pts[i][1] });
                 if (d < bd) { bd = d; best = i; }
             }
             if (best < 0) return false;
-            line.lat = rows[best].lat;
-            line.lon = rows[best].lon;
-            var hdg = gpN(rows[best].hdg);
-            if (hdg === null) hdg = gpHeadingAt(rows, best, 5);
-            line.heading = ((hdg % 360) + 360) % 360;
+            var a = pts[best];
+            var b = pts[(best + 1) % pts.length];
+            /* The last point of a closed shape repeats the first, which has no
+               direction of its own — step back instead. */
+            if (b[0] === a[0] && b[1] === a[1]) b = pts[(best - 1 + pts.length) % pts.length];
+            var md = gpMetresPerDeg(a[0]);
+            var dx = (b[1] - a[1]) * md.lo, dy = (b[0] - a[0]) * md.la;
+            line.lat = a[0];
+            line.lon = a[1];
+            if (dx || dy) line.heading = ((Math.atan2(dx, dy) / (Math.PI / 180)) % 360 + 360) % 360;
             return true;
         }
 
@@ -15824,6 +15872,9 @@
                  GP_PLACES.length + " circuits…' value='" + gpEsc(gp.placeFilter || "") + "'>";
             h += "<div id='gpPlaceList'>" + gpPlaceListHtml(here) + "</div>";
             h += "<button class='ws-btn-line' style='margin-top:8px' data-gp-place=''>+ Blank track here</button>";
+            h += "<div class='ws-note' style='margin-top:8px'>Pick the circuit you are at, or start a blank one " +
+                 "on the map you are looking at. You do not need to have driven it: the next panel walks you " +
+                 "through tracing its shape and placing the timing line.</div>";
             rail.innerHTML = h;
             var search = rail.querySelector("#gpPlaceSearch");
             if (search) search.addEventListener("input", function () {
@@ -17934,18 +17985,55 @@
 
             /* The order of operations, said once, in the app rather than only
                in a doc. It exists only while the track is unfinished, so a
-               set-up track never carries instructions for work already done. */
+               set-up track never carries instructions for work already done.
+               It covers the WHOLE job — including drawing the shape and
+               sending it to the dash — because "I have not driven here yet
+               and I want the track on my dash" is a thing people set out to
+               do, and the two halves used to be documented in one place and
+               performed in another. The steps that DO something are buttons;
+               reading an instruction you cannot act on is how a checklist
+               becomes wallpaper. */
             var nsT = gpNodeTrackState();
             var sent = nsT.st === "match";
-            if (!t.start_finish || (!sent && gpLapUsable())) {
-                h += "<div class='gp-steps'>" +
-                     "<div class='gp-step done'><span class='n'>1</span><span>Circuit picked</span></div>" +
-                     "<div class='gp-step" + (t.start_finish ? " done" : "") + "'>" +
-                       "<span class='n'>2</span><span>Put the " +
-                       (trial ? "start and finish gates" : "start/finish line") +
-                       " on the real paint — zoom right in on the tarmac first</span></div>" +
-                     "<div class='gp-step" + (sent ? " done" : "") + "'><span class='n'>3</span><span>Send it to the puck, so it can time laps in the car</span></div>" +
-                     "</div>";
+            var olNow = t.outline && t.outline.pts && t.outline.pts.length > 1;
+            var pushed = olNow && t.outline.pushed === gpTrackSlug(t.name);
+            var dashHere = !!gpDashTarget();
+            var puckHere = gpLapUsable();
+            var step = function (n, done, body, action) {
+                var cls = "gp-step" + (done ? " done" : "") + (action ? " act" : "");
+                var inner = "<span class='n'>" + n + "</span><span>" + body + "</span>";
+                return action
+                    ? "<button class='" + cls + "' onclick=\"" + action + "\">" + inner + "</button>"
+                    : "<div class='" + cls + "'>" + inner + "</div>";
+            };
+            var everything = t.start_finish && olNow &&
+                             (sent || !puckHere) && (pushed || !dashHere);
+            if (!everything) {
+                h += "<div class='gp-steps'>";
+                h += step(1, true, "Track picked", null);
+                h += step(2, !!olNow,
+                    olNow ? "Shape drawn" + (t.outline.src === "lap" ? " from a lap" : " by hand")
+                          : (gp.trace && gp.trace.length
+                                ? "<b>Draw the shape</b> — take it from the lap you have loaded, or trace it by hand"
+                                : "<b>Trace the shape</b> — click your way round the track on the imagery"),
+                    olNow ? null : (gp.trace && gp.trace.length ? "gpOutlineFromLap()" : "gpOutlineTrace(true)"));
+                h += step(3, !!t.start_finish,
+                    t.start_finish ? "Timing line placed"
+                                   : "<b>Place the " + (trial ? "start and finish gates" : "start/finish line") +
+                                     "</b> on the real paint — zoom right in on the tarmac first",
+                    t.start_finish ? null : "gpPlaceGate('sf')");
+                h += step(4, sent,
+                    sent ? "Sent to the puck"
+                         : (puckHere ? "<b>Send it to the puck</b>, so it times laps in the car"
+                                     : "Send it to the puck when one is connected — it is the gates that time laps"),
+                    (sent || !puckHere) ? null : "gpSendTrack('gpTrackMsg')");
+                h += step(5, !!pushed,
+                    pushed ? "Shape is on the dash"
+                           : !olNow ? "Then push the shape to the dash, so it can draw the track"
+                           : (dashHere ? "<b>Push the shape to " + gpEsc(gpDashTarget()) + "</b>, so it draws the track"
+                                       : "Push the shape to the dash when one is connected"),
+                    (pushed || !olNow || !dashHere) ? null : "gpOutlinePush()");
+                h += "</div>";
             }
 
             h += "<div class='ws-field'><label>Track name</label>" +
