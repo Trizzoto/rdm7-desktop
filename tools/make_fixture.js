@@ -29,14 +29,58 @@ const pos = th => {
     const r = R0 + A * Math.cos(3 * th) + B * Math.cos(5 * th);
     return [r * Math.cos(th), r * Math.sin(th)];
 };
-const speedAt = th => {
-    const h = 0.01;
-    const [x0, y0] = pos(th - h), [x1, y1] = pos(th), [x2, y2] = pos(th + h);
-    const a = Math.hypot(x1 - x0, y1 - y0), b = Math.hypot(x2 - x1, y2 - y1);
-    const c = Math.hypot(x2 - x0, y2 - y0);
-    const area = Math.abs((x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)) / 2;
-    const cr = area < 1e-9 ? 1e6 : (a * b * c) / (4 * area);
-    return Math.max(12, Math.min(55, Math.sqrt(1.1 * 9.81 * cr)));
+
+/* Corner-limited speed alone lets speed step down as fast as curvature
+   rises — an impossible 6 g "stop" the stat tiles then print as the
+   hardest braking of the day. So: dense arc-length table of the curve,
+   corner-limited ceiling per point, then a backward pass capped at
+   braking grip and a forward pass capped at drive, run twice around the
+   loop so the seam is continuous. The car this makes can actually exist. */
+const M = 8000, A_BRK = 1.05 * 9.81, A_ACC = 0.42 * 9.81;
+const TAB = { x: [], y: [], s: [], v: [] };
+{
+    let acc = 0;
+    for (let i = 0; i < M; i++) {
+        const th = i / M * Math.PI * 2;
+        const [x, y] = pos(th);
+        if (i) acc += Math.hypot(x - TAB.x[i - 1], y - TAB.y[i - 1]);
+        TAB.x.push(x); TAB.y.push(y); TAB.s.push(acc);
+        const h = 0.01;
+        const [x0, y0] = pos(th - h), [x2, y2] = pos(th + h);
+        const a = Math.hypot(x - x0, y - y0), b = Math.hypot(x2 - x, y2 - y);
+        const c = Math.hypot(x2 - x0, y2 - y0);
+        const area = Math.abs((x - x0) * (y2 - y0) - (x2 - x0) * (y - y0)) / 2;
+        const cr = area < 1e-9 ? 1e6 : (a * b * c) / (4 * area);
+        TAB.v.push(Math.max(12, Math.min(55, Math.sqrt(1.1 * 9.81 * cr))));
+    }
+    const [xl, yl] = [TAB.x[M - 1], TAB.y[M - 1]];
+    TAB.L = TAB.s[M - 1] + Math.hypot(TAB.x[0] - xl, TAB.y[0] - yl);
+    for (let pass = 0; pass < 2; pass++) {
+        for (let i = M - 1; i >= 0; i--) {          /* braking, backward */
+            const j = (i + 1) % M;
+            const ds = (TAB.s[j] - TAB.s[i] + TAB.L) % TAB.L || TAB.L / M;
+            TAB.v[i] = Math.min(TAB.v[i], Math.sqrt(TAB.v[j] * TAB.v[j] + 2 * A_BRK * ds));
+        }
+        for (let i = 0; i < M; i++) {               /* drive, forward */
+            const j = (i - 1 + M) % M;
+            const ds = (TAB.s[i] - TAB.s[j] + TAB.L) % TAB.L || TAB.L / M;
+            TAB.v[i] = Math.min(TAB.v[i], Math.sqrt(TAB.v[j] * TAB.v[j] + 2 * A_ACC * ds));
+        }
+    }
+}
+/* Sample the table at an arc position (metres, wraps). */
+const atArc = s => {
+    s = ((s % TAB.L) + TAB.L) % TAB.L;
+    let lo = 0, hi = M - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (TAB.s[mid] <= s) lo = mid; else hi = mid - 1; }
+    const j = (lo + 1) % M;
+    const seg = ((TAB.s[j] - TAB.s[lo] + TAB.L) % TAB.L) || TAB.L / M;
+    const t2 = Math.min(1, (s - TAB.s[lo]) / seg);
+    return {
+        x: TAB.x[lo] + (TAB.x[j] - TAB.x[lo]) * t2,
+        y: TAB.y[lo] + (TAB.y[j] - TAB.y[lo]) * t2,
+        v: TAB.v[lo] + (TAB.v[j] - TAB.v[lo]) * t2
+    };
 };
 
 /* Two CAN channels, so the fixture exercises the channel columns as well as
@@ -63,30 +107,39 @@ const rows = [];
 let tms = Date.UTC(2026, 6, 25, 3, 12, 0) % 4294967295;   /* fits the u32 t field */
 let clock = Date.UTC(2026, 6, 25, 3, 12, 0);
 const LAPS = 5;
+const SCALES = [0.02, -0.01, 0, 0.008, 0.03];
 let prevV = null;
-for (let lap = 0; lap < LAPS; lap++) {
-    const scale = 1 + [0.02, -0.01, 0, 0.008, 0.03][lap];
-    let th = 0;
-    while (th < Math.PI * 2) {
-        const [x, y] = pos(th);
-        const v = speedAt(th) / scale;
+{
+    /* Integrate position from speed at 25 Hz along the arc-length table.
+       The per-lap pace factor blends smoothly across each lap, so the lap
+       boundary carries no speed step (a step of a few km/h in one 40 ms
+       sample reads as a phantom 4 g stab of brake, and the stat tiles
+       would print it as the hardest stop of the day). */
+    let s = 0, lap = 0;
+    while (lap < LAPS) {
+        const frac = s / TAB.L - lap;                       /* 0..1 into this lap */
+        if (frac >= 1) { lap++; continue; }
+        const s0 = 1 + SCALES[lap];
+        const s1 = 1 + SCALES[Math.min(lap + 1, LAPS - 1)];
+        const scale = s0 + (s1 - s0) * frac;
+        const P0 = atArc(s);
+        const v = P0.v / scale;
         /* Heading from the direction of travel. A constant heading makes yaw
            rate and lateral g identically zero, which reads as a car that
            never turned — and would let a broken channel look fine. */
-        const [hx, hy] = pos(th + 1e-4);
-        const hdgDeg = (Math.atan2(hx - x, hy - y) / D + 360) % 360;
+        const P1 = atArc(s + 0.5);
+        const hdgDeg = (Math.atan2(P1.x - P0.x, P1.y - P0.y) / D + 360) % 360;
         /* Throttle from the acceleration this speed trace implies: hard on
            where it is gaining, closed where it is losing. */
         const accel = prevV === null ? 0 : (v - prevV) * 25;      /* m/s^2 */
         prevV = v;
         const throttle = Math.max(0, Math.min(100, 50 + accel * 14));
-        rows.push({ lat: CENTRE[0] + y / mLat, lon: CENTRE[1] + x / mLon,
+        rows.push({ lat: CENTRE[0] + P0.y / mLat, lon: CENTRE[1] + P0.x / mLon,
                     kph: v * 3.6, hdg: hdgDeg, t: tms,
                     /* Raw counts, exactly as the puck stores them: the scale
                        lives in the channel definition, not in the data. */
                     can: [Math.round(rpmFor(v)), Math.round(throttle * 10)] });
-        const [nx, ny] = pos(th + 1e-4);
-        th += (v / 25) / (Math.hypot(nx - x, ny - y) / 1e-4);
+        s += v / 25;
         tms += 40;
     }
 }

@@ -8542,11 +8542,11 @@
             var Y = function (s) { return hi === lo ? 22 : 8 + (s.bestLapS - lo) / (hi - lo) * 28; };
             var pts = hist.map(function (s) { return X(s).toFixed(1) + "," + Y(s).toFixed(1); }).join(" ");
             var h = "<svg class='gp-hist-svg' viewBox='0 0 240 44' preserveAspectRatio='none'>" +
-                    "<polyline points='" + pts + "' fill='none' stroke='#3a4048' stroke-width='1'/>";
+                    "<polyline points='" + pts + "' fill='none' stroke='#b7b7ba' stroke-width='1'/>";
             hist.forEach(function (s) {
                 var on = s.id === curId;
                 h += "<circle cx='" + X(s).toFixed(1) + "' cy='" + Y(s).toFixed(1) +
-                     "' r='" + (on ? 3.2 : 2.2) + "' fill='" + (on ? "#6FBF73" : "#9ecbff") + "'>" +
+                     "' r='" + (on ? 3.2 : 2.2) + "' fill='" + (on ? "#d2232a" : "#7a7a7d") + "'>" +
                      "<title>" + gpEsc(gpSesDay(s.recordedAt)) + " \u2014 " + gpLapTime(s.bestLapS) + "</title></circle>";
             });
             return h + "</svg>";
@@ -8740,7 +8740,19 @@
                 gpComputeG(gp.trace);
                 gp.cmpLap = -1;
                 var said = gpSplitLapsAuto();
-                gp.selLap = gp.traceLaps.length ? 0 : -1;
+                /* The turn-4 default: analyse the closest challenger against
+                   the session best (ADR-0024). The best lap is the reference
+                   gpSplitLaps just picked; the lap with something to learn is
+                   the next one down. One lap only → look at that lap. */
+                gp.selLap = -1;
+                if (gp.traceLaps.length) {
+                    var t2b = [];
+                    gp.traceLaps.forEach(function (l, i) {
+                        if (!l.ghost) t2b.push([gpSecs(gp.trace, l.from, l.to), i]);
+                    });
+                    t2b.sort(function (a, b) { return a[0] - b[0]; });
+                    gp.selLap = t2b.length > 1 ? t2b[1][1] : t2b[0][1];
+                }
                 gp.playIdx = 0;
                 /* The card must agree with what just split. An imported file
                    carries whatever its exporter knew (often "0 laps"), and a
