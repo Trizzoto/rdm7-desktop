@@ -9569,13 +9569,22 @@
                 seg([["video", "VIDEO"], ["solo", "SOLO"]], g.preset, "gpGridPreset");
             /* The fill rule is the answer to "where does a new row go" — say
                it in the same place you can override it. */
-            h += "<div class='hd' style='margin-top:2px'>Height</div>" +
-                seg([["fit", "FIT THE WINDOW"], ["tall", "SCROLL"]], g.fit ? "fit" : "tall", "gpGridFitSet") +
-                "<div class='note'>" + (g.fit
-                    ? "Everything is on screen. A new row squeezes the others — until one would be too "
-                      + "short to read, and then the page starts scrolling instead."
-                    : "Rows keep a readable height and the page scrolls. Drag a divider up and the page "
-                      + "sheds its overflow first, so it snaps back to fitting.") + "</div>";
+            var root = gpRootCol(g);
+            var mins = root.kids.map(gpNodeMinH);
+            var roomy = root.kids.reduce(function (a, k, i) {
+                return a + Math.max(mins[i], GP_ROW_PREF);
+            }, 0) + (root.kids.length - 1) * GP_GAP;
+            var sameEither = roomy <= gpGridAvail();
+            h += "<div class='hd' style='margin-top:2px'>Row height</div>" +
+                seg([["fit", "FIT"], ["tall", "TALL"]], g.fit ? "fit" : "tall", "gpGridFitSet") +
+                "<div class='note'>" +
+                "<b>Fit</b> keeps everything on screen: a new row squeezes the others, until one would " +
+                "be too short to read — then the page extends below the fold and scrolls instead. " +
+                "<b>Tall</b> gives every row " + GP_ROW_PREF + "&nbsp;px up front and scrolls from the start." +
+                (sameEither
+                    ? " With this many panels the window is tall enough for either, so both look the same."
+                    : "") +
+                "</div>";
 
             h += "<div class='hd' style='margin-top:2px'>Saved arrangements</div>" +
                 "<div style='display:flex;gap:6px'>" +
@@ -10808,6 +10817,38 @@
                height is what the port scrolls through — the rows plus the
                dividers standing between them. */
             cv.style.minHeight = g.fit ? "0px" : Math.round(total + gaps) + "px";
+            gpMapWheelSync(!g.fit);
+        }
+
+        /* Leaflet eats the wheel to zoom, and unlike every other panel it does
+           not hand the event back when it has nothing left to do with it. On a
+           grid that fits, that is exactly right. On one that scrolls, a map
+           panel wide enough to sit under the pointer is a hole you cannot
+           scroll out of — so while the page can scroll, the map zooms only
+           with Ctrl (or Cmd) held, which is what an embedded map does
+           everywhere else. */
+        function gpMapWheelSync(scrolls) {
+            if (!gp.map || !gp.map.scrollWheelZoom) return;
+            var hold = scrolls && gp.view === "session";
+            if (hold === !!gp._mapWheelHeld) return;
+            gp._mapWheelHeld = hold;
+            if (hold) gp.map.scrollWheelZoom.disable();
+            else gp.map.scrollWheelZoom.enable();
+            var el = document.getElementById("gpMap");
+            if (el && !gp._mapWheelBound) {
+                gp._mapWheelBound = true;
+                el.addEventListener("wheel", function (e) {
+                    if (!gp._mapWheelHeld || !gp.map) return;
+                    if (!(e.ctrlKey || e.metaKey)) return;   /* let the page scroll */
+                    e.preventDefault(); e.stopPropagation();
+                    gp.map.setZoom(gp.map.getZoom() + (e.deltaY < 0 ? 1 : -1));
+                }, { passive: false, capture: true });
+            }
+            var chip = document.getElementById("gpBtnTiles");
+            if (chip) chip.title = hold
+                ? "Drop the satellite imagery and read the driven line on its own — " +
+                  "(the page scrolls, so the map zooms with Ctrl + wheel)"
+                : "Drop the satellite imagery and read the driven line on its own";
         }
         /* After a resize the map and the canvases have new boxes and neither
            finds out on its own. */
@@ -10837,9 +10878,17 @@
                                "' onclick=\"gpMapModeSet('" + m[0] + "')\">" + m[1] + "</button>";
                      }).join("") + "</div>";
             } else if (p.type === "graph") {
+                /* Two states, drawn as two buttons with the live one lit —
+                   the same segment idiom as the map's modes an inch away.
+                   One button that printed the mode you were already in could
+                   only be read by guessing whether it was a label or an
+                   offer. */
+                var over = gp.plotMode === "over";
                 h += "<div class='gpb-pseg'>" +
-                     "<button data-gp-plotmode onclick='gpPlotModeToggle()' title='One well or one lane per channel'>" +
-                     (gp.plotMode === "over" ? "Combined" : "Stacked") + "</button>" +
+                     "<button data-gp-plotmode class='" + (over ? "" : "on") +
+                     "' onclick=\"gpPlotModeSet('tiled')\" title='One lane per channel, each with its own frame and scale'>Stacked</button>" +
+                     "<button class='" + (over ? "on" : "") +
+                     "' onclick=\"gpPlotModeSet('over')\" title='Every channel in one well, so their shapes line up against each other'>Combined</button>" +
                      "<button onclick='gpChanPopToggle()' title='Choose which channels the rack draws'>Channels</button>" +
                      "</div>";
             }
@@ -12406,6 +12455,10 @@
            other. Both are right for different questions, which is why every
            analysis package ships both, so this is a toggle and not a decision
            made once in the code. */
+        window.gpPlotModeSet = function (m) {
+            if ((m === "over") === (gp.plotMode === "over")) return;
+            window.gpPlotModeToggle();
+        };
         window.gpPlotModeToggle = function () {
             gp.plotMode = gp.plotMode === "over" ? "tiled" : "over";
             try { window.localStorage.setItem("rdm7_gp_plotmode", gp.plotMode); } catch (e) {}
@@ -12430,8 +12483,13 @@
             Array.prototype.forEach.call(document.querySelectorAll("[data-gp-mapmode]"), function (b) {
                 b.classList.toggle("on", b.getAttribute("data-gp-mapmode") === mm);
             });
+            /* Stacked and Combined are two buttons now, so what changes is
+               which one is lit — rewriting the label here is what left the
+               segment reading "Combined | Combined". */
+            var over = gp.plotMode === "over";
             Array.prototype.forEach.call(document.querySelectorAll("[data-gp-plotmode]"), function (b) {
-                b.textContent = gp.plotMode === "over" ? "Combined" : "Stacked";
+                b.classList.toggle("on", !over);
+                if (b.nextElementSibling) b.nextElementSibling.classList.toggle("on", over);
             });
         }
 
@@ -17403,7 +17461,14 @@
                the way into Analyse. */
             var hintEl = document.getElementById("gpHint");
             if (hintEl && view === "session" && gp.trace && gp.trace.length) hintEl.textContent = "";
-            if (view !== "session") { gp.layoutsOpen = false; gp.splitMenu = null; }
+            if (view !== "session") {
+                gp.layoutsOpen = false; gp.splitMenu = null;
+                /* gpGridLayout is the only other caller and it does not run
+                   outside Analyse — without this the map would keep holding
+                   its wheel for Ctrl in Live and Corners, where nothing
+                   scrolls and the reason no longer exists. */
+                gpMapWheelSync(false);
+            }
             gpRenderCtx();
             /* Gates are drawn in ONE place: the Tracks editor. */
             gpDrawEditor();
