@@ -12298,6 +12298,12 @@
                 } else {
                     h += "<span class='nt'>Open a recording to line this up with it.</span>";
                 }
+                if (v.noOverlap)
+                    h += "<span class='nt' title='The camera clock put the whole recording outside the footage'>" +
+                         "camera clock not usable — lined up start to start</span>";
+                else if (v.tzHours)
+                    h += "<span class='nt' title='The camera writes its clock in local time; the recording is UTC'>" +
+                         "camera clock was " + (v.tzHours > 0 ? "+" : "") + v.tzHours + " h out — timezone, corrected</span>";
                 h += "<span style='flex:1'></span>" +
                      "<label class='pick' title='Load a different file'>Replace" +
                      "<input type='file' accept='video/*' style='display:none' onchange='gpVideoOpen(this)'></label>" +
@@ -17281,6 +17287,70 @@
             }).catch(function () { return null; });
         }
 
+        /* A camera clock a whole number of hours away from the lap is not
+           drift, it is a TIMEZONE. GoPro writes its mvhd in LOCAL time while a
+           GPS-dated session is UTC, so a Californian afternoon lands seven
+           hours from the recording and the video pins to whichever end of
+           itself it can reach — which is what it did with a real hero5 file:
+           parked on the last frame, 0:34 of 0:34, while the playhead sat at
+           the start.
+
+           Snap out the whole offset and leave the remainder alone. Fifteen
+           minutes is the step because zones exist on quarter hours (+5:45,
+           +12:45), and a residual over two minutes means this is not a
+           timezone at all, so nothing is touched. What is left after the snap
+           is real clock error — the hero5 camera runs 40 s ahead of its own
+           GPS — and Nudge is what that is for. */
+        /* The camera clock has now been believed as far as it deserves. It
+           can still be wrong in a way no timezone explains — the hero5
+           sample's runs 40 s ahead of its own GPS — and when the error is
+           bigger than the video is long, believing it puts the WHOLE
+           recording outside the footage. The picture then freezes on frame
+           zero and stays there however you scrub, which looks like a broken
+           player rather than a clock that cannot be trusted.
+
+           So: if the session does not overlap the video at all, stop
+           trusting the clock and line them up start to start. That is the
+           behaviour from before there was a camera clock to read, it always
+           yields a usable picture, and it says so rather than pretending to
+           a precision it has not got.
+
+           Needs the video's DURATION, so it runs once that is known — which
+           is why it is called from the metadata handler and not only from
+           the probe. */
+        function gpVideoAutoAlign() {
+            var v = gp.video, el = document.getElementById("gpVideo");
+            if (!v || !el || v.t0 === null || v.t0 === undefined) return;
+            if (!isFinite(el.duration) || !gp.trace || !gp.trace.length) return;
+            var first = gpSampleUtc(0), last = gpSampleUtc(gp.trace.length - 1);
+            if (first === null || last === null) return;
+            var a = (first - v.t0) / 1000, b = (last - v.t0) / 1000;
+            if (b < 0 || a > el.duration) {
+                v.t0 = first;
+                v.noOverlap = true;
+            } else {
+                v.noOverlap = false;
+            }
+            gpVideoFollowSeek();
+            gpVideoDrawOverlay();
+            gpRenderGridSoft();
+        }
+
+        /* Re-render the grid only when it exists, so the alignment message can
+           appear without a view switch caring. */
+        function gpRenderGridSoft() {
+            if (gp.view === "session" && typeof gpRenderGrid === "function") gpRenderGrid();
+        }
+
+        function gpVideoTzFix(camMs, sessionMs) {
+            var STEP = 900000;
+            var diff = sessionMs - camMs;
+            if (Math.abs(diff) < STEP) return { t0: camMs, hours: 0 };
+            var k = Math.round(diff / STEP);
+            if (!k || Math.abs(diff - k * STEP) > 120000) return { t0: camMs, hours: 0 };
+            return { t0: camMs + k * STEP, hours: k / 4 };
+        }
+
         function gpCurSessionMeta() {
             return (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0] || null;
         }
@@ -17348,8 +17418,7 @@
                    the seeking. */
                 var onMeta = function () {
                     el.removeEventListener("loadedmetadata", onMeta);
-                    gpVideoFollowSeek();
-                    gpVideoDrawOverlay();
+                    gpVideoAutoAlign();
                 };
                 el.addEventListener("loadedmetadata", onMeta);
             }
@@ -17363,7 +17432,11 @@
                 /* Auto-sync only means something when the session itself is
                    GPS-dated — against a download-dated anchor the camera clock
                    is comparing apples to a guess. */
-                if (ms !== null && meta && meta.dated === "gps" && gp.cam.auto) gp.video.t0 = ms;
+                if (ms !== null && meta && meta.dated === "gps" && gp.cam.auto) {
+                    var tz = gpVideoTzFix(ms, meta.recordedAt);
+                    gp.video.t0 = tz.t0;
+                    gp.video.tzHours = tz.hours;
+                }
                 gpRenderInspector();
                 if (gp.view === "session") gpRenderGrid();
                 /* Setting t0 is what SYNCS the video; it is not what MOVES it.
@@ -17372,8 +17445,7 @@
                    stays there until something unrelated forces a redraw, so
                    the first thing that appeared to fix it was closing a
                    panel. Seek it to where the playhead already is. */
-                gpVideoFollowSeek();
-                gpVideoDrawOverlay();
+                gpVideoAutoAlign();
             });
             /* The tile lives in whichever panel is hosting it, and the grid
                only re-appends it once a video EXISTS — so loading one has to
