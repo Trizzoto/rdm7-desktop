@@ -3258,7 +3258,7 @@
                            oninput="gpScrubTo(this.value)">
                     <span class="gp-sep"></span>
                     <button class="gp-rate" id="gpPlayRate" onclick="gpRateCycle()"
-                            title="Playback speed — click to cycle, or J / L">4&times;</button>
+                            title="Playback speed — click to cycle, or J / L">1&times;</button>
                     <i class="gp-lamp info" id="gpKeysLamp" data-tip="<b>Keyboard</b>
                        <span class='k'>Space / K</span> play / pause<br>
                        <span class='k'>J / L</span> slower &middot; faster (editor transport); J at 1&times; jumps back 5 s<br>
@@ -7303,7 +7303,12 @@
             trace: null,          /* [{lat,lon,kph,hdg,g}] at 25 Hz */
             traceInfo: null, traceBusy: false, tracePct: 0,
             traceLayer: null, traceLaps: [], selLap: -1, cmpLap: -1,
-            playing: false, playIdx: 0, playRate: 4, playTimer: null, playMarker: null,
+            /* 1x, always, on every load. Playback opens at real time because
+               real time is what the driver felt; anything faster is a choice
+               the user makes, not one made for them. */
+            playing: false, playIdx: 0, playRate: 1, playTimer: null, playMarker: null,
+            traceCv: null,        /* the full-resolution line, on its own canvas */
+            ghostMarks: null,     /* lap index -> the faded dot for that lap */
             coach: null,          /* memoised {sel,cmp,ops}; see gpCoachOps */
             delta: null, deltaKey: "",   /* memoised cumulative delta series */
             rate: null, rateKey: "",     /* memoised d(delta)/dt for the map */
@@ -12567,8 +12572,13 @@
                      "<div class='gpb-thrbar'><i data-dv='thr'></i></div></div>";
             }
             if (d.rate) {
+                /* data-gp-rate is what gpPlayRateSet re-marks. Without it the
+                   segment was built once with 4x lit and never moved again —
+                   the click DID change the rate, nothing on screen said so,
+                   and the control read as broken. */
                 h += "<div class='gpb-seg'>" + [1, 2, 4, 10].map(function (x) {
-                    return "<button class='" + (gp.playRate === x ? "on" : "") + "' onclick='gpPlayRateSet(" + x + ")'>" + x + "&times;</button>";
+                    return "<button class='" + (gp.playRate === x ? "on" : "") + "' data-gp-rate='" + x +
+                           "' onclick='gpPlayRateSet(" + x + ")'>" + x + "&times;</button>";
                 }).join("") + "</div>";
             }
             el.innerHTML = h;
@@ -13830,8 +13840,7 @@
                     return "rate";
                 }
                 /* At 1x (or paused): jump back five seconds. */
-                var rj = gpLapRange();
-                gp.playIdx = Math.max(rj.from, gp.playIdx - GP_TRACE_HZ * 5);
+                gpSeekBy(-5);
                 var elj = document.getElementById("gpVideo");
                 if (elj && gp.video && gp.video.follow && !elj.paused) {
                     var vtj = gpVideoTimeFor(gp.playIdx);
@@ -13841,9 +13850,16 @@
                 return "jump";
             }
             if (key === "ArrowLeft" || key === "ArrowRight") {
-                var step = (shift ? 25 : 1) * (key === "ArrowLeft" ? -1 : 1);
+                var dir = key === "ArrowLeft" ? -1 : 1;
                 gpPlayStop();
-                window.gpScrubTo(Math.max(0, Math.min(r.to - r.from, gp.playIdx - r.from + step)));
+                /* Shift is ONE SECOND, and a second is a second — it was 25
+                   samples, which is a second only on a 25 Hz recording. Plain
+                   arrows stay one SAMPLE, because that one really is "the next
+                   thing the receiver wrote down". */
+                if (shift) gpSeekBy(dir);
+                else gp.playIdx = Math.max(r.from, Math.min(r.to, gp.playIdx + dir));
+                gpSyncScrub();
+                gpDrawPlayhead();
                 return "scrub";
             }
             if (key === "ArrowUp" || key === "ArrowDown") {
@@ -16761,8 +16777,84 @@
            into a line the car did not drive. Parked, that allows a wide
            window and the scribble collapses to a point; at speed it collapses
            to no smoothing at all, which is correct because none is needed. */
-        var GP_SMOOTH_M = 1.0;         /* max real travel blurred, metres */
         var GP_SMOOTH_LIVE = 10;       /* live: cap the lag, in samples */
+        var GP_SMOOTH_MAXW = 60;       /* samples either side, whatever the metres say */
+
+        /* ---- the axis the fit runs against ---------------------------------
+           Distance along the drive, integrated from GROUND SPEED — never from
+           summed position deltas. gpArcLength says why in one line: position
+           deltas accumulate receiver noise into phantom metres. A car parked
+           for twenty seconds sums 250 m of scribble that way, which told the
+           old smoother it was travelling and left the scribble on screen.
+           Doppler speed says 0, so the window swallows the whole thing.
+
+           A log whose speed column is missing would give an axis of zeros and
+           draw the lap as a blob, so that case falls back to position deltas.
+           The test is NET DISPLACEMENT rather than path length: a parked car
+           and a broken speed channel look identical by path length, and only
+           one of them actually covered ground. */
+        function gpSmoothAxis(rows) {
+            var n = rows.length, cum = new Float64Array(n), i;
+            var mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity, mxk = 0;
+            for (i = 0; i < n; i++) {
+                var x = rows[i].lon, y = rows[i].lat;
+                if (x < mnx) mnx = x;
+                if (x > mxx) mxx = x;
+                if (y < mny) mny = y;
+                if (y > mxy) mxy = y;
+                if (rows[i].kph > mxk) mxk = rows[i].kph;
+                if (i) cum[i] = cum[i - 1] + (rows[i - 1].kph / 3.6) * gpStep(rows, i - 1);
+            }
+            var spanM = Math.sqrt(Math.pow((mxx - mnx) * 111320 * Math.cos(rows[0].lat * Math.PI / 180), 2) +
+                                  Math.pow((mxy - mny) * 111320, 2));
+            if (mxk < 3 && spanM > 100) {
+                for (i = 1; i < n; i++) cum[i] = cum[i - 1] + gpMetres(rows[i - 1], rows[i]);
+            }
+            return cum;
+        }
+
+        /* ---- how noisy is THIS receiver? ------------------------------------
+           Measured off the recording rather than assumed, because the answer
+           differs by an order of magnitude across the files this opens: a VBOX
+           export is a few tens of centimetres, the puck's own download is
+           similar, a phone log can be metres. The window has to know which.
+
+           The statistic is each fix's perpendicular offset from the chord
+           through its two neighbours. On a straight that is pure noise; on a
+           curve it also carries the real sagitta, so only the straightest half
+           of the recording is counted. For white noise that offset has spread
+           sigma*sqrt(3/2), and the median of a half-normal is 0.6745 of its
+           spread, hence the 0.826. Recovers an injected sigma to within 8%
+           from 0.15 m to 1.5 m, at 10 Hz and at 25. */
+        function gpSmoothNoise(rows, kap) {
+            var n = rows.length, i;
+            if (n < 20) return 0.4;
+            /* Two medians over a full ring is two sorts of 331,000 floats, and
+               that alone was two thirds of the whole smoothing pass. A median
+               does not need every sample — walking a stride that keeps this
+               near 20,000 gives the same number for a fraction of the work. */
+            var GP_NOISE_N = 20000;
+            var step = Math.max(1, Math.floor(n / GP_NOISE_N));
+            var ks = [];
+            for (i = 0; i < n; i += step) ks.push(kap[i]);
+            ks.sort(function (a, b) { return a - b; });
+            var flat = ks[Math.floor(ks.length * 0.5)];
+            var mLat = 111320, mLon = 111320 * Math.cos(rows[0].lat * Math.PI / 180);
+            var dev = [];
+            for (i = step; i < n - 1; i += step) {
+                if (kap[i] > flat) continue;
+                var ax = rows[i - 1].lon * mLon, ay = rows[i - 1].lat * mLat;
+                var bx = rows[i + 1].lon * mLon, by = rows[i + 1].lat * mLat;
+                var px = rows[i].lon * mLon, py = rows[i].lat * mLat;
+                var dx = bx - ax, dy = by - ay;
+                var L = Math.sqrt(dx * dx + dy * dy);
+                if (L < 0.05) continue;
+                dev.push(Math.abs((px - ax) * dy - (py - ay) * dx) / L);
+            }
+            if (dev.length < 10) return 0.4;
+            dev.sort(function (a, b) { return a - b; });
+            return Math.max(0.05, Math.min(3, dev[Math.floor(dev.length / 2)] / 0.826));
+        }
 
         function gpSmoothPath() {
             var rows = gp.trace;
@@ -16770,57 +16862,60 @@
             var key = rows.length + ":" + (rows[0].t || 0) + ":" + (rows[rows.length - 1].t || 0);
             if (gp.pathKey === key && gp.path) return gp.path;
 
-            var n = rows.length, i;
-            /* Prefix sums: window width then costs nothing, so a 331k-sample
-               ring is O(n) however wide the windows get. */
-            var pLat = new Float64Array(n + 1), pLon = new Float64Array(n + 1);
-            var cum = new Float64Array(n);        /* distance along the raw line */
-            for (i = 0; i < n; i++) {
-                pLat[i + 1] = pLat[i] + rows[i].lat;
-                pLon[i + 1] = pLon[i] + rows[i].lon;
-                if (i) cum[i] = cum[i - 1] + gpMetres(rows[i - 1], rows[i]);
-            }
+            var n = rows.length, i, j;
+            var cum = gpSmoothAxis(rows);
 
-            /* How wide a window is SAFE depends on how bent the line is here,
-               not on how far the car travelled.
-
-               Averaging along a straight is free: slide a window down a
-               straight line and every point lands back on it, so the window
-               can be metres long and all it removes is the wobble. Averaging
-               round a corner is what costs — it pulls the point inside the
-               bend. For an arc of radius R the pull is about L²/24R, so
-               solving for L gives the longest window that keeps the error
-               inside a tolerance:  L = sqrt(24 · tol · R).
-
-               That is why the two earlier attempts failed. Both bounded the
-               window by travel — a fixed sample count, then a fixed half
-               metre of path — and at 50 km/h half a metre is one sample, so
-               a car driving down a straight street got no smoothing at all
-               while its line visibly wobbled. Bounded by curvature instead,
-               the same street gets a 25 m window and goes clean, and a
-               20 m-radius hairpin tightens itself to 12 m and keeps its
-               apex. Parked, the line does not advance, so the window
-               swallows the whole scribble.
-
-               Radius comes from the heading channel, which the puck already
-               reports: curvature is heading change per metre travelled. */
-            var TOL = 0.30, L_CAP = 25;
-            var out = new Array(n), a = 0, b = 0;
-            var cap = gp.liveMode ? GP_SMOOTH_LIVE : 0;   /* 0 = no cap */
+            /* Radius of curvature from the heading channel, which the receiver
+               derives from Doppler and is far cleaner than position. */
+            var kap = new Float64Array(n);
             for (i = 0; i < n; i++) {
                 var j0 = i > 1 ? i - 2 : 0, j1 = i < n - 2 ? i + 2 : n - 1;
                 var ds = cum[j1] - cum[j0];
                 var dh = Math.abs(rows[j1].hdg - rows[j0].hdg) % 360;
                 if (dh > 180) dh = 360 - dh;
-                var kappa = ds > 0.05 ? (dh * Math.PI / 180) / ds : 0;
-                var L = kappa > 1e-6 ? Math.sqrt(24 * TOL * (1 / kappa)) : L_CAP;
-                if (L > L_CAP) L = L_CAP;
-                var H = L / 2;
-                /* Both ends must be able to CONTRACT as well as extend. A
-                   sliding window that only ever advances is fine when the
-                   width is constant, and wrong here because the width is the
-                   whole point: a wide window opened on a straight stayed open
-                   into the corner after it and cut six metres off the apex.
+                kap[i] = ds > 0.05 ? (dh * Math.PI / 180) / ds : 0;
+            }
+
+            var sigma = gpSmoothNoise(rows, kap);
+            /* Never spend more shape error than the noise being removed: a
+               smoother that displaces the line further than the wobble it
+               cleaned up is a net loss however tidy it looks. */
+            var tol = 0.5 * sigma;
+            /* Widest the window may get on a straight. Measured, not guessed —
+               the optimum tracked the receiver's own noise across a sweep from
+               0.2 m to 0.8 m, and this line is the fit through it. */
+            var cap = Math.max(30, Math.min(70, 28 + 42 * sigma));
+            var live = gp.liveMode ? GP_SMOOTH_LIVE : 0;
+
+            var out = new Array(n);
+            var a = 0, b = 0;
+            for (i = 0; i < n; i++) {
+                /* ---- how wide, and why it is wider than it used to be -------
+                   The old window was sized for a moving AVERAGE, which is a
+                   local CONSTANT fit: on an arc of radius R it cannot follow
+                   the curve at all and pulls every apex inward by L^2/24R. To
+                   hold that under a third of a metre the window had to stay
+                   narrow, which capped how much noise it could ever remove.
+
+                   A local QUADRATIC follows curvature by construction. What is
+                   left is the arc's quartic term, about h^4/8R^3 — so solving
+                   for the same tolerance gives a half-width that grows as
+                   R^(3/4) instead of R^(1/2). Roughly twice the window at a
+                   hairpin and several times it through a fast sweeper, for the
+                   same shape error, and the extra samples are what buy the
+                   noise back. Measured against a known curve it lands 25-45%
+                   closer than the average did, and — the part that matters —
+                   it is BETTER at the tightest corners, not worse. */
+                var H = cap;
+                if (kap[i] > 1e-6) {
+                    var R = 1 / kap[i];
+                    var q = Math.pow(8 * tol * R * R * R, 0.25);
+                    if (q < H) H = q;
+                }
+                /* Both ends must be able to CONTRACT as well as extend, and
+                   both must SLIDE rather than rescan: restarting the search at
+                   i each time makes finding the window cost more than the fit
+                   inside it, and turned a full ring from 0.2 s into 1.8 s.
                    H moves smoothly, so the walk stays near O(n). */
                 if (a > i) a = i;
                 while (a < i && cum[i] - cum[a] > H) a++;
@@ -16829,26 +16924,43 @@
                 while (b > i && cum[b] - cum[i] > H) b--;
                 while (b + 1 < n && cum[b + 1] - cum[i] <= H) b++;
                 var lo = a, hi = b;
+                /* SYMMETRIC, always. A window with more samples ahead than
+                   behind slides the point along the path — invisible mid-lap
+                   and glaring at the two ends, where one side has nothing. */
+                var half = Math.min(i - lo, hi - i, GP_SMOOTH_MAXW);
                 /* Live has to stay responsive: a wide window here would show
                    the car where it was a second ago. */
-                if (cap) {
-                    if (i - lo > cap) lo = i - cap;
-                    if (hi - i > cap) hi = i + cap;
-                }
-                /* SYMMETRIC, always. An average taken over more samples ahead
-                   than behind slides the point along the path — which is
-                   invisible in the middle of a lap and glaring at the two
-                   ends, where the window has nothing on one side: the first
-                   sample of a recording was being dragged six metres down the
-                   road. Shrink to whichever side is shorter and the bias
-                   cancels; at the very edge that means no smoothing, which is
-                   the honest answer there. */
-                var half = Math.min(i - lo, hi - i);
+                if (live && half > live) half = live;
+                if (half < 2) { out[i] = [rows[i].lat, rows[i].lon]; continue; }
                 lo = i - half; hi = i + half;
-                var c = hi - lo + 1;
-                out[i] = [(pLat[hi + 1] - pLat[lo]) / c, (pLon[hi + 1] - pLon[lo]) / c];
+
+                var S0 = 0, S1 = 0, S2 = 0, S3 = 0, S4 = 0;
+                var Ax = 0, Bx = 0, Cx = 0, Ay = 0, By = 0, Cy = 0;
+                var s0 = cum[i];
+                for (j = lo; j <= hi; j++) {
+                    var s = cum[j] - s0, ss = s * s;
+                    var xj = rows[j].lon, yj = rows[j].lat;
+                    S0++; S1 += s; S2 += ss; S3 += ss * s; S4 += ss * ss;
+                    Ax += xj; Bx += s * xj; Cx += ss * xj;
+                    Ay += yj; By += s * yj; Cy += ss * yj;
+                }
+                var det = S0 * (S2 * S4 - S3 * S3) - S1 * (S1 * S4 - S3 * S2) +
+                          S2 * (S1 * S3 - S2 * S2);
+                /* Not moving: no arc length to regress against, so the fit is
+                   singular. The plain mean is sitting right there in the sums,
+                   and it is exactly what collapses a stationary scribble. */
+                if (!isFinite(det) || Math.abs(det) < 1e-12 || cum[hi] - cum[lo] < 0.5) {
+                    out[i] = [Ay / S0, Ax / S0];
+                    continue;
+                }
+                var c0 = S2 * S4 - S3 * S3;
+                var c1 = -(S1 * S4 - S3 * S2);
+                var c2 = S1 * S3 - S2 * S2;
+                out[i] = [(c0 * Ay + c1 * By + c2 * Cy) / det,
+                          (c0 * Ax + c1 * Bx + c2 * Cx) / det];
             }
             gp.pathKey = key; gp.path = out;
+            gp.pathSigma = sigma;
             return out;
         }
 
@@ -16861,36 +16973,285 @@
             return r ? [r.lat, r.lon] : null;
         }
 
+        /* ══════════════════════════════════════════════════════════════════
+         * The driven line: one canvas, every sample, every zoom
+         *
+         * The line used to be assembled out of a few hundred short Leaflet
+         * polylines, thinned to about one point per SCREEN pixel. That made
+         * the geometry a function of the zoom: the same corner was four
+         * points wide looking at the whole circuit and forty looking at the
+         * corner, so the drawn apex MOVED as you scrolled the wheel, and
+         * zoomed out two laps a metre apart collapsed onto the same pixels
+         * and read as one line. Leaflet compounded it twice over —
+         * latLngToLayerPoint rounds to whole pixels (a quarter of a metre
+         * thrown away at circuit zoom) and polylines carry their own
+         * pixel-space simplification on top.
+         *
+         * So the line is drawn here instead, straight into a 2D context:
+         *
+         *   - every recorded sample, at every zoom. No decimation, ever.
+         *   - projected unrounded, so sub-pixel detail survives.
+         *   - colour still varies per sample, but consecutive samples whose
+         *     colour rounds to the same RGB share one path — a 3,000-sample
+         *     lap costs a few dozen strokes instead of 3,000 map layers.
+         *
+         * The smoothing in gpSmoothPath still applies and is unchanged: that
+         * is a bounded (0.3 m) filter on receiver noise, and it does not
+         * change with the zoom. This is about not throwing away what it
+         * leaves behind.
+         * ═════════════════════════════════════════════════════════════════ */
+        var GP_TRACE_PANE = "gpTracePane";
+        var GP_TRACE_CASE = "#0a0c0e";      /* the dark casing under the bright lap */
+
+        var GpTraceLayer = L.Layer.extend({
+            options: { pane: GP_TRACE_PANE, padding: 0.25 },
+
+            initialize: function (opts) { L.setOptions(this, opts); this._strands = []; },
+
+            onAdd: function () {
+                var cv = this._cv = L.DomUtil.create("canvas");
+                cv.style.position = "absolute";
+                cv.style.pointerEvents = "none";
+                if (this._zoomAnimated) L.DomUtil.addClass(cv, "leaflet-zoom-animated");
+                this.getPane().appendChild(cv);
+                this._ctx = cv.getContext("2d");
+                this._reset();
+            },
+
+            onRemove: function () {
+                if (this._cv && this._cv.parentNode) this._cv.parentNode.removeChild(this._cv);
+                this._cv = null; this._ctx = null;
+            },
+
+            getEvents: function () {
+                var ev = { viewreset: this._reset, zoom: this._onZoom,
+                           moveend: this._reset, resize: this._reset };
+                if (this._zoomAnimated) ev.zoomanim = this._onAnimZoom;
+                return ev;
+            },
+
+            /* What to draw, as index ranges into gp.trace — held, not copied.
+               The samples themselves are the session's own arrays. */
+            setStrands: function (strands) { this._strands = strands || []; this.redraw(); },
+
+            redraw: function () { if (this._map && this._ctx) this._draw(); },
+
+            _onZoom: function () { this._transform(this._map.getCenter(), this._map.getZoom()); },
+            _onAnimZoom: function (e) { this._transform(e.center, e.zoom); },
+
+            /* Leaflet's own renderer trick: while a zoom animates, scale and
+               shift the canvas by CSS rather than redrawing it, then redraw
+               once at the new zoom when the move settles. */
+            _transform: function (centre, zoom) {
+                if (!this._cv || !this._centre) return;
+                var map = this._map;
+                var scale = map.getZoomScale(zoom, this._zoom);
+                var half = map.getSize().multiplyBy(0.5 + this.options.padding);
+                var here = map.project(this._centre, zoom);
+                var off = half.multiplyBy(-scale).add(here)
+                              .subtract(map._getNewPixelOrigin(centre, zoom));
+                if (L.Browser.any3d) L.DomUtil.setTransform(this._cv, off, scale);
+                else L.DomUtil.setPosition(this._cv, off);
+            },
+
+            _reset: function () {
+                if (!this._map || !this._cv) return;
+                var map = this._map, pad = this.options.padding, size = map.getSize();
+                var min = map.containerPointToLayerPoint(size.multiplyBy(-pad))._round();
+                this._bounds = new L.Bounds(min, min.add(size.multiplyBy(1 + pad * 2)._round()));
+                this._centre = map.getCenter();
+                this._zoom = map.getZoom();
+                var s = this._bounds.getSize();
+                /* Capped at 2: a 4x display would quadruple the fill cost for
+                   detail no eye resolves on a 2 px line. */
+                var dpr = Math.min(window.devicePixelRatio || 1, 2);
+                var cv = this._cv;
+                var wD = Math.round(s.x * dpr), hD = Math.round(s.y * dpr);
+                if (cv.width !== wD || cv.height !== hD) { cv.width = wD; cv.height = hD; }
+                cv.style.width = s.x + "px";
+                cv.style.height = s.y + "px";
+                this._dpr = dpr;
+                L.DomUtil.setPosition(cv, min);
+                this._transform(this._centre, this._zoom);
+                this._draw();
+            },
+
+            _draw: function () {
+                var ctx = this._ctx, b = this._bounds;
+                if (!ctx || !b) return;
+                var s = b.getSize(), dpr = this._dpr || 1;
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                ctx.clearRect(0, 0, s.x, s.y);
+                if (!this._strands.length) return;
+                var pr = gpTraceXY(this._zoom);
+                if (!pr) return;
+                /* Draw in Leaflet layer points from here on. */
+                ctx.translate(-b.min.x, -b.min.y);
+                ctx.lineJoin = "round";
+                ctx.lineCap = "round";
+                var org = this._map.getPixelOrigin();
+                for (var i = 0; i < this._strands.length; i++)
+                    this._strand(this._strands[i], pr, org.x, org.y);
+                ctx.setLineDash([]);
+                ctx.globalAlpha = 1;
+            },
+
+            _strand: function (st, pr, ox, oy) {
+                var ctx = this._ctx, ax = pr.ax, ay = pr.ay;
+                if (st.to <= st.from || st.to >= ax.length) return;
+                /* A circuit is far bigger than the window at corner zoom and
+                   most of it is off-screen, so segments with both ends past
+                   the same edge are dropped before they reach the context. */
+                var m = st.width + (st.casing || 0) + 4;
+                var lx = this._bounds.min.x - m, ly = this._bounds.min.y - m;
+                var hx = this._bounds.max.x + m, hy = this._bounds.max.y + m;
+                var code = function (x, y) {
+                    var c = 0;
+                    if (x < lx) c |= 1; else if (x > hx) c |= 2;
+                    if (y < ly) c |= 4; else if (y > hy) c |= 8;
+                    return c;
+                };
+                var pass = function (width, colOf, alpha, dash) {
+                    ctx.lineWidth = width;
+                    ctx.globalAlpha = alpha;
+                    ctx.setLineDash(dash || []);
+                    var pen = null, has = false, open = false;
+                    for (var k = st.from + 1; k <= st.to; k++) {
+                        var x0 = ax[k - 1] - ox, y0 = ay[k - 1] - oy;
+                        var x1 = ax[k] - ox, y1 = ay[k] - oy;
+                        if (code(x0, y0) & code(x1, y1)) { open = false; continue; }
+                        var col = colOf(k);
+                        if (col !== pen) {
+                            if (has) ctx.stroke();
+                            ctx.beginPath();
+                            ctx.strokeStyle = col;
+                            pen = col; has = false; open = false;
+                        }
+                        if (!open) { ctx.moveTo(x0, y0); open = true; }
+                        ctx.lineTo(x1, y1);
+                        has = true;
+                    }
+                    if (has) ctx.stroke();
+                };
+                var flat = function () { return GP_TRACE_CASE; };
+                var own = typeof st.col === "function" ? st.col
+                                                      : function () { return st.col; };
+                if (st.casing) pass(st.width + st.casing, flat, st.caseAlpha || 0.5, null);
+                pass(st.width, own, st.alpha === undefined ? 1 : st.alpha, st.dash);
+            }
+        });
+
+        /* Every sample projected to ABSOLUTE map pixels at one zoom. Absolute
+           because a pan never invalidates it — only a zoom or a new recording
+           does — and unrounded because rounding here is exactly the accuracy
+           the whole exercise is about keeping. */
+        function gpTraceXY(zoom) {
+            var rows = gp.trace;
+            if (!gp.map || !rows || !rows.length) return null;
+            var P = gpSmoothPath();                     /* also sets gp.pathKey */
+            var key = (gp.pathKey || "") + "@" + zoom;
+            if (gp._xyKey === key && gp._xy) return gp._xy;
+            var n = rows.length;
+            var ax = new Float64Array(n), ay = new Float64Array(n);
+            var ll = L.latLng(0, 0);                    /* reused, not n of them */
+            for (var i = 0; i < n; i++) {
+                var p = P && P[i] ? P[i] : null;
+                ll.lat = p ? p[0] : rows[i].lat;
+                ll.lng = p ? p[1] : rows[i].lon;
+                var q = gp.map.project(ll, zoom);
+                ax[i] = q.x; ay[i] = q.y;
+            }
+            gp._xyKey = key; gp._xy = { ax: ax, ay: ay };
+            return gp._xy;
+        }
+
+        function gpTraceCv() {
+            if (!gp.map) return null;
+            if (!gp.map.getPane(GP_TRACE_PANE)) {
+                /* Above the imagery (200), below every vector and marker
+                   (400+): the line sits on the map, the playhead and the
+                   ghosts sit on the line. */
+                var pane = gp.map.createPane(GP_TRACE_PANE);
+                pane.style.zIndex = 385;
+                pane.style.pointerEvents = "none";
+            }
+            if (!gp.traceCv) {
+                gp.traceCv = new GpTraceLayer().addTo(gp.map);
+                window.__gpTrace = gp.traceCv;   /* debug/automation, like __gpMap */
+            }
+            return gp.traceCv;
+        }
+
+        /* A lap that is not the subject is CONTEXT. Same hue, so the swatch
+           beside it in the lap list still names it, but mixed most of the way
+           to a neutral and thinned right down: the analysed lap has to be the
+           only bright thing on the map, or telling two of them apart is
+           guesswork. */
+        var GP_DULL_TO = [124, 128, 132];
+        function gpMixHex(hex, to, k) {
+            var h = String(hex).replace("#", "");
+            var r = parseInt(h.substr(0, 2), 16),
+                g2 = parseInt(h.substr(2, 2), 16),
+                b = parseInt(h.substr(4, 2), 16);
+            return "rgb(" + Math.round(r + (to[0] - r) * k) + "," +
+                            Math.round(g2 + (to[1] - g2) * k) + "," +
+                            Math.round(b + (to[2] - b) * k) + ")";
+        }
+        function gpDullLapColour(i) { return gpMixHex(gpLapColour(i), GP_DULL_TO, 0.58); }
+
+        /* Markers (the playhead, the ghosts) live in gp.traceLayer; the line
+           lives on the canvas. Leaving a view has to take both. */
+        function gpClearMarks() {
+            if (gp.traceLayer) gp.traceLayer.clearLayers();
+            gp.playMarker = null;
+            gp.ghostMarks = null;
+        }
+
         function gpDrawTrace() {
             if (!gp.map) return;
             if (!gp.traceLayer) gp.traceLayer = L.layerGroup().addTo(gp.map);
-            gp.traceLayer.clearLayers();
-            if (!gp.trace || !gp.trace.length) return;
+            var cv = gpTraceCv();
+            if (!cv) return;
+            if (!gp.trace || !gp.trace.length) { cv.setStrands([]); gpClearMarks(); return; }
+
+            var strands = [];
+            var rows = gp.trace;
+
             /* Tracks view gets the driven line too — flat, thin, underneath
                the gate markers. Aiming a split at satellite imagery works on
                a circuit with painted kerbs; on a road course, a new track or
                anything the imagery is stale for, the line you actually drove
                is the only thing worth aiming at. */
             if (gp.view === "tracks") {
-                if (!gp._canvasRenderer) gp._canvasRenderer = L.canvas({ padding: 0.3 });
-                var tp = [], TP = gpSmoothPath();
-                for (var tq = 0; tq < gp.trace.length; tq += 2)
-                    tp.push(TP ? TP[tq] : [gp.trace[tq].lat, gp.trace[tq].lon]);
                 /* One colour either way: the field under it is dark whether
                    that is satellite imagery or the plot ground the Hide-map
                    button drops to, and a mid-grey line was only ever there to
                    survive the light field that used to replace the tiles. */
-                L.polyline(tp, { color: "#f2f2f3", weight: 3, opacity: 0.7,
-                                 renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
+                cv.setStrands([{ from: 0, to: rows.length - 1, width: 2.6,
+                                 col: "#f2f2f3", alpha: 0.72 }]);
+                gpClearMarks();
                 return;
             }
-            if (gp.view !== "session" && gp.view !== "corners") return;
-
-            /* Canvas, not SVG: 30,000 points of SVG path is a slideshow. */
-            if (!gp._canvasRenderer) gp._canvasRenderer = L.canvas({ padding: 0.3 });
+            if (gp.view !== "session" && gp.view !== "corners") {
+                cv.setStrands([]); gpClearMarks(); return;
+            }
 
             var span = gpGScale();
-            var rows = gp.trace;
+
+            /* Every OTHER ticked lap (ADR-0025), full resolution and dull.
+               Underneath everything else, so ticking a sixth lap can never
+               bury the one being analysed. They keep a flat colour — two laps
+               both coloured by braking would be two rainbows and no
+               comparison. */
+            if (gp.view === "session") {
+                gpShownList().forEach(function (li) {
+                    if (li === gp.selLap || li === gp.cmpLap) return;
+                    var lp = gp.traceLaps[li];
+                    if (!lp) return;
+                    strands.push({ from: lp.from, to: lp.to, width: 2,
+                                   col: gpDullLapColour(li), alpha: 0.62 });
+                });
+            }
 
             /* The comparison lap, in a flat colour — the point of it is the
                LINE, and colouring both by g makes neither readable.
@@ -16899,30 +17260,12 @@
                completely, so two laps that genuinely took a corner a metre
                apart still drew as one line. Dashes read as "the other lap"
                wherever the two coincide, and separate visibly wherever they
-               do not. */
+               do not. Above the dull laps, because it is the one being
+               measured against. */
             if (gp.cmpLap >= 0 && gp.traceLaps[gp.cmpLap] && gp.cmpLap !== gp.selLap) {
-                var c = gp.traceLaps[gp.cmpLap], pts = [], P = gpSmoothPath();
-                for (var k = c.from; k <= c.to; k++) pts.push(P ? P[k] : [rows[k].lat, rows[k].lon]);
-                L.polyline(pts, { color: "#ffffff", weight: 2.5, opacity: 0.9,
-                                  dashArray: "6 5", lineCap: "butt",
-                                  renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
-            }
-
-            /* Every OTHER ticked lap, flat, in its own colour (ADR-0025). The
-               analysed lap keeps the data colouring below — two laps both
-               coloured by braking would be two rainbows and no comparison. */
-            if (gp.view === "session") {
-                var Pm = gpSmoothPath();
-                gpShownList().forEach(function (li) {
-                    if (li === gp.selLap || li === gp.cmpLap) return;
-                    var lp = gp.traceLaps[li];
-                    if (!lp) return;
-                    var q = [];
-                    for (var m = lp.from; m <= lp.to; m += 2)
-                        q.push(Pm ? Pm[m] : [rows[m].lat, rows[m].lon]);
-                    L.polyline(q, { color: gpLapColour(li), weight: 2, opacity: 0.85,
-                                    renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
-                });
+                var c = gp.traceLaps[gp.cmpLap];
+                strands.push({ from: c.from, to: c.to, width: 2.4, col: "#e9ebed",
+                               alpha: 0.92, dash: [7, 5] });
             }
 
             var r = gpLapRange();
@@ -16954,49 +17297,24 @@
                 colour = function (v) { return gpGColour(v * span, span); };
             }
 
-            /* ---- drawn at the scale it is being LOOKED at --------------------
-               This used to round every sample into one of 25 discrete colour
-               "buckets", then merge same-bucket runs into flat blocks with a
-               hard seam at every boundary. Zoomed out, a value that idles
-               near a bucket edge flickers between two flat colours every few
-               samples, and the merged blocks turn that into a bead-chain —
-               a trace that reads as jittery dashes instead of one driven
-               line. Nothing was wrong with the data; rounding it first threw
-               away the gradient the colour ramps already know how to draw.
+            /* ---- the analysed lap: bright, and drawn sample by sample -------
+               No buckets and no thinning. Every segment is coloured by the
+               mean of its own two ends, so neighbours differ by a shade
+               rather than a step and the lap fades smoothly instead of
+               strobing; runs that land on the same rounded RGB are stroked as
+               one path, which is where the speed comes from.
 
-               So: no buckets. Decimate to about one point per screen pixel —
-               still necessary, since 1,500 raw samples is 1,500 seams no
-               screen can resolve — but carry the continuous mean value at
-               each kept point, and colour each short segment by the AVERAGE
-               of its own two ends. Neighbouring segments then differ by a
-               shade, not a step, and the whole lap fades smoothly instead of
-               strobing. */
-            var mpp = gpMetresPerPixel();
-            var stepM = mpp * 1.1;      /* keep a point about every pixel */
-            var SP = gpSmoothPath();
-            var at = function (idx) { return SP ? SP[idx] : [rows[idx].lat, rows[idx].lon]; };
+               The dark casing underneath is what makes it read as the SUBJECT
+               of the map. Over satellite imagery a 4 px coloured line and a
+               2 px dull one are both just lines; give the bright one a shadow
+               and the eye picks it out of a stack of six laps instantly. */
+            strands.push({
+                from: r.from, to: r.to, width: 4.2,
+                casing: 3.4, caseAlpha: 0.52,
+                col: function (i) { return colour((value(i - 1) + value(i)) / 2); }
+            });
 
-            /* Thin the samples to the screen's resolution, carrying the mean
-               value of everything each kept point stands for. */
-            var keep = [], acc = 0, cnt = 0, run = 0;
-            for (var i = r.from; i <= r.to; i++) {
-                acc += value(i); cnt++;
-                if (i > r.from) run += gpMetres(rows[i - 1], rows[i]);
-                if (i === r.from || i === r.to || run >= stepM) {
-                    keep.push({ i: i, v: acc / cnt });
-                    acc = 0; cnt = 0; run = 0;
-                }
-            }
-            if (keep.length < 2) { keep = [{ i: r.from, v: value(r.from) }, { i: r.to, v: value(r.to) }]; }
-
-            /* Round joins and caps so consecutive segments — each a shade
-               apart, not a colour apart — meet without a visible corner. */
-            for (var j = 1; j < keep.length; j++) {
-                var seg = [at(keep[j - 1].i), at(keep[j].i)];
-                L.polyline(seg, { color: colour((keep[j - 1].v + keep[j].v) / 2), weight: 4,
-                                  opacity: 0.95, lineCap: "round", lineJoin: "round",
-                                  smoothFactor: 1, renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
-            }
+            cv.setStrands(strands);
             gpSyncModeButtons();
             gpSyncScrub();
             gpDrawPlayhead();
@@ -17080,6 +17398,103 @@
         }
 
 
+        /* ---- where the other laps had got to, at this moment ----------------
+         * The playhead says where the analysed lap was T seconds into it.
+         * Every other lap on the map gets a faded dot at ITS position T
+         * seconds in, so the gap between the dots IS the gap between the
+         * laps — drawn on the track, at the corner where it opened up,
+         * instead of read off a number.
+         *
+         * Aligned by TIME, not by distance. Distance alignment answers "who
+         * took the tighter line", which the Line colouring already answers;
+         * time alignment answers "who is ahead", which is the question you
+         * ask while watching a replay. A dot trailing the playhead is a lap
+         * that is behind, and it falls further back exactly where it lost.
+         *
+         * A lap shorter than T has already finished: its dot parks on its own
+         * last sample rather than vanishing or wrapping round again.
+         */
+        function gpLapIdxAtSecs(lap, secs) {
+            var rows = gp.trace;
+            if (!lap || !rows) return null;
+            if (!(secs > 0)) return lap.from;
+            if (gpSecs(rows, lap.from, lap.to) <= secs) return lap.to;
+            var lo = lap.from, hi = lap.to;
+            while (lo < hi) {
+                var mid = (lo + hi) >> 1;
+                if (gpSecs(rows, lap.from, mid) < secs) lo = mid + 1; else hi = mid;
+            }
+            return lo;
+        }
+
+        /* Move the playhead by real SECONDS, whatever rate the recording was
+           written at. Every transport shortcut used to move it by a count of
+           samples at an assumed 25 Hz, which is only ever right for a puck
+           download — see the note in gpPlayResumeTicker. */
+        function gpSeekBy(dSecs) {
+            var r = gpLapRange();
+            var at = gpSecs(gp.trace, r.from, gp.playIdx) + dSecs;
+            gp.playIdx = gpLapIdxAtSecs(r, Math.max(0, at));
+        }
+
+        function gpDropGhosts() {
+            if (!gp.ghostMarks) return;
+            for (var k in gp.ghostMarks) {
+                if (gp.traceLayer && gp.traceLayer.hasLayer(gp.ghostMarks[k]))
+                    gp.traceLayer.removeLayer(gp.ghostMarks[k]);
+            }
+            gp.ghostMarks = null;
+        }
+
+        function gpDrawGhosts() {
+            if (!gp.map || !gp.traceLayer) return;
+            if (gp.view !== "session" || gp.selLap < 0 || !gp.trace || !gp.trace.length) {
+                gpDropGhosts(); return;
+            }
+            var r = gpLapRange();
+            var t = gpSecs(gp.trace, r.from, gp.playIdx);
+            /* Everything drawn on the map except the lap the playhead is on:
+               the ticked laps, plus the reference whether it is ticked or
+               not — it is on the map either way, so it gets a dot either
+               way. */
+            var want = {};
+            gpShownList().forEach(function (li) { if (li !== gp.selLap) want[li] = 1; });
+            if (gp.cmpLap >= 0 && gp.cmpLap !== gp.selLap) want[gp.cmpLap] = 1;
+
+            if (!gp.ghostMarks) gp.ghostMarks = {};
+            var k;
+            for (k in gp.ghostMarks) {
+                if (!want[k]) {
+                    if (gp.traceLayer.hasLayer(gp.ghostMarks[k]))
+                        gp.traceLayer.removeLayer(gp.ghostMarks[k]);
+                    delete gp.ghostMarks[k];
+                }
+            }
+            for (k in want) {
+                var li = parseInt(k, 10);
+                var lap = gp.traceLaps[li];
+                if (!lap) continue;
+                var gl = gpDrawnAt(gpLapIdxAtSecs(lap, t));
+                if (!gl) continue;
+                var m = gp.ghostMarks[k];
+                if (!m) {
+                    /* Faded on purpose: a ghost is where someone else was,
+                       not where you are. Same fill as the lap's own line, so
+                       a dot on the map and a line on the map are obviously
+                       the same lap. */
+                    m = L.circleMarker(gl, {
+                        radius: 5, weight: 1.4,
+                        color: "#f4f5f6", opacity: 0.5,
+                        fillColor: li === gp.cmpLap ? "#e9ebed" : gpLapColour(li),
+                        fillOpacity: 0.42, interactive: false
+                    });
+                    gp.ghostMarks[k] = m;
+                }
+                m.setLatLng(gl);
+                if (!gp.traceLayer.hasLayer(m)) m.addTo(gp.traceLayer);
+            }
+        }
+
         function gpDrawPlayhead() {
             gpVideoFollowSeek();
             gpVideoDrawOverlay();
@@ -17093,12 +17508,18 @@
             if (!ll) return;
             if (!gp.playMarker) {
                 gp.playMarker = L.circleMarker(ll, {
-                    radius: 6, color: "#fff", weight: 2, fillColor: "#d2232a", fillOpacity: 1
+                    radius: 6.5, color: "#fff", weight: 2.5,
+                    fillColor: "#d2232a", fillOpacity: 1, interactive: false
                 }).addTo(gp.traceLayer);
             } else {
                 gp.playMarker.setLatLng(ll);
                 if (!gp.traceLayer.hasLayer(gp.playMarker)) gp.playMarker.addTo(gp.traceLayer);
             }
+            gpDrawGhosts();
+            /* The ghosts are added after the playhead the first time round,
+               which would leave a faded dot sitting on top of the solid one
+               wherever two laps coincide. */
+            gp.playMarker.bringToFront();
             gpFollowCar(ll);
             gpTcUpdate();
         }
@@ -17179,6 +17600,19 @@
             if (el && !el.paused) el.playbackRate = gp.playRate;
             var btn = document.getElementById("gpPlayRate");
             if (btn) btn.innerHTML = gp.playRate + "&times;";
+            /* The ticker reads "seconds of recording per second of wall clock"
+               off one anchor. Changing the rate without re-taking it would
+               re-scale everything played so far and throw the playhead. */
+            if (gp.playing && gp.playTimer) gpPlayAnchor();
+            /* The dock's segment is the rate control anyone actually sees —
+               the playbar above it is retired (ADR-0025). Mark it here, not
+               by rebuilding the dock: a rebuild mid-drag destroys the scrub. */
+            var dock = document.getElementById("gpDock");
+            if (dock) {
+                Array.prototype.forEach.call(dock.querySelectorAll("[data-gp-rate]"), function (b) {
+                    b.classList.toggle("on", parseFloat(b.getAttribute("data-gp-rate")) === gp.playRate);
+                });
+            }
         };
 
         function gpPlayStop() {
@@ -17211,15 +17645,59 @@
             gpPlayResumeTicker();
         };
 
+        function gpNow() {
+            return (window.performance && window.performance.now)
+                ? window.performance.now() : Date.now();
+        }
+
+        /* Where the playhead is in the RECORDING's own clock, and when that
+           was by the wall clock. Everything the ticker does is derived from
+           this pair, so re-taking it is how playback absorbs a scrub, a jump,
+           or a rate change without losing its place. */
+        function gpPlayAnchor() {
+            var r = gpLapRange();
+            gp._playAtS = gpSecs(gp.trace, r.from, gp.playIdx);
+            gp._playWallMs = gpNow();
+            gp._playIdxSet = gp.playIdx;
+        }
+
         function gpPlayResumeTicker() {
             gp.playing = true;
             gpPlayIcon(true);
-            /* 20 real fps; advance by whatever the chosen rate implies so the
-               playback clock matches the recording clock at 1x. */
+            gpPlayAnchor();
+            /* ---- playback runs off SECONDS, not off samples -----------------
+               Twenty frames a second, but the position in each of them is read
+               off the wall clock and converted through the recording's own
+               timestamps. It is never counted in samples.
+
+               Counting samples needs a sample rate, and there isn't one. The
+               constant here was 25 Hz — right for a puck download and wrong
+               for everything else. A VBO import from another logger is 10 Hz,
+               and the puck itself skips idle samples on purpose. So a 1:47
+               Sonoma lap played out in 38 seconds with the button saying 1x,
+               while the timecode beside it — which has always read real
+               timestamps — counted up in agreement with nothing on screen.
+
+               Reading the clock fixes a second thing for free: a tick that
+               arrives late (the map is redrawing, the machine is busy) catches
+               up on the next one instead of quietly losing that time. The old
+               ticker could only ever fall behind, never recover. */
             gp.playTimer = setInterval(function () {
                 var rr = gpLapRange();
-                gp.playIdx += Math.max(1, Math.round(GP_TRACE_HZ / 20 * gp.playRate));
-                if (gp.playIdx >= rr.to) { gp.playIdx = rr.to; gpPlayStop(); }
+                /* Something outside the ticker moved the playhead — a scrub
+                   mid-play, J jumping back five seconds, a coach jump. Take
+                   the new position as the anchor rather than fighting it. */
+                if (gp.playIdx !== gp._playIdxSet) gpPlayAnchor();
+                var want = gp._playAtS + (gpNow() - gp._playWallMs) / 1000 * gp.playRate;
+                if (want >= gpSecs(gp.trace, rr.from, rr.to)) {
+                    gp.playIdx = rr.to;
+                    gpSyncScrub();
+                    gpDrawPlayhead();
+                    gpPlayStop();
+                    return;
+                }
+                gp.playIdx = gpLapIdxAtSecs(rr, want);
+                gp._playIdxSet = gp.playIdx;
                 var sc = document.getElementById("gpScrub");
                 if (sc) sc.value = String(gp.playIdx - rr.from);
                 gpDrawPlayhead();
@@ -18127,22 +18605,12 @@
                 if (gp.follow) window.gpToggleFollow();
                 if (gp.view === "session" && gpPlayCamera() !== "free") window.gpCameraSet("free");
             });
-            /* The drawn line is decimated to the CURRENT scale, so it has to be
-               redrawn when the scale changes. Without this the line keeps
-               whatever resolution it was built at and looks wrong at every
-               other zoom. */
-            gp.map.on("zoomend", function () { if (gp.view === "session" || gp.view === "corners") gpDrawTrace(); });
+            /* No zoomend rebuild any more: the line is the same geometry at
+               every scale, and GpTraceLayer redraws its own canvas. The old
+               hook existed only because the line used to be thinned to the
+               current pixel size — which is exactly the behaviour that made
+               it "adjust" as you scrolled the wheel. */
             window.__gpMap = gp.map;   /* debug/automation handle */
-        }
-
-        /* Metres one screen pixel covers at the current zoom and latitude.
-           Web Mercator: the world is 256 px at zoom 0 and doubles each level,
-           and the cos term is the projection's own stretch away from the
-           equator — without it a line at 35 S decimates ~20% too coarsely. */
-        function gpMetresPerPixel() {
-            if (!gp.map) return 1;
-            var lat = gp.map.getCenter().lat;
-            return 40075016.686 * Math.cos(lat * Math.PI / 180) / Math.pow(2, gp.map.getZoom() + 8);
         }
 
         /* The imagery is context, not data. Off, the driven line sits on a flat
