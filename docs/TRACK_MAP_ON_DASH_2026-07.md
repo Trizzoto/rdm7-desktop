@@ -1,5 +1,44 @@
 # The track on the dash — design notes
 
+> **ADR-0028, 2026-08-09 — one track library, and circuits arrive with their
+> shape.** The Tracks rail held two lists: your saved tracks, and a circuit
+> picker beneath them. Opening the same circuit twice put two of it in the
+> upper list while the lower one still offered it a third time, and every
+> entry in the upper list was a copy of something the lower list already
+> named. Double dipping — so there is one list now.
+>
+> A circuit **is** a library entry. Opening one adopts it in place: the record
+> is keyed by `place` (the GP_PLACES id) rather than a fresh uid, so "open
+> Winton" twice is the same Winton, and the entry stays where it was in the
+> list with your sector count where the region tag used to be. The only
+> division left is **Your own** — tracks you drew from scratch, which cannot
+> be found any other way — above **Circuits**, which is always one search
+> away. Adopted circuits sort to the top of Circuits so the cap can never
+> hide the one you have put a line on, and the row shows *your* name for it
+> once you have renamed it.
+>
+> Tracks made before `place` existed are matched back by name, including the
+> names that shipped before a circuit gained configurations (`GP_PLACE_WAS`) —
+> otherwise a Winton lap recorded last month would land under Your own, the
+> one place it does not belong.
+>
+> Circuits now ship with geometry (`GP_SHAPES`, keyed by place id): 21 layouts
+> across 12 Australian venues, taken from OpenStreetMap's raceway ways and
+> simplified through `gpOutlineSimplify` itself, so a built-in shape and a
+> traced one are the same kind of object everywhere downstream. Each
+> configuration is a closed cycle over the site's way graph, identified by
+> measuring it against the published length — that check is what separates
+> "this is the International Circuit" from "this is a loop of roughly the
+> right size". Still **no start/finish line**: a gate has to go on the real
+> paint, and the shape does not change that.
+>
+> A circuit adopted before its shape shipped keeps its gate and gains the
+> outline on load — additive only. A shape you traced, or took off a lap you
+> drove, is yours and beats the survey.
+>
+> © OpenStreetMap contributors, ODbL. `outline.src` carries `"osm"` so the
+> readiness card can print the credit where a person actually reads it.
+
 Status: **plan only, nothing built** · 2026-07-31
 
 The ask: draw a track outline in Studio by tracing the map, push it to the
