@@ -12549,17 +12549,14 @@
             var lanes = have ? gpLaneRowsAll().filter(function (L) {
                 return L.id.indexOf("can_") === 0 && !L.pending && typeof L.get === "function";
             }) : [];
-            var pick = function (re) {
-                for (var k = 0; k < lanes.length; k++) if (re.test(String(lanes[k].label))) return lanes[k];
-                return null;
-            };
+            var pick = function (re, unitRe) { return gpDockPick(lanes, re, unitRe); };
             if (d.rpm) {
-                var Lr = pick(/rpm/i);
+                var Lr = pick(GP_DOCK_RPM, GP_DOCK_RPM_U);
                 h += "<div style='min-width:60px'><div class='k'>" + gpEsc(Lr ? Lr.label : "RPM") + "</div>" +
                      "<div class='v' data-dv='rpm'></div></div>";
             }
             if (d.thr) {
-                var Lt = pick(/thr/i);
+                var Lt = pick(GP_DOCK_THR);
                 h += "<div><div class='k' data-dv='thrk'>" + gpEsc(Lt ? Lt.label : "Throttle") + "</div>" +
                      "<div class='gpb-thrbar'><i data-dv='thr'></i></div></div>";
             }
@@ -12581,6 +12578,27 @@
            writes values into slots rather than rebuilding the bar: a rebuild
            twenty times a second would destroy the scrub the user is dragging,
            close the right-click menu, and re-lay-out the row for nothing. */
+        /* Which lane is the rev counter, and which is the throttle. Name
+           first, then UNIT — a channel measured in rpm IS the rev counter
+           whatever it is called. The Sonoma log calls it "Engine Speed",
+           which matches nothing named rpm, and the dock showed a rev readout
+           with a dash in it beside a throttle bar that worked fine.
+           Two passes, so a channel actually CALLED rpm still beats one that
+           merely reads in them. Shared by the dock's builder AND its updater,
+           which each had their own copy of this and disagreed the moment one
+           was fixed. */
+        var GP_DOCK_RPM = /rpm|engine\s*speed/i;
+        var GP_DOCK_RPM_U = /^\s*rpm\s*$/i;
+        var GP_DOCK_THR = /thr|tps|pedal/i;
+
+        function gpDockPick(lanes, re, unitRe) {
+            var k;
+            for (k = 0; k < lanes.length; k++) if (re.test(String(lanes[k].label))) return lanes[k];
+            if (unitRe) for (k = 0; k < lanes.length; k++)
+                if (unitRe.test(String(lanes[k].unit || ""))) return lanes[k];
+            return null;
+        }
+
         function gpUpdateDock() {
             var el = document.getElementById("gpDock");
             if (!el || gp.view !== "session") return;
@@ -12605,13 +12623,10 @@
             var lanes = have ? gpLaneRowsAll().filter(function (L) {
                 return L.id.indexOf("can_") === 0 && !L.pending && typeof L.get === "function";
             }) : [];
-            var pick2 = function (re) {
-                for (var k = 0; k < lanes.length; k++) if (re.test(String(lanes[k].label))) return lanes[k];
-                return null;
-            };
-            var Lr = pick2(/rpm/i), vr = Lr ? Lr.get(i) : null;
+            var pick2 = function (re, unitRe) { return gpDockPick(lanes, re, unitRe); };
+            var Lr = pick2(GP_DOCK_RPM, GP_DOCK_RPM_U), vr = Lr ? Lr.get(i) : null;
             put("rpm", (vr === null || vr === undefined || !isFinite(vr)) ? "&mdash;" : Math.round(vr));
-            var Lt = pick2(/thr/i), vt = Lt ? Lt.get(i) : null;
+            var Lt = pick2(GP_DOCK_THR), vt = Lt ? Lt.get(i) : null;
             var pct = (vt === null || vt === undefined || !isFinite(vt)) ? null : Math.max(0, Math.min(100, vt));
             var bar = el.querySelector("[data-dv='thr']");
             if (bar) bar.style.width = (pct === null ? 0 : pct) + "%";
