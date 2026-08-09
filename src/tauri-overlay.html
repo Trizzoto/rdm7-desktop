@@ -3204,6 +3204,7 @@
                         <button class="gp-mapbtn on" id="gpBtnFollow" onclick="gpToggleFollow()" title="Keep the car centred">Follow</button>
                         <button class="gp-mapbtn on" id="gpBtnCam" onclick="gpCameraCycle()" style="display:none"
                                 title="How the map follows the car during playback. Lock: centred on every sample. Auto: recentres only when it nears the edge. Free: never moves on its own — drag and zoom as you like. Click to cycle.">Auto</button>
+                        <button class="gp-mapbtn" id="gpBtnSpread" onclick="gpSpreadCycle()" style="display:none">Spread</button>
                         <button class="gp-mapbtn" id="gpBtnTiles" onclick="gpTilesToggle()" title="Drop the satellite imagery and read the driven line on its own">Hide map</button>
                         <button class="gp-mapbtn" id="gpBtnMapCollapse" onclick="gpMapCollapseToggle()" style="display:none"
                                 title="Collapse the map to a one-line position readout — click it again to bring the map back">Collapse</button>
@@ -11355,7 +11356,12 @@
             if (!gp.dock) {
                 var d = null;
                 try { d = JSON.parse(window.localStorage.getItem(GP_DOCK_LS) || "null"); } catch (e) {}
-                gp.dock = d || { lap: true, pos: true, delta: true, speed: true, rpm: true, thr: true, rate: true };
+                gp.dock = d || { lap: true, pos: true, delta: true, spread: true,
+                                 speed: true, rpm: true, thr: true, rate: true };
+                /* Added after the dock was first saved, so a stored bar has
+                   no opinion about it — default it on rather than leaving a
+                   readout nobody knows to go and tick. */
+                if (gp.dock.spread === undefined) gp.dock.spread = true;
             }
             return gp.dock;
         }
@@ -12550,6 +12556,13 @@
                      (gp.cmpLap >= 0 ? gpEsc(gpRefName()) : "ref") + "</div>" +
                      "<div class='v' data-dv='delta'></div></div>";
             }
+            if (d.spread) {
+                /* The number Spread is exaggerating, printed at its real
+                   size. The drawing may lie by a stated multiplier; this
+                   never does (ADR-0011). */
+                h += "<div style='min-width:86px'><div class='k'>Lines apart</div>" +
+                     "<div class='v' data-dv='spread'></div></div>";
+            }
             if (d.speed || d.rpm || d.thr) h += "<div class='sep'></div>";
             if (d.speed) {
                 h += "<div style='min-width:76px'><div class='k'>Speed</div>" +
@@ -12635,6 +12648,14 @@
                 dn.innerHTML = ok ? (dv >= 0 ? "+" : "") + dv.toFixed(2) + " <small>s</small>" : "&mdash;";
                 dn.classList.toggle("red", !!(ok && dv > 0.005));
             }
+            var sp = el.querySelector("[data-dv='spread']");
+            if (sp) {
+                var sv = have ? gpSpreadAt(i) : null;
+                sp.innerHTML = (sv === null || !isFinite(sv)) ? "&mdash;"
+                    : sv.toFixed(1) + " <small>m</small>" +
+                      (gpSpread() > 1 ? " <small style='color:var(--gpb-muted)'>drawn " +
+                                        gpSpread() + "&times;</small>" : "");
+            }
             put("speed", s ? Math.round(gpSpdN(s.kph)) + " <small>" + gpSpdU() + "</small>" : "&mdash;");
             var lanes = have ? gpLaneRowsAll().filter(function (L) {
                 return L.id.indexOf("can_") === 0 && !L.pending && typeof L.get === "function";
@@ -12660,7 +12681,8 @@
             var old = document.getElementById("gpDockMenu");
             if (old) old.remove();
             var defs = [["lap", "Current " + gpRunWord()], ["pos", "Position / " + gpRunWord() + " time"],
-                        ["delta", "Delta vs reference"], ["speed", "Speed"], ["rpm", "RPM"],
+                        ["delta", "Delta vs reference"], ["spread", "How far apart the lines are"],
+                        ["speed", "Speed"], ["rpm", "RPM"],
                         ["thr", "Throttle bar"], ["rate", "Playback rate"]];
             var d = gpDock();
             var m = document.createElement("div");
@@ -15706,18 +15728,28 @@
          * Same forward-only sliding window as gpDeltaSeries, and the same
          * reason: O(n), and a hairpin cannot match the far side of the track.
          */
-        function gpLineOffset() {
-            if (gp.selLap < 0 || gp.cmpLap < 0 || gp.selLap === gp.cmpLap) return null;
-            var key = gp.selLap + ":" + gp.cmpLap;
-            if (gp.lineKey === key && gp.lineOff) return gp.lineOff;
+        /* One lap measured against another. Returns the signed offset per
+           sample AND, for each of them, which sample of the spine it matched
+           and the unit normal there — Spread needs all three to push a lap
+           sideways along the direction its offset was measured in, and the
+           band needs to know which station each offset belongs to. */
+        function gpOffsetVs(lapIdx, spineIdx) {
+            if (lapIdx < 0 || spineIdx < 0 || lapIdx === spineIdx) return null;
+            var lap = gp.traceLaps[lapIdx], ref = gp.traceLaps[spineIdx];
+            if (!lap || !ref) return null;
+            if (!gp.offCache) gp.offCache = {};
+            var key = lapIdx + ":" + spineIdx + ":" + (gp.pathKey || "");
+            if (gp.offCache[key]) return gp.offCache[key];
 
-            var sel = gp.traceLaps[gp.selLap], ref = gp.traceLaps[gp.cmpLap];
-            if (!sel || !ref) return null;
-            var n = sel.to - sel.from + 1, out = new Float32Array(n);
+            var n = lap.to - lap.from + 1;
+            var out = new Float32Array(n);        /* metres, + left of the spine */
+            var at = new Int32Array(n);           /* which spine sample matched */
+            var nx = new Float32Array(n);         /* unit normal, east */
+            var ny = new Float32Array(n);         /* unit normal, north */
             var j = ref.from, i, k;
 
             for (i = 0; i < n; i++) {
-                var s = gp.trace[sel.from + i];
+                var s = gp.trace[lap.from + i];
                 var lo = Math.max(ref.from, j - 25), hi = Math.min(ref.to, j + 120);
                 var best = lo, bd = Infinity;
                 for (k = lo; k <= hi; k++) {
@@ -15734,12 +15766,23 @@
                 var dirX = (b1.lon - b0.lon) * md.lo, dirY = (b1.lat - b0.lat) * md.la;
                 var vX = (s.lon - b0.lon) * md.lo, vY = (s.lat - b0.lat) * md.la;
                 var len = Math.sqrt(dirX * dirX + dirY * dirY);
+                at[i] = best;
                 /* Stationary reference sample: no direction, so no side. Fall
                    back to the unsigned distance rather than inventing a sign. */
-                out[i] = len < 1e-6 ? bd : (dirX * vY - dirY * vX) / len;
+                if (len < 1e-6) { out[i] = bd; nx[i] = 0; ny[i] = 0; continue; }
+                out[i] = (dirX * vY - dirY * vX) / len;
+                /* The normal pointing the way a POSITIVE offset goes — left of
+                   the direction of travel, which is what the cross above signs. */
+                nx[i] = -dirY / len; ny[i] = dirX / len;
             }
-            gp.lineKey = key; gp.lineOff = out;
-            return out;
+            var res = { off: out, at: at, nx: nx, ny: ny, from: lap.from, to: lap.to };
+            gp.offCache[key] = res;
+            return res;
+        }
+
+        function gpLineOffset() {
+            var r = gpOffsetVs(gp.selLap, gp.cmpLap);
+            return r ? r.off : null;
         }
 
         /* The scale is the lap's own 95th percentile, so the colours mean the
@@ -16035,7 +16078,8 @@
             gp.coach = null; gp.delta = null; gp.deltaKey = "";
             gp.stripCache = null; gp.stripZoom = null; gp.sectors = null; gp.secKey = "";
             gp.scaleCache = null;
-            gp.rate = null; gp.rateKey = ""; gp.lineOff = null; gp.lineKey = ""; gp.insightCursor = -1;
+            gp.rate = null; gp.rateKey = ""; gp.lineOff = null; gp.lineKey = ""; gp.offCache = null;
+            gp.spreadCache = null; gp.spreadKey = ""; gp.insightCursor = -1;
             gp.chan = null; gp.chanKey = "";
             /* Ticked laps are lap INDICES, and after a re-split they point at
                different laps — open a 10-lap session having ticked laps 7 and
@@ -17096,9 +17140,45 @@
                 ctx.globalAlpha = 1;
             },
 
+            /* A strand is either an index range into the shared projection —
+               the common case, costing nothing — or its own list of points,
+               which is what Spread needs, because a lap pushed sideways is no
+               longer at any of the recorded positions. Own points are
+               projected once per zoom and kept on the strand itself. */
+            _resolve: function (st, pr) {
+                if (!st.pts) return { ax: pr.ax, ay: pr.ay, from: st.from, to: st.to };
+                if (st._z !== this._zoom) {
+                    var n = st.pts.length;
+                    var ax = new Float64Array(n), ay = new Float64Array(n);
+                    var ll = L.latLng(0, 0);
+                    for (var i = 0; i < n; i++) {
+                        ll.lat = st.pts[i][0]; ll.lng = st.pts[i][1];
+                        var q = this._map.project(ll, this._zoom);
+                        ax[i] = q.x; ay[i] = q.y;
+                    }
+                    st._z = this._zoom; st._ax = ax; st._ay = ay;
+                }
+                return { ax: st._ax, ay: st._ay, from: 0, to: st.pts.length - 1 };
+            },
+
             _strand: function (st, pr, ox, oy) {
-                var ctx = this._ctx, ax = pr.ax, ay = pr.ay;
-                if (st.to <= st.from || st.to >= ax.length) return;
+                var ctx = this._ctx;
+                var G = this._resolve(st, pr);
+                var ax = G.ax, ay = G.ay;
+                if (G.to <= G.from || G.to >= ax.length) return;
+                /* A filled shape — the spread band. One path, no per-segment
+                   colour, and no casing. */
+                if (st.fill) {
+                    ctx.globalAlpha = st.alpha === undefined ? 1 : st.alpha;
+                    ctx.setLineDash([]);
+                    ctx.beginPath();
+                    ctx.moveTo(ax[G.from] - ox, ay[G.from] - oy);
+                    for (var f = G.from + 1; f <= G.to; f++) ctx.lineTo(ax[f] - ox, ay[f] - oy);
+                    ctx.closePath();
+                    ctx.fillStyle = st.fill;
+                    ctx.fill();
+                    return;
+                }
                 /* A circuit is far bigger than the window at corner zoom and
                    most of it is off-screen, so segments with both ends past
                    the same edge are dropped before they reach the context. */
@@ -17116,7 +17196,7 @@
                     ctx.globalAlpha = alpha;
                     ctx.setLineDash(dash || []);
                     var pen = null, has = false, open = false;
-                    for (var k = st.from + 1; k <= st.to; k++) {
+                    for (var k = G.from + 1; k <= G.to; k++) {
                         var x0 = ax[k - 1] - ox, y0 = ay[k - 1] - oy;
                         var x1 = ax[k] - ox, y1 = ay[k] - oy;
                         if (code(x0, y0) & code(x1, y1)) { open = false; continue; }
@@ -17182,6 +17262,189 @@
             return gp.traceCv;
         }
 
+        /* ══════════════════════════════════════════════════════════════════
+         * Spread: seeing every lap's line at once
+         *
+         * Ticking six laps already draws six lines. The problem is that one
+         * screen pixel is 2-15 m at the zoom where a whole lap fits, and the
+         * lines differ by 0.3-3 m — so they land on the same pixels and read
+         * as one line however thin the stroke. More lines cannot fix that.
+         * The DIFFERENCE has to be magnified.
+         *
+         * Each lap already knows how far off the analysed lap it ran, and
+         * which way — that is the same measurement the Line colouring shows,
+         * generalised to every lap by gpOffsetVs. Spread draws a lap where it
+         * really was, pushed further along that same normal:
+         *
+         *     drawn = fix + normal * offset * (k - 1)
+         *
+         * so k=1 is the truth untouched, k=5 turns a metre into five, and the
+         * ALONG-track position never moves — only the sideways difference is
+         * exaggerated. The fan opens where you were inconsistent and closes
+         * where you were repeatable, on the real shape of the circuit.
+         *
+         * ADR-0011 says what is shown is measured, and this deliberately is
+         * not, so: it defaults off, the multiplier is on the button, and the
+         * readout prints the REAL spread in metres. Nothing here touches a
+         * number — only the drawing.
+         * ═════════════════════════════════════════════════════════════════ */
+        var GP_SPREADS = [1, 2, 5, 10];
+        var GP_SPREAD_LS = "rdm7_gp_spread";
+        function gpSpread() {
+            if (gp.spread === undefined || gp.spread === null) {
+                var v = 1;
+                try { v = parseFloat(window.localStorage.getItem(GP_SPREAD_LS)) || 1; } catch (e) { }
+                gp.spread = GP_SPREADS.indexOf(v) >= 0 ? v : 1;
+            }
+            return gp.spread;
+        }
+        window.gpSpreadCycle = function () {
+            var i = GP_SPREADS.indexOf(gpSpread());
+            gp.spread = GP_SPREADS[(i + 1) % GP_SPREADS.length];
+            try { window.localStorage.setItem(GP_SPREAD_LS, String(gp.spread)); } catch (e) { }
+            gpSyncSpreadBtn();
+            gpDrawTrace();
+        };
+        function gpSyncSpreadBtn() {
+            var b = document.getElementById("gpBtnSpread");
+            if (!b) return;
+            var k = gpSpread();
+            b.textContent = k > 1 ? "Spread " + k + "×" : "Spread";
+            b.classList.toggle("on", k > 1);
+            b.title = k > 1
+                ? "Lines drawn " + k + "× further apart than they really were, so you can "
+                  + "see them at this zoom. The dock prints the real gap in metres. Click to change."
+                : "Draw every ticked lap pushed apart from the analysed one, so lines that "
+                  + "differ by a metre are visible without zooming in";
+        }
+
+        /* Where a lap is DRAWN once Spread is on. Returns [lat, lon] pairs for
+           the whole lap, or null when nothing is being exaggerated. */
+        function gpSpreadPts(lapIdx) {
+            var k = gpSpread();
+            var P = gpSmoothPath();
+            var lap = gp.traceLaps[lapIdx];
+            if (!lap) return null;
+            /* Memoised: the ghost dots ask for this twenty times a second
+               while the playhead runs, and it is O(lap) to build. */
+            var ck = lapIdx + ":" + gp.selLap + ":" + k + ":" + (gp.pathKey || "");
+            if (!gp.spreadCache) gp.spreadCache = {};
+            if (gp.spreadCache[ck]) return gp.spreadCache[ck];
+            var r = (k > 1) ? gpOffsetVs(lapIdx, gp.selLap) : null;
+            var pts = [], i;
+            if (!r) {
+                for (i = lap.from; i <= lap.to; i++)
+                    pts.push(P ? P[i] : [gp.trace[i].lat, gp.trace[i].lon]);
+            } else {
+                for (i = lap.from; i <= lap.to; i++) {
+                    var p = P ? P[i] : [gp.trace[i].lat, gp.trace[i].lon];
+                    var q = i - lap.from;
+                    var push = r.off[q] * (k - 1);
+                    var md = gpMetresPerDeg(p[0]);
+                    pts.push([p[0] + r.ny[q] * push / md.la,
+                              p[1] + r.nx[q] * push / md.lo]);
+                }
+            }
+            gp.spreadCache[ck] = pts;
+            return pts;
+        }
+
+        /* Where a sample of a lap is DRAWN — on the spread line when Spread is
+           on, so a ghost dot never floats off the line it belongs to. */
+        function gpDrawnAtIn(lapIdx, idx) {
+            if (gpSpread() > 1 && gp.selLap >= 0 && lapIdx >= 0 && lapIdx !== gp.selLap) {
+                var lap = gp.traceLaps[lapIdx];
+                var pts = lap ? gpSpreadPts(lapIdx) : null;
+                if (pts && idx >= lap.from && idx <= lap.to) return pts[idx - lap.from];
+            }
+            return gpDrawnAt(idx);
+        }
+
+        /* How far apart the ticked laps ran, at every station of the analysed
+           lap. Built once per (laps, spine) — the dock asks for it twenty
+           times a second while the playhead runs, and the band is drawn from
+           the same numbers, so a scan per call would be paid twice over. */
+        function gpSpreadRange() {
+            var spine = gp.traceLaps[gp.selLap];
+            if (!spine) return null;
+            var shown = gpShownList();
+            var key = gp.selLap + "|" + shown.join(",") + "|" + (gp.pathKey || "");
+            if (gp.spreadKey === key) return gp.spreadRange;
+            var n = spine.to - spine.from + 1;
+            var lo = new Float32Array(n), hi = new Float32Array(n);
+            var seen = new Uint8Array(n), any = false, i;
+            shown.forEach(function (li) {
+                if (li === gp.selLap) return;
+                var r = gpOffsetVs(li, gp.selLap);
+                if (!r) return;
+                any = true;
+                for (var q = 0; q < r.off.length; q++) {
+                    var st = r.at[q] - spine.from;
+                    if (st < 0 || st >= n) continue;
+                    var v = r.off[q];
+                    if (!seen[st]) { lo[st] = v; hi[st] = v; seen[st] = 1; }
+                    else { if (v < lo[st]) lo[st] = v; if (v > hi[st]) hi[st] = v; }
+                }
+            });
+            gp.spreadKey = key;
+            if (!any) { gp.spreadRange = null; return null; }
+            /* The analysed lap is one of the lines, so the band must reach it:
+               a band that floated clear of the very lap it is drawn around
+               would read as though that lap were the outlier. */
+            for (i = 0; i < n; i++) {
+                if (!seen[i]) continue;
+                if (lo[i] > 0) lo[i] = 0;
+                if (hi[i] < 0) hi[i] = 0;
+            }
+            /* Carry the last known edges across stations no lap matched, so a
+               gap in the matching does not punch a notch in the shape. */
+            var last = -1;
+            for (i = 0; i < n; i++) {
+                if (seen[i]) { last = i; continue; }
+                if (last >= 0) { lo[i] = lo[last]; hi[i] = hi[last]; }
+            }
+            gp.spreadRange = { lo: lo, hi: hi, from: spine.from, n: n };
+            return gp.spreadRange;
+        }
+
+        /* The band between the outermost laps. Before reading any single line
+           you can see where your spread is a hand's width and where it is
+           half a car. */
+        function gpSpreadBand() {
+            var R = gpSpreadRange();
+            if (!R) return null;
+            var spine = gp.traceLaps[gp.selLap];
+            var n = R.n, lo = R.lo, hi = R.hi, i;
+            var k = gpSpread(), P = gpSmoothPath();
+            var outer = [], inner = [];
+            for (i = 0; i < n; i++) {
+                var idx = spine.from + i;
+                var p = P ? P[idx] : [gp.trace[idx].lat, gp.trace[idx].lon];
+                var i0 = Math.max(spine.from, idx - 1), i1 = Math.min(spine.to, idx + 1);
+                var a = P ? P[i0] : [gp.trace[i0].lat, gp.trace[i0].lon];
+                var b = P ? P[i1] : [gp.trace[i1].lat, gp.trace[i1].lon];
+                var md = gpMetresPerDeg(p[0]);
+                var dx = (b[1] - a[1]) * md.lo, dy = (b[0] - a[0]) * md.la;
+                var L = Math.sqrt(dx * dx + dy * dy);
+                if (L < 1e-6) { continue; }
+                var nEast = -dy / L, nNorth = dx / L;
+                outer.push([p[0] + nNorth * hi[i] * k / md.la, p[1] + nEast * hi[i] * k / md.lo]);
+                inner.push([p[0] + nNorth * lo[i] * k / md.la, p[1] + nEast * lo[i] * k / md.lo]);
+            }
+            if (outer.length < 3) return null;
+            return outer.concat(inner.reverse());
+        }
+
+        /* The real gap between the outermost laps at the playhead, in metres —
+           the number Spread is exaggerating. Printed, never scaled. */
+        function gpSpreadAt(idx) {
+            var R = gpSpreadRange();
+            if (!R) return null;
+            var st = idx - R.from;
+            if (st < 0 || st >= R.n) return null;
+            return R.hi[st] - R.lo[st];
+        }
+
         /* A lap that is not the subject is CONTEXT. Same hue, so the swatch
            beside it in the lap list still names it, but mixed most of the way
            to a neutral and thinned right down: the analysed lap has to be the
@@ -17238,18 +17501,31 @@
 
             var span = gpGScale();
 
+            /* The spread band goes down FIRST, under every line: it answers
+               "where am I inconsistent" at a glance, before you read any
+               individual lap. */
+            var spreading = gp.view === "session" && gpSpread() > 1 && gp.selLap >= 0;
+            if (spreading) {
+                var band = gpSpreadBand();
+                if (band) strands.push({ pts: band, fill: "rgba(124,192,255,0.13)", alpha: 1 });
+            }
+
             /* Every OTHER ticked lap (ADR-0025), full resolution and dull.
                Underneath everything else, so ticking a sixth lap can never
                bury the one being analysed. They keep a flat colour — two laps
                both coloured by braking would be two rainbows and no
-               comparison. */
+               comparison. (A flat colour is also what lets a lap be drawn
+               from its own displaced points: a per-sample colour function
+               indexes gp.trace, and a spread lap is no longer on it.) */
             if (gp.view === "session") {
                 gpShownList().forEach(function (li) {
                     if (li === gp.selLap || li === gp.cmpLap) return;
                     var lp = gp.traceLaps[li];
                     if (!lp) return;
-                    strands.push({ from: lp.from, to: lp.to, width: 2,
-                                   col: gpDullLapColour(li), alpha: 0.62 });
+                    var s = { width: 2, col: gpDullLapColour(li), alpha: 0.62 };
+                    if (spreading) s.pts = gpSpreadPts(li);
+                    else { s.from = lp.from; s.to = lp.to; }
+                    strands.push(s);
                 });
             }
 
@@ -17264,8 +17540,13 @@
                measured against. */
             if (gp.cmpLap >= 0 && gp.traceLaps[gp.cmpLap] && gp.cmpLap !== gp.selLap) {
                 var c = gp.traceLaps[gp.cmpLap];
-                strands.push({ from: c.from, to: c.to, width: 2.4, col: "#e9ebed",
-                               alpha: 0.92, dash: [7, 5] });
+                var cs = { width: 2.4, col: "#e9ebed", alpha: 0.92, dash: [7, 5] };
+                /* The reference fans out with the rest. It is the lap most
+                   likely to be sitting on top of the analysed one, so leaving
+                   it behind would hide the very comparison it exists for. */
+                if (spreading) cs.pts = gpSpreadPts(gp.cmpLap);
+                else { cs.from = c.from; cs.to = c.to; }
+                strands.push(cs);
             }
 
             var r = gpLapRange();
@@ -17474,7 +17755,7 @@
                 var li = parseInt(k, 10);
                 var lap = gp.traceLaps[li];
                 if (!lap) continue;
-                var gl = gpDrawnAt(gpLapIdxAtSecs(lap, t));
+                var gl = gpDrawnAtIn(li, gpLapIdxAtSecs(lap, t));
                 if (!gl) continue;
                 var m = gp.ghostMarks[k];
                 if (!m) {
@@ -19391,6 +19672,8 @@
             /* Follow is for the live car; the analysis views have a playhead. */
             if (fb) fb.style.display = view === "monitor" ? "" : "none";
             if (cb) { cb.style.display = view === "session" ? "" : "none"; gpSyncCamButtons(); }
+            var sb = document.getElementById("gpBtnSpread");
+            if (sb) { sb.style.display = view === "session" ? "" : "none"; gpSyncSpreadBtn(); }
             /* Map-collapse belonged to the old rail-docked layout. In the
                brand layout the map is structural — the button stays retired. */
             var mc = document.getElementById("gpBtnMapCollapse");
@@ -23457,7 +23740,8 @@
             gp.selLap = -1; gp.cmpLap = -1; gp.playIdx = 0; gp.tracePct = 0;
             gp.coach = null; gp.coachAll = false;
             gp.delta = null; gp.deltaKey = ""; gp.stripZoom = null;
-            gp.rate = null; gp.rateKey = ""; gp.lineOff = null; gp.lineKey = ""; gp.insightCursor = -1;
+            gp.rate = null; gp.rateKey = ""; gp.lineOff = null; gp.lineKey = ""; gp.offCache = null;
+            gp.spreadCache = null; gp.spreadKey = ""; gp.insightCursor = -1;
             gp.sectors = null; gp.secKey = "";
             gp.chan = null; gp.chanKey = "";
             if (!gp.cam) gp.cam = gpCamLoad();
