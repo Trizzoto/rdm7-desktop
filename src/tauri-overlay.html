@@ -8446,8 +8446,10 @@
          * ships pre-placed: a line you did not put there, that the readiness
          * card calls done, is worse than no line at all.
          *
-         * Mallala, Lakeside and Baskerville have no pit lane mapped in OSM and
-         * so get no hint; they behave as before. */
+         * Mallala, Lakeside and Baskerville have no pit lane mapped in OSM, so
+         * theirs is the midpoint of the circuit's LONGEST STRAIGHT instead —
+         * which is where a start/finish goes when nobody has told you where it
+         * goes. Weaker evidence, same flag, same instruction to check it. */
         var GP_STARTS = {
             bend_gt:       [-35.306746, 139.5112627, 3.9],   /* Pit Lane */
             bend_intl:     [-35.3067459, 139.5112621, 3.9],   /* Pit Lane */
@@ -8467,7 +8469,10 @@
             symmons:       [-41.658186, 147.2501296, 171.1],   /* Pit lane */
             wanneroo:      [-31.6631558, 115.7866337, 1.2],   /* Pit lane */
             hiddenvalley:  [-12.4492864, 130.9059494, 31.6],   /* Pit Lane */
-            bathurst:      [-33.43927, 149.5582409, 279.5]    /* Pit Straight */
+            bathurst:      [-33.43927, 149.5582409, 279.5],   /* Pit Straight */
+            mallala:       [-34.4161627, 138.5030594, 155.7],   /* longest straight (337 m) */
+            lakeside:      [-27.2289723, 152.9667471, 283.8],   /* longest straight (263 m) */
+            baskerville:   [-42.7451786, 147.2948404, 236.2]    /* longest straight (517 m) */
         };
 
         function gpTrackUid() {
@@ -8589,6 +8594,13 @@
                     var ring = GP_SHAPES[t.place].map(function (p) { return [p[0], p[1]]; });
                     t.outline = { pts: ring, nodes: ring.map(function (p) { return [p[0], p[1]]; }),
                                   closed: true, round: 0, src: "osm", at: Date.now() };
+                }
+                /* Same for the line: a circuit opened before the start/finish
+                   shipped has none, and nothing would ever have given it one.
+                   Only ever ADDS — a gate you placed is never touched. */
+                if (!t.start_finish && t.place) {
+                    var dg = gpDerivedGate(t.place);
+                    if (dg) t.start_finish = dg;
                 }
                 /* An outline arrives from an import file or a hand-edited
                    export as well as from this app, and it goes straight into
@@ -17908,6 +17920,9 @@
                 centre.on("drag", function (e) {
                     g.line.lat = e.target.getLatLng().lat;
                     g.line.lon = e.target.getLatLng().lng;
+                    /* You have just put it where you want it, so it is no
+                       longer the pit lane's guess and must stop saying so. */
+                    delete g.line.derived;
                     gpRefreshGate(g.key, "centre");
                 });
                 centre.on("dragend", function () {
@@ -17936,6 +17951,7 @@
                         var r = gpGateFromEnd(g.line, e.target.getLatLng().lat, e.target.getLatLng().lng);
                         g.line.heading = r.heading;
                         g.line.half_width_m = r.half_width_m;
+                        delete g.line.derived;          /* aimed by hand now */
                         gpRefreshGate(g.key, "end");
                     });
                     end.on("dragend", function () { gpTracksSave(); gpDrawEditor(); gpRenderInspector(); });
@@ -18496,6 +18512,22 @@
             }
         };
 
+        /* The start/finish a circuit arrives with, or null when nothing is
+           known about it. Taken from the pit lane (GP_STARTS), so it is on
+           the right straight pointing the right way and is NOT on the paint —
+           `derived` says so, the readiness card repeats it, and the flag
+           clears the moment you move the gate yourself.
+           This used to be a hint applied only when you pressed Place
+           start/finish, on the reasoning that a line you did not place is
+           worse than no line. That was wrong in practice: it left every
+           circuit looking unfinished, and pressing the button is not a
+           decision anyone was weighing — it is a step in the way. */
+        function gpDerivedGate(placeId) {
+            var s = GP_STARTS[placeId];
+            if (!s) return null;
+            return { lat: s[0], lon: s[1], heading: s[2], half_width_m: 15, derived: true };
+        }
+
         /* The record for a circuit, made the first time you open it. Keyed by
            place id and NOT by a fresh uid, because "open Winton" twice has to
            be the same Winton — a second copy is the thing the old two-list
@@ -18505,13 +18537,6 @@
                 return x.place === placeId;
             })[0];
             return t || null;
-        }
-
-        /* Has this circuit been opened yet? The list uses it to show which
-           entries carry your own work. */
-        function gpPlaceAdopted(placeId) {
-            var t = gpTrackForPlace(placeId);
-            return !!(t && (t.start_finish || (t.sectors || []).length || t.name !== gpPlaceName(placeId)));
         }
 
         function gpPlaceName(placeId) {
@@ -18542,6 +18567,7 @@
                 t.outline = { pts: ring, nodes: ring.map(function (p) { return [p[0], p[1]]; }),
                               closed: true, round: 0, src: "osm", at: Date.now() };
             }
+            if (place) t.start_finish = gpDerivedGate(place.id);
             gp.tracks.tracks.push(t);
             gpTracksSave();
             window.gpTrackSelect(t.id);
@@ -18998,14 +19024,38 @@
                    "<span class='tag'>" + gpEsc(o.tag || "") + "</span></button>";
         }
 
+        /* What "nearest" is measured from. The car when the puck has a fix —
+           at a circuit the one you want is the one you are standing on. With
+           no fix, the middle of the map you are looking at, which is the same
+           question asked a slower way. */
+        function gpNearFrom() {
+            var p = gpHerePos();
+            if (p) return p;
+            /* No fix: the track you have open says where you are far better
+               than the map does. The map is wherever it was last dragged, and
+               at startup that can be the other side of the world — which put
+               Jerez and Kyalami at the top of the list for a car in South
+               Australia. */
+            var t = gpActiveTrack();
+            var a = gpTrackAnchor(t);
+            if (a) return a;
+            if (gp.map && gp.map.getCenter) {
+                var c = gp.map.getCenter();
+                return [c.lat, c.lng];
+            }
+            return null;
+        }
+
         function gpBuildTrackRail(rail) {
             var live = gp.lap && gp.lap.has_track ? gp.lap.track_name : null;
-            var here = gpHerePos();
+            var here = gpNearFrom();
+            var fix = !!gpHerePos();
             var list = (gp.tracks && gp.tracks.tracks) || [];
             var custom = list.filter(function (t) { return !t.place; });
 
             var h = "<div class='ws-rail-title'>Track library" +
-                    (here ? " <span style='text-transform:none;letter-spacing:0'>· nearest first</span>" : "") +
+                    (here ? " <span style='text-transform:none;letter-spacing:0'>· nearest " +
+                            (fix ? "the car" : "first") + "</span>" : "") +
                     "</div>";
 
             h += "<div class='gp-rail-sub'>Your own</div>";
@@ -19041,7 +19091,7 @@
                    destroy this input and drop focus on every keystroke. */
                 var box = rail.querySelector("#gpPlaceList");
                 if (box) {
-                    box.innerHTML = gpPlaceListHtml(gpHerePos());
+                    box.innerHTML = gpPlaceListHtml(gpNearFrom());
                     gpBindPlaceButtons(box);
                 }
             });
@@ -19057,10 +19107,12 @@
             });
         }
 
-        /* Nearest first with a fix, listed order without one — same rule as
-           the library above. Unfiltered, the list is capped and says what it
-           is hiding; a search shows everything that matches. */
-        var GP_PLACE_CAP = 12;
+        /* Every circuit, nearest first. It used to show twelve and hide the
+           rest behind "103 more — type to search", which meant the answer to
+           "what have you got?" was a search box: you had to know the name of
+           the thing you were looking for before the list would admit to
+           having it. A hundred-odd rows is a scroll, and a scroll is cheaper
+           than a guess. */
 
         function gpPlaceMatches(filter) {
             var f = String(filter || "").trim().toLowerCase();
@@ -19082,23 +19134,23 @@
             var act = ((gp.tracks && gp.tracks.tracks) || []).filter(function (t) {
                 return t.id === (gp.tracks && gp.tracks.active);
             })[0];
-            var ordered = gpByDistance(matches, here);
-            /* A circuit you have put a line on is yours now, so it outranks
-               the rest — and it must never be the entry the cap hides. */
-            ordered.sort(function (a, b) {
-                var aa = gpPlaceAdopted(a.item.id) ? 0 : 1;
-                var bb = gpPlaceAdopted(b.item.id) ? 0 : 1;
-                return aa - bb;
-            });
-            var shown = filter ? ordered : ordered.slice(0, GP_PLACE_CAP);
+            /* Distance decides the order, and nothing else does. An earlier
+               pass floated the circuits you had adopted to the top; with the
+               whole list showing there is nothing to rescue them from, and
+               "why is Winton above the track I am parked at" is a worse
+               question than any it answered. */
+            var shown = gpByDistance(matches, here);
             var h = "";
             shown.forEach(function (e) {
                 var pl = e.item;
                 var rec = gpTrackForPlace(pl.id);
                 var shaped = !!(GP_SHAPES[pl.id] ||
                                 (rec && rec.outline && rec.outline.pts && rec.outline.pts.length > 1));
-                var tag = rec && rec.start_finish ? ((rec.sectors || []).length + 1) + " sec"
-                        : (e.distM !== null ? gpFmtDistance(e.distM) : pl.where);
+                /* Distance is the tag, because distance is now the order —
+                   a column that does not explain the sort is just decoration.
+                   Sector count only when there is no position to show. */
+                var tag = e.distM !== null ? gpFmtDistance(e.distM)
+                        : (rec && rec.start_finish ? ((rec.sectors || []).length + 1) + " sec" : pl.where);
                 /* Your name for it wins once you have one: renaming a circuit
                    and then not finding that name in the list is the list
                    lying about what it holds. */
@@ -19111,9 +19163,6 @@
                            (rec && rec.start_finish ? " — your timing line is on it" : "")
                 });
             });
-            if (!filter && ordered.length > shown.length)
-                h += "<div class='gp-place-more'>" + (ordered.length - shown.length) +
-                     " more — type to search</div>";
             return h;
         }
         function gpSelect(id) {
@@ -21209,10 +21258,19 @@
                                 ? "<b>Draw the shape</b> — take it from the lap you have loaded, or trace it by hand"
                                 : "<b>Trace the shape</b> — click your way round the track on the imagery"),
                     olNow ? null : (gp.trace && gp.trace.length ? "gpOutlineFromLap()" : "gpOutlineTrace(true)"));
-                h += step(3, !!t.start_finish,
-                    t.start_finish ? "Timing line placed"
-                                   : "<b>Place the " + (trial ? "start and finish gates" : "start/finish line") +
-                                     "</b> on the real paint — zoom right in on the tarmac first",
+                /* A line that came from the pit lane is NOT a finished step.
+                   It is on the right straight and pointing the right way, and
+                   it is not on the paint — so the card stops short of ticking
+                   it and says what to do about it. */
+                var derived = !!(t.start_finish && t.start_finish.derived);
+                h += step(3, !!t.start_finish && !derived,
+                    !t.start_finish
+                        ? "<b>Place the " + (trial ? "start and finish gates" : "start/finish line") +
+                          "</b> on the real paint — zoom right in on the tarmac first"
+                        : derived
+                            ? "<b>Check the timing line</b> — it came from the pit lane, not the paint. " +
+                              "Zoom right in and drag it onto the real one."
+                            : "Timing line placed",
                     t.start_finish ? null : "gpPlaceGate('sf')");
                 h += step(4, sent,
                     sent ? "Sent to the puck"
