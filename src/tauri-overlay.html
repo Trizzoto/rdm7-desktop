@@ -16048,6 +16048,35 @@
            to share one message ("place the line"), and four of them were not
            fixed by placing the line. Diagnose from the same crossing scan the
            splitter ran, so the explanation cannot disagree with the result. */
+        /* Which OTHER track in the library has a line this recording actually
+           goes through. "Your line is somewhere else" is true and useless
+           when the answer — the layout you were really on — is sitting in the
+           same list. Distance to the gate rather than a full re-split: this
+           only runs when there are no laps, and it only has to be right
+           enough to name the track. */
+        function gpTrackCrossedBy(t, rows) {
+            var g = t && t.start_finish;
+            if (!g || !rows || !rows.length) return false;
+            var reach = Math.max(gpN(g.half_width_m) || 15, 20);
+            for (var i = 0; i < rows.length; i += 2) {
+                if (gpMetres(g, rows[i]) <= reach) return true;
+            }
+            return false;
+        }
+
+        function gpElsewhereSays() {
+            var rows = gp.trace || [];
+            var act = gp.tracks && gp.tracks.active;
+            var hits = ((gp.tracks && gp.tracks.tracks) || []).filter(function (t) {
+                return t.id !== act && gpTrackCrossedBy(t, rows);
+            });
+            if (!hits.length) return "";
+            var names = hits.slice(0, 3).map(function (t) { return gpEsc(t.name); });
+            return " The car DID go through the line on " + names.join(", ") +
+                   (hits.length > 3 ? " and " + (hits.length - 3) + " more" : "") +
+                   " — open Tracks and pick " + (hits.length === 1 ? "it" : "one") + " instead.";
+        }
+
         function gpNoLapsWhy() {
             var trk = gpActiveTrack();
             var word = gpRunWord();
@@ -16063,10 +16092,13 @@
 
             var m = Math.round(S.nearestM);
             if (!S.samplesInBand) {
+                var els = gpElsewhereSays();
                 if (S.nearestM > 500)
                     return "The start/finish line is " + (m >= 1000 ? (m / 1000).toFixed(1) + " km" : m + " m") +
-                           " from anywhere the car went — it is placed on a different part of the map. Open Tracks and drag it onto the track you drove.";
-                return "The car passed about " + m + " m from the end of the start/finish line but never through it. Open Tracks and drag the line onto the driven part of the track, or make it wider.";
+                           " from anywhere the car went — it is placed on a different part of the map." +
+                           (els || " Open Tracks and drag it onto the track you drove.");
+                return "The car passed about " + m + " m from the end of the start/finish line but never through it." +
+                       (els || " Open Tracks and drag the line onto the driven part of the track, or make it wider.");
             }
             if (!S.hits.length)
                 return "The car reached the start/finish line but no crossing registered — likely clipping the very end of it. Widen the line a little in Tracks.";
