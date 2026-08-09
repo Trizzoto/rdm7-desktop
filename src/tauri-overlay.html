@@ -7818,7 +7818,7 @@
             { id: "smp_amaroo", name: "SMP Amaroo South", where: "NSW · AUS", center: [-33.807250, 150.872991], zoom: 16 },
             { id: "winton", name: "Winton National", where: "VIC · AUS", center: [-36.518502, 146.087158], zoom: 16 },
             { id: "winton_club", name: "Winton Club", where: "VIC · AUS", center: [-36.516805, 146.087131], zoom: 16 },
-            { id: "bathurst", name: "Mount Panorama (Bathurst)", where: "NSW · AUS", center: [-33.4361, 149.5544], zoom: 14 },
+            { id: "bathurst", name: "Mount Panorama (Bathurst)", where: "NSW · AUS", center: [-33.448691, 149.553936], zoom: 15 },
             { id: "sandown", name: "Sandown", where: "VIC · AUS", center: [-37.9497, 145.1308], zoom: 15 },
             { id: "calder", name: "Calder Park National", where: "VIC · AUS", center: [-37.672231, 144.753644], zoom: 16 },
             { id: "lakeside", name: "Lakeside", where: "QLD · AUS", center: [-27.228207, 152.964871], zoom: 16 },
@@ -8382,6 +8382,40 @@
                 [-12.4475484,130.9073814],[-12.4474001,130.9072407],[-12.4472125,130.9071923],[-12.4467152,130.9071224],
                 [-12.4456068,130.9068907],[-12.4454932,130.9068104],[-12.4454564,130.906734],[-12.4454501,130.9066388]
             ]
+,
+            /* Mount Panorama (Bathurst) — 6.19 km measured, 6.21 km published. Assembled from the
+               PUBLIC ROADS: Mount Panorama is a street circuit and OSM tags no
+               raceway here at all. The lap is Hell Corner, Mountain Straight,
+               Griffins Bend, The Cutting, Reid Park, McPhillamy Park, Sulman
+               Park, Brocks Skyline, The Esses, Forrest's Elbow, Conrod
+               Straight, The Chase, Murrays Corner, Pit Straight — every corner
+               its own named way, which is why chaining only the STRAIGHTS came
+               up 900 m short. */
+            bathurst: [
+                [-33.4396304,149.5608337],[-33.4389612,149.5560193],[-33.4389811,149.5558858],[-33.4390717,149.5557355],
+                [-33.4391418,149.5556856],[-33.4392561,149.5556564],[-33.4485948,149.5537217],[-33.4487864,149.5536375],
+                [-33.448925,149.5534943],[-33.4490434,149.5532619],[-33.4490839,149.5530646],[-33.4490749,149.5528214],
+                [-33.4489697,149.5524183],[-33.4480577,149.5504435],[-33.4478302,149.5498759],[-33.4478117,149.5496892],
+                [-33.4478413,149.549363],[-33.4479378,149.5489874],[-33.4480015,149.5488212],[-33.4480688,149.5487398],
+                [-33.4481504,149.548698],[-33.4482615,149.5486856],[-33.4483398,149.5487071],[-33.4484174,149.5487595],
+                [-33.44901,149.5493597],[-33.449148,149.5494433],[-33.4493621,149.549508],[-33.4495925,149.5495036],
+                [-33.4499024,149.5494545],[-33.4505617,149.5492905],[-33.4507217,149.5491974],[-33.4508646,149.5490413],
+                [-33.4509549,149.5488752],[-33.4511617,149.5483573],[-33.4512536,149.5481978],[-33.4516744,149.5476777],
+                [-33.4520104,149.5473073],[-33.4521658,149.5471664],[-33.4523437,149.5470603],[-33.4529827,149.5467942],
+                [-33.4531865,149.5467603],[-33.4533833,149.5467725],[-33.4535675,149.5468246],[-33.4537568,149.5469182],
+                [-33.4551684,149.5479695],[-33.4553693,149.5481788],[-33.4554761,149.5483573],[-33.4556198,149.5486806],
+                [-33.4556621,149.5488994],[-33.4557182,149.551543],[-33.4557728,149.5518271],[-33.4559659,149.5522286],
+                [-33.4560218,149.5524217],[-33.4560306,149.5526032],[-33.4559831,149.5529869],[-33.4560086,149.5531316],
+                [-33.4560945,149.5532909],[-33.4562097,149.5534284],[-33.4564356,149.5535467],[-33.4564896,149.5536085],
+                [-33.4565303,149.5537626],[-33.4565346,149.5540793],[-33.4565743,149.5542123],[-33.4572126,149.5550735],
+                [-33.4574997,149.5557944],[-33.457595,149.5559109],[-33.4577521,149.5560372],[-33.4582781,149.5563489],
+                [-33.458369,149.5564532],[-33.4584167,149.556584],[-33.45842,149.5566911],[-33.4583847,149.5568137],
+                [-33.4582304,149.556988],[-33.4574085,149.5576166],[-33.456969,149.5579102],[-33.4567115,149.5580267],
+                [-33.4543275,149.5585013],[-33.4470002,149.5598282],[-33.4468223,149.5598955],[-33.4448798,149.5610027],
+                [-33.4447009,149.5610732],[-33.4446194,149.5610694],[-33.4445161,149.5610094],[-33.4441343,149.560598],
+                [-33.4438995,149.5604683],[-33.4437007,149.5604288],[-33.442719,149.5605865],[-33.4398733,149.5611118],
+                [-33.4397945,149.5610976],[-33.4397289,149.5610486],[-33.4396619,149.5609477],[-33.4396304,149.5608337]
+            ]
         };
 
         /* Circuits that gained configurations gained longer names with them,
@@ -8392,6 +8426,48 @@
             "Winton": "winton",
             "Sydney Motorsport Park": "smp",
             "Calder Park": "calder"
+        };
+
+        /* ---- where the line actually is ------------------------------------
+         * Placing the start/finish drops it at the middle of the view and snaps
+         * it to the shape. On a circuit you have just opened, the middle of the
+         * view is the INFIELD — so it snapped to whatever tarmac happened to be
+         * nearest the centre of the paddock: a quarter of the way round
+         * Bathurst, 61% of the way round Phillip Island. On the line, in the
+         * wrong place, every time.
+         *
+         * So: [lat, lon, heading] per circuit, taken from the PIT LANE. Every
+         * circuit ever built puts its start/finish on the straight the pits run
+         * along, so projecting the pit lane's midpoint onto the ring lands on
+         * the right straight, pointing the right way.
+         *
+         * It is a good starting point and NOT the painted line — nudge it. Which
+         * is why this is a hint used when a gate is placed, and not a gate that
+         * ships pre-placed: a line you did not put there, that the readiness
+         * card calls done, is worse than no line at all.
+         *
+         * Mallala, Lakeside and Baskerville have no pit lane mapped in OSM and
+         * so get no hint; they behave as before. */
+        var GP_STARTS = {
+            bend_gt:       [-35.306746, 139.5112627, 3.9],   /* Pit Lane */
+            bend_intl:     [-35.3067459, 139.5112621, 3.9],   /* Pit Lane */
+            bend_west:     [-35.306746, 139.5112634, 3.9],   /* Pit Lane */
+            bend_westplus: [-35.306746, 139.5112634, 3.9],   /* Pit Lane */
+            phillip:       [-38.502307, 145.2319802, 161.2],   /* Pit lane */
+            smp:           [-33.8033537, 150.8676736, 262.8],   /* Pit Lane */
+            smp_brabham:   [-33.8033537, 150.8676736, 262.8],   /* Pit Lane */
+            smp_druitt:    [-33.8035303, 150.8677004, 266.1],   /* Pit Lane */
+            smp_amaroo:    [-33.8079782, 150.8699002, 154.6],   /* Pit Lane */
+            winton:        [-36.5214046, 146.0894478, 322.4],   /* Pit Lane */
+            winton_club:   [-36.518492, 146.0872922, 243.0],   /* Pit Lane */
+            calder:        [-37.6684322, 144.7526501, 159.8],   /* Pit Lane */
+            qldraceway:    [-27.688696, 152.6546618, 181.0],   /* Pit Lane */
+            qr_sportsman:  [-27.688696, 152.6546618, 181.0],   /* Pit Lane */
+            qr_clubman:    [-27.688696, 152.6546618, 181.0],   /* Pit Lane */
+            symmons:       [-41.658186, 147.2501296, 171.1],   /* Pit lane */
+            wanneroo:      [-31.6631558, 115.7866337, 1.2],   /* Pit lane */
+            hiddenvalley:  [-12.4492864, 130.9059494, 31.6],   /* Pit Lane */
+            bathurst:      [-33.43927, 149.5582409, 279.5]    /* Pit Straight */
         };
 
         function gpTrackUid() {
@@ -18531,6 +18607,27 @@
             return true;
         }
 
+        /* How far a point is from the drawn shape. Null when there is no shape
+           — which is not the same as "far", and the caller has to tell them
+           apart. */
+        function gpOutlineDistM(t, lat, lon) {
+            var pts = t && t.outline && t.outline.pts;
+            if (!pts || pts.length < 2) return null;
+            var md = gpMetresPerDeg(pts[0][0]);
+            var px = lon * md.lo, py = lat * md.la, bd = Infinity;
+            for (var i = 0; i + 1 < pts.length; i++) {
+                var ax = pts[i][1] * md.lo, ay = pts[i][0] * md.la;
+                var cx = pts[i + 1][1] * md.lo, cy = pts[i + 1][0] * md.la;
+                var vx = cx - ax, vy = cy - ay, L2 = vx * vx + vy * vy;
+                if (L2 < 1e-6) continue;
+                var u = Math.max(0, Math.min(1, ((px - ax) * vx + (py - ay) * vy) / L2));
+                var qx = ax + vx * u, qy = ay + vy * u;
+                var d = Math.sqrt((px - qx) * (px - qx) + (py - qy) * (py - qy));
+                if (d < bd) bd = d;
+            }
+            return bd === Infinity ? null : bd;
+        }
+
         /* Drop a gate at the middle of the current view — the "I'm looking at
            the line right now" gesture. Heading defaults along the map's up. */
         window.gpPlaceGate = function (what) {
@@ -18538,6 +18635,20 @@
             if (!t || !gp.map) return;
             var c = gp.map.getCenter();
             var line = { lat: c.lat, lon: c.lng, heading: 0, half_width_m: 15 };
+            /* Framing the whole circuit means the centre of the view is the
+               infield, and "here" is not an answer — start from the pit
+               straight instead. ZOOM is what says which you are doing: still
+               at the circuit's own zoom, you are looking at all of it; zoomed
+               in past that, you are looking at a piece of tarmac and your
+               view wins.
+               (Distance from the shape is NOT the test. Mount Panorama is a
+               long thin loop up a mountain, so the centre of its bounding box
+               is 25 m from the road — by that measure the infield looked like
+               the track, and the hint never fired.) */
+            var hint = (what === "sf" && t.place) ? GP_STARTS[t.place] : null;
+            if (hint && gp.map.getZoom() <= (gpN(t.zoom) === null ? 15 : t.zoom)) {
+                line.lat = hint[0]; line.lon = hint[1]; line.heading = hint[2];
+            }
             var snapped = gpSnapGate(line, 600);
             if (what === "sf") {
                 t.start_finish = line;
