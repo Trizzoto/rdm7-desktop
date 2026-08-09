@@ -2616,7 +2616,36 @@
         }
         #gpWorkspace .gpb-phead {
             display: flex; align-items: center; gap: 6px;
-            padding: 4px 5px 4px 9px; border-bottom: 1px solid var(--gpb-div); flex: none;
+            padding: 4px 5px 4px 5px; border-bottom: 1px solid var(--gpb-div); flex: none;
+            cursor: grab; user-select: none; touch-action: none;
+        }
+        #gpWorkspace .gpb-phead:active { cursor: grabbing; }
+        /* The header IS the handle, but a surface you can drag has to look
+           like one — six dots is the one idiom nobody has to be taught. */
+        #gpWorkspace .gpb-grip {
+            flex: none; width: 10px; height: 16px; opacity: 0.3;
+            background-image: radial-gradient(circle, var(--gpb-ink) 1px, transparent 1px);
+            background-size: 4px 5px; background-position: 1px 2px;
+        }
+        #gpWorkspace .gpb-phead:hover .gpb-grip { opacity: 0.65; }
+        /* Controls in the header keep their own cursor and their own clicks. */
+        #gpWorkspace .gpb-phead select, #gpWorkspace .gpb-phead button { cursor: pointer; }
+        #gpWorkspace .gpb-panel.dragsrc { opacity: 0.4; }
+        #gpWorkspace .gpb-drop {
+            position: absolute; z-index: 900; pointer-events: none;
+            background: rgba(210,35,42,0.16); border: 2px solid var(--gpb-red);
+            display: flex; align-items: flex-start; justify-content: center;
+            padding-top: 8px;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 12px;
+            letter-spacing: 0.12em; text-transform: uppercase; color: var(--gpb-red-800);
+        }
+        #gpWorkspace .gpb-dragghost {
+            position: fixed; z-index: 16050; pointer-events: none;
+            background: var(--gpb-surface); border: 1px solid var(--gpb-red);
+            box-shadow: 0 10px 26px rgba(0,0,0,0.28); padding: 5px 12px;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 13px;
+            letter-spacing: 0.07em; text-transform: uppercase; color: var(--gpb-ink);
+            white-space: nowrap;
         }
         #gpWorkspace .gpb-phead select.ty {
             font-family: var(--gpb-head); font-weight: 600; font-size: 13.5px;
@@ -10476,6 +10505,60 @@
             });
         };
 
+        /* ---- moving a panel ------------------------------------------------
+           A panel is a leaf holding a type, so moving one is moving its type:
+           swapping two is an exchange, and dropping one on another's edge is
+           a removal followed by a split. Doing the removal FIRST matters — a
+           drop inside the source's own parent would otherwise see the source
+           twice and place the copy against a stale index. */
+        window.gpPanelSwap = function (a, b) {
+            if (a === b) return;
+            gpGridMutate(function (g) {
+                var A = gpNodeFind(g.root, a), B = gpNodeFind(g.root, b);
+                if (!A || !B || A.node.kids || B.node.kids) return;
+                var t = A.node.type;
+                A.node.type = B.node.type;
+                B.node.type = t;
+                g.preset = null;
+            });
+        };
+
+        window.gpPanelMoveTo = function (src, dst, side) {
+            if (src === dst) return;
+            gpGridMutate(function (g) {
+                var S = gpNodeFind(g.root, src);
+                if (!S || S.node.kids || !S.parent) return;
+                var type = S.node.type;
+                var p = S.parent, freed = gpNum(p.sz[S.idx], 1);
+                p.kids.splice(S.idx, 1);
+                p.sz.splice(S.idx, 1);
+                /* Hand the space to a neighbour, as closing does. */
+                var to = Math.min(S.idx, p.sz.length - 1);
+                if (to >= 0) p.sz[to] += freed;
+                gpNodeCollapse(g.root);
+
+                var D = gpNodeFind(g.root, dst);
+                if (!D) return;
+                var dir = (side === "left" || side === "right") ? "row" : "col";
+                var before = (side === "left" || side === "top");
+                var leaf = { id: gpNodeId(), type: type };
+                var dp = D.parent;
+                if (dp && dp.dir === dir) {
+                    /* Already a spine running that way: become a sibling, so
+                       the spine stays flat and the cascade drag keeps working. */
+                    var was = gpNum(dp.sz[D.idx], 1), half = was / 2;
+                    dp.sz[D.idx] = half;
+                    dp.sz.splice(D.idx + (before ? 0 : 1), 0, half);
+                    dp.kids.splice(D.idx + (before ? 0 : 1), 0, leaf);
+                } else {
+                    var split = { id: gpNodeId(), dir: dir, sz: [1, 1],
+                                  kids: before ? [leaf, D.node] : [D.node, leaf] };
+                    if (!dp) g.root = split; else dp.kids[D.idx] = split;
+                }
+                g.preset = null;
+            });
+        };
+
         window.gpPanelClose = function (id) {
             gp.splitMenu = null;
             gpGridMutate(function (g) {
@@ -10729,6 +10812,140 @@
             window.addEventListener("pointermove", move);
             window.addEventListener("pointerup", up);
         }
+        /* ---- dragging a panel somewhere else -------------------------------
+           Pick a panel up by its header and drop it on another one. The middle
+           of the target swaps the two; an edge puts the panel on that side of
+           it. Two gestures, and between them every rearrangement the mosaic
+           can hold — including the one that has no other route, moving a panel
+           out of one row and into another.
+
+           Pointer events rather than HTML5 drag-and-drop: the panels host a
+           Leaflet map and two canvases, and the native machinery does not
+           survive contact with either. It is also the same input model the
+           dividers already use.
+
+           Nothing happens until the pointer has moved 5 px, so a click on the
+           header — which is also where the type picker and the close button
+           live — is still a click. */
+        var GP_DRAG_SLOP = 5;
+
+        function gpDragPanel(id, ev) {
+            if (ev.button) return;
+            if (ev.target.closest && ev.target.closest("select,button,.gpb-splitmenu")) return;
+            var host = document.getElementById("gpGrid");
+            if (!host) return;
+            var g = gpGrid();
+            var me = gpNodeFind(g.root, id);
+            if (!me || me.node.kids) return;
+            if (gpNodeLeaves(g.root).length < 2) return;   /* nowhere to go */
+
+            var x0 = ev.clientX, y0 = ev.clientY, live = false;
+            var srcEl = host.querySelector("[data-gp-panel='" + id + "']");
+            var ghost = null, drop = null, zone = null, scroller = null;
+            var label = (GP_PTYPES.filter(function (t) { return t.id === me.node.type; })[0] || {}).label || "Panel";
+
+            /* Which panel is under the pointer, and which part of it. The
+               middle fifth is the swap; past that, whichever edge the pointer
+               is closer to along the axis it has strayed furthest on. */
+            var zoneAt = function (e) {
+                var els = host.querySelectorAll("[data-gp-panel]");
+                for (var i = 0; i < els.length; i++) {
+                    var r = els[i].getBoundingClientRect();
+                    if (e.clientX < r.left || e.clientX > r.right ||
+                        e.clientY < r.top || e.clientY > r.bottom) continue;
+                    var tid = els[i].getAttribute("data-gp-panel");
+                    if (tid === id) return { el: els[i], id: tid, side: null };
+                    var fx = (e.clientX - r.left) / (r.width || 1);
+                    var fy = (e.clientY - r.top) / (r.height || 1);
+                    var dx = Math.abs(fx - 0.5), dy = Math.abs(fy - 0.5), s;
+                    if (dx < 0.22 && dy < 0.22) s = "swap";
+                    else if (dx > dy) s = fx < 0.5 ? "left" : "right";
+                    else s = fy < 0.5 ? "top" : "bottom";
+                    return { el: els[i], id: tid, side: s };
+                }
+                return null;
+            };
+
+            var paint = function (z) {
+                if (drop) { drop.parentNode.removeChild(drop); drop = null; }
+                if (!z || !z.side) return;
+                drop = document.createElement("div");
+                drop.className = "gpb-drop";
+                var box = { swap:   "inset:0",
+                            left:   "left:0;top:0;width:50%;height:100%",
+                            right:  "left:50%;top:0;width:50%;height:100%",
+                            top:    "left:0;top:0;width:100%;height:50%",
+                            bottom: "left:0;top:50%;width:100%;height:50%" }[z.side];
+                drop.setAttribute("style", box);
+                drop.textContent = z.side === "swap" ? "Swap" : "Move here";
+                z.el.appendChild(drop);
+            };
+
+            var move = function (e) {
+                if (!live) {
+                    if (Math.abs(e.clientX - x0) < GP_DRAG_SLOP &&
+                        Math.abs(e.clientY - y0) < GP_DRAG_SLOP) return;
+                    live = true;
+                    if (srcEl) srcEl.classList.add("dragsrc");
+                    ghost = document.createElement("div");
+                    ghost.className = "gpb-dragghost";
+                    ghost.textContent = label;
+                    document.body.appendChild(ghost);
+                }
+                e.preventDefault();
+                ghost.style.left = (e.clientX + 14) + "px";
+                ghost.style.top = (e.clientY + 14) + "px";
+                /* A grid taller than its port has the drop target off screen —
+                   which is exactly the case this gesture exists for. Nudge it
+                   while the pointer is held near an edge. */
+                var hr = host.getBoundingClientRect();
+                var near = e.clientY - hr.top < 44 ? -18
+                         : hr.bottom - e.clientY < 44 ? 18 : 0;
+                if (near && !scroller) {
+                    scroller = window.setInterval(function () { host.scrollTop += near; }, 16);
+                } else if (near && scroller) {
+                    window.clearInterval(scroller);
+                    scroller = window.setInterval(function () { host.scrollTop += near; }, 16);
+                } else if (!near && scroller) {
+                    window.clearInterval(scroller); scroller = null;
+                }
+                zone = zoneAt(e);
+                paint(zone);
+            };
+
+            var stop = function (apply) {
+                window.removeEventListener("pointermove", move);
+                window.removeEventListener("pointerup", up);
+                window.removeEventListener("pointercancel", cancel);
+                window.removeEventListener("blur", cancel);
+                window.removeEventListener("keydown", key, true);
+                if (scroller) { window.clearInterval(scroller); scroller = null; }
+                if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
+                if (drop && drop.parentNode) drop.parentNode.removeChild(drop);
+                if (srcEl) srcEl.classList.remove("dragsrc");
+                if (!apply || !live || !zone || !zone.side) return;
+                if (zone.side === "swap") window.gpPanelSwap(id, zone.id);
+                else window.gpPanelMoveTo(id, zone.id, zone.side);
+            };
+            var up = function () { stop(true); };
+            /* Release the button outside the window, or alt-tab away, and no
+               pointerup ever arrives — which would leave the edge-scroll timer
+               running and the grid creeping on its own. Both of those end the
+               drag as a cancel. */
+            var cancel = function () { stop(false); };
+            var key = function (e) {
+                if (e.key !== "Escape") return;
+                e.stopPropagation();
+                stop(false);
+            };
+
+            window.addEventListener("pointermove", move);
+            window.addEventListener("pointerup", up);
+            window.addEventListener("pointercancel", cancel);
+            window.addEventListener("blur", cancel);
+            window.addEventListener("keydown", key, true);
+        }
+
         /* Measure, then write — in that order, always. gpGridLayout is the
            only thing that changes the numbers; this is the only thing that
            puts them on the DOM. Doing it this way rather than rebuilding the
@@ -10878,7 +11095,9 @@
                 return "<option value='" + t.id + "'" + (t.id === p.type ? " selected" : "") + ">" +
                        gpEsc(t.label) + "</option>";
             }).join("");
-            var h = "<div class='gpb-phead'>" +
+            var h = "<div class='gpb-phead' data-gp-pdrag='" + p.id + "' " +
+                "title='Drag to move this panel — drop on the middle of another to swap them, " +
+                "or on an edge to put it there'><i class='gpb-grip'></i>" +
                 "<select class='ty' title='What this panel shows' data-gp-ptype='" + p.id + "'>" + opts + "</select>";
             /* The controls that used to sit in the shared playbar belong to
                the panel they act on — colouring the line is a MAP setting,
@@ -11226,6 +11445,10 @@
             Array.prototype.forEach.call(host.querySelectorAll("[data-gp-hs]"), function (el) {
                 var p = (el.getAttribute("data-gp-hs") || "").split(":");
                 el.addEventListener("pointerdown", function (e) { gpDragSplit(p[0], +p[1], e); });
+            });
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-pdrag]"), function (el) {
+                var pid = el.getAttribute("data-gp-pdrag");
+                el.addEventListener("pointerdown", function (e) { gpDragPanel(pid, e); });
             });
             Array.prototype.forEach.call(host.querySelectorAll("[data-gp-ghost]"), function (b) {
                 b.addEventListener("click", function (e) {

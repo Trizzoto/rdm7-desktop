@@ -56,6 +56,15 @@
 > **Split top/bottom**. A `TOWER` preset ships the arrangement that used to
 > be impossible. v1 arrangements and v1 saved layouts convert on read.
 >
+> *Panels could be re-typed but not re-placed.* Getting the video from the
+> bottom row to the top meant changing two dropdowns and hoping. Panels are
+> dragged by their header now: drop on the middle of another to swap the two,
+> or on an edge to put the panel on that side of it — which is the only route
+> to moving a panel out of one row and into another. Held near the top or
+> bottom of a scrolling grid, the drag scrolls it, since the destination is
+> exactly what may be off screen. Escape, a lost pointer or a window blur all
+> cancel.
+>
 > *There was nowhere to put a fifth panel.* Panels now have a floor
 > (`GP_ROW_MIN`), a row is never shorter than what it holds, and the grid is
 > its own scrollport. **When adding a row would put something below the
