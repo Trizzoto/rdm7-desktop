@@ -2370,8 +2370,9 @@
            ================================================================ */
         /* context strip under the brand bar */
         #gpWorkspace .gpb-ctx {
-            display: flex; align-items: baseline; gap: 14px; padding: 12px 16px 10px;
+            display: flex; align-items: center; gap: 12px; padding: 8px 14px;
             border-bottom: 1px solid var(--gpb-div); flex-shrink: 0; flex-wrap: wrap;
+            position: relative;
         }
         #gpWorkspace .gpb-ctx h3 {
             margin: 0; font-family: var(--gpb-head); font-weight: 600; font-size: 22px;
@@ -2526,6 +2527,175 @@
         #gpWorkspace .gpb-curcard .bar span { width: 24px; }
         #gpWorkspace .gpb-curcard .bar i { flex: 1; height: 4px; background: var(--gpb-n200); display: block; }
         #gpWorkspace .gpb-curcard .bar i b { display: block; height: 100%; background: var(--gpb-ink); }
+
+        /* ================================================================
+           Analyse: the panel grid (ADR-0025)
+           ================================================================ */
+        #gpWorkspace .gpb-grid {
+            flex: 1; min-height: 0; display: flex; flex-direction: column;
+            padding: var(--gpb-pg, 10px) 14px;
+        }
+        #gpWorkspace .gpb-row { display: flex; min-height: 0; }
+        #gpWorkspace .gpb-panel {
+            min-width: 0; position: relative; display: flex; flex-direction: column;
+            border: 1px solid var(--gpb-div); background: var(--gpb-surface);
+        }
+        #gpWorkspace .gpb-phead {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 5px 4px 9px; border-bottom: 1px solid var(--gpb-div); flex: none;
+        }
+        #gpWorkspace .gpb-phead select.ty {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 13.5px;
+            letter-spacing: 0.06em; text-transform: uppercase; color: var(--gpb-ink);
+            background: transparent; border: none; padding: 2px 0; cursor: pointer; max-width: 62%;
+        }
+        #gpWorkspace .gpb-phead select.lap {
+            font-size: 11.5px; color: var(--gpb-ink); background: transparent;
+            border: 1px solid var(--gpb-div); padding: 1px 4px; cursor: pointer;
+        }
+        #gpWorkspace .gpb-phead .sp { flex: 1; }
+        #gpWorkspace .gpb-picon {
+            width: 24px; height: 24px; display: grid; place-items: center;
+            background: transparent; border: none; cursor: pointer;
+            color: var(--gpb-ink); opacity: 0.5;
+        }
+        #gpWorkspace .gpb-picon:hover { opacity: 1; background: rgba(29,31,32,0.08); }
+        #gpWorkspace .gpb-pbody { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+        #gpWorkspace .gpb-pscroll { position: absolute; inset: 0; overflow: auto; }
+        /* resize handles */
+        #gpWorkspace .gpb-hcol {
+            flex: none; width: var(--gpb-pg, 10px); min-width: 7px; cursor: col-resize;
+            display: grid; place-items: center; touch-action: none;
+        }
+        #gpWorkspace .gpb-hrow {
+            flex: none; height: var(--gpb-pg, 10px); min-height: 7px; cursor: row-resize;
+            display: grid; place-items: center; touch-action: none;
+        }
+        #gpWorkspace .gpb-hcol i { width: 1px; height: 60%; background: var(--gpb-div); display: block; }
+        #gpWorkspace .gpb-hrow i { height: 1px; width: 96px; background: var(--gpb-div); display: block; }
+        #gpWorkspace .gpb-hcol:hover, #gpWorkspace .gpb-hrow:hover { background: var(--gpb-red-100); }
+        #gpWorkspace .gpb-addp {
+            flex: none; width: 24px; margin-left: 6px; border: 1px dashed var(--gpb-div);
+            background: transparent; cursor: pointer; color: var(--gpb-ink); opacity: 0.45; font-size: 17px;
+        }
+        #gpWorkspace .gpb-addp:hover { opacity: 1; border-color: var(--gpb-red); color: var(--gpb-red-700); }
+        #gpWorkspace .gpb-addrow {
+            border: 1px dashed var(--gpb-div); background: transparent; cursor: pointer;
+            color: var(--gpb-muted); font-family: var(--gpb-head); font-weight: 600;
+            font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase;
+            padding: 5px; margin-top: var(--gpb-pg, 10px); flex: none;
+        }
+        #gpWorkspace .gpb-addrow:hover { border-color: var(--gpb-red); color: var(--gpb-red-700); }
+
+        /* panels that host a real element (map / rack / video) */
+        #gpWorkspace .gpb-panel.hosting .gpb-pbody { display: flex; }
+        #gpWorkspace .gpb-panel.hosting .gp-viewer { flex: 1; min-height: 0; margin: 0; }
+        #gpWorkspace .gpb-panel.hosting .gp-mapwrap {
+            border: none; display: flex; flex-direction: column; flex: 1; min-height: 0;
+        }
+        #gpWorkspace .gpb-panel.hosting #gpMap { flex: 1; height: auto; min-height: 80px; }
+        #gpWorkspace .gpb-panel.hosting .gp-vtile { flex: 1; min-height: 0; border: none; display: block; }
+        /* The rack keeps its natural height (lanes never compress below
+           readable) and the panel scrolls when the arrangement does not give
+           it room — a squeezed lane draws its own label over its own trace. */
+        #gpWorkspace .gpb-graphwrap { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden auto; }
+        #gpWorkspace .gpb-graphwrap .gp-strip { flex: none; margin: 0; width: 100%; }
+        #gpWorkspace .gpb-graphwrap .gp-nav { flex: none; margin: 0 0 2px; width: 100%; position: sticky; bottom: 0; }
+        #gpWorkspace .gpb-glegend {
+            display: flex; align-items: center; gap: 12px; padding: 3px 9px; flex: none;
+            font-size: 11px; flex-wrap: wrap;
+        }
+        #gpWorkspace .gpb-glegend .sw { display: inline-flex; align-items: center; gap: 5px; }
+        #gpWorkspace .gpb-glegend .sw i { width: 10px; height: 10px; display: inline-block; }
+        #gpWorkspace .gpb-glegend b { font-family: var(--gpb-head); font-weight: 600; letter-spacing: 0.05em; }
+        #gpWorkspace .gpb-glegend .cur { margin-left: auto; color: var(--gpb-muted); font-variant-numeric: tabular-nums; }
+
+        /* lap times panel */
+        #gpWorkspace .gpb-lapline {
+            display: flex; align-items: center; gap: 9px; padding: 6px 11px;
+            border-bottom: 1px solid var(--gpb-div-lt); cursor: pointer; width: 100%;
+            background: transparent; border-left: none; border-right: none; border-top: none;
+            font: inherit; color: var(--gpb-ink); text-align: left;
+        }
+        #gpWorkspace .gpb-lapline:hover { background: rgba(29,31,32,0.04); }
+        #gpWorkspace .gpb-lapline.sel { background: rgba(29,31,32,0.06); box-shadow: inset 3px 0 0 var(--gpb-n900); }
+        #gpWorkspace .gpb-lapline input[type=checkbox] { accent-color: var(--gpb-red); width: 15px; height: 15px; cursor: pointer; }
+        #gpWorkspace .gpb-lapline .sw { width: 11px; height: 11px; flex: none; }
+        #gpWorkspace .gpb-lapline .nm { font-family: var(--gpb-head); font-weight: 600; font-size: 14px; letter-spacing: 0.05em; width: 54px; }
+        #gpWorkspace .gpb-lapline .tm { font-family: var(--gpb-head); font-weight: 600; font-size: 17px; font-variant-numeric: tabular-nums; }
+        #gpWorkspace .gpb-lapline .dl { font-size: 11.5px; color: var(--gpb-muted); font-variant-numeric: tabular-nums; }
+        #gpWorkspace .gpb-reftag {
+            font-size: 10px; letter-spacing: 0.04em; padding: 2px 7px; cursor: pointer;
+            border: 1px solid var(--gpb-div); background: transparent; color: var(--gpb-muted);
+        }
+        #gpWorkspace .gpb-reftag:hover { border-color: var(--gpb-ink); color: var(--gpb-ink); }
+        #gpWorkspace .gpb-reftag.on { border-color: var(--gpb-red); color: var(--gpb-red-700); }
+
+        /* where-the-time-went: diverging bars */
+        #gpWorkspace .gpb-div-row { display: flex; align-items: center; gap: 9px; padding: 2px 0; }
+        #gpWorkspace .gpb-div-row .lb { font-family: var(--gpb-head); font-weight: 600; font-size: 12.5px; width: 40px; letter-spacing: 0.04em; }
+        #gpWorkspace .gpb-div-track { flex: 1; position: relative; height: 14px; }
+        #gpWorkspace .gpb-div-track > .mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--gpb-div); }
+        #gpWorkspace .gpb-div-track > .neg { position: absolute; right: 50%; top: 2px; bottom: 2px; background: var(--gpb-red-600); }
+        #gpWorkspace .gpb-div-track > .pos { position: absolute; left: 50%; top: 2px; bottom: 2px; background: var(--gpb-red-100); border: 1px solid var(--gpb-red-500); }
+        #gpWorkspace .gpb-div-row .vl { font-size: 11.5px; font-variant-numeric: tabular-nums; width: 48px; text-align: right; color: var(--gpb-soft); }
+
+        /* the dock */
+        #gpWorkspace .gpb-dock {
+            flex: none; display: flex; align-items: center; gap: 16px;
+            padding: var(--gpb-dpv, 8px) 14px; border-top: 1px solid var(--gpb-div);
+            background: var(--gpb-surface); flex-wrap: wrap;
+        }
+        #gpWorkspace .gpb-dock .k { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-dock .v {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 16px; line-height: 1.1;
+            font-variant-numeric: tabular-nums; color: var(--gpb-ink);
+        }
+        #gpWorkspace .gpb-dock .v small { font-size: 10.5px; color: var(--gpb-muted); font-family: var(--gpb-body); font-weight: 400; }
+        #gpWorkspace .gpb-dock .v.red { color: var(--gpb-red-700); }
+        #gpWorkspace .gpb-dock .sep { width: 1px; align-self: stretch; background: var(--gpb-div); }
+        #gpWorkspace .gpb-dock input[type=range] { flex: 1; min-width: 80px; }
+        #gpWorkspace .gpb-thrbar { height: 7px; border: 1px solid var(--gpb-div); margin-top: 5px; position: relative; width: 84px; }
+        #gpWorkspace .gpb-thrbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gpb-red); display: block; }
+        #gpWorkspace .gpb-dockmenu {
+            position: fixed; z-index: 16000; width: 218px; background: var(--gpb-bg);
+            border: 1px solid var(--gpb-div); box-shadow: 0 12px 32px rgba(43,43,45,0.25); padding: 11px;
+        }
+        #gpWorkspace .gpb-dockmenu label {
+            display: flex; align-items: center; gap: 8px; padding: 4px 2px; cursor: pointer; font-size: 12.5px;
+        }
+        #gpWorkspace .gpb-dockmenu label:hover { background: rgba(29,31,32,0.05); }
+        #gpWorkspace .gpb-dockmenu input { accent-color: var(--gpb-red); }
+
+        /* layout controls in the context strip */
+        #gpWorkspace .gpb-ctl { display: flex; align-items: center; gap: 7px; }
+        #gpWorkspace .gpb-ctl .lbl { font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-seg { display: inline-flex; border: 1px solid var(--gpb-div); }
+        #gpWorkspace .gpb-seg button {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 11.5px; letter-spacing: 0.07em;
+            padding: 4px 10px; background: transparent; border: none; cursor: pointer; color: var(--gpb-soft);
+        }
+        #gpWorkspace .gpb-seg button + button { border-left: 1px solid var(--gpb-div); }
+        #gpWorkspace .gpb-seg button:hover { background: rgba(29,31,32,0.06); }
+        #gpWorkspace .gpb-seg button.on { background: var(--gpb-red); color: #fff; }
+        #gpWorkspace .gpb-lay {
+            position: absolute; right: 14px; top: calc(100% + 6px); z-index: 60; width: 278px;
+            background: var(--gpb-bg); border: 1px solid var(--gpb-div);
+            box-shadow: 0 12px 32px rgba(43,43,45,0.25); padding: 11px;
+            display: flex; flex-direction: column; gap: 7px;
+        }
+        #gpWorkspace .gpb-lay .hd { font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--gpb-red-700); }
+        #gpWorkspace .gpb-lay .row {
+            display: flex; align-items: center; gap: 4px;
+            border-top: 1px solid var(--gpb-div-lt); padding-top: 5px;
+        }
+        #gpWorkspace .gpb-lay .row .nm {
+            flex: 1; text-align: left; background: transparent; border: none; cursor: pointer;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 13.5px;
+            letter-spacing: 0.05em; color: var(--gpb-ink); padding: 3px 2px;
+        }
+        #gpWorkspace .gpb-lay .row .nm:hover { color: var(--gpb-red-700); }
+        #gpWorkspace .gpb-lay .row .mt { font-size: 10px; color: var(--gpb-muted); }
 
         /* export popover */
         #gpWorkspace .gpb-exppop {
@@ -2973,6 +3143,11 @@
                        <span class='k'>Double-click</span> the rack to leave a corner"></i>
                 </div>
                 <div class="gp-grid" id="gpStage"></div>
+                <!-- Analyse (ADR-0025): rows of panels the user arranges. The
+                     map, the rack and the video tile are re-parented into
+                     whichever panel is hosting them. -->
+                <div class="gpb-grid" id="gpGrid" style="display:none"></div>
+                <div class="gpb-dock" id="gpDock" style="display:none"></div>
                 <div class="gpb-sess" id="gpSessionsWrap" style="display:none"></div>
                 <div class="gpb-cornerswrap" id="gpCornersWrap" style="display:none">
                     <div class="gpb-cornersmap" id="gpCornersMapCell"></div>
@@ -9265,9 +9440,59 @@
                     tags += "<span class='gpb-tag grey'>Spread " + (worst - best).toFixed(2) + " s</span>";
                 }
             }
+            /* The arrangement controls belong with the session line: they are
+               about how you are LOOKING at this recording. */
+            var g = gpGrid();
+            var seg = function (items, cur, call) {
+                return "<div class='gpb-seg'>" + items.map(function (x) {
+                    return "<button class='" + (cur === x[0] ? "on" : "") + "' onclick=\"" +
+                           call + "('" + x[0] + "')\">" + x[1] + "</button>";
+                }).join("") + "</div>";
+            };
+            var ctl = "<div class='gpb-ctl'><span class='lbl'>Layout</span>" +
+                seg([["quad", "QUAD"], ["split", "SPLIT"], ["video", "VIDEO"], ["solo", "SOLO"]],
+                    g.preset, "gpGridPreset") + "</div>";
+            if (g.rows.length === 2) {
+                ctl += "<div class='gpb-ctl'><span class='lbl'>Rows</span>" +
+                    seg([["top", "TOP"], ["even", "EVEN"], ["bottom", "BOTTOM"]],
+                        g.emphasis, "gpGridEmphasis") + "</div>";
+            }
+            ctl += "<button class='ws-btn-line' style='width:auto;padding:4px 12px' onclick='gpLayoutsToggle()'>My layouts</button>";
+            if (gp.layoutsOpen) {
+                var list = gpGrids();
+                ctl += "<div class='gpb-lay'><div class='hd'>Saved layouts</div>" +
+                    "<div style='display:flex;gap:6px'>" +
+                    "<input class='ws-field' id='gpLayName' type='text' placeholder='Name this layout…' " +
+                    "value='" + gpEsc(gp.layoutName || "") + "' oninput='gp_layName(this.value)' " +
+                    "style='flex:1;background:var(--gpb-surface);border:1px solid var(--gpb-div);color:var(--gpb-ink);padding:4px 8px;font:inherit;font-size:12px'>" +
+                    "<button class='gpb-export' style='height:auto;padding:4px 12px' onclick='gpLayoutSave()'>SAVE</button></div>" +
+                    "<div style='font-size:10px;color:var(--gpb-muted)'>Saves the panels, their types and every size.</div>";
+                if (!list.length) {
+                    ctl += "<div style='font-size:11px;color:var(--gpb-muted);border-top:1px solid var(--gpb-div-lt);padding-top:6px'>" +
+                           "Nothing saved yet — arrange the grid, then save it here.</div>";
+                }
+                list.forEach(function (v, i) {
+                    var n = v.rows.reduce(function (a, r) { return a + r.panels.length; }, 0);
+                    ctl += "<div class='row'>";
+                    if (gp.layoutEdit === i) {
+                        ctl += "<input id='gpLayEdit' type='text' value='" + gpEsc(gp.layoutEditName === undefined ? v.name : gp.layoutEditName) + "' " +
+                               "oninput='gp_layEditName(this.value)' " +
+                               "style='flex:1;background:var(--gpb-surface);border:1px solid var(--gpb-div);color:var(--gpb-ink);padding:3px 6px;font:inherit;font-size:12px'>" +
+                               "<button class='gpb-picon' title='Done' onclick='gpLayoutRenameDone(" + i + ")'>&#10003;</button>";
+                    } else {
+                        ctl += "<button class='nm' title='Apply this layout' onclick='gpLayoutApply(" + i + ")'>" +
+                               gpEsc(v.name) + "</button><span class='mt'>" + n + " panels</span>" +
+                               "<button class='gpb-picon' title='Rename' onclick='gpLayoutRename(" + i + ")'>&#9998;</button>" +
+                               "<button class='gpb-picon' title='Delete' onclick='gpLayoutDelete(" + i + ")'>&times;</button>";
+                    }
+                    ctl += "</div>";
+                });
+                ctl += "</div>";
+            }
+
             el.innerHTML = "<h3>" + gpEsc(trk ? trk.name : (meNow ? meNow.name : "Recording")) + "</h3>" +
                 "<span class='m'>" + gpEsc(bits.join(" · ")) + "</span>" +
-                "<span class='sp'></span>" + tags;
+                "<span class='sp'></span>" + tags + ctl;
         }
 
         function gpBuildSessionRail(rail) {
@@ -9756,6 +9981,712 @@
             });
         }
 
+        /* ══════════════════════════════════════════════════════════════════
+         * Analyse: the panel grid (ADR-0025)
+         *
+         * Rows of panels the user arranges. Three of the types host a real
+         * singleton element — the Leaflet map, the rack canvas, the video —
+         * so those are moved INTO their panel rather than re-created, the
+         * same trick gpDockViewer already used to move the map between the
+         * rail and the stage. Everything else is markup built here.
+         * ═════════════════════════════════════════════════════════════════ */
+        var GP_GRID_LS = "rdm7_gp_grid", GP_GRIDS_LS = "rdm7_gp_grids", GP_DOCK_LS = "rdm7_gp_dock";
+        var GP_PTYPES = [
+            { id: "map", label: "Track map", solo: true },
+            { id: "graph", label: "Graph", solo: true },
+            { id: "video", label: "Video", solo: true },
+            { id: "times", label: "Lap times" },
+            { id: "report", label: "Lap report" },
+            { id: "corners", label: "Where the time went" },
+            { id: "splits", label: "Splits" }
+        ];
+        var GP_PRESETS = {
+            quad:  { rows: [["map", "graph"], ["times", "report"]], flex: [1, 1] },
+            split: { rows: [["map", "graph"]], flex: [1] },
+            video: { rows: [["video", "map"], ["graph"]], flex: [1.3, 0.7] },
+            solo:  { rows: [["graph"]], flex: [1] }
+        };
+        /* Laps drawn together need telling apart at a glance. The session
+           best takes the strongest red; the rest step away from it. */
+        var GP_LAP_COLOURS = ["#9c1a1f", "#dd4b45", "#ec817b", "#5d5d60",
+                              "#0f7a68", "#8a6d00", "#3f4bb8", "#b4551a"];
+        function gpLapColour(i) { return GP_LAP_COLOURS[i % GP_LAP_COLOURS.length]; }
+
+        function gpGridDefault() { return gpGridFromPreset("quad"); }
+        function gpGridFromPreset(id) {
+            var L = GP_PRESETS[id] || GP_PRESETS.quad, n = 1;
+            return {
+                preset: id, emphasis: id === "quad" ? "even" : null,
+                rows: L.rows.map(function (r, i) {
+                    return { flex: L.flex[i] || 1, panels: r.map(function (ty) { return { id: n++, type: ty, w: 1 }; }) };
+                })
+            };
+        }
+        function gpGrid() {
+            if (!gp.grid) {
+                var g = null;
+                try { g = JSON.parse(window.localStorage.getItem(GP_GRID_LS) || "null"); } catch (e) {}
+                gp.grid = (g && g.rows && g.rows.length) ? g : gpGridDefault();
+            }
+            return gp.grid;
+        }
+        function gpGridSave() {
+            try { window.localStorage.setItem(GP_GRID_LS, JSON.stringify(gp.grid)); } catch (e) {}
+        }
+        function gpGrids() {
+            if (!gp.grids) {
+                try { gp.grids = JSON.parse(window.localStorage.getItem(GP_GRIDS_LS) || "[]"); } catch (e) { gp.grids = []; }
+                if (!Array.isArray(gp.grids)) gp.grids = [];
+            }
+            return gp.grids;
+        }
+        function gpGridsSave() {
+            try { window.localStorage.setItem(GP_GRIDS_LS, JSON.stringify(gp.grids || [])); } catch (e) {}
+        }
+        function gpDock() {
+            if (!gp.dock) {
+                var d = null;
+                try { d = JSON.parse(window.localStorage.getItem(GP_DOCK_LS) || "null"); } catch (e) {}
+                gp.dock = d || { lap: true, pos: true, delta: true, speed: true, rpm: true, thr: true, rate: true };
+            }
+            return gp.dock;
+        }
+        function gpDockSave() {
+            try { window.localStorage.setItem(GP_DOCK_LS, JSON.stringify(gp.dock)); } catch (e) {}
+        }
+
+        /* Which laps get DRAWN. Separate from gp.selLap / gp.cmpLap, which
+           are what gets ANALYSED — see ADR-0025. Defaults to the analysed
+           pair, so the grid opens showing what the report is about. */
+        function gpShownLaps() {
+            if (!gp.shownLaps) gp.shownLaps = {};
+            var any = false, k;
+            for (k in gp.shownLaps) if (gp.shownLaps[k]) { any = true; break; }
+            if (!any) {
+                if (gp.selLap >= 0) gp.shownLaps[gp.selLap] = true;
+                if (gp.cmpLap >= 0) gp.shownLaps[gp.cmpLap] = true;
+            }
+            return gp.shownLaps;
+        }
+        function gpShownList() {
+            var sh = gpShownLaps(), out = [];
+            (gp.traceLaps || []).forEach(function (l, i) { if (sh[i]) out.push(i); });
+            return out;
+        }
+        window.gpLapShowToggle = function (i) {
+            i = parseInt(i, 10);
+            var sh = gpShownLaps();
+            sh[i] = !sh[i];
+            gpDrawTrace(); gpDrawStrip(); gpRenderGrid();
+        };
+        window.gpLapAnalyse = function (i) {
+            window.gpSelectLap(parseInt(i, 10));
+            gpShownLaps()[parseInt(i, 10)] = true;
+            gpRenderGrid();
+        };
+        window.gpLapRef = function (i) {
+            i = parseInt(i, 10);
+            window.gpCompareLap(i === gp.cmpLap ? -1 : i);
+            if (i !== gp.cmpLap) gpShownLaps()[i] = true;
+            gpRenderGrid();
+        };
+
+        /* ---- mutation helpers ---- */
+        function gpGridMutate(fn) {
+            var g = gpGrid();
+            fn(g);
+            g.rows = g.rows.filter(function (r) { return r.panels.length; });
+            if (!g.rows.length) g.rows = [{ flex: 1, panels: [{ id: Date.now() % 100000, type: "graph", w: 1 }] }];
+            gpGridSave();
+            gpRenderGrid();
+            gpRenderCtx();
+        }
+        function gpPanelAt(g, ri, pi) { return g.rows[ri] && g.rows[ri].panels[pi]; }
+
+        window.gpPanelType = function (ri, pi, ty) {
+            gpGridMutate(function (g) {
+                var p = gpPanelAt(g, ri, pi);
+                if (!p) return;
+                var was = p.type;
+                var solo = GP_PTYPES.filter(function (t) { return t.id === ty && t.solo; }).length;
+                if (solo) {
+                    /* One map, one rack, one video element exist. Rather than
+                       refusing — which strands the user when the panel they
+                       want is taken — the panel that had it takes the type
+                       this one was showing. */
+                    g.rows.forEach(function (r, a) {
+                        r.panels.forEach(function (q, b) {
+                            if ((a !== ri || b !== pi) && q.type === ty) q.type = was;
+                        });
+                    });
+                }
+                p.type = ty;
+            });
+        };
+        window.gpPanelDup = function (ri, pi) {
+            gpGridMutate(function (g) {
+                var row = g.rows[ri];
+                if (!row || row.panels.length >= 3) return;
+                var p = row.panels[pi];
+                var solo = GP_PTYPES.filter(function (t) { return t.id === p.type && t.solo; }).length;
+                /* A singleton cannot be in two places; duplicating one gives
+                   you the lap times beside it, which is what the gesture is
+                   usually reaching for. */
+                row.panels.splice(pi + 1, 0, { id: Date.now() % 100000 + pi,
+                                               type: solo ? "times" : p.type, w: p.w || 1 });
+            });
+        };
+        window.gpPanelClose = function (ri, pi) {
+            gpGridMutate(function (g) {
+                if (g.rows[ri]) g.rows[ri].panels.splice(pi, 1);
+                g.preset = null;
+            });
+        };
+        window.gpPanelAdd = function (ri) {
+            gpGridMutate(function (g) {
+                var row = g.rows[ri];
+                if (!row || row.panels.length >= 3) return;
+                var used = {};
+                g.rows.forEach(function (r) { r.panels.forEach(function (p) { used[p.type] = 1; }); });
+                var want = "times";
+                for (var i = 0; i < GP_PTYPES.length; i++)
+                    if (!used[GP_PTYPES[i].id]) { want = GP_PTYPES[i].id; break; }
+                row.panels.push({ id: Date.now() % 100000, type: want, w: 1 });
+                g.preset = null;
+            });
+        };
+        window.gpRowAdd = function () {
+            gpGridMutate(function (g) {
+                g.rows.push({ flex: 1, panels: [{ id: Date.now() % 100000, type: "times", w: 1 }] });
+                g.preset = null; g.emphasis = null;
+            });
+        };
+        window.gpGridPreset = function (id) {
+            gp.grid = gpGridFromPreset(id);
+            gpGridSave();
+            gpRenderGrid();
+            gpRenderCtx();          /* the segment has to show what is active */
+        };
+        window.gpGridEmphasis = function (id) {
+            var f = { top: [1.55, 0.75], even: [1, 1], bottom: [0.75, 1.55] }[id];
+            gpGridMutate(function (g) {
+                g.emphasis = id;
+                g.rows.forEach(function (r, i) { r.flex = (f && f[i]) || 1; });
+            });
+        };
+
+        /* ---- saved arrangements ---- */
+        window.gpLayoutsToggle = function () {
+            gp.layoutsOpen = !gp.layoutsOpen;
+            gp.layoutEdit = -1;
+            gpRenderCtx();
+        };
+        window.gp_layName = function (v) { gp.layoutName = v; };
+        window.gp_layEditName = function (v) { gp.layoutEditName = v; };
+
+        window.gpLayoutSave = function () {
+            var inp = document.getElementById("gpLayName");
+            var name = (((inp && inp.value) || gp.layoutName || "")).trim();
+            var list = gpGrids();
+            if (!name) name = "Layout " + (list.length + 1);
+            var g = gpGrid();
+            list.push({
+                name: name,
+                rows: g.rows.map(function (r) {
+                    return { flex: r.flex || 1, panels: r.panels.map(function (p) {
+                        return { type: p.type, w: p.w || 1 };
+                    }) };
+                })
+            });
+            gpGridsSave();
+            gp.layoutName = "";
+            if (inp) inp.value = "";
+            gpRenderCtx();
+        };
+        window.gpLayoutApply = function (i) {
+            var v = gpGrids()[i];
+            if (!v) return;
+            var n = 1;
+            gp.grid = { preset: null, emphasis: null, rows: v.rows.map(function (r) {
+                return { flex: r.flex || 1, panels: r.panels.map(function (p) {
+                    return { id: n++, type: p.type, w: p.w || 1 };
+                }) };
+            }) };
+            gp.layoutsOpen = false;
+            gpGridSave();
+            gpRenderGrid(); gpRenderCtx();
+        };
+        window.gpLayoutRename = function (i) {
+            gp.layoutEdit = i;
+            gp.layoutEditName = (gpGrids()[i] || {}).name || "";
+            gpRenderCtx();
+        };
+        window.gpLayoutRenameDone = function (i) {
+            var inp = document.getElementById("gpLayEdit");
+            var list = gpGrids();
+            var v = (inp && inp.value !== undefined) ? inp.value : gp.layoutEditName;
+            if (list[i]) list[i].name = String(v || "").trim() || list[i].name;
+            gp.layoutEdit = -1; gp.layoutEditName = undefined;
+            gpGridsSave(); gpRenderCtx();
+        };
+        window.gpLayoutDelete = function (i) {
+            gpGrids().splice(i, 1);
+            gp.layoutEdit = -1;
+            gpGridsSave(); gpRenderCtx();
+        };
+
+        /* ---- resize handles ---- */
+        function gpDragCol(ri, pi, ev) {
+            ev.preventDefault();
+            var rowEl = ev.currentTarget.parentNode;
+            var W = rowEl.getBoundingClientRect().width;
+            var g = gpGrid(), row = g.rows[ri];
+            if (!row || !W) return;
+            var sum = row.panels.reduce(function (a, p) { return a + (p.w || 1); }, 0);
+            var f0 = row.panels[pi].w || 1, f1 = row.panels[pi + 1].w || 1, x0 = ev.clientX;
+            var move = function (e) {
+                var d = (e.clientX - x0) / W * sum;
+                var a = Math.min(f0 + f1 - 0.25, Math.max(0.25, f0 + d));
+                row.panels[pi].w = a; row.panels[pi + 1].w = f0 + f1 - a;
+                g.preset = null;
+                gpGridApplyFlex();
+            };
+            var up = function () {
+                window.removeEventListener("pointermove", move);
+                window.removeEventListener("pointerup", up);
+                gpGridSave(); gpGridReflow();
+            };
+            window.addEventListener("pointermove", move);
+            window.addEventListener("pointerup", up);
+        }
+        function gpDragRow(ri, ev) {
+            ev.preventDefault();
+            var host = document.getElementById("gpGrid");
+            var H = host ? host.getBoundingClientRect().height : 0;
+            var g = gpGrid();
+            if (!H || !g.rows[ri + 1]) return;
+            var sum = g.rows.reduce(function (a, r) { return a + (r.flex || 1); }, 0);
+            var f0 = g.rows[ri].flex || 1, f1 = g.rows[ri + 1].flex || 1, y0 = ev.clientY;
+            var move = function (e) {
+                var d = (e.clientY - y0) / H * sum;
+                var a = Math.min(f0 + f1 - 0.25, Math.max(0.25, f0 + d));
+                g.rows[ri].flex = a; g.rows[ri + 1].flex = f0 + f1 - a;
+                g.emphasis = null;
+                gpGridApplyFlex();
+            };
+            var up = function () {
+                window.removeEventListener("pointermove", move);
+                window.removeEventListener("pointerup", up);
+                gpGridSave(); gpGridReflow();
+            };
+            window.addEventListener("pointermove", move);
+            window.addEventListener("pointerup", up);
+        }
+        /* Resizing writes flex straight onto the nodes rather than rebuilding
+           the grid: a rebuild during a drag destroys the element under the
+           pointer, and re-parenting a Leaflet map 60 times a second is not a
+           thing anyone should watch. */
+        function gpGridApplyFlex() {
+            var host = document.getElementById("gpGrid");
+            if (!host) return;
+            var g = gpGrid();
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-row]"), function (rowEl) {
+                var ri = parseInt(rowEl.getAttribute("data-gp-row"), 10);
+                if (!g.rows[ri]) return;
+                rowEl.style.flex = (g.rows[ri].flex || 1) + " 1 0%";
+                Array.prototype.forEach.call(rowEl.querySelectorAll("[data-gp-panel]"), function (pel) {
+                    var pi = parseInt(pel.getAttribute("data-gp-panel"), 10);
+                    var p = g.rows[ri].panels[pi];
+                    if (p) pel.style.flex = (p.w || 1) + " 1 0%";
+                });
+            });
+        }
+        /* After a resize the map and the canvases have new boxes and neither
+           finds out on its own. */
+        function gpGridReflow() {
+            if (gp.map) gp.map.invalidateSize({ animate: false });
+            gpDrawStrip();
+            gpVideoDrawOverlay();
+        }
+
+        /* ---- the panels ---- */
+        function gpPanelHeadHtml(p, ri, pi, nPanels) {
+            var opts = GP_PTYPES.map(function (t) {
+                return "<option value='" + t.id + "'" + (t.id === p.type ? " selected" : "") + ">" +
+                       gpEsc(t.label) + "</option>";
+            }).join("");
+            var h = "<div class='gpb-phead'>" +
+                "<select class='ty' title='What this panel shows' data-gp-ptype='" + ri + ":" + pi + "'>" + opts + "</select>";
+            h += "<span class='sp'></span>";
+            if (nPanels < 3)
+                h += "<button class='gpb-picon' title='Add a panel beside this one' data-gp-pdup='" + ri + ":" + pi + "'>" +
+                     "<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'>" +
+                     "<rect x='9' y='9' width='12' height='12'></rect><path d='M5 15H4V4h11v1'></path></svg></button>";
+            h += "<button class='gpb-picon' title='Close this panel' data-gp-pclose='" + ri + ":" + pi + "'>" +
+                 "<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'>" +
+                 "<path d='M18 6 6 18M6 6l12 12'></path></svg></button></div>";
+            return h;
+        }
+
+        function gpPanelTimesHtml() {
+            if (!(gp.trace && gp.trace.length)) return gpPanelEmpty("No recording open.");
+            var laps = gp.traceLaps || [];
+            var word = gpRunWord(true);
+            var real = [], bestT = Infinity, bestI = -1;
+            laps.forEach(function (l, i) {
+                if (l.ghost) return;
+                var s = gpSecs(gp.trace, l.from, l.to);
+                real.push({ i: i, s: s });
+                if (s < bestT) { bestT = s; bestI = i; }
+            });
+            if (!real.length) return gpPanelEmpty(gpNoLapsWhy());
+            var sh = gpShownLaps();
+            var h = "<div class='gpb-pscroll'>";
+            real.forEach(function (r) {
+                h += "<button class='gpb-lapline" + (gp.selLap === r.i ? " sel" : "") + "' data-gp-lapline='" + r.i + "'>" +
+                     "<input type='checkbox' data-gp-lapshow='" + r.i + "'" + (sh[r.i] ? " checked" : "") +
+                     " title='Draw this " + gpRunWord() + " on the graph and map'>" +
+                     "<i class='sw' style='background:" + gpLapColour(r.i) + "'></i>" +
+                     "<span class='nm'>" + word + " " + (r.i + 1) + "</span>" +
+                     "<span class='tm'>" + gpLapTime(r.s) + "</span>" +
+                     "<span class='dl'>" + (r.i === bestI ? "&mdash;" : "+" + (r.s - bestT).toFixed(2)) + "</span>" +
+                     "<span class='sp' style='flex:1'></span>" +
+                     (r.i === bestI ? "<span class='gpb-tag red'>BEST</span>" : "") +
+                     "<span class='gpb-reftag" + (gp.cmpLap === r.i ? " on" : "") + "' data-gp-lapref='" + r.i + "'" +
+                     " title='Use this " + gpRunWord() + " as the reference everything is measured against'>REF</span>" +
+                     "</button>";
+            });
+            h += "<div style='padding:7px 11px;font-size:11px;color:var(--gpb-muted)'>" +
+                 "Ticked " + gpRunWord() + "s draw on every graph and map panel. Click a " +
+                 gpRunWord() + " to analyse it; <b>REF</b> is what it is measured against.</div></div>";
+            return h;
+        }
+
+        function gpPanelReportHtml() {
+            if (!(gp.trace && gp.trace.length)) return gpPanelEmpty("No recording open.");
+            var h = "<div class='gpb-pscroll' style='padding:10px'>";
+            h += gpLapReportHtml();
+            h += gpStatTilesHtml().replace("<div class='ws-grp'>", "<div class='ws-grp' style='border-top:none'>");
+            var ops = gpCoachOps();
+            if (ops && ops.length) {
+                var worst = ops.slice().sort(function (a, b) { return b.total_s - a.total_s; })[0];
+                var rx = worst && worst.total_s > 0.03 ? gpPrescribe(worst) : null;
+                h += "<div class='ws-grp'><div class='ws-gt'>Coach &mdash; " + gpRunWord(true) + " " + (gp.selLap + 1) +
+                     " against " + gpEsc(gpRefName()) + "</div>" +
+                     "<div style='font-size:12.5px;color:var(--gpb-soft);line-height:1.5'>" +
+                     (rx ? "Turn " + worst.n + " is the one: " + gpEsc(rx.try)
+                         : "Nothing stands out &mdash; this " + gpRunWord() +
+                           " gave nothing significant away against the reference.") +
+                     "</div></div>";
+            }
+            h += "</div>";
+            return h;
+        }
+
+        function gpPanelCornersHtml() {
+            var ops = gpCoachOps();
+            if (!ops || !ops.length)
+                return gpPanelEmpty("Pick a " + gpRunWord() + " and a REF in Lap times, and this ranks every corner.");
+            var mx = 0;
+            ops.forEach(function (o) { mx = Math.max(mx, Math.abs(o.total_s)); });
+            mx = Math.max(0.05, mx);
+            var h = "<div class='gpb-pscroll' style='padding:8px 12px'>" +
+                "<div style='display:flex;justify-content:space-between;font-size:10px;letter-spacing:0.1em;" +
+                "text-transform:uppercase;color:var(--gpb-muted);padding:2px 0 6px'>" +
+                "<span>" + gpRunWord(true) + " " + (gp.selLap + 1) + " vs " + gpEsc(gpRefName()) + " &mdash; per corner</span>" +
+                "<span>&larr; lost &middot; gained &rarr;</span></div>";
+            ops.forEach(function (o) {
+                var v = o.total_s;                      /* + is time LOST */
+                var w = Math.min(50, Math.abs(v) / mx * 50).toFixed(1);
+                h += "<div class='gpb-div-row' data-gp-cjump='" + o.selApex + ":" + o.selEntry + ":" + o.selExit +
+                     "' style='cursor:pointer'>" +
+                     "<span class='lb'>T" + o.n + "</span><span class='gpb-div-track'><i class='mid'></i>" +
+                     (v > 0 ? "<i class='neg' style='width:" + w + "%'></i>"
+                            : "<i class='pos' style='width:" + w + "%'></i>") +
+                     "</span><span class='vl'>" + (v > 0 ? "&minus;" : "+") + Math.abs(v).toFixed(2) + "</span></div>";
+            });
+            h += "</div>";
+            return h;
+        }
+
+        function gpPanelEmpty(msg) {
+            return "<div style='position:absolute;inset:0;display:grid;place-items:center;padding:20px;" +
+                   "text-align:center;font-size:12.5px;color:var(--gpb-muted)'>" + msg + "</div>";
+        }
+
+        function gpPanelVideoHtml() {
+            if (gp.video && gp.video.url) return "";     /* the tile itself is hosted */
+            return "<div style='position:absolute;inset:0;background:var(--gpb-red-900);color:var(--gpb-red-200);" +
+                   "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:16px'>" +
+                   "<svg width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5'>" +
+                   "<path d='m16 10 6-3v10l-6-3'></path><rect x='2' y='6' width='14' height='12'></rect></svg>" +
+                   "<div style='font-family:var(--gpb-head);font-weight:600;font-size:15px;letter-spacing:0.1em;text-transform:uppercase'>No video loaded</div>" +
+                   "<div style='font-size:11px;opacity:0.75'>The camera's own clock lines it up with the " +
+                   gpRunWord() + " &mdash; nothing to sync by hand.</div>" +
+                   "<label class='ws-btn-line' style='width:auto;padding:5px 14px;cursor:pointer;border-color:var(--gpb-red-400);color:var(--gpb-red-200)'>" +
+                   "Load video&hellip;<input type='file' accept='video/*' style='display:none' onchange='gpVideoOpen(this)'></label></div>";
+        }
+
+        function gpPanelGraphLegendHtml() {
+            var shown = gpShownList();
+            if (!shown.length) return "";
+            var word = gpRunWord(true);
+            var h = "<div class='gpb-glegend'>";
+            shown.forEach(function (i) {
+                var l = gp.traceLaps[i];
+                if (!l) return;
+                h += "<span class='sw'><i style='background:" + gpLapColour(i) + "'></i>" +
+                     "<b>" + word.toUpperCase() + " " + (i + 1) + "</b>" +
+                     "<span style='color:var(--gpb-muted)'>" + gpLapTime(gpSecs(gp.trace, l.from, l.to)) + "</span></span>";
+            });
+            h += "<span class='cur' id='gpGraphCur'></span></div>";
+            return h;
+        }
+
+        /* ---- render ---- */
+        function gpRenderGrid() {
+            var host = document.getElementById("gpGrid");
+            if (!host) return;
+            if (gp.view !== "session") return;
+            var g = gpGrid();
+
+            /* Pull the hosted singletons out BEFORE the rebuild, or innerHTML
+               destroys the Leaflet container and both canvases.
+               The holder is IN the document, just hidden: detached, the map
+               and the canvases stop answering getElementById, which breaks
+               every other view that expects to find them. */
+            if (!gp._hold) {
+                gp._hold = document.createElement("div");
+                gp._hold.id = "gpHold";
+                gp._hold.style.display = "none";
+                (document.getElementById("gpStageCol") || document.body).appendChild(gp._hold);
+            }
+            ["gpViewer", "gpStrip", "gpNav", "gpVideoTile"].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el && el.parentNode !== gp._hold) gp._hold.appendChild(el);
+            });
+
+            var html = "";
+            g.rows.forEach(function (row, ri) {
+                html += "<div class='gpb-row' data-gp-row='" + ri + "' style='flex:" + (row.flex || 1) + " 1 0%'>";
+                row.panels.forEach(function (p, pi) {
+                    html += "<section class='gpb-panel" +
+                            (p.type === "map" || p.type === "graph" || p.type === "video" ? " hosting" : "") +
+                            "' data-gp-panel='" + pi + "' style='flex:" + (p.w || 1) + " 1 0%'>";
+                    html += gpPanelHeadHtml(p, ri, pi, row.panels.length);
+                    html += "<div class='gpb-pbody' data-gp-pbody='" + ri + ":" + pi + "' data-gp-ptypeid='" + p.type + "'>";
+                    if (p.type === "times") html += gpPanelTimesHtml();
+                    else if (p.type === "report") html += gpPanelReportHtml();
+                    else if (p.type === "corners") html += gpPanelCornersHtml();
+                    else if (p.type === "splits") html += "<div class='gpb-pscroll' style='padding:6px 10px'>" +
+                        (gp.trace && gp.trace.length ? gpSplitsHtml() : gpPanelEmpty("No recording open.")) + "</div>";
+                    else if (p.type === "video") html += gpPanelVideoHtml();
+                    else if (p.type === "graph") html += "<div class='gpb-graphwrap'>" + gpPanelGraphLegendHtml() + "</div>";
+                    html += "</div></section>";
+                    if (pi < row.panels.length - 1)
+                        html += "<div class='gpb-hcol' data-gp-hcol='" + ri + ":" + pi + "' title='Drag to resize'><i></i></div>";
+                });
+                if (row.panels.length < 3)
+                    html += "<button class='gpb-addp' data-gp-padd='" + ri + "' title='Add a panel to this row'>+</button>";
+                html += "</div>";
+                if (ri < g.rows.length - 1)
+                    html += "<div class='gpb-hrow' data-gp-hrow='" + ri + "' title='Drag to resize rows'><i></i></div>";
+            });
+            html += "<button class='gpb-addrow' onclick='gpRowAdd()'>+ Add a row</button>";
+            host.innerHTML = html;
+
+            /* Put the hosted elements into their panels. */
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-pbody]"), function (body) {
+                var ty = body.getAttribute("data-gp-ptypeid");
+                if (ty === "map") {
+                    var v = document.getElementById("gpViewer");
+                    if (v) { v.style.display = ""; v.className = "gp-viewer"; body.appendChild(v); }
+                } else if (ty === "video") {
+                    var vt = document.getElementById("gpVideoTile");
+                    if (vt && gp.video && gp.video.url) { vt.style.display = "block"; body.appendChild(vt); }
+                } else if (ty === "graph") {
+                    var wrap = body.querySelector(".gpb-graphwrap");
+                    var st = document.getElementById("gpStrip"), nv = document.getElementById("gpNav");
+                    if (wrap && st) wrap.appendChild(st);
+                    if (wrap && nv) wrap.appendChild(nv);
+                }
+            });
+
+            gpBindGrid(host);
+            gpRenderDock();
+            /* The map and the canvases all have new boxes now. */
+            setTimeout(function () {
+                if (gp.view !== "session") return;
+                if (gp.map) gp.map.invalidateSize({ animate: false });
+                gpDrawTrace(); gpDrawStrip(); gpViewerSync();
+            }, 30);
+        }
+
+        function gpBindGrid(host) {
+            var pick = function (attr, fn) {
+                Array.prototype.forEach.call(host.querySelectorAll("[" + attr + "]"), function (el) {
+                    var parts = (el.getAttribute(attr) || "").split(":");
+                    el.addEventListener("click", function (e) { e.stopPropagation(); fn(parts, el, e); });
+                });
+            };
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-ptype]"), function (sel) {
+                var p = sel.getAttribute("data-gp-ptype").split(":");
+                sel.addEventListener("change", function () { window.gpPanelType(+p[0], +p[1], sel.value); });
+            });
+            pick("data-gp-pdup", function (p) { window.gpPanelDup(+p[0], +p[1]); });
+            pick("data-gp-pclose", function (p) { window.gpPanelClose(+p[0], +p[1]); });
+            pick("data-gp-padd", function (p) { window.gpPanelAdd(+p[0]); });
+            pick("data-gp-cjump", function (p) {
+                window.gpCoachJump(+p[0], +p[1], +p[2]);
+            });
+            /* the lap line: the tick draws, the row analyses, REF references */
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-lapshow]"), function (cb) {
+                cb.addEventListener("click", function (e) { e.stopPropagation(); });
+                cb.addEventListener("change", function () { window.gpLapShowToggle(cb.getAttribute("data-gp-lapshow")); });
+            });
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-lapref]"), function (b) {
+                b.addEventListener("click", function (e) {
+                    e.stopPropagation(); e.preventDefault();
+                    window.gpLapRef(b.getAttribute("data-gp-lapref"));
+                });
+            });
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-lapline]"), function (b) {
+                b.addEventListener("click", function () { window.gpLapAnalyse(b.getAttribute("data-gp-lapline")); });
+            });
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-hcol]"), function (el) {
+                var p = el.getAttribute("data-gp-hcol").split(":");
+                el.addEventListener("pointerdown", function (e) { gpDragCol(+p[0], +p[1], e); });
+            });
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-hrow]"), function (el) {
+                var ri = parseInt(el.getAttribute("data-gp-hrow"), 10);
+                el.addEventListener("pointerdown", function (e) { gpDragRow(ri, e); });
+            });
+            gpSplitsBind(host);
+            gpTipInit();
+        }
+
+        /* ---- the dock ---- */
+        function gpRenderDock() {
+            var el = document.getElementById("gpDock");
+            if (!el || gp.view !== "session") return;
+            var d = gpDock();
+            var have = gp.trace && gp.trace.length;
+            var i = have ? Math.max(0, Math.min(gp.playIdx, gp.trace.length - 1)) : 0;
+            var s = have ? gp.trace[i] : null;
+            var r = have ? gpLapRange() : { from: 0, to: 0 };
+            var h = "";
+            if (d.lap) {
+                h += "<div><div class='k'>" + gpRunWord(true) + "</div><div class='v'>" +
+                     (gp.selLap >= 0 ? (gp.selLap + 1) : "&mdash;") +
+                     (gp.cmpLap >= 0 && gp.cmpLap !== gp.selLap
+                        ? " <small style='color:var(--gpb-red-700)'>vs " + (gp.cmpLap + 1) + "</small>" : "") +
+                     "</div></div>";
+            }
+            h += "<div style='display:flex;align-items:center;gap:4px'>" +
+                 "<button class='gp-tbtn' title='Jump to start' onclick=\"gpTransport('start')\">" +
+                 "<svg viewBox='0 0 12 12'><path d='M1.5 1.5h1.6v9H1.5zM10.5 1.5v9L4 6z'/></svg></button>" +
+                 "<button class='gp-tbtn' title='Step back' onclick=\"gpTransport('back')\">" +
+                 "<svg viewBox='0 0 12 12'><path d='M9 1.5v9L3 6z'/></svg></button>" +
+                 "<button class='gp-tbtn gp-tbtn-play' title='Play / pause (Space)' onclick='gpPlayToggle()'>" +
+                 (gp.playing ? "<svg viewBox='0 0 12 12'><path d='M2.5 1.5h3v9h-3zM6.5 1.5h3v9h-3z'/></svg>"
+                             : "<svg viewBox='0 0 12 12'><path d='M3 1.5 10.5 6 3 10.5z'/></svg>") +
+                 "</button>" +
+                 "<button class='gp-tbtn' title='Step forward' onclick=\"gpTransport('fwd')\">" +
+                 "<svg viewBox='0 0 12 12'><path d='M3 1.5v9L9 6z'/></svg></button>" +
+                 "<button class='gp-tbtn' title='Jump to end' onclick=\"gpTransport('end')\">" +
+                 "<svg viewBox='0 0 12 12'><path d='M8.9 1.5h1.6v9H8.9zM1.5 1.5v9L8 6z'/></svg></button></div>";
+            if (d.pos) {
+                var el3 = have ? gpSecs(gp.trace, r.from, i) : 0;
+                var tot = have ? gpSecs(gp.trace, r.from, r.to) : 0;
+                h += "<div style='min-width:118px'><div class='k'>Position</div><div class='v'>" +
+                     gpTcFmt(el3) + " <small>/ " + gpTcFmt(tot) + "</small></div></div>";
+            }
+            h += "<input type='range' id='gpDockScrub' min='0' max='" + Math.max(0, r.to - r.from) +
+                 "' value='" + Math.max(0, i - r.from) + "' step='1' oninput='gpScrubTo(this.value)'" +
+                 (have ? "" : " disabled") + ">";
+            if (d.delta) {
+                var dv = null, ds = gpDeltaSeries();
+                if (ds && have) dv = ds[i - r.from];
+                h += "<div style='min-width:84px'><div class='k'>&Delta; vs " +
+                     (gp.cmpLap >= 0 ? gpEsc(gpRefName()) : "ref") + "</div>" +
+                     "<div class='v" + (dv > 0.005 ? " red" : "") + "'>" +
+                     (dv === null || dv === undefined || !isFinite(dv) ? "&mdash;"
+                        : (dv >= 0 ? "+" : "") + dv.toFixed(2) + " <small>s</small>") + "</div></div>";
+            }
+            if (d.speed || d.rpm || d.thr) h += "<div class='sep'></div>";
+            if (d.speed) {
+                h += "<div style='min-width:76px'><div class='k'>Speed</div><div class='v'>" +
+                     (s ? Math.round(gpSpdN(s.kph)) : "&mdash;") + " <small>" + gpSpdU() + "</small></div></div>";
+            }
+            /* RPM and throttle come from whatever CAN channels this recording
+               carries — named by their own definitions, not assumed. */
+            var lanes = have ? gpLaneRowsAll().filter(function (L) {
+                return L.id.indexOf("can_") === 0 && !L.pending && typeof L.get === "function";
+            }) : [];
+            var pick = function (re) {
+                for (var k = 0; k < lanes.length; k++) if (re.test(String(lanes[k].label))) return lanes[k];
+                return null;
+            };
+            if (d.rpm) {
+                var Lr = pick(/rpm/i), vr = Lr ? Lr.get(i) : null;
+                h += "<div style='min-width:60px'><div class='k'>" + gpEsc(Lr ? Lr.label : "RPM") + "</div>" +
+                     "<div class='v'>" + (vr === null || vr === undefined ? "&mdash;" : Math.round(vr)) + "</div></div>";
+            }
+            if (d.thr) {
+                var Lt = pick(/thr/i), vt = Lt ? Lt.get(i) : null;
+                var pct = (vt === null || vt === undefined) ? null : Math.max(0, Math.min(100, vt));
+                h += "<div><div class='k'>" + gpEsc(Lt ? Lt.label : "Throttle") +
+                     (pct === null ? "" : " " + Math.round(pct) + "%") + "</div>" +
+                     "<div class='gpb-thrbar'><i style='width:" + (pct === null ? 0 : pct) + "%'></i></div></div>";
+            }
+            if (d.rate) {
+                h += "<div class='gpb-seg'>" + [1, 2, 4, 10].map(function (x) {
+                    return "<button class='" + (gp.playRate === x ? "on" : "") + "' onclick='gpPlayRateSet(" + x + ")'>" + x + "&times;</button>";
+                }).join("") + "</div>";
+            }
+            el.innerHTML = h;
+            el.oncontextmenu = function (e) {
+                e.preventDefault();
+                gpDockMenu(e.clientX, e.clientY);
+            };
+            el.title = "Right-click to choose what this bar shows";
+        }
+
+        function gpDockMenu(x, y) {
+            var old = document.getElementById("gpDockMenu");
+            if (old) old.remove();
+            var defs = [["lap", "Current " + gpRunWord()], ["pos", "Position / " + gpRunWord() + " time"],
+                        ["delta", "Delta vs reference"], ["speed", "Speed"], ["rpm", "RPM"],
+                        ["thr", "Throttle bar"], ["rate", "Playback rate"]];
+            var d = gpDock();
+            var m = document.createElement("div");
+            m.className = "gpb-dockmenu";
+            m.id = "gpDockMenu";
+            m.innerHTML = "<div style='font-size:9px;letter-spacing:0.13em;text-transform:uppercase;" +
+                "color:var(--gpb-red-700);margin-bottom:6px'>Customise this bar</div>" +
+                defs.map(function (o) {
+                    return "<label><input type='checkbox' data-gp-dock='" + o[0] + "'" +
+                           (d[o[0]] ? " checked" : "") + ">" + gpEsc(o[1]) + "</label>";
+                }).join("") +
+                "<div style='font-size:10px;color:var(--gpb-muted);margin-top:7px'>The transport and the scrub always stay.</div>";
+            document.getElementById("gpWorkspace").appendChild(m);
+            m.style.left = Math.max(8, Math.min(x - 40, window.innerWidth - 230)) + "px";
+            m.style.top = Math.max(8, y - m.offsetHeight - 8) + "px";
+            Array.prototype.forEach.call(m.querySelectorAll("[data-gp-dock]"), function (cb) {
+                cb.addEventListener("change", function () {
+                    gp.dock[cb.getAttribute("data-gp-dock")] = cb.checked;
+                    gpDockSave(); gpRenderDock();
+                });
+            });
+            setTimeout(function () {
+                var close = function (e) {
+                    if (m.contains(e.target)) return;
+                    m.remove(); document.removeEventListener("mousedown", close);
+                };
+                document.addEventListener("mousedown", close);
+            }, 0);
+        }
+
         /* ---- Export: one red button, three formats ---- */
         function gpSyncExportBtn() {
             var b = document.getElementById("gpExportBtn");
@@ -10146,6 +11077,34 @@
             });
             h += "</div><div class='gp-note' style='margin-top:4px'>against " + gpEsc(gpRefName()) +
                  " · the full story is in <b>Corners</b></div></div>";
+            return h;
+        }
+
+        /* The four things you DO with the node's recording. Split out of the
+           old Analyse inspector so Live can carry it (ADR-0025). */
+        function gpRecordingGroupHtml() {
+            var dev = gpDev();
+            var h = "<div class='ws-grp'><div class='ws-gt'>Recording</div>";
+            if (!dev || !dev.traceRead) {
+                h += "<div class='ws-note'>Attach the RDM GPS over USB. The node records at 25 Hz on its own — no laptop needed in the car.</div></div>";
+                return h;
+            }
+            var rec = !gp.traceInfo || gp.traceInfo.recording !== false;
+            var rbOn = !gp.node || gp.node.record_on_boot !== false;
+            h += "<button class='ws-btn-line' onclick='gpTraceDownload()'" +
+                 (gp.traceBusy ? " disabled" : "") + ">" +
+                 (gp.traceBusy ? "Downloading… " + gp.tracePct + "%" : "Download from node") + "</button>";
+            h += "<div class='lt-expbtns' style='margin-top:6px'>" +
+                 "<button class='ws-btn-line' onclick='gpLiveWatch(" + (gp.liveMode ? "false" : "true") + ")'>" +
+                 (gp.liveMode ? "Stop watching" : "Watch live") + "</button>" +
+                 "<button class='ws-btn-line' onclick='gpRecToggle()'>" +
+                 (rec ? "Stop recording" : "Start recording") + "</button></div>";
+            h += "<button class='ws-btn-line' style='margin-top:6px' onclick='gpTraceClear()'>Clear the node's recording</button>";
+            h += "<div class='ws-note'>" + (rbOn
+                 ? "The node records from the moment it has power — nothing to press before a drive. It writes only above 8 km/h, so a stationary car records nothing on purpose. (Setup → Recording changes what a power-up does, for a daily.)"
+                 : "This node waits for the <b>REC</b> button — press it before the drives you want kept, here or on the dash. It writes only above 8 km/h, and the memory holds about six hours before the oldest drive is overwritten. (Setup → Recording flips it back to always-on.)") +
+                 "</div>";
+            h += "<div class='gp-msg' id='gpTraceMsg'></div></div>";
             return h;
         }
 
@@ -11200,8 +12159,21 @@
 
         function gpFitLaneH(rows) {
             if (!rows) return GP_LANE_H;
-            var stage = document.getElementById("gpStageCol");
             var cv = document.getElementById("gpStrip");
+            /* In the grid the rack is inside a panel, and the panel body IS
+               the space it gets — no siblings to subtract beyond the
+               navigator and the legend. Lanes may go below the usual floor
+               here: a Graph panel one row tall is a legitimate thing to ask
+               for, and a squeezed lane still reads better than a clipped one. */
+            var wrap = cv && cv.closest ? cv.closest(".gpb-graphwrap") : null;
+            if (wrap && wrap.clientHeight) {
+                var other = 0, k;
+                for (k = 0; k < wrap.children.length; k++)
+                    if (wrap.children[k] !== cv) other += wrap.children[k].offsetHeight || 0;
+                var free = wrap.clientHeight - other - 4 - GP_AXIS_H;
+                return Math.max(26, Math.min(GP_LANE_MAX, Math.floor(free / rows)));
+            }
+            var stage = document.getElementById("gpStageCol");
             if (!stage || !stage.clientHeight || !cv || !stage.children) return GP_LANE_H;
             /* Measure EVERY sibling rather than naming the map and the
                transport: the stage also carries the hint banner, which comes
@@ -11366,6 +12338,7 @@
            difference between a hairline and a grey smear. */
         function gpRackStatic(w, h, rng, dpr) {
             var key = [gp.selLap, gp.cmpLap, rng.from, rng.to, w, h, dpr, gpLaneSig(), gp.plotMode,
+                       gpShownList().join(","),
                        JSON.stringify(gp.laneW || {})].join(":");
             if (gp.stripCache && gp.stripCache.key === key) return gp.stripCache.cv;
 
@@ -11606,6 +12579,41 @@
                         if (i === rng.from) g.moveTo(x, y(v)); else g.lineTo(x, y(v));
                     }
                     g.stroke();
+                }
+
+                /* ---- the other ticked laps, over the same lane ------------
+                   Aligned by ELAPSED TIME from each lap's own start, which is
+                   what the x-axis already is. A quicker lap therefore ends
+                   short of the right edge and a slower one runs past it —
+                   which is the comparison, not an artefact. Drawn as plain
+                   thin lines: the envelope decimation belongs to the lap
+                   being analysed, and stacking envelopes turns the well into
+                   a smear. Skipped in overlaid mode, where the well already
+                   carries every channel. */
+                if (gp.plotMode !== "over" && !noData && lane.id !== "delta") {
+                    var selSpan = gpSecs(gp.trace, rng.from, rng.to) || 1;
+                    gpShownList().forEach(function (li) {
+                        if (li === gp.selLap) return;
+                        var lp = gp.traceLaps[li];
+                        if (!lp || lp.to <= lp.from) return;
+                        g.strokeStyle = gpLapColour(li);
+                        g.lineWidth = 1.1;
+                        g.lineJoin = "round"; g.lineCap = "round";
+                        g.globalAlpha = 0.85;
+                        g.beginPath();
+                        var started = false, q;
+                        for (q = lp.from; q <= lp.to; q++) {
+                            var el2 = gpSecs(gp.trace, lp.from, q);
+                            if (el2 > selSpan) break;
+                            var vq = lane.get(q);
+                            if (vq === null || vq === undefined || !isFinite(vq)) { started = false; continue; }
+                            var xq = plotX + (el2 / selSpan) * plotW;
+                            if (!started) { g.moveTo(xq, y(vq)); started = true; }
+                            else g.lineTo(xq, y(vq));
+                        }
+                        g.stroke();
+                        g.globalAlpha = 1;
+                    });
                 }
 
                 /* Top and bottom of this lane's scale, in the name column
@@ -13630,6 +14638,23 @@
                                   renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
             }
 
+            /* Every OTHER ticked lap, flat, in its own colour (ADR-0025). The
+               analysed lap keeps the data colouring below — two laps both
+               coloured by braking would be two rainbows and no comparison. */
+            if (gp.view === "session") {
+                var Pm = gpSmoothPath();
+                gpShownList().forEach(function (li) {
+                    if (li === gp.selLap || li === gp.cmpLap) return;
+                    var lp = gp.traceLaps[li];
+                    if (!lp) return;
+                    var q = [];
+                    for (var m = lp.from; m <= lp.to; m += 2)
+                        q.push(Pm ? Pm[m] : [rows[m].lat, rows[m].lon]);
+                    L.polyline(q, { color: gpLapColour(li), weight: 2, opacity: 0.85,
+                                    renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
+                });
+            }
+
             var r = gpLapRange();
             var mode = gpEffectiveMapMode();
             var value, colour;
@@ -15576,23 +16601,24 @@
                 viewer.style.display = mapless ? "none" : "";
             }
             var railEl = document.getElementById("gpRail");
+            /* Corners is map + table + detail (design 4a), and Analyse is a
+               grid of panels (ADR-0025) — neither wants a fixed rail. */
+            var noRail = (view === "corners" || view === "session");
             if (railEl) {
                 railEl.classList.remove("gp-onecol");
-                /* Corners is map + table + detail (design 4a): the lap and the
-                   reference are picked in the strip above the table, so the
-                   rail would only repeat them. */
-                railEl.style.display = view === "corners" ? "none" : "";
+                railEl.style.display = noRail ? "none" : "";
                 var split = railEl.nextElementSibling;
                 if (split && split.classList.contains("ws-split"))
-                    split.style.display = view === "corners" ? "none" : "";
+                    split.style.display = noRail ? "none" : "";
             }
             /* BEFORE gpBuildRail below: rail rebuilds by innerHTML would take
-               a docked map's DOM with it. */
-            gpDockViewer(view === "corners" ? "corners" : "stage");
+               a docked map's DOM with it. In Analyse the grid claims the map
+               itself, so the docker is told to leave it alone. */
+            if (view !== "session") gpDockViewer(view === "corners" ? "corners" : "stage");
             gpCurCardUpdate();
             /* The report column: hidden only on the Sessions library. */
             var insp = document.getElementById("gpInspector");
-            if (insp) insp.style.display = view === "sessions" ? "none" : "";
+            if (insp) insp.style.display = (view === "sessions" || view === "session") ? "none" : "";
             gpViewerSync();
             var su = document.getElementById("gpSetupWrap");
             if (su) su.style.display = view === "setup" ? "flex" : "none";
@@ -15600,10 +16626,14 @@
             if (sw) sw.style.display = view === "sessions" ? "block" : "none";
             var cw = document.getElementById("gpCornersWrap");
             if (cw) cw.style.display = view === "corners" ? "flex" : "none";
+            var gw = document.getElementById("gpGrid");
+            if (gw) gw.style.display = view === "session" ? "flex" : "none";
+            var dw = document.getElementById("gpDock");
+            if (dw) dw.style.display = view === "session" ? "flex" : "none";
             if (grid) grid.style.display = view === "monitor" ? "" : "none";
-            /* The playback bar is part of Analyse's structure: visible either
-               way, idle until a recording gives it something to play. */
-            if (pb) pb.style.display = view === "session" ? "flex" : "none";
+            /* The old playbar is retired: the transport lives in the dock
+               along the bottom of the grid now (ADR-0025). */
+            if (pb) pb.style.display = "none";
             if (view !== "session") gpPlayStop();
             if (view !== "session" && gp.chanPop) { gp.chanPop = false; gpChanPopRender(); }
             /* Corners may re-point gp.selLap (analyse the challenger, not the
@@ -15618,6 +16648,7 @@
             gpDrawCornerBadges();
             if (view === "sessions") gpRenderSessions();
             if (view === "corners") gpRenderCorners();
+            if (view === "session") gpRenderGrid();
             gpRenderInspector();
             gpSyncExportBtn();
             if (gp.map) setTimeout(function () { if (gp.map) gp.map.invalidateSize(); }, 60);
@@ -16190,6 +17221,12 @@
                 gpRenderSetup();
                 /* the inspector itself shows the device at a glance */
             }
+            /* Recording belongs to the view that is ABOUT the device. It
+               used to live in the Analyse inspector, which ADR-0025 removed;
+               the checklist and the four things you DO are here now, above
+               the identity panel. */
+            var recH = gpRecordingGroupHtml();
+
             /* Reading the CAN fields out of the stale device.info copy had
                this panel insisting the base was 0x500 while the frame map two
                feet away — freshly read from the same node — said 0x400. The
@@ -16198,7 +17235,8 @@
             var d = gpDevCfg();
 
             var h = "<h2>" + gpEsc((gp.info && gp.info.name) || "RDM GPS") + "</h2>" +
-                "<div class='ws-sub'>" + gpEsc(d.serial || "not connected") + "</div>";
+                "<div class='ws-sub'>" + gpEsc(d.serial || "not connected") + "</div>" +
+                "<div id='gpReadyCard'></div>" + recH;
 
             h += "<div class='ws-grp'><div class='ws-gt'>Device</div><div class='gp-rows'>" +
                 GP_IDENTITY.map(function (f) {
@@ -16208,6 +17246,7 @@
 
             h += "<div class='ws-note'>Units, CAN bus, WiFi and Identify live in <b>Setup</b>.</div>";
             box.innerHTML = h;
+            gpRenderReady();
             gpRestoreMsgs();
         }
 
