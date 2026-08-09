@@ -10186,7 +10186,7 @@
             keep.forEach(function (st) {
                 chain = chain.then(function () {
                     var seg = rows.slice(st.from, st.to + 1);
-                    gp.trace = seg;
+                    gp.trace = seg; gp.framed = false;
                     gpComputeG(seg);
                     var s = gpSplitLapsAuto();
                     if (s && said.indexOf(s) < 0) said.push(s);
@@ -10216,7 +10216,7 @@
                    of different geometry than the ones that were saved. */
                 if (meta.trackId && gp.tracks && gpTrackById(meta.trackId))
                     gp.tracks.active = meta.trackId;
-                gp.trace = rows;
+                gp.trace = rows; gp.framed = false;
                 gp.traceInfo = { used_samples: rows.length };
                 gp.sessionId = id;
                 /* The columns came back with the rows; this is what they mean.
@@ -17402,11 +17402,25 @@
             gpDrawPlayhead();
         }
 
+        /* Frame the lap. Once per recording, and then never again on its own:
+           see the note at the two automatic call sites. */
         function gpFitTrace() {
             if (!gp.map || !gp.trace || !gp.trace.length) return;
+            /* The container is sized by aspect-ratio, so right after a
+               re-parent it can still measure nothing. Fitting into a 0x0 box
+               produces a garbage view AND would mark the recording framed,
+               which is why gpDockViewer retries at 0, 60 and 250 ms — bail
+               here so the later attempt is the one that counts. */
+            var sz = gp.map.getSize();
+            if (sz.x < 40 || sz.y < 40) return;
             var r = gpLapRange(), pts = [];
             for (var i = r.from; i <= r.to; i += 5) pts.push([gp.trace[i].lat, gp.trace[i].lon]);
-            if (pts.length > 1) gp.map.fitBounds(pts, { padding: [30, 30] });
+            /* Only a fit that actually happened counts as framing. Marking it
+               on the way in let a call that had nothing to fit — a range one
+               sample wide before the laps are split — block the real one. */
+            if (pts.length < 2) return;
+            gp.map.fitBounds(pts, { padding: [30, 30] });
+            gp.framed = true;
         }
 
         /* ---- playback ------------------------------------------------------ */
@@ -17517,6 +17531,42 @@
             var r = gpLapRange();
             var at = gpSecs(gp.trace, r.from, gp.playIdx) + dSecs;
             gp.playIdx = gpLapIdxAtSecs(r, Math.max(0, at));
+        }
+
+        /* The same PLACE ON TRACK in another lap — the sibling of
+           gpLapIdxAtSecs, which finds the same MOMENT. Switching which lap
+           you are analysing is nearly always "show me this corner on that
+           lap", so the position has to survive the switch; the time does
+           not, and holding the time instead would land you somewhere else
+           entirely on a lap a second and a half slower.
+
+           Distance round the lap gets close, and a local nearest-position
+           search finishes it, because two laps that take a corner
+           differently cover slightly different ground getting to it. The
+           search is LOCAL for the usual reason: a hairpin would otherwise
+           match the far side of the track. */
+        function gpSameSpot(idx, fromLap, toLap) {
+            var rows = gp.trace;
+            var a = gp.traceLaps[fromLap], b = gp.traceLaps[toLap];
+            if (!rows || !a || !b) return null;
+            if (idx < a.from) idx = a.from;
+            if (idx > a.to) idx = a.to;
+            var la = gpArcLength(rows, a.from, a.to);
+            var lb = gpArcLength(rows, b.from, b.to);
+            if (!(la > 0) || !(lb > 0)) return null;
+            var want = (gpArcLength(rows, a.from, idx) / la) * lb;
+            var run = 0, guess = b.to, k;
+            for (k = b.from; k < b.to; k++) {
+                run += (rows[k].kph / 3.6) * gpStep(rows, k);
+                if (run >= want) { guess = k; break; }
+            }
+            var lo = Math.max(b.from, guess - 60), hi = Math.min(b.to, guess + 60);
+            var best = guess, bd = Infinity;
+            for (k = lo; k <= hi; k++) {
+                var d = gpMetres(rows[k], rows[idx]);
+                if (d < bd) { bd = d; best = k; }
+            }
+            return best;
         }
 
         function gpDropGhosts() {
@@ -17786,14 +17836,43 @@
             }, 50);
         }
 
+        /* Switching laps holds your PLACE, and leaves the map alone.
+           It used to send the playhead back to the start line and re-frame
+           the whole lap, which threw away the thing you had just set up:
+           zoom into turn six, click the next lap to see how you took it,
+           and you were looking at the start-finish straight from orbit
+           again. Comparing a corner across five laps meant re-zooming five
+           times. */
         window.gpSelectLap = function (i) {
+            var was = gp.selLap, wasIdx = gp.playIdx, wasZoom = gp.stripZoom;
             gp.selLap = parseInt(i, 10);
-            gp.stripZoom = null;        /* a corner zoom belongs to one lap */
             gp.insightCursor = -1;
-            gp.playIdx = gpLapRange().from;
+            var here = (was >= 0 && was !== gp.selLap && gp.traceLaps[was] &&
+                        gp.traceLaps[gp.selLap] && gp.trace && gp.trace.length)
+                ? gpSameSpot(wasIdx, was, gp.selLap) : null;
+            if (here === null) {
+                /* Nothing to hold — first lap opened, or the laps just got
+                   re-split under us. Frame it. */
+                gp.stripZoom = null;
+                gp.playIdx = gpLapRange().from;
+            } else {
+                gp.playIdx = here;
+                /* A corner zoom on the rack is the same intent as a zoom on
+                   the map, so it travels the same way. It used to be dropped
+                   with the note "a corner zoom belongs to one lap", which was
+                   true of the sample INDICES and not of the corner. */
+                var f = wasZoom && wasZoom.lap === was
+                    ? gpSameSpot(wasZoom.from, was, gp.selLap) : null;
+                var t = wasZoom && wasZoom.lap === was
+                    ? gpSameSpot(wasZoom.to, was, gp.selLap) : null;
+                gp.stripZoom = (f !== null && t !== null && t > f)
+                    ? { lap: gp.selLap, from: f, to: t } : null;
+            }
             gpPlayStop();
             gpSyncScrub();
-            gpDrawTrace(); gpFitTrace(); gpRenderInspector();
+            gpDrawTrace();
+            if (here === null) gpFitTrace();
+            gpRenderInspector();
         };
         window.gpCompareLap = function (i) {
             gpGhostDrop();                    /* a real reference replaces the ghost */
@@ -19446,8 +19525,13 @@
                     gp.map.invalidateSize({ animate: false });
                     gpDrawTrace();
                     gpDrawEditor();
+                    /* Only if this recording has never been framed. This
+                       runs on every relayout — and the grid re-parents the
+                       map on every render — so without the guard, clicking
+                       a different lap threw away the corner you had just
+                       zoomed into and put you back over the start line. */
                     if ((gp.view === "session" || gp.view === "corners") &&
-                        gp.trace && gp.trace.length && !gp.stripZoom) gpFitTrace();
+                        gp.trace && gp.trace.length && !gp.stripZoom && !gp.framed) gpFitTrace();
                 }, d);
             });
         }
@@ -19563,7 +19647,7 @@
                 /* …unless something already framed a corner (a coach jump, a
                    corner pick): a whole-lap fit would throw that framing away. */
                 setTimeout(function () {
-                    if (gp.map && gp.trace && gp.trace.length && !gp.stripZoom) gpFitTrace();
+                    if (gp.map && gp.trace && gp.trace.length && !gp.stripZoom && !gp.framed) gpFitTrace();
                 }, 80);
             }
         };
