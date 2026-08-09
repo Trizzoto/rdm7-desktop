@@ -10660,27 +10660,21 @@
                  "<button class='gp-tbtn' title='Jump to end' onclick=\"gpTransport('end')\">" +
                  "<svg viewBox='0 0 12 12'><path d='M8.9 1.5h1.6v9H8.9zM1.5 1.5v9L8 6z'/></svg></button></div>";
             if (d.pos) {
-                var el3 = have ? gpSecs(gp.trace, r.from, i) : 0;
-                var tot = have ? gpSecs(gp.trace, r.from, r.to) : 0;
-                h += "<div style='min-width:118px'><div class='k'>Position</div><div class='v'>" +
-                     gpTcFmt(el3) + " <small>/ " + gpTcFmt(tot) + "</small></div></div>";
+                h += "<div style='min-width:118px'><div class='k'>Position</div>" +
+                     "<div class='v' data-dv='pos'></div></div>";
             }
             h += "<input type='range' id='gpDockScrub' min='0' max='" + Math.max(0, r.to - r.from) +
                  "' value='" + Math.max(0, i - r.from) + "' step='1' oninput='gpScrubTo(this.value)'" +
                  (have ? "" : " disabled") + ">";
             if (d.delta) {
-                var dv = null, ds = gpDeltaSeries();
-                if (ds && have) dv = ds[i - r.from];
                 h += "<div style='min-width:84px'><div class='k'>&Delta; vs " +
                      (gp.cmpLap >= 0 ? gpEsc(gpRefName()) : "ref") + "</div>" +
-                     "<div class='v" + (dv > 0.005 ? " red" : "") + "'>" +
-                     (dv === null || dv === undefined || !isFinite(dv) ? "&mdash;"
-                        : (dv >= 0 ? "+" : "") + dv.toFixed(2) + " <small>s</small>") + "</div></div>";
+                     "<div class='v' data-dv='delta'></div></div>";
             }
             if (d.speed || d.rpm || d.thr) h += "<div class='sep'></div>";
             if (d.speed) {
-                h += "<div style='min-width:76px'><div class='k'>Speed</div><div class='v'>" +
-                     (s ? Math.round(gpSpdN(s.kph)) : "&mdash;") + " <small>" + gpSpdU() + "</small></div></div>";
+                h += "<div style='min-width:76px'><div class='k'>Speed</div>" +
+                     "<div class='v' data-dv='speed'></div></div>";
             }
             /* RPM and throttle come from whatever CAN channels this recording
                carries — named by their own definitions, not assumed. */
@@ -10692,16 +10686,14 @@
                 return null;
             };
             if (d.rpm) {
-                var Lr = pick(/rpm/i), vr = Lr ? Lr.get(i) : null;
+                var Lr = pick(/rpm/i);
                 h += "<div style='min-width:60px'><div class='k'>" + gpEsc(Lr ? Lr.label : "RPM") + "</div>" +
-                     "<div class='v'>" + (vr === null || vr === undefined ? "&mdash;" : Math.round(vr)) + "</div></div>";
+                     "<div class='v' data-dv='rpm'></div></div>";
             }
             if (d.thr) {
-                var Lt = pick(/thr/i), vt = Lt ? Lt.get(i) : null;
-                var pct = (vt === null || vt === undefined) ? null : Math.max(0, Math.min(100, vt));
-                h += "<div><div class='k'>" + gpEsc(Lt ? Lt.label : "Throttle") +
-                     (pct === null ? "" : " " + Math.round(pct) + "%") + "</div>" +
-                     "<div class='gpb-thrbar'><i style='width:" + (pct === null ? 0 : pct) + "%'></i></div></div>";
+                var Lt = pick(/thr/i);
+                h += "<div><div class='k' data-dv='thrk'>" + gpEsc(Lt ? Lt.label : "Throttle") + "</div>" +
+                     "<div class='gpb-thrbar'><i data-dv='thr'></i></div></div>";
             }
             if (d.rate) {
                 h += "<div class='gpb-seg'>" + [1, 2, 4, 10].map(function (x) {
@@ -10709,11 +10701,60 @@
                 }).join("") + "</div>";
             }
             el.innerHTML = h;
+            gpUpdateDock();
             el.oncontextmenu = function (e) {
                 e.preventDefault();
                 gpDockMenu(e.clientX, e.clientY);
             };
             el.title = "Right-click to choose what this bar shows";
+        }
+
+        /* The dock is chrome that has to keep up with the playhead. It
+           writes values into slots rather than rebuilding the bar: a rebuild
+           twenty times a second would destroy the scrub the user is dragging,
+           close the right-click menu, and re-lay-out the row for nothing. */
+        function gpUpdateDock() {
+            var el = document.getElementById("gpDock");
+            if (!el || gp.view !== "session") return;
+            var have = gp.trace && gp.trace.length;
+            var i = have ? Math.max(0, Math.min(gp.playIdx, gp.trace.length - 1)) : 0;
+            var s = have ? gp.trace[i] : null;
+            var r = have ? gpLapRange() : { from: 0, to: 0 };
+            var put = function (k, html) {
+                var n = el.querySelector("[data-dv='" + k + "']");
+                if (n) n.innerHTML = html;
+            };
+            put("pos", have ? gpTcFmt(gpSecs(gp.trace, r.from, i)) +
+                              " <small>/ " + gpTcFmt(gpSecs(gp.trace, r.from, r.to)) + "</small>" : "&mdash;");
+            var dn = el.querySelector("[data-dv='delta']");
+            if (dn) {
+                var ds = gpDeltaSeries(), dv = (ds && have) ? ds[i - r.from] : null;
+                var ok = dv !== null && dv !== undefined && isFinite(dv);
+                dn.innerHTML = ok ? (dv >= 0 ? "+" : "") + dv.toFixed(2) + " <small>s</small>" : "&mdash;";
+                dn.classList.toggle("red", !!(ok && dv > 0.005));
+            }
+            put("speed", s ? Math.round(gpSpdN(s.kph)) + " <small>" + gpSpdU() + "</small>" : "&mdash;");
+            var lanes = have ? gpLaneRowsAll().filter(function (L) {
+                return L.id.indexOf("can_") === 0 && !L.pending && typeof L.get === "function";
+            }) : [];
+            var pick2 = function (re) {
+                for (var k = 0; k < lanes.length; k++) if (re.test(String(lanes[k].label))) return lanes[k];
+                return null;
+            };
+            var Lr = pick2(/rpm/i), vr = Lr ? Lr.get(i) : null;
+            put("rpm", (vr === null || vr === undefined || !isFinite(vr)) ? "&mdash;" : Math.round(vr));
+            var Lt = pick2(/thr/i), vt = Lt ? Lt.get(i) : null;
+            var pct = (vt === null || vt === undefined || !isFinite(vt)) ? null : Math.max(0, Math.min(100, vt));
+            var bar = el.querySelector("[data-dv='thr']");
+            if (bar) bar.style.width = (pct === null ? 0 : pct) + "%";
+            var thk = el.querySelector("[data-dv='thrk']");
+            if (thk && Lt) thk.textContent = Lt.label + (pct === null ? "" : " " + Math.round(pct) + "%");
+            /* the scrub follows the playhead, but never while it is being dragged */
+            var sc = document.getElementById("gpDockScrub");
+            if (sc && document.activeElement !== sc) {
+                sc.max = String(Math.max(0, r.to - r.from));
+                sc.value = String(Math.max(0, i - r.from));
+            }
         }
 
         function gpDockMenu(x, y) {
@@ -14927,6 +14968,7 @@
             gpVideoDrawOverlay();
             gpDrawStrip();
             gpCurCardUpdate();
+            gpUpdateDock();
             if (!gp.map || !gp.trace || !gp.trace.length) return;
             /* On the line the user can SEE, not on the raw fix half a metre
                off it — a car that floats beside its own trace is worse than a
