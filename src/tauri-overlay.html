@@ -8441,8 +8441,12 @@
          * along, so projecting the pit lane's midpoint onto the ring lands on
          * the right straight, pointing the right way.
          *
-         * It is a good starting point and NOT the painted line — nudge it. Which
-         * is why this is a hint used when a gate is placed, and not a gate that
+         * A fourth element, 1, marks an entry that WAS put on the paint and
+         * checked — those are not guesses and do not carry the flag.
+         *
+         * Otherwise it is a good starting point and NOT the painted line — nudge
+         * it. Which
+         * is why the gate says where it came from, and not merely that
          * ships pre-placed: a line you did not put there, that the readiness
          * card calls done, is worse than no line at all.
          *
@@ -8451,10 +8455,13 @@
          * which is where a start/finish goes when nobody has told you where it
          * goes. Weaker evidence, same flag, same instruction to check it. */
         var GP_STARTS = {
-            bend_gt:       [-35.306746, 139.5112627, 3.9],   /* Pit Lane */
-            bend_intl:     [-35.3067459, 139.5112621, 3.9],   /* Pit Lane */
-            bend_west:     [-35.306746, 139.5112634, 3.9],   /* Pit Lane */
-            bend_westplus: [-35.306746, 139.5112634, 3.9],   /* Pit Lane */
+            /* All four Bend layouts cross the SAME line — placed by hand on
+               the paint and copied across, so these four are the only
+               entries here that are not a guess. */
+            bend_gt:       [-35.3083044, 139.5111334, 2.3, 1],   /* placed by hand */
+            bend_intl:     [-35.3083044, 139.5111334, 2.3, 1],   /* placed by hand */
+            bend_west:     [-35.3083044, 139.5111334, 2.3, 1],   /* placed by hand */
+            bend_westplus: [-35.3083044, 139.5111334, 2.3, 1],   /* placed by hand */
             phillip:       [-38.502307, 145.2319802, 161.2],   /* Pit lane */
             smp:           [-33.8033537, 150.8676736, 262.8],   /* Pit Lane */
             smp_brabham:   [-33.8033537, 150.8676736, 262.8],   /* Pit Lane */
@@ -8598,7 +8605,12 @@
                 /* Same for the line: a circuit opened before the start/finish
                    shipped has none, and nothing would ever have given it one.
                    Only ever ADDS — a gate you placed is never touched. */
-                if (!t.start_finish && t.place) {
+                if (t.place && (!t.start_finish || t.start_finish.derived)) {
+                    /* Refreshing a DERIVED gate as well as filling an absent
+                       one: it is not your work, so a better answer shipping
+                       later should replace it rather than leave the first
+                       guess sitting there for ever. A gate you placed has no
+                       `derived` flag and is never touched by this. */
                     var dg = gpDerivedGate(t.place);
                     if (dg) t.start_finish = dg;
                 }
@@ -18525,7 +18537,13 @@
         function gpDerivedGate(placeId) {
             var s = GP_STARTS[placeId];
             if (!s) return null;
-            return { lat: s[0], lon: s[1], heading: s[2], half_width_m: 15, derived: true };
+            var g = { lat: s[0], lon: s[1], heading: s[2], half_width_m: 15 };
+            /* A fourth element means this one was put on the actual paint and
+               checked, so it is not a guess and must not be labelled one. The
+               card would otherwise send you off to fix a line that is already
+               right, which is how a warning stops being read. */
+            if (!s[3]) g.derived = true;
+            return g;
         }
 
         /* The record for a circuit, made the first time you open it. Keyed by
@@ -18673,7 +18691,10 @@
            — which is not the same as "far", and the caller has to tell them
            apart. */
         function gpOutlineDistM(t, lat, lon) {
-            var pts = t && t.outline && t.outline.pts;
+            return gpPtsDistM(t && t.outline && t.outline.pts, lat, lon);
+        }
+
+        function gpPtsDistM(pts, lat, lon) {
             if (!pts || pts.length < 2) return null;
             var md = gpMetresPerDeg(pts[0][0]);
             var px = lon * md.lo, py = lat * md.la, bd = Infinity;
@@ -18689,6 +18710,72 @@
             }
             return bd === Infinity ? null : bd;
         }
+
+        /* ---- one line, several layouts ------------------------------------
+         * A venue with more than one configuration crosses the same painted
+         * line on most of them — all four Bend layouts do — so placing it
+         * four times is placing it three times too many, and the three
+         * copies will not agree with each other.
+         *
+         * Which layouts share it is DERIVED, not declared: a sibling
+         * qualifies when its own shape RUNS THROUGH the line, which is the
+         * same question as "would this line time a lap of that layout". A
+         * hand-kept table of which configurations share a start would go
+         * stale and would have to be right about circuits nobody here has
+         * driven.
+         *
+         * Ten metres, not thirty. At thirty, Sydney's Druitt North claimed
+         * Gardner's line from twenty metres away — near it, not on it, and
+         * Druitt has a start of its own. Ten is inside the tarmac and
+         * outside the near misses. */
+        function gpLineSiblings(t) {
+            var sf = t && t.start_finish;
+            if (!sf || !t.place) return [];
+            var out = [];
+            Object.keys(GP_SHAPES).forEach(function (id) {
+                if (id === t.place) return;
+                var d = gpPtsDistM(GP_SHAPES[id], sf.lat, sf.lon);
+                if (d !== null && d <= 10) out.push(id);
+            });
+            return out;
+        }
+
+        window.gpGateToSiblings = function () {
+            var t = gpActiveTrack();
+            var sf = t && t.start_finish;
+            if (!sf) return;
+            var sibs = gpLineSiblings(t);
+            if (!sibs.length) return;
+            var names = [];
+            sibs.forEach(function (id) {
+                var rec = gpTrackForPlace(id);
+                if (!rec) {
+                    var place = GP_PLACES.filter(function (p) { return p.id === id; })[0];
+                    if (!place) return;
+                    rec = { id: gpTrackUid(), name: place.name, place: place.id,
+                            center: place.center, zoom: place.zoom,
+                            start_finish: null, sectors: [], min_lap_time_s: 10 };
+                    var shape = GP_SHAPES[place.id];
+                    if (shape && shape.length > 1) {
+                        var ring = shape.map(function (p) { return [p[0], p[1]]; });
+                        rec.outline = { pts: ring, nodes: ring.map(function (p) { return [p[0], p[1]]; }),
+                                        closed: true, round: 0, src: "osm", at: Date.now() };
+                    }
+                    gp.tracks.tracks.push(rec);
+                }
+                /* A copy, not a reference — two tracks sharing one gate object
+                   would move together for ever after. `derived` does not come
+                   with it: this line was placed by hand, and it stays placed
+                   by hand wherever it lands. */
+                rec.start_finish = { lat: sf.lat, lon: sf.lon, heading: sf.heading,
+                                     half_width_m: sf.half_width_m };
+                names.push(rec.name);
+            });
+            gpTracksSave();
+            gpBuildRail(); gpDrawEditor(); gpRenderInspector();
+            gpSetMsg("gpTrackMsg", "Timing line copied to " + names.join(", ") +
+                     ". Each keeps its own sectors.", "ok");
+        };
 
         /* Drop a gate at the middle of the current view — the "I'm looking at
            the line right now" gesture. Heading defaults along the map's up. */
@@ -21284,6 +21371,23 @@
                                        : "Push the shape to the dash when one is connected"),
                     (pushed || !olNow || !dashHere) ? null : "gpOutlinePush()");
                 h += "</div>";
+                /* Only once the line is yours: offering to spread a guess
+                   across four layouts spreads the guess. */
+                if (t.start_finish && !derived) {
+                    var sibs = gpLineSiblings(t);
+                    if (sibs.length) {
+                        var sibNames = sibs.map(function (id) {
+                            var p = GP_PLACES.filter(function (x) { return x.id === id; })[0];
+                            return p ? p.name : id;
+                        });
+                        h += "<button class='ws-btn-line' style='margin-top:8px' " +
+                             "onclick='gpGateToSiblings()' title='" + gpEsc(sibNames.join(", ")) + "'>" +
+                             "Use this line on the other " + sibs.length + " layout" +
+                             (sibs.length > 1 ? "s" : "") + " here</button>" +
+                             "<div class='ws-note' style='margin-top:4px'>" +
+                             gpEsc(sibNames.join(", ")) + " run through it too.</div>";
+                    }
+                }
             }
 
             h += "<div class='ws-field'><label>Track name</label>" +
