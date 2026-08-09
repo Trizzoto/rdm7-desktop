@@ -2565,6 +2565,235 @@
         #gpWorkspace .gpb-corner-badge.l1 { background: var(--gpb-red-300); color: var(--gpb-red-900); }
         #gpWorkspace .gpb-corner-badge.l2 { background: var(--gpb-red); color: #fff; border-color: var(--gpb-red-700); }
 
+        /* ================================================================
+           Analyse: the panel grid (ADR-0025)
+           ================================================================ */
+        /* The grid is the scrollport (ADR-0026). Not the stage: the dock has
+           to stay pinned along the bottom while the panels scroll past it,
+           and it is a sibling of this element, not a child. */
+        #gpWorkspace .gpb-grid {
+            flex: 1; min-height: 0; display: flex; flex-direction: column;
+            padding: var(--gpb-pg, 10px) 14px; overflow: hidden auto;
+        }
+        /* The mosaic itself. flex:1 makes it fill the port when it fits;
+           an inline min-height (set by gpGridLayout when the arrangement is
+           taller than the port) is what makes the port scroll instead. */
+        #gpWorkspace .gpb-canvas { flex: 1 1 auto; min-height: 0; display: flex; }
+        /* One rule at every depth: a split is a flex box, and every child —
+           panel or nested split — is sized by `flex: <size> 1 0%`. That one
+           declaration is why the same numbers can mean pixels (when the box
+           is exactly their sum, which is the tall case) and proportions
+           (when it is not, which is the fitted one). */
+        #gpWorkspace .gpb-node { display: flex; min-width: 0; min-height: 0; }
+        #gpWorkspace .gpb-node.row { flex-direction: row; }
+        #gpWorkspace .gpb-node.col { flex-direction: column; }
+        #gpWorkspace .gpb-panel {
+            min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column;
+            border: 1px solid var(--gpb-div); background: var(--gpb-surface);
+        }
+        #gpWorkspace .gpb-phead {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 5px 4px 5px; border-bottom: 1px solid var(--gpb-div); flex: none;
+            cursor: grab; user-select: none; touch-action: none;
+        }
+        #gpWorkspace .gpb-phead:active { cursor: grabbing; }
+        /* The header IS the handle, but a surface you can drag has to look
+           like one — six dots is the one idiom nobody has to be taught. */
+        #gpWorkspace .gpb-grip {
+            flex: none; width: 10px; height: 16px; opacity: 0.3;
+            background-image: radial-gradient(circle, var(--gpb-ink) 1px, transparent 1px);
+            background-size: 4px 5px; background-position: 1px 2px;
+        }
+        #gpWorkspace .gpb-phead:hover .gpb-grip { opacity: 0.65; }
+        /* Controls in the header keep their own cursor and their own clicks. */
+        #gpWorkspace .gpb-phead select, #gpWorkspace .gpb-phead button { cursor: pointer; }
+        #gpWorkspace .gpb-panel.dragsrc { opacity: 0.4; }
+        #gpWorkspace .gpb-drop {
+            position: absolute; z-index: 900; pointer-events: none;
+            background: rgba(210,35,42,0.16); border: 2px solid var(--gpb-red);
+            display: flex; align-items: flex-start; justify-content: center;
+            padding-top: 8px;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 12px;
+            letter-spacing: 0.12em; text-transform: uppercase; color: var(--gpb-red-800);
+        }
+        #gpWorkspace .gpb-dragghost {
+            position: fixed; z-index: 16050; pointer-events: none;
+            background: var(--gpb-surface); border: 1px solid var(--gpb-red);
+            box-shadow: 0 10px 26px rgba(0,0,0,0.28); padding: 5px 12px;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 13px;
+            letter-spacing: 0.07em; text-transform: uppercase; color: var(--gpb-ink);
+            white-space: nowrap;
+        }
+        #gpWorkspace .gpb-phead select.ty {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 13.5px;
+            letter-spacing: 0.06em; text-transform: uppercase; color: var(--gpb-ink);
+            background: transparent; border: none; padding: 2px 0; cursor: pointer; max-width: 62%;
+        }
+        #gpWorkspace .gpb-phead select.lap {
+            font-size: 11.5px; color: var(--gpb-ink); background: transparent;
+            border: 1px solid var(--gpb-div); padding: 1px 4px; cursor: pointer;
+        }
+        #gpWorkspace .gpb-phead .sp { flex: 1; }
+        #gpWorkspace .gpb-pseg { display: inline-flex; border: 1px solid var(--gpb-div); margin-left: 4px; }
+        #gpWorkspace .gpb-pseg button {
+            font-size: 10.5px; padding: 2px 7px; background: transparent; border: none;
+            cursor: pointer; color: var(--gpb-soft); white-space: nowrap;
+        }
+        #gpWorkspace .gpb-pseg button + button { border-left: 1px solid var(--gpb-div); }
+        #gpWorkspace .gpb-pseg button:hover { background: rgba(29,31,32,0.06); }
+        #gpWorkspace .gpb-pseg button.on { background: var(--gpb-red); color: #fff; }
+        #gpWorkspace .gpb-picon {
+            width: 24px; height: 24px; display: grid; place-items: center;
+            background: transparent; border: none; cursor: pointer;
+            color: var(--gpb-ink); opacity: 0.5;
+        }
+        #gpWorkspace .gpb-picon:hover { opacity: 1; background: rgba(29,31,32,0.08); }
+        #gpWorkspace .gpb-picon.on { opacity: 1; background: var(--gpb-red-100); color: var(--gpb-red-800); }
+        /* Split menu: two ways to cut this panel, drawn as the cut they make. */
+        #gpWorkspace .gpb-splitmenu {
+            position: absolute; z-index: 30; background: var(--gpb-surface);
+            border: 1px solid var(--gpb-div); box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+            padding: 4px; display: flex; flex-direction: column; min-width: 156px;
+        }
+        #gpWorkspace .gpb-splitmenu button {
+            display: flex; align-items: center; gap: 8px; background: transparent;
+            border: none; cursor: pointer; font: inherit; font-size: 12px;
+            color: var(--gpb-ink); padding: 5px 7px; text-align: left;
+        }
+        #gpWorkspace .gpb-splitmenu button:hover { background: var(--gpb-red-100); color: var(--gpb-red-800); }
+        #gpWorkspace .gpb-splitmenu button svg { flex: none; opacity: 0.7; }
+        #gpWorkspace .gpb-pbody { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+        #gpWorkspace .gpb-pscroll { position: absolute; inset: 0; overflow: auto; }
+        /* resize handles */
+        #gpWorkspace .gpb-hcol {
+            flex: none; width: var(--gpb-pg, 10px); min-width: 7px; cursor: col-resize;
+            display: grid; place-items: center; touch-action: none;
+        }
+        #gpWorkspace .gpb-hrow {
+            flex: none; height: var(--gpb-pg, 10px); min-height: 7px; cursor: row-resize;
+            display: grid; place-items: center; touch-action: none;
+        }
+        #gpWorkspace .gpb-hcol i { width: 1px; height: 60%; background: var(--gpb-div); display: block; }
+        #gpWorkspace .gpb-hrow i { height: 1px; width: 96px; background: var(--gpb-div); display: block; }
+        #gpWorkspace .gpb-hcol:hover, #gpWorkspace .gpb-hrow:hover { background: var(--gpb-red-100); }
+        /* Adding a row used to be a 25 px dashed banner plus its 10 px margin,
+           permanently spending 35 px of panel to advertise a button pressed
+           once a month. Now it is a hairline that only becomes a button under
+           the pointer. */
+        #gpWorkspace .gpb-addrow {
+            flex: none; height: 12px; margin-top: 3px; border: none; padding: 0;
+            background: transparent; cursor: pointer; display: flex;
+            align-items: center; justify-content: center; gap: 8px;
+            color: var(--gpb-muted); font-family: var(--gpb-head); font-weight: 600;
+            font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+        }
+        #gpWorkspace .gpb-addrow i {
+            flex: 1; height: 1px; background: var(--gpb-div-lt); display: block;
+        }
+        #gpWorkspace .gpb-addrow span { opacity: 0; transition: opacity 0.12s; white-space: nowrap; }
+        #gpWorkspace .gpb-addrow:hover span { opacity: 1; }
+        #gpWorkspace .gpb-addrow:hover i { background: var(--gpb-red); }
+        #gpWorkspace .gpb-addrow:hover { color: var(--gpb-red-700); }
+
+        /* panels that host a real element (map / rack / video) */
+        #gpWorkspace .gpb-panel.hosting .gpb-pbody { display: flex; }
+        #gpWorkspace .gpb-panel.hosting .gp-viewer { flex: 1; min-height: 0; margin: 0; }
+        #gpWorkspace .gpb-panel.hosting .gp-mapwrap {
+            border: none; display: flex; flex-direction: column; flex: 1; min-height: 0;
+        }
+        #gpWorkspace .gpb-panel.hosting #gpMap { flex: 1; height: auto; min-height: 80px; }
+        #gpWorkspace .gpb-panel.hosting .gp-vtile { flex: 1; min-height: 0; border: none; display: block; }
+        /* The rack keeps its natural height (lanes never compress below
+           readable) and the panel scrolls when the arrangement does not give
+           it room — a squeezed lane draws its own label over its own trace. */
+        #gpWorkspace .gpb-graphwrap { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden auto; }
+        #gpWorkspace .gpb-graphwrap .gp-strip { flex: none; margin: 0; width: 100%; }
+        /* The navigator stays in view while the rack scrolls, so it needs to
+           be opaque: its own canvas only paints the plot area, and the gutter
+           would show the lanes sliding underneath it. */
+        #gpWorkspace .gpb-graphwrap .gp-nav {
+            flex: none; margin: 0; width: 100%; position: sticky; bottom: 0;
+            background: var(--gpb-bg); border-top: 1px solid var(--gpb-div-lt);
+        }
+        #gpWorkspace .gpb-glegend {
+            display: flex; align-items: center; gap: 12px; padding: 3px 9px; flex: none;
+            font-size: 11px; flex-wrap: wrap;
+        }
+        #gpWorkspace .gpb-glegend .sw { display: inline-flex; align-items: center; gap: 5px; }
+        #gpWorkspace .gpb-glegend .sw i { width: 10px; height: 10px; display: inline-block; }
+        #gpWorkspace .gpb-glegend b { font-family: var(--gpb-head); font-weight: 600; letter-spacing: 0.05em; }
+        #gpWorkspace .gpb-glegend .cur { margin-left: auto; color: var(--gpb-muted); font-variant-numeric: tabular-nums; }
+
+        /* lap times panel */
+        #gpWorkspace .gpb-lapline {
+            display: flex; align-items: center; gap: 9px; padding: 6px 11px;
+            border-bottom: 1px solid var(--gpb-div-lt); cursor: pointer; width: 100%;
+            background: transparent; border-left: none; border-right: none; border-top: none;
+            font: inherit; color: var(--gpb-ink); text-align: left;
+        }
+        #gpWorkspace .gpb-lapline:hover { background: rgba(29,31,32,0.04); }
+        #gpWorkspace .gpb-lapline.sel { background: rgba(29,31,32,0.06); box-shadow: inset 3px 0 0 var(--gpb-n900); }
+        #gpWorkspace .gpb-lapline input[type=checkbox] { accent-color: var(--gpb-red); width: 15px; height: 15px; cursor: pointer; }
+        #gpWorkspace .gpb-lapline .sw { width: 11px; height: 11px; flex: none; }
+        #gpWorkspace .gpb-lapline .nm { font-family: var(--gpb-head); font-weight: 600; font-size: 14px; letter-spacing: 0.05em; width: 54px; }
+        #gpWorkspace .gpb-lapline .tm { font-family: var(--gpb-head); font-weight: 600; font-size: 17px; font-variant-numeric: tabular-nums; }
+        #gpWorkspace .gpb-lapline .dl { font-size: 11.5px; color: var(--gpb-muted); font-variant-numeric: tabular-nums; }
+        #gpWorkspace .gpb-reftag {
+            font-size: 10px; letter-spacing: 0.04em; padding: 2px 7px; cursor: pointer;
+            border: 1px solid var(--gpb-div); background: transparent; color: var(--gpb-muted);
+        }
+        #gpWorkspace .gpb-reftag:hover { border-color: var(--gpb-ink); color: var(--gpb-ink); }
+        #gpWorkspace .gpb-reftag.on { border-color: var(--gpb-red); color: var(--gpb-red-700); }
+
+        /* where-the-time-went: diverging bars */
+        #gpWorkspace .gpb-div-row { display: flex; align-items: center; gap: 9px; padding: 2px 0; }
+        #gpWorkspace .gpb-div-row .lb { font-family: var(--gpb-head); font-weight: 600; font-size: 12.5px; width: 40px; letter-spacing: 0.04em; }
+        #gpWorkspace .gpb-div-track { flex: 1; position: relative; height: 14px; }
+        #gpWorkspace .gpb-div-track > .mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--gpb-div); }
+        #gpWorkspace .gpb-div-track > .neg { position: absolute; right: 50%; top: 2px; bottom: 2px; background: var(--gpb-red-600); }
+        #gpWorkspace .gpb-div-track > .pos { position: absolute; left: 50%; top: 2px; bottom: 2px; background: var(--gpb-red-100); border: 1px solid var(--gpb-red-500); }
+        #gpWorkspace .gpb-div-row .vl { font-size: 11.5px; font-variant-numeric: tabular-nums; width: 48px; text-align: right; color: var(--gpb-soft); }
+
+        /* the dock */
+        #gpWorkspace .gpb-dock {
+            flex: none; display: flex; align-items: center; gap: 16px;
+            padding: var(--gpb-dpv, 8px) 14px; border-top: 1px solid var(--gpb-div);
+            background: var(--gpb-surface); flex-wrap: wrap;
+        }
+        #gpWorkspace .gpb-dock .k { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-dock .v {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 16px; line-height: 1.1;
+            font-variant-numeric: tabular-nums; color: var(--gpb-ink);
+        }
+        #gpWorkspace .gpb-dock .v small { font-size: 10.5px; color: var(--gpb-muted); font-family: var(--gpb-body); font-weight: 400; }
+        #gpWorkspace .gpb-dock .v.red { color: var(--gpb-red-700); }
+        #gpWorkspace .gpb-dock .sep { width: 1px; align-self: stretch; background: var(--gpb-div); }
+        #gpWorkspace .gpb-dock input[type=range] { flex: 1; min-width: 80px; }
+        #gpWorkspace .gpb-thrbar { height: 7px; border: 1px solid var(--gpb-div); margin-top: 5px; position: relative; width: 84px; }
+        #gpWorkspace .gpb-thrbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gpb-red); display: block; }
+        #gpWorkspace .gpb-dockmenu {
+            position: fixed; z-index: 16000; width: 218px; background: var(--gpb-bg);
+            border: 1px solid var(--gpb-div); box-shadow: 0 12px 32px rgba(43,43,45,0.25); padding: 11px;
+        }
+        #gpWorkspace .gpb-dockmenu label {
+            display: flex; align-items: center; gap: 8px; padding: 4px 2px; cursor: pointer; font-size: 12.5px;
+        }
+        #gpWorkspace .gpb-dockmenu label:hover { background: rgba(29,31,32,0.05); }
+        #gpWorkspace .gpb-dockmenu input { accent-color: var(--gpb-red); }
+
+        /* layout controls — now inside the arrangement popover */
+        #gpWorkspace .gpb-ctl { display: flex; align-items: center; gap: 7px; }
+        #gpWorkspace .gpb-ctl .lbl { font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-seg { display: inline-flex; border: 1px solid var(--gpb-div); }
+        #gpWorkspace .gpb-seg button {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 11.5px; letter-spacing: 0.07em;
+            padding: 4px 10px; background: transparent; border: none; cursor: pointer; color: var(--gpb-soft);
+        }
+        #gpWorkspace .gpb-seg button + button { border-left: 1px solid var(--gpb-div); }
+        #gpWorkspace .gpb-seg button:hover { background: rgba(29,31,32,0.06); }
+        #gpWorkspace .gpb-seg button.on { background: var(--gpb-red); color: #fff; }
+        #gpWorkspace .gpb-seg button.wide { flex: 1; }
+
         /* video panel: the controls that came back out of the inspector */
         #gpWorkspace .gpb-vidctl {
             position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
