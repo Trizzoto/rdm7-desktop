@@ -9470,6 +9470,185 @@
             return out + lines.join("\n") + "\n";
         }
 
+        /* ---- reading one back ----------------------------------------------
+         * The exporter is strict about what it writes. The importer has to be
+         * forgiving about what it reads: VBOX hardware, RaceChrono, Racebox,
+         * Harry's LapTimer and TrackAddict all write VBO, and no two of them
+         * name their columns alike. So names are mapped through a table of
+         * aliases rather than matched, and a column nobody recognises is
+         * reported rather than guessed at.
+         *
+         * All three traps above are traps in this direction too — minutes not
+         * degrees, longitude positive west, and a `time` that reads as a float
+         * and is not one.
+         */
+        var GP_VBO_ROLE = {
+            sats: "sats", satellites: "sats", "sat": "sats",
+            time: "time", utctime: "time",
+            lat: "lat", latitude: "lat",
+            "long": "lon", lon: "lon", longitude: "lon", lng: "lon",
+            velocity: "kph", speed: "kph", vel: "kph", "velocity_kmh": "kph",
+            heading: "hdg", head: "hdg", course: "hdg",
+            height: "alt", altitude: "alt", alt: "alt"
+        };
+
+        /* HHMMSS.SS to milliseconds since midnight. It is NOT a float: 512.30
+           is five minutes twelve, not eight and a half. A few writers do put
+           plain seconds in the column, and minutes or seconds above 59 is how
+           that announces itself. */
+        function gpVboClockMs(v) {
+            if (!isFinite(v)) return null;
+            var ip = Math.floor(Math.abs(v)), frac = Math.abs(v) - ip;
+            var hh = Math.floor(ip / 10000), mm = Math.floor(ip / 100) % 100, ss = ip % 100;
+            if (mm > 59 || ss > 59 || hh > 23) return Math.round(Math.abs(v) * 1000);
+            return (hh * 3600 + mm * 60 + ss) * 1000 + Math.round(frac * 1000);
+        }
+
+        /* km/h out, whatever went in. Racebox and the US apps write mph;
+           marine-derived loggers write knots. */
+        function gpVboSpeedScale(unit) {
+            var u = String(unit || "").toLowerCase().replace(/[^a-z\/]/g, "");
+            if (u.indexOf("mph") >= 0) return 1.609344;
+            if (u.indexOf("kn") === 0 || u.indexOf("kt") >= 0) return 1.852;
+            if (u === "ms" || u === "m/s") return 3.6;
+            return 1;
+        }
+
+        function gpVboParse(text, fileName) {
+            var lines = String(text || "").split(/\r\n|\r|\n/);
+            var sect = "", head = [], colLine = "", data = [], comments = [], created = null;
+            for (var i = 0; i < lines.length; i++) {
+                var ln = lines[i].trim();
+                if (!ln) continue;
+                var m = /^\[([^\]]+)\]$/.exec(ln);
+                if (m) { sect = m[1].toLowerCase(); continue; }
+                if (!sect) {
+                    var c = /^File created on\s+(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s*@\s*(\d{1,2}):(\d{2}):(\d{2}))?/i.exec(ln);
+                    if (c) created = Date.UTC(+c[3], +c[2] - 1, +c[1], +(c[4] || 0), +(c[5] || 0), +(c[6] || 0));
+                    continue;
+                }
+                if (sect === "header") head.push(ln);
+                else if (sect === "column names") { if (!colLine) colLine = ln; }
+                else if (sect === "comments") comments.push(ln);
+                else if (sect === "data") data.push(ln);
+            }
+            if (!data.length) throw new Error("no [data] rows — is this really a VBO file?");
+
+            /* [column names] when it is there, [header] when it is not. A
+               header entry carries its unit after the name ("velocity kmh"),
+               which is the only place the speed unit is ever stated. */
+            var cols, unitOf = {};
+            head.forEach(function (h) {
+                var p = h.split(/\s+/);
+                unitOf[p[0].toLowerCase()] = p.slice(1).join(" ");
+            });
+            cols = colLine ? colLine.split(/\s+/) : head.map(function (h) { return h.split(/\s+/)[0]; });
+            var roles = cols.map(function (c) { return GP_VBO_ROLE[String(c).toLowerCase()] || null; });
+            if (roles.indexOf("lat") < 0 || roles.indexOf("lon") < 0)
+                throw new Error("no latitude/longitude columns — found: " + cols.join(", "));
+
+            var vs = 1;
+            for (var q = 0; q < cols.length; q++)
+                if (roles[q] === "kph") vs = gpVboSpeedScale(unitOf[String(cols[q]).toLowerCase()]);
+
+            var rows = [], wrap = 0, prev = null, skipped = 0;
+            for (var d = 0; d < data.length; d++) {
+                var tok = data[d].split(/\s+/);
+                if (tok.length < cols.length) { skipped++; continue; }
+                var lat = null, lon = null, kph = 0, hdg = 0, ms = null;
+                for (var k = 0; k < cols.length; k++) {
+                    if (!roles[k]) continue;
+                    var v = parseFloat(tok[k]);
+                    if (!isFinite(v)) continue;
+                    if (roles[k] === "lat") lat = v / 60;                 /* minutes */
+                    else if (roles[k] === "lon") lon = -v / 60;           /* positive WEST */
+                    else if (roles[k] === "kph") kph = v * vs;
+                    else if (roles[k] === "hdg") hdg = v;
+                    else if (roles[k] === "time") ms = gpVboClockMs(v);
+                }
+                if (lat === null || lon === null || !isFinite(lat) || !isFinite(lon)) { skipped++; continue; }
+                if (ms !== null) {
+                    var abs = ms + wrap;
+                    /* A session that runs through midnight UTC restarts its
+                       clock at zero, and without this every lap after it would
+                       be dated a day early and sort before the first. */
+                    if (prev !== null && abs < prev - 1000) { wrap += 86400000; abs = ms + wrap; }
+                    prev = abs; ms = abs;
+                }
+                rows.push({ lat: lat, lon: lon, kph: kph, hdg: ((hdg % 360) + 360) % 360, ms: ms });
+            }
+            if (rows.length < 2)
+                throw new Error("only " + rows.length + " usable row(s) of " + data.length);
+
+            /* Longitude positive west is the spec, and a writer that gets it
+               backwards puts the lap on the far side of the planet — where it
+               still draws, still times, and is still wrong. The track library
+               is the check: if flipping the sign lands the trace on a circuit
+               we ship and the spec-correct reading lands nowhere near one,
+               believe the map over the spec. */
+            var mid = rows[Math.floor(rows.length / 2)];
+            var near = function (lon) {
+                var best = Infinity;
+                GP_PLACES.forEach(function (p) {
+                    var d = gpHaversineM([mid.lat, lon], p.center);
+                    if (d !== null && d < best) best = d;
+                });
+                return best;
+            };
+            var flipped = false;
+            if (near(mid.lon) > 20000 && near(-mid.lon) < 20000) {
+                rows.forEach(function (r) { r.lon = -r.lon; });
+                flipped = true;
+            }
+
+            var n = rows.length;
+            var haveT = rows[0].ms !== null && rows[0].ms !== undefined;
+            var t0 = haveT ? rows[0].ms : 0;
+            var packed = gpRowsPack(rows.map(function (r) {
+                return { lat: r.lat, lon: r.lon, kph: r.kph, hdg: r.hdg,
+                         t: (haveT && r.ms !== null) ? (r.ms - t0) : undefined, g: 0, can: null };
+            }));
+
+            var pick = function (label) {
+                for (var i = 0; i < comments.length; i++) {
+                    var m2 = new RegExp("^" + label + "\\s*:\\s*(.+)$", "i").exec(comments[i]);
+                    if (m2) return m2[1].trim();
+                }
+                return "";
+            };
+            /* The date line dates the FILE; the time column dates the first
+               sample within that day. Together they are real UTC, which is
+               what "gps" means to everything downstream — video auto-sync
+               above all. Without the date line there is a time of day and no
+               day to hang it on, and inventing one would make the camera
+               clock agree with a fiction. */
+            var day = created !== null ? Math.floor(created / 86400000) * 86400000 : null;
+            var dated = (day !== null && haveT) ? "gps" : "file";
+            var meta = {
+                id: gpSesUid(),
+                name: String(fileName || "VBO import").replace(/\.vbo$/i, "") || "VBO import",
+                trackId: null, trackName: null, trial: false,
+                recordedAt: (day !== null && haveT) ? day + t0 : (created !== null ? created : Date.now()),
+                dated: dated, savedAt: Date.now(),
+                device: pick("Source") || "VBO import",
+                samples: n,
+                durationS: haveT ? (rows[n - 1].ms - t0) / 1000 : 0,
+                lapCount: 0, bestLapS: null, lapTimesS: [], corners: [],
+                car: pick("Vehicle"), driver: pick("Driver"), chanIds: []
+            };
+
+            var unknown = [];
+            for (var z = 0; z < cols.length; z++) if (!roles[z]) unknown.push(cols[z]);
+            var note = n + " samples";
+            if (meta.durationS) note += " over " + meta.durationS.toFixed(1) + " s";
+            if (dated !== "gps") note += "; no date in the file, so the clock is time-of-day only";
+            if (flipped) note += "; longitude sign was mirrored and has been corrected";
+            if (skipped) note += "; " + skipped + " unreadable row(s) skipped";
+            if (unknown.length)
+                note += "; extra channels not imported: " + unknown.join(", ");
+            return { meta: meta, pk: packed, note: note };
+        }
+
         window.gpSessionExportVbo = function (id) {
             if (id !== gp.sessionId || !gp.trace || !gp.trace.length) return;
             var meta = (gp.sessions || []).filter(function (s) { return s.id === id; })[0];
@@ -9497,23 +9676,45 @@
             });
         };
 
+        /* Import results go to the toast the rest of the app uses. They used
+           to go to gpSetMsg("gpTraceMsg"), and no view has ever rendered an
+           element by that id — so a VBO that failed to parse looked exactly
+           like one that worked: nothing happened at all. */
+        function gpImportSaid(text, tone) {
+            if (typeof showToast === "function") { showToast(text, tone); return; }
+            gpSetMsg("gpTraceMsg", text, tone === "error" ? "bad" : "ok");
+        }
+
         window.gpSessionImport = function (input) {
             var f = input && input.files && input.files[0];
             if (!f) return;
             var rd = new FileReader();
             rd.onload = function () {
                 try {
-                    var r = gpSessionFileParse(rd.result);
+                    /* Which format by what is INSIDE the file, not by its
+                       extension — a .vbo renamed on its way through email is
+                       still a VBO, and a helpful mail client that appends
+                       .txt should not cost you the import. */
+                    var txt = String(rd.result || "");
+                    var isVbo = /^\s*\[data\]\s*$/im.test(txt) &&
+                                /^\s*\[(header|column names)\]\s*$/im.test(txt);
+                    var r = isVbo ? gpVboParse(txt, f.name) : gpSessionFileParse(txt);
                     gpStore.put(r.meta, r.pk).then(function () {
                         return gpSessionsRefresh();
                     }).then(function () {
                         gpBuildRail();
                         window.gpSessionLoad(r.meta.id);
+                        /* A toast, not gpSetMsg: `gpTraceMsg` is an id no view
+                           renders, so every import result — including every
+                           "Import failed" below — has been going into a store
+                           that nothing reads. A file that silently does
+                           nothing is the worst of the possible outcomes. */
+                        if (r.note) gpImportSaid("Imported " + r.meta.name + " — " + r.note + ".", "success");
                     }).catch(function (e) {
-                        gpSetMsg("gpTraceMsg", "Import failed: " + (e && e.message ? e.message : e), "bad");
+                        gpImportSaid("Import failed: " + (e && e.message ? e.message : e), "error");
                     });
                 } catch (e) {
-                    gpSetMsg("gpTraceMsg", "Import failed: " + (e && e.message ? e.message : e), "bad");
+                    gpImportSaid("Import failed: " + (e && e.message ? e.message : e), "error");
                 }
                 input.value = "";
             };
@@ -9522,8 +9723,10 @@
 
         function gpSesImportHtml() {
             return "<div class='gp-ses-act' style='margin-top:4px'>" +
-                   "<button class='ws-btn-line' onclick=\"document.getElementById('gpSesFile').click()\">Import a session file</button></div>" +
-                   "<input type='file' id='gpSesFile' accept='.rdmsession,application/json' style='display:none' onchange='gpSessionImport(this)'>";
+                   "<button class='ws-btn-line' onclick=\"document.getElementById('gpSesFile').click()\">Import a recording…</button></div>" +
+                   "<div class='ws-note' style='margin-top:4px'>A .vbo from any logger — VBOX, RaceChrono, Racebox, " +
+                   "Harry's LapTimer, TrackAddict — or a .rdmsession from another PC running Studio.</div>" +
+                   "<input type='file' id='gpSesFile' accept='.vbo,.rdmsession,text/plain,application/json' style='display:none' onchange='gpSessionImport(this)'>";
         }
 
         /* iTOW dates a sample to the second but only within its GPS week. The
