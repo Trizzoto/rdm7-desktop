@@ -17337,7 +17337,22 @@
                          autoT0: null, offsetMs: 0, follow: gp.cam.follow, probing: true };
             input.value = "";
             var el = document.getElementById("gpVideo");
-            if (el) el.src = gp.video.url;
+            if (el) {
+                el.src = gp.video.url;
+                /* gpVideoFollowSeek refuses to move a video whose duration it
+                   does not know yet, and a file that has only just been handed
+                   to the element does not know it — so the seek that syncs it
+                   lands before there is anything to seek, and the picture sits
+                   on frame zero while the readout beside it says it is lined
+                   up. Whichever arrives last, the probe or the metadata, does
+                   the seeking. */
+                var onMeta = function () {
+                    el.removeEventListener("loadedmetadata", onMeta);
+                    gpVideoFollowSeek();
+                    gpVideoDrawOverlay();
+                };
+                el.addEventListener("loadedmetadata", onMeta);
+            }
             gp.viewFocus = null;               /* a fresh video arrives side by side */
             gpViewerSync();
             gpRenderInspector();
@@ -17351,6 +17366,14 @@
                 if (ms !== null && meta && meta.dated === "gps" && gp.cam.auto) gp.video.t0 = ms;
                 gpRenderInspector();
                 if (gp.view === "session") gpRenderGrid();
+                /* Setting t0 is what SYNCS the video; it is not what MOVES it.
+                   Without this the picture sits on frame zero looking broken
+                   while the readout beside it says it is lined up — and it
+                   stays there until something unrelated forces a redraw, so
+                   the first thing that appeared to fix it was closing a
+                   panel. Seek it to where the playhead already is. */
+                gpVideoFollowSeek();
+                gpVideoDrawOverlay();
             });
             /* The tile lives in whichever panel is hosting it, and the grid
                only re-appends it once a video EXISTS — so loading one has to
