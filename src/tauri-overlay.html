@@ -8607,6 +8607,42 @@
                     if (p.length < 2) delete t.outline; else t.outline.pts = p;
                 }
             });
+            /* Collapse duplicates of the same circuit. Before opening a
+               circuit reused its record, every click on one made another —
+               a library can end up holding The Bend West five times. The new
+               list is built from GP_PLACES, one row per circuit, so those
+               extras are not merely untidy: they are INVISIBLE, and there is
+               no way to reach them to delete them.
+               Conservative on purpose. A duplicate is dropped only when it is
+               untouched — no timing line, no sectors, and no shape but the one
+               that shipped with it. Anything you did work on is kept, even if
+               that means two entries for one circuit, because guessing which
+               of two hand-placed lines to throw away is not a guess to make. */
+            var byPlace = {};
+            ((s && s.tracks) || []).forEach(function (t) {
+                if (t && t.place) (byPlace[t.place] = byPlace[t.place] || []).push(t);
+            });
+            var bin = [];
+            Object.keys(byPlace).forEach(function (k) {
+                var group = byPlace[k];
+                if (group.length < 2) return;
+                var touched = function (t) {
+                    return !!(t.start_finish || (t.sectors || []).length ||
+                              (t.outline && t.outline.src && t.outline.src !== "osm"));
+                };
+                var keep = group.filter(touched);
+                /* All untouched: keep the first, which is the one already
+                   selected by everything that looks a circuit up. */
+                if (!keep.length) keep = [group[0]];
+                group.forEach(function (t) {
+                    if (keep.indexOf(t) < 0) bin.push(t);
+                });
+            });
+            if (bin.length) {
+                s.tracks = s.tracks.filter(function (t) { return bin.indexOf(t) < 0; });
+                if (!s.tracks.filter(function (t) { return t.id === s.active; }).length)
+                    s.active = s.tracks.length ? s.tracks[0].id : null;
+            }
             return s;
         }
 
