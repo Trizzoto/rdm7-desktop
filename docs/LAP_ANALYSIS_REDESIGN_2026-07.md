@@ -1,5 +1,47 @@
 # Lap recording and telemetry analysis — the redesign (2026-07-29)
 
+> **ADR-0026, 2026-08-09 — Analyse is a mosaic, and it may be taller than
+> the window.** ADR-0025 made Analyse a grid of panels you arrange. Three
+> things were wrong with it once it was full of real panels.
+>
+> *It was giving a fifth of the window to chrome.* A 34 px band said "No RDM
+> GPS connected" — true, and irrelevant to reading a recording already on
+> this PC — and a 41 px band under it carried the track name, the session
+> line, the tags and four arrangement controls. The facts now live in the
+> black bar's own slack, which was empty; the arrangement controls live
+> behind one **Arrange** button; the hint is suppressed in Analyse. Add the
+> add-a-row banner (35 px) and the per-row add-a-panel column, and the
+> panels got **88 px and a column back** — at 800 px tall that took each
+> panel in a quad from 223 px to 329 px.
+>
+> *Rows always won.* The model was strictly row-major: a row spanned the
+> full width, and a column could only ever be as tall as the row it was in,
+> so "a map down the left with a graph and the lap times stacked beside it"
+> could not be described. It is now a nested tree — a node is a panel or a
+> split of other nodes — and every panel carries **Split left/right** and
+> **Split top/bottom**. A `TOWER` preset ships the arrangement that used to
+> be impossible. v1 arrangements and v1 saved layouts convert on read.
+>
+> *There was nowhere to put a fifth panel.* Panels now have a floor
+> (`GP_ROW_MIN`), a row is never shorter than what it holds, and the grid is
+> its own scrollport. **When adding a row would put something below the
+> floor, the page extends below the fold and scrolls instead of squeezing** —
+> which is the whole answer to "compress or scroll". Dragging a divider
+> takes height from the next row, and from the one after it when that one is
+> already at its floor, all the way down; past the bottom the page grows.
+> Drag back up and it sheds the overflow first, so it snaps back to fitting.
+>
+> Three rack bugs went with it. **Combined drew only the analysed lap** —
+> ticking two laps and switching to Combined silently dropped one; the other
+> ticked laps now draw dashed on the same scale. **Combined printed no
+> magnitudes at all**, and its gutter legend dropped any channel whose row
+> fell past the bottom of a short panel, which is why RPM could be ticked and
+> nowhere to be found; the legend now lays out to fit and carries each
+> channel's own scale. **Stacked drew the analysed lap in the channel's
+> colour while the legend gave it a lap colour**, so Lap 1's swatch was dark
+> red and its speed trace was black; with more than one lap on the rack,
+> colour means the lap, and the legend says which rule is in force.
+>
 > **Status 2026-08-09:** The workspace now wears the brand (ADR-0024,
 > `RDM-7_Dash/docs/adr/0024-the-lap-timer-wears-the-brand.md`): Industry
 > light ground, black brand bar, Barlow type, RDM red as the only accent,

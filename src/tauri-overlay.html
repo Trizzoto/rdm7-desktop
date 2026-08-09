@@ -1983,6 +1983,11 @@
             --gpb-ok: #2e7d43;   --gpb-warn: #a06508;  --gpb-bad: #c02026;
             --gpb-head: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
             --gpb-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+            /* The gutter between panels, and the width of every divider that
+               sits in one. GP_GAP in the mosaic layout is the same number:
+               the grid has to know how much of its height the dividers take
+               before it can say whether the panels fit. */
+            --gpb-pg: 10px;
             background: var(--gpb-bg);
             color: var(--gpb-ink);
             font-family: var(--gpb-body);
@@ -2015,6 +2020,8 @@
         #gpWorkspace .ws-topbar {
             background: var(--gpb-bar); border-bottom: none; box-shadow: none;
             padding: 0 14px 0 10px; gap: 12px; min-height: 50px; flex-wrap: nowrap;
+            /* the arrangement popover hangs off this bar */
+            position: relative;
         }
         #gpWorkspace .ws-topbar > .btn:first-child {
             background: transparent; border: none; color: var(--gpb-bar-muted);
@@ -2027,7 +2034,10 @@
         }
         #gpWorkspace .ws-modes {
             background: transparent; border: none; height: 50px; overflow: visible;
-            margin: 0 auto 0 4px; align-self: stretch; align-items: stretch; gap: 2px;
+            /* No auto margin: the session bar next to it is what takes the
+               slack now, so a long circuit name grows into the gap rather
+               than shoving the chips off the end. */
+            margin: 0 0 0 4px; flex: none; align-self: stretch; align-items: stretch; gap: 2px;
         }
         #gpWorkspace .ws-modes button {
             font-family: var(--gpb-head); font-weight: 600; font-size: 13px;
@@ -2368,18 +2378,61 @@
         /* ================================================================
            New design-language components (gpb-*)
            ================================================================ */
-        /* context strip under the brand bar */
-        #gpWorkspace .gpb-ctx {
-            display: flex; align-items: center; gap: 12px; padding: 8px 14px;
-            border-bottom: 1px solid var(--gpb-div); flex-shrink: 0; flex-wrap: wrap;
-            position: relative;
+        /* ---- the Analyse context, IN the brand bar ------------------------
+           This was a 41 px band of its own under the black bar, carrying a
+           22 px track name, the session line, the tags and every arrangement
+           control. Together with the connection hint above it, a fifth of a
+           1000 px window was chrome describing the panels rather than panels.
+           The facts move into the bar's own slack — which was empty — the
+           arrangement controls move behind one button, and the band is gone. */
+        #gpWorkspace .gpb-sesbar {
+            flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 9px;
+            overflow: hidden;
         }
-        #gpWorkspace .gpb-ctx h3 {
-            margin: 0; font-family: var(--gpb-head); font-weight: 600; font-size: 22px;
-            letter-spacing: -0.01em; color: var(--gpb-ink); line-height: 1.1;
+        #gpWorkspace .gpb-sesbar .nm {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 16px;
+            letter-spacing: 0.01em; color: #fff; white-space: nowrap; flex: none;
         }
-        #gpWorkspace .gpb-ctx .m { font-size: 12px; color: var(--gpb-muted); font-variant-numeric: tabular-nums; }
-        #gpWorkspace .gpb-ctx .sp { margin-left: auto; }
+        /* The one thing allowed to lose its tail: a long circuit name and the
+           session best must survive a narrow window, the driver's name need
+           not. */
+        #gpWorkspace .gpb-sesbar .m {
+            font-size: 11.5px; color: var(--gpb-bar-muted); font-variant-numeric: tabular-nums;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+        }
+        #gpWorkspace .gpb-sesbar .gpb-tag { flex: none; height: 22px; }
+        #gpWorkspace .gpb-sesbar .gpb-tag.red { background: rgba(210,35,42,0.20); color: #ff8a84; }
+        #gpWorkspace .gpb-sesbar .gpb-tag.line { border-color: #7a3134; color: #ff8a84; }
+        #gpWorkspace .gpb-sesbar .gpb-tag.grey { background: rgba(255,255,255,0.09); color: var(--gpb-bar-muted); }
+        #gpWorkspace .gpb-arr {
+            flex: none; background: transparent; border: 1px solid var(--gpb-bar-div);
+            color: var(--gpb-bar-muted); font-family: var(--gpb-head); font-weight: 600;
+            font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+            height: 28px; padding: 0 12px; cursor: pointer; display: inline-flex;
+            align-items: center; gap: 7px;
+        }
+        #gpWorkspace .gpb-arr:hover, #gpWorkspace .gpb-arr.on { border-color: #6a6e72; color: #fff; }
+        #gpWorkspace .gpb-arrpop {
+            position: absolute; top: 46px; right: 14px; z-index: 40; width: 290px;
+            background: var(--gpb-surface); border: 1px solid var(--gpb-div);
+            box-shadow: 0 14px 36px rgba(0,0,0,0.28); padding: 11px;
+            display: flex; flex-direction: column; gap: 9px; color: var(--gpb-ink);
+        }
+        #gpWorkspace .gpb-arrpop .hd {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 11px;
+            letter-spacing: 0.12em; text-transform: uppercase; color: var(--gpb-muted);
+        }
+        #gpWorkspace .gpb-arrpop .note { font-size: 10.5px; color: var(--gpb-muted); line-height: 1.45; }
+        #gpWorkspace .gpb-arrpop .row {
+            display: flex; align-items: center; gap: 6px;
+            border-top: 1px solid var(--gpb-div-lt); padding-top: 6px;
+        }
+        #gpWorkspace .gpb-arrpop .row .nm {
+            flex: 1; text-align: left; background: transparent; border: none; cursor: pointer;
+            font: inherit; font-size: 12.5px; color: var(--gpb-ink); padding: 2px 0;
+        }
+        #gpWorkspace .gpb-arrpop .row .nm:hover { color: var(--gpb-red-700); }
+        #gpWorkspace .gpb-arrpop .row .mt { font-size: 10px; color: var(--gpb-muted); }
         #gpWorkspace .gpb-tag {
             display: inline-flex; align-items: center; font-size: 11px; padding: 3px 10px;
             font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
@@ -2531,13 +2584,27 @@
         /* ================================================================
            Analyse: the panel grid (ADR-0025)
            ================================================================ */
+        /* The grid is the scrollport (ADR-0026). Not the stage: the dock has
+           to stay pinned along the bottom while the panels scroll past it,
+           and it is a sibling of this element, not a child. */
         #gpWorkspace .gpb-grid {
             flex: 1; min-height: 0; display: flex; flex-direction: column;
-            padding: var(--gpb-pg, 10px) 14px;
+            padding: var(--gpb-pg, 10px) 14px; overflow: hidden auto;
         }
-        #gpWorkspace .gpb-row { display: flex; min-height: 0; }
+        /* The mosaic itself. flex:1 makes it fill the port when it fits;
+           an inline min-height (set by gpGridLayout when the arrangement is
+           taller than the port) is what makes the port scroll instead. */
+        #gpWorkspace .gpb-canvas { flex: 1 1 auto; min-height: 0; display: flex; }
+        /* One rule at every depth: a split is a flex box, and every child —
+           panel or nested split — is sized by `flex: <size> 1 0%`. That one
+           declaration is why the same numbers can mean pixels (when the box
+           is exactly their sum, which is the tall case) and proportions
+           (when it is not, which is the fitted one). */
+        #gpWorkspace .gpb-node { display: flex; min-width: 0; min-height: 0; }
+        #gpWorkspace .gpb-node.row { flex-direction: row; }
+        #gpWorkspace .gpb-node.col { flex-direction: column; }
         #gpWorkspace .gpb-panel {
-            min-width: 0; position: relative; display: flex; flex-direction: column;
+            min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column;
             border: 1px solid var(--gpb-div); background: var(--gpb-surface);
         }
         #gpWorkspace .gpb-phead {
@@ -2568,6 +2635,20 @@
             color: var(--gpb-ink); opacity: 0.5;
         }
         #gpWorkspace .gpb-picon:hover { opacity: 1; background: rgba(29,31,32,0.08); }
+        #gpWorkspace .gpb-picon.on { opacity: 1; background: var(--gpb-red-100); color: var(--gpb-red-800); }
+        /* Split menu: two ways to cut this panel, drawn as the cut they make. */
+        #gpWorkspace .gpb-splitmenu {
+            position: absolute; z-index: 30; background: var(--gpb-surface);
+            border: 1px solid var(--gpb-div); box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+            padding: 4px; display: flex; flex-direction: column; min-width: 156px;
+        }
+        #gpWorkspace .gpb-splitmenu button {
+            display: flex; align-items: center; gap: 8px; background: transparent;
+            border: none; cursor: pointer; font: inherit; font-size: 12px;
+            color: var(--gpb-ink); padding: 5px 7px; text-align: left;
+        }
+        #gpWorkspace .gpb-splitmenu button:hover { background: var(--gpb-red-100); color: var(--gpb-red-800); }
+        #gpWorkspace .gpb-splitmenu button svg { flex: none; opacity: 0.7; }
         #gpWorkspace .gpb-pbody { flex: 1; min-height: 0; position: relative; overflow: hidden; }
         #gpWorkspace .gpb-pscroll { position: absolute; inset: 0; overflow: auto; }
         /* resize handles */
@@ -2582,18 +2663,24 @@
         #gpWorkspace .gpb-hcol i { width: 1px; height: 60%; background: var(--gpb-div); display: block; }
         #gpWorkspace .gpb-hrow i { height: 1px; width: 96px; background: var(--gpb-div); display: block; }
         #gpWorkspace .gpb-hcol:hover, #gpWorkspace .gpb-hrow:hover { background: var(--gpb-red-100); }
-        #gpWorkspace .gpb-addp {
-            flex: none; width: 24px; margin-left: 6px; border: 1px dashed var(--gpb-div);
-            background: transparent; cursor: pointer; color: var(--gpb-ink); opacity: 0.45; font-size: 17px;
-        }
-        #gpWorkspace .gpb-addp:hover { opacity: 1; border-color: var(--gpb-red); color: var(--gpb-red-700); }
+        /* Adding a row used to be a 25 px dashed banner plus its 10 px margin,
+           permanently spending 35 px of panel to advertise a button pressed
+           once a month. Now it is a hairline that only becomes a button under
+           the pointer. */
         #gpWorkspace .gpb-addrow {
-            border: 1px dashed var(--gpb-div); background: transparent; cursor: pointer;
+            flex: none; height: 12px; margin-top: 3px; border: none; padding: 0;
+            background: transparent; cursor: pointer; display: flex;
+            align-items: center; justify-content: center; gap: 8px;
             color: var(--gpb-muted); font-family: var(--gpb-head); font-weight: 600;
-            font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase;
-            padding: 5px; margin-top: var(--gpb-pg, 10px); flex: none;
+            font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
         }
-        #gpWorkspace .gpb-addrow:hover { border-color: var(--gpb-red); color: var(--gpb-red-700); }
+        #gpWorkspace .gpb-addrow i {
+            flex: 1; height: 1px; background: var(--gpb-div-lt); display: block;
+        }
+        #gpWorkspace .gpb-addrow span { opacity: 0; transition: opacity 0.12s; white-space: nowrap; }
+        #gpWorkspace .gpb-addrow:hover span { opacity: 1; }
+        #gpWorkspace .gpb-addrow:hover i { background: var(--gpb-red); }
+        #gpWorkspace .gpb-addrow:hover { color: var(--gpb-red-700); }
 
         /* panels that host a real element (map / rack / video) */
         #gpWorkspace .gpb-panel.hosting .gpb-pbody { display: flex; }
@@ -2681,7 +2768,7 @@
         #gpWorkspace .gpb-dockmenu label:hover { background: rgba(29,31,32,0.05); }
         #gpWorkspace .gpb-dockmenu input { accent-color: var(--gpb-red); }
 
-        /* layout controls in the context strip */
+        /* layout controls — now inside the arrangement popover */
         #gpWorkspace .gpb-ctl { display: flex; align-items: center; gap: 7px; }
         #gpWorkspace .gpb-ctl .lbl { font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--gpb-muted); }
         #gpWorkspace .gpb-seg { display: inline-flex; border: 1px solid var(--gpb-div); }
@@ -2692,24 +2779,7 @@
         #gpWorkspace .gpb-seg button + button { border-left: 1px solid var(--gpb-div); }
         #gpWorkspace .gpb-seg button:hover { background: rgba(29,31,32,0.06); }
         #gpWorkspace .gpb-seg button.on { background: var(--gpb-red); color: #fff; }
-        #gpWorkspace .gpb-lay {
-            position: absolute; right: 14px; top: calc(100% + 6px); z-index: 60; width: 278px;
-            background: var(--gpb-bg); border: 1px solid var(--gpb-div);
-            box-shadow: 0 12px 32px rgba(43,43,45,0.25); padding: 11px;
-            display: flex; flex-direction: column; gap: 7px;
-        }
-        #gpWorkspace .gpb-lay .hd { font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--gpb-red-700); }
-        #gpWorkspace .gpb-lay .row {
-            display: flex; align-items: center; gap: 4px;
-            border-top: 1px solid var(--gpb-div-lt); padding-top: 5px;
-        }
-        #gpWorkspace .gpb-lay .row .nm {
-            flex: 1; text-align: left; background: transparent; border: none; cursor: pointer;
-            font-family: var(--gpb-head); font-weight: 600; font-size: 13.5px;
-            letter-spacing: 0.05em; color: var(--gpb-ink); padding: 3px 2px;
-        }
-        #gpWorkspace .gpb-lay .row .nm:hover { color: var(--gpb-red-700); }
-        #gpWorkspace .gpb-lay .row .mt { font-size: 10px; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-seg button.wide { flex: 1; }
 
         /* export popover */
         #gpWorkspace .gpb-exppop {
@@ -3060,6 +3130,11 @@
                 <button id="gpBtnTracks" onclick="gpSetView('tracks')">Tracks</button>
                 <button id="gpBtnSetup" onclick="gpSetView('setup')">Setup</button>
             </div>
+            <!-- Whose drive this is, in the bar's own slack (ADR-0026). This
+                 was a band of its own under the bar until the panels it was
+                 labelling ran out of room. -->
+            <span class="gpb-sesbar" id="gpCtx"></span>
+            <div class="gpb-arrpop" id="gpArrPop" style="display:none"></div>
             <span class="ws-chip" id="gpChipDev">no node linked</span>
             <span class="ws-chip" id="gpChipFix">&#8212;</span>
             <button class="ws-chip" id="gpChipRec" style="display:none" onclick="gpRecToggle()"></button>
@@ -3070,7 +3145,6 @@
             <div class="ws-rail" id="gpRail"></div>
             <div class="ws-stage" id="gpStageCol">
                 <div class="gp-hint" id="gpHint"></div>
-                <div class="gpb-ctx" id="gpCtx" style="display:none"></div>
                 <!-- Live position from the puck, plus the dash's track and
                      start/finish gate. Two devices, one picture — which is the
                      whole reason the transport registry exists.
@@ -9420,14 +9494,22 @@
            recordings and a real lap list were fighting for the same ~250px.
            Same content, same click targets, just each gets the full rail
            when it's the one being read. */
-        /* The context strip: whose drive this is, and what it came to
-           (design 2a). Rendered above the map in Analyse only. */
+        /* ---- the session line, in the brand bar (ADR-0026) ------------------
+           Whose drive this is, and what it came to. This used to be a band of
+           its own between the bar and the panels: a 22 px track name, the
+           session line, the tags, and four arrangement controls, costing 41 px
+           of a stage that was already giving 34 px to a connection hint about
+           hardware you do not need in order to read a saved recording.
+
+           The facts move into the bar's slack, which was empty; the
+           arrangement controls move behind one button, because they are used
+           when you set the view up and never again while reading it. */
         function gpRenderCtx() {
             var el = document.getElementById("gpCtx");
             if (!el) return;
             var show = gp.view === "session" && gp.trace && gp.trace.length;
             el.style.display = show ? "flex" : "none";
-            if (!show) { el.innerHTML = ""; return; }
+            if (!show) { el.innerHTML = ""; gpArrPopRender(); return; }
             var meNow = (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0];
             var trk = gpActiveTrack();
             var bits = [];
@@ -9443,7 +9525,7 @@
             var tags = "";
             if (times.length) {
                 var best = Math.min.apply(null, times);
-                tags += "<span class='gpb-tag red'>Session best " + gpLapTime(best) + "</span>";
+                tags += "<span class='gpb-tag red'>Best " + gpLapTime(best) + "</span>";
                 var S = gpSessionSectors();
                 if (S && S.best && S.best.length > 1 && times.length > 1) {
                     var ideal = S.best.reduce(function (a, b) { return a + b; }, 0);
@@ -9454,59 +9536,74 @@
                     tags += "<span class='gpb-tag grey'>Spread " + (worst - best).toFixed(2) + " s</span>";
                 }
             }
-            /* The arrangement controls belong with the session line: they are
-               about how you are LOOKING at this recording. */
+            /* Name and tags first and unshrinkable, then the meta line, which
+               is the one thing here that can afford to lose its tail. */
+            el.innerHTML =
+                "<span class='nm'>" + gpEsc(trk ? trk.name : (meNow ? meNow.name : "Recording")) + "</span>" +
+                tags +
+                "<span class='m'>" + gpEsc(bits.join(" · ")) + "</span>" +
+                "<span style='flex:1'></span>" +
+                "<button class='gpb-arr" + (gp.layoutsOpen ? " on" : "") + "' onclick='gpLayoutsToggle()' " +
+                "title='Presets, saved arrangements, and how the panels fill the window'>" +
+                "<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7'>" +
+                "<rect x='3' y='3' width='18' height='18'></rect><path d='M3 12h18M12 3v9'></path></svg>Arrange</button>";
+            gpArrPopRender();
+        }
+
+        /* The arrangement popover: presets, the fill rule, saved layouts. */
+        function gpArrPopRender() {
+            var pop = document.getElementById("gpArrPop");
+            if (!pop) return;
+            var open = !!gp.layoutsOpen && gp.view === "session" && gp.trace && gp.trace.length;
+            pop.style.display = open ? "flex" : "none";
+            if (!open) { pop.innerHTML = ""; return; }
             var g = gpGrid();
             var seg = function (items, cur, call) {
                 return "<div class='gpb-seg'>" + items.map(function (x) {
-                    return "<button class='" + (cur === x[0] ? "on" : "") + "' onclick=\"" +
+                    return "<button class='wide " + (cur === x[0] ? "on" : "") + "' onclick=\"" +
                            call + "('" + x[0] + "')\">" + x[1] + "</button>";
                 }).join("") + "</div>";
             };
-            var ctl = "<div class='gpb-ctl'><span class='lbl'>Layout</span>" +
-                seg([["quad", "QUAD"], ["split", "SPLIT"], ["video", "VIDEO"], ["solo", "SOLO"]],
-                    g.preset, "gpGridPreset") + "</div>";
-            if (g.rows.length === 2) {
-                ctl += "<div class='gpb-ctl'><span class='lbl'>Rows</span>" +
-                    seg([["top", "TOP"], ["even", "EVEN"], ["bottom", "BOTTOM"]],
-                        g.emphasis, "gpGridEmphasis") + "</div>";
-            }
-            ctl += "<button class='ws-btn-line' style='width:auto;padding:4px 12px' onclick='gpLayoutsToggle()'>My layouts</button>";
-            if (gp.layoutsOpen) {
-                var list = gpGrids();
-                ctl += "<div class='gpb-lay'><div class='hd'>Saved layouts</div>" +
-                    "<div style='display:flex;gap:6px'>" +
-                    "<input class='ws-field' id='gpLayName' type='text' placeholder='Name this layout…' " +
-                    "value='" + gpEsc(gp.layoutName || "") + "' oninput='gp_layName(this.value)' " +
-                    "style='flex:1;background:var(--gpb-surface);border:1px solid var(--gpb-div);color:var(--gpb-ink);padding:4px 8px;font:inherit;font-size:12px'>" +
-                    "<button class='gpb-export' style='height:auto;padding:4px 12px' onclick='gpLayoutSave()'>SAVE</button></div>" +
-                    "<div style='font-size:10px;color:var(--gpb-muted)'>Saves the panels, their types and every size.</div>";
-                if (!list.length) {
-                    ctl += "<div style='font-size:11px;color:var(--gpb-muted);border-top:1px solid var(--gpb-div-lt);padding-top:6px'>" +
-                           "Nothing saved yet — arrange the grid, then save it here.</div>";
-                }
-                list.forEach(function (v, i) {
-                    var n = v.rows.reduce(function (a, r) { return a + r.panels.length; }, 0);
-                    ctl += "<div class='row'>";
-                    if (gp.layoutEdit === i) {
-                        ctl += "<input id='gpLayEdit' type='text' value='" + gpEsc(gp.layoutEditName === undefined ? v.name : gp.layoutEditName) + "' " +
-                               "oninput='gp_layEditName(this.value)' " +
-                               "style='flex:1;background:var(--gpb-surface);border:1px solid var(--gpb-div);color:var(--gpb-ink);padding:3px 6px;font:inherit;font-size:12px'>" +
-                               "<button class='gpb-picon' title='Done' onclick='gpLayoutRenameDone(" + i + ")'>&#10003;</button>";
-                    } else {
-                        ctl += "<button class='nm' title='Apply this layout' onclick='gpLayoutApply(" + i + ")'>" +
-                               gpEsc(v.name) + "</button><span class='mt'>" + n + " panels</span>" +
-                               "<button class='gpb-picon' title='Rename' onclick='gpLayoutRename(" + i + ")'>&#9998;</button>" +
-                               "<button class='gpb-picon' title='Delete' onclick='gpLayoutDelete(" + i + ")'>&times;</button>";
-                    }
-                    ctl += "</div>";
-                });
-                ctl += "</div>";
-            }
+            var h = "<div class='hd'>Preset</div>" +
+                seg([["quad", "QUAD"], ["split", "SPLIT"], ["tower", "TOWER"]], g.preset, "gpGridPreset") +
+                seg([["video", "VIDEO"], ["solo", "SOLO"]], g.preset, "gpGridPreset");
+            /* The fill rule is the answer to "where does a new row go" — say
+               it in the same place you can override it. */
+            h += "<div class='hd' style='margin-top:2px'>Height</div>" +
+                seg([["fit", "FIT THE WINDOW"], ["tall", "SCROLL"]], g.fit ? "fit" : "tall", "gpGridFitSet") +
+                "<div class='note'>" + (g.fit
+                    ? "Everything is on screen. A new row squeezes the others — until one would be too "
+                      + "short to read, and then the page starts scrolling instead."
+                    : "Rows keep a readable height and the page scrolls. Drag a divider up and the page "
+                      + "sheds its overflow first, so it snaps back to fitting.") + "</div>";
 
-            el.innerHTML = "<h3>" + gpEsc(trk ? trk.name : (meNow ? meNow.name : "Recording")) + "</h3>" +
-                "<span class='m'>" + gpEsc(bits.join(" · ")) + "</span>" +
-                "<span class='sp'></span>" + tags + ctl;
+            h += "<div class='hd' style='margin-top:2px'>Saved arrangements</div>" +
+                "<div style='display:flex;gap:6px'>" +
+                "<input class='ws-field' id='gpLayName' type='text' placeholder='Name this arrangement…' " +
+                "value='" + gpEsc(gp.layoutName || "") + "' oninput='gp_layName(this.value)' " +
+                "style='flex:1;background:var(--gpb-bg);border:1px solid var(--gpb-div);color:var(--gpb-ink);padding:4px 8px;font:inherit;font-size:12px'>" +
+                "<button class='gpb-export' style='height:auto;padding:4px 12px' onclick='gpLayoutSave()'>SAVE</button></div>";
+            var list = gpGrids();
+            if (!list.length) {
+                h += "<div class='note'>Nothing saved yet — arrange the panels, then save them here.</div>";
+            }
+            list.forEach(function (v, i) {
+                h += "<div class='row'>";
+                if (gp.layoutEdit === i) {
+                    h += "<input id='gpLayEdit' type='text' value='" +
+                         gpEsc(gp.layoutEditName === undefined ? v.name : gp.layoutEditName) + "' " +
+                         "oninput='gp_layEditName(this.value)' " +
+                         "style='flex:1;background:var(--gpb-bg);border:1px solid var(--gpb-div);color:var(--gpb-ink);padding:3px 6px;font:inherit;font-size:12px'>" +
+                         "<button class='gpb-picon' title='Done' onclick='gpLayoutRenameDone(" + i + ")'>&#10003;</button>";
+                } else {
+                    h += "<button class='nm' title='Apply this arrangement' onclick='gpLayoutApply(" + i + ")'>" +
+                         gpEsc(v.name) + "</button><span class='mt'>" + gpLayoutPanelCount(v) + " panels</span>" +
+                         "<button class='gpb-picon' title='Rename' onclick='gpLayoutRename(" + i + ")'>&#9998;</button>" +
+                         "<button class='gpb-picon' title='Delete' onclick='gpLayoutDelete(" + i + ")'>&times;</button>";
+                }
+                h += "</div>";
+            });
+            pop.innerHTML = h;
         }
 
         function gpBuildSessionRail(rail) {
@@ -10014,11 +10111,42 @@
             { id: "corners", label: "Where the time went" },
             { id: "splits", label: "Splits" }
         ];
+        /* ---- the mosaic (ADR-0026) -----------------------------------------
+           ADR-0025's arrangement was strictly row-major: every row spanned
+           the full width, and a column could only ever be as tall as the row
+           it was in. So "a map down the left, a graph and the lap times
+           stacked beside it" was not expressible — the rows always won.
+
+           A node is either a PANEL or a SPLIT of other nodes:
+
+               { id, type }                            a panel
+               { id, dir: 'row'|'col', kids, sz }      a split
+
+           `sz[i]` is the size of kid i ALONG dir, and every child — panel or
+           nested split — is rendered as `flex: sz[i] 1 0%`. That single rule
+           is why the same numbers work both ways: flex-grow divides whatever
+           height the box has in proportion to them, so when the box is
+           exactly their sum they ARE pixels, and when it is not they are
+           ratios. Fitting the window and scrolling past it are then the same
+           layout with a different box height.
+
+           The root is always a 'col' — the vertical spine of rows — because
+           that is the only spine allowed to outgrow the window, and keeping
+           it uniform is what makes "add a row at the bottom" one operation
+           rather than four cases. */
+        var GP_ROW_MIN = 150;   /* px; below this a panel is a label, not a panel */
+        var GP_COL_MIN = 180;   /* px; the same idea across */
+        var GP_ROW_PREF = 260;  /* px; what a row wants when the page may scroll */
+        var GP_GAP = 10;        /* px; must equal --gpb-pg, see the note there */
+
         var GP_PRESETS = {
-            quad:  { rows: [["map", "graph"], ["times", "report"]], flex: [1, 1] },
-            split: { rows: [["map", "graph"]], flex: [1] },
-            video: { rows: [["video", "map"], ["graph"]], flex: [1.3, 0.7] },
-            solo:  { rows: [["graph"]], flex: [1] }
+            quad:  ["col", 1, ["row", 1, "map", 1, "graph"], 1, ["row", 1, "times", 1, "report"]],
+            split: ["col", 1, ["row", 1, "map", 1, "graph"]],
+            /* The one that could not be drawn before: a full-height map
+               beside its own stack. */
+            tower: ["col", 1, ["row", 1.15, "map", 0.85, ["col", 1, "graph", 1, "times"]]],
+            video: ["col", 1.3, ["row", 1, "video", 1, "map"], 0.7, ["row", 1, "graph"]],
+            solo:  ["col", 1, "graph"]
         };
         /* Laps drawn together need telling apart at a glance. The session
            best takes the strongest red; the rest step away from it. */
@@ -10026,23 +10154,128 @@
                               "#0f7a68", "#8a6d00", "#3f4bb8", "#b4551a"];
         function gpLapColour(i) { return GP_LAP_COLOURS[i % GP_LAP_COLOURS.length]; }
 
-        function gpGridDefault() { return gpGridFromPreset("quad"); }
+        var gpNodeSeq = 1;
+        function gpNodeId() { return "n" + (gpNodeSeq++); }
+
+        /* The preset literals above are [dir, size, kid, size, kid, ...] with
+           a bare string for a panel — dense enough to read the shape of the
+           arrangement off the line itself. */
+        function gpNodeFromSpec(spec) {
+            if (typeof spec === "string") return { id: gpNodeId(), type: spec };
+            var dir = spec[0], kids = [], sz = [];
+            for (var i = 1; i < spec.length; i += 2) {
+                sz.push(spec[i]);
+                kids.push(gpNodeFromSpec(spec[i + 1]));
+            }
+            return { id: gpNodeId(), dir: dir, kids: kids, sz: sz };
+        }
         function gpGridFromPreset(id) {
-            var L = GP_PRESETS[id] || GP_PRESETS.quad, n = 1;
-            return {
-                preset: id, emphasis: id === "quad" ? "even" : null,
-                rows: L.rows.map(function (r, i) {
-                    return { flex: L.flex[i] || 1, panels: r.map(function (ty) { return { id: n++, type: ty, w: 1 }; }) };
-                })
-            };
+            return { v: 2, preset: GP_PRESETS[id] ? id : "quad", fit: true,
+                     root: gpNodeFromSpec(GP_PRESETS[id] || GP_PRESETS.quad) };
+        }
+        function gpGridDefault() { return gpGridFromPreset("quad"); }
+
+        /* ---- reading what is on disk --------------------------------------
+           Three shapes can turn up under this key: a v2 mosaic, an ADR-0025
+           row-major arrangement, and nothing. Only the last one is allowed to
+           silently become the default — an arrangement someone built is worth
+           converting, and losing it without a word is the failure mode this
+           guard exists to avoid. */
+        function gpGridAdopt(g) {
+            if (!g || typeof g !== "object") return null;
+            if (g.root) {
+                var ok = gpNodeNormalise(g.root);
+                if (!ok) return null;
+                gpNodeReseq(g.root);
+                return { v: 2, preset: g.preset || null, fit: g.fit !== false, root: g.root };
+            }
+            if (g.rows && g.rows.length) return gpGridFromRows(g);
+            return null;
+        }
+        /* Row-major -> mosaic. A row of panels is a 'row' split; the stack of
+           rows is the root 'col'. Every ADR-0025 arrangement has an exact
+           equivalent here, so nothing is approximated. */
+        function gpGridFromRows(g) {
+            var kids = [], sz = [];
+            (g.rows || []).forEach(function (r) {
+                var ps = (r.panels || []).filter(function (p) { return p && p.type; });
+                if (!ps.length) return;
+                sz.push(gpNum(r.flex, 1));
+                kids.push(ps.length === 1
+                    ? { id: gpNodeId(), type: ps[0].type }
+                    : { id: gpNodeId(), dir: "row",
+                        kids: ps.map(function (p) { return { id: gpNodeId(), type: p.type }; }),
+                        sz: ps.map(function (p) { return gpNum(p.w, 1); }) });
+            });
+            if (!kids.length) return null;
+            return { v: 2, preset: g.preset || null, fit: true,
+                     root: { id: gpNodeId(), dir: "col", kids: kids, sz: sz } };
+        }
+        function gpNum(v, dflt) {
+            var n = typeof v === "number" ? v : parseFloat(v);
+            return (isFinite(n) && n > 0) ? n : dflt;
+        }
+        /* Repair a tree read off disk in place; false means it is not one. */
+        function gpNodeNormalise(n) {
+            if (!n || typeof n !== "object") return false;
+            if (n.kids) {
+                if (!Array.isArray(n.kids) || !n.kids.length) return false;
+                if (n.dir !== "row" && n.dir !== "col") n.dir = "row";
+                n.kids = n.kids.filter(gpNodeNormalise);
+                if (!n.kids.length) return false;
+                if (!Array.isArray(n.sz)) n.sz = [];
+                n.sz = n.kids.map(function (k, i) { return gpNum(n.sz[i], 1); });
+                return true;
+            }
+            return typeof n.type === "string" && !!n.type;
+        }
+        /* Ids only have to be unique within one live tree; renumbering on
+           load keeps them short and stops a saved arrangement applied twice
+           from addressing the copy it replaced. */
+        function gpNodeReseq(n) {
+            n.id = gpNodeId();
+            if (n.kids) n.kids.forEach(gpNodeReseq);
         }
         function gpGrid() {
             if (!gp.grid) {
                 var g = null;
                 try { g = JSON.parse(window.localStorage.getItem(GP_GRID_LS) || "null"); } catch (e) {}
-                gp.grid = (g && g.rows && g.rows.length) ? g : gpGridDefault();
+                gp.grid = gpGridAdopt(g) || gpGridDefault();
+                gpRootCol(gp.grid);
             }
             return gp.grid;
+        }
+        /* The root is a col spine, always — wrap a bare panel or a single row
+           so every "add a row" and every vertical drag has the same shape to
+           work on. */
+        function gpRootCol(g) {
+            if (!g.root.kids || g.root.dir !== "col")
+                g.root = { id: gpNodeId(), dir: "col", kids: [g.root], sz: [1] };
+            return g.root;
+        }
+        /* ---- walking the tree ---- */
+        function gpNodeWalk(n, fn, parent, idx) {
+            fn(n, parent, idx);
+            if (n.kids) n.kids.forEach(function (k, i) { gpNodeWalk(k, fn, n, i); });
+        }
+        function gpNodeFind(root, id) {
+            var hit = null;
+            gpNodeWalk(root, function (n, parent, idx) {
+                if (n.id === id) hit = { node: n, parent: parent, idx: idx };
+            });
+            return hit;
+        }
+        function gpNodeLeaves(root) {
+            var out = [];
+            gpNodeWalk(root, function (n) { if (!n.kids) out.push(n); });
+            return out;
+        }
+        function gpLayoutPanelCount(v) {
+            /* Both schemas, because a v1 saved layout must still list itself
+               rather than throwing inside the popover that draws it. */
+            if (v && v.root) return gpNodeLeaves(v.root).length;
+            if (v && v.rows) return v.rows.reduce(function (a, r) { return a + ((r.panels || []).length); }, 0);
+            return 0;
         }
         function gpGridSave() {
             try { window.localStorage.setItem(GP_GRID_LS, JSON.stringify(gp.grid)); } catch (e) {}
@@ -10105,96 +10338,250 @@
             gpRenderGrid();
         };
 
-        /* ---- mutation helpers ---- */
+        /* ---- mutation helpers ----
+           Every structural change goes through here: mutate, repair, persist,
+           redraw. The repair a tree needs is collapse — a split that has lost
+           all but one child is not a split any more, and leaving it in place
+           would give the survivor a divider to nothing. */
         function gpGridMutate(fn) {
             var g = gpGrid();
             fn(g);
-            g.rows = g.rows.filter(function (r) { return r.panels.length; });
-            if (!g.rows.length) g.rows = [{ flex: 1, panels: [{ id: Date.now() % 100000, type: "graph", w: 1 }] }];
+            gpNodeCollapse(g.root);
+            if (!g.root.kids && !g.root.type) g.root = { id: gpNodeId(), type: "graph" };
+            gpRootCol(g);
             gpGridSave();
             gpRenderGrid();
             gpRenderCtx();
         }
-        function gpPanelAt(g, ri, pi) { return g.rows[ri] && g.rows[ri].panels[pi]; }
+        /* Depth-first, so a child collapses before its parent looks at it.
+           Also flattens a split into a parent of the same direction: three
+           rows in a spine must be three siblings, not a row nested in a row,
+           or dragging the second divider would resize a different pair than
+           the one under the pointer. */
+        function gpNodeCollapse(n) {
+            if (!n.kids) return;
+            n.kids.forEach(gpNodeCollapse);
+            var kids = [], sz = [];
+            n.kids.forEach(function (k, i) {
+                var w = gpNum(n.sz[i], 1);
+                if (k.kids && k.kids.length === 1) k = k.kids[0];          /* a split of one */
+                if (k.kids && k.dir === n.dir) {                            /* same-axis nest */
+                    var tot = k.sz.reduce(function (a, b) { return a + b; }, 0) || 1;
+                    k.kids.forEach(function (gk, j) { kids.push(gk); sz.push(w * k.sz[j] / tot); });
+                    return;
+                }
+                kids.push(k); sz.push(w);
+            });
+            n.kids = kids; n.sz = sz;
+        }
 
-        window.gpPanelType = function (ri, pi, ty) {
+        window.gpPanelType = function (id, ty) {
             gpGridMutate(function (g) {
-                var p = gpPanelAt(g, ri, pi);
-                if (!p) return;
-                var was = p.type;
+                var hit = gpNodeFind(g.root, id);
+                if (!hit || hit.node.kids) return;
+                var was = hit.node.type;
                 var solo = GP_PTYPES.filter(function (t) { return t.id === ty && t.solo; }).length;
                 if (solo) {
                     /* One map, one rack, one video element exist. Rather than
                        refusing — which strands the user when the panel they
                        want is taken — the panel that had it takes the type
                        this one was showing. */
-                    g.rows.forEach(function (r, a) {
-                        r.panels.forEach(function (q, b) {
-                            if ((a !== ri || b !== pi) && q.type === ty) q.type = was;
-                        });
+                    gpNodeLeaves(g.root).forEach(function (l) {
+                        if (l !== hit.node && l.type === ty) l.type = was;
                     });
                 }
-                p.type = ty;
+                hit.node.type = ty;
             });
         };
-        window.gpPanelDup = function (ri, pi) {
+
+        /* What a new panel should show: the first type not already on screen,
+           so splitting never hands you a second copy of what you are looking
+           at. */
+        function gpNextType(g) {
+            var used = {};
+            gpNodeLeaves(g.root).forEach(function (l) { used[l.type] = 1; });
+            for (var i = 0; i < GP_PTYPES.length; i++)
+                if (!used[GP_PTYPES[i].id]) return GP_PTYPES[i].id;
+            return "times";
+        }
+
+        /* ---- splitting --------------------------------------------------
+           Cut this panel in two, along `dir`. If the panel already sits in a
+           spine running that way it gains a SIBLING rather than a nested
+           split — that is what keeps a column of four rows a single spine,
+           which is what the cascade drag below needs.
+
+           Along a col spine the new panel wants half the height. Where half
+           would be unreadable the arrangement grows downward instead and the
+           grid starts scrolling: never silently make a panel too short to
+           read, and never open a scrollbar that was not needed. */
+        window.gpPanelSplit = function (id, dir) {
+            gp.splitMenu = null;
             gpGridMutate(function (g) {
-                var row = g.rows[ri];
-                if (!row || row.panels.length >= 3) return;
-                var p = row.panels[pi];
-                var solo = GP_PTYPES.filter(function (t) { return t.id === p.type && t.solo; }).length;
-                /* A singleton cannot be in two places; duplicating one gives
-                   you the lap times beside it, which is what the gesture is
-                   usually reaching for. */
-                row.panels.splice(pi + 1, 0, { id: Date.now() % 100000 + pi,
-                                               type: solo ? "times" : p.type, w: p.w || 1 });
+                var hit = gpNodeFind(g.root, id);
+                if (!hit) return;
+                var leaf = { id: gpNodeId(), type: gpNextType(g) };
+                var p = hit.parent;
+                g.preset = null;
+                if (p && p.dir === dir) {
+                    var was = gpNum(p.sz[hit.idx], 1);
+                    var half = was / 2;
+                    if (dir === "col" && p === g.root) {
+                        var avail = gpSpineAvail(g);
+                        var sum = p.sz.reduce(function (a, b) { return a + b; }, 0) || 1;
+                        var px = was * (g.fit ? avail / sum : 1);
+                        if (px / 2 < gpNodeMinH(hit.node)) {   /* grow the page instead */
+                            gpSpineToPx(g, avail);
+                            p.sz.splice(hit.idx + 1, 0, GP_ROW_MIN);
+                            p.kids.splice(hit.idx + 1, 0, leaf);
+                            g.fit = false;
+                            return;
+                        }
+                    }
+                    p.sz[hit.idx] = half;
+                    p.sz.splice(hit.idx + 1, 0, half);
+                    p.kids.splice(hit.idx + 1, 0, leaf);
+                    return;
+                }
+                /* A different axis: the panel becomes a split of itself and
+                   the newcomer, in place. */
+                var split = { id: gpNodeId(), dir: dir, sz: [1, 1],
+                              kids: [{ id: hit.node.id, type: hit.node.type,
+                                       dir: hit.node.dir, kids: hit.node.kids, sz: hit.node.sz }, leaf] };
+                if (!p) { g.root = split; return; }
+                p.kids[hit.idx] = split;
             });
         };
-        window.gpPanelClose = function (ri, pi) {
+
+        window.gpPanelClose = function (id) {
+            gp.splitMenu = null;
             gpGridMutate(function (g) {
-                if (g.rows[ri]) g.rows[ri].panels.splice(pi, 1);
+                var hit = gpNodeFind(g.root, id);
+                if (!hit || !hit.parent) return;          /* never close the last one */
+                var p = hit.parent;
+                var freed = gpNum(p.sz[hit.idx], 1);
+                p.kids.splice(hit.idx, 1);
+                p.sz.splice(hit.idx, 1);
+                /* Hand the space to a neighbour rather than rescaling the
+                   whole spine: closing the middle of three rows should not
+                   move the two that stay. */
+                var to = Math.min(hit.idx, p.sz.length - 1);
+                if (to >= 0) p.sz[to] += freed;
                 g.preset = null;
             });
         };
-        window.gpPanelAdd = function (ri) {
-            gpGridMutate(function (g) {
-                var row = g.rows[ri];
-                if (!row || row.panels.length >= 3) return;
-                var used = {};
-                g.rows.forEach(function (r) { r.panels.forEach(function (p) { used[p.type] = 1; }); });
-                var want = "times";
-                for (var i = 0; i < GP_PTYPES.length; i++)
-                    if (!used[GP_PTYPES[i].id]) { want = GP_PTYPES[i].id; break; }
-                row.panels.push({ id: Date.now() % 100000, type: want, w: 1 });
-                g.preset = null;
-            });
-        };
+
+        /* A row at the bottom, full width. Squeeze the existing rows to make
+           room while they can all still be read; past that, extend below the
+           fold and let the grid scroll. */
         window.gpRowAdd = function () {
             gpGridMutate(function (g) {
-                g.rows.push({ flex: 1, panels: [{ id: Date.now() % 100000, type: "times", w: 1 }] });
-                g.preset = null; g.emphasis = null;
+                var root = gpRootCol(g);
+                var was = gpSpineAvail(g);
+                /* One more row is also one more divider. */
+                var after = Math.max(GP_ROW_MIN, was - GP_GAP);
+                var mins = root.kids.map(gpNodeMinH).concat(GP_ROW_MIN);
+                var need = mins.reduce(function (a, b) { return a + b; }, 0);
+                g.preset = null;
+                if (!g.fit || need > after) {
+                    gpSpineToPx(g, was);
+                    root.sz.push(GP_ROW_MIN);
+                    root.kids.push({ id: gpNodeId(), type: gpNextType(g) });
+                    g.fit = false;
+                    return;
+                }
+                var sum = root.sz.reduce(function (a, b) { return a + b; }, 0) || 1;
+                root.sz.push(sum / root.kids.length);
+                root.kids.push({ id: gpNodeId(), type: gpNextType(g) });
             });
         };
+
+        /* Freeze the root spine's proportions as the pixels they currently
+           are — the moment a fitted arrangement stops fitting, the numbers
+           have to start meaning something absolute. */
+        function gpSpineToPx(g, avail) {
+            var root = g.root;
+            if (!g.fit) return;
+            var sum = root.sz.reduce(function (a, b) { return a + b; }, 0) || 1;
+            root.sz = root.sz.map(function (s) { return Math.max(GP_ROW_MIN, s * avail / sum); });
+        }
+
+        /* How much height the mosaic actually has to play with. */
+        function gpGridAvail() {
+            var host = document.getElementById("gpGrid");
+            if (!host || !host.clientHeight) return 600;
+            var cs = window.getComputedStyle(host);
+            var add = host.querySelector(".gpb-addrow");
+            return Math.max(GP_ROW_MIN, host.clientHeight -
+                (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0) -
+                (add ? add.offsetHeight + 3 : 0));
+        }
+
         window.gpGridPreset = function (id) {
             gp.grid = gpGridFromPreset(id);
+            gpRootCol(gp.grid);
             gpGridSave();
             gpRenderGrid();
             gpRenderCtx();          /* the segment has to show what is active */
         };
-        window.gpGridEmphasis = function (id) {
-            var f = { top: [1.55, 0.75], even: [1, 1], bottom: [0.75, 1.55] }[id];
-            gpGridMutate(function (g) {
-                g.emphasis = id;
-                g.rows.forEach(function (r, i) { r.flex = (f && f[i]) || 1; });
-            });
+        /* FIT and SCROLL are two ways of asking for a height, not a mode flag:
+           FIT re-fits the rows to the window now, SCROLL gives every row a
+           height you can actually read in and lets the page grow to suit. The
+           flag itself is derived — gpGridLayout works out whether what you
+           asked for still fits. */
+        window.gpGridFitSet = function (mode) {
+            var g = gpGrid(), root = gpRootCol(g), avail = gpSpineAvail(g);
+            gpSpineToPx(g, avail);
+            if (mode === "tall") {
+                var mins = root.kids.map(gpNodeMinH);
+                root.sz = root.sz.map(function (s, i) {
+                    return Math.max(s, mins[i], GP_ROW_PREF);
+                });
+                g.fit = false;
+            } else {
+                g.fit = true;
+            }
+            gpGridSave();
+            gpRenderGrid();
+            gpRenderCtx();
         };
 
         /* ---- saved arrangements ---- */
         window.gpLayoutsToggle = function () {
             gp.layoutsOpen = !gp.layoutsOpen;
             gp.layoutEdit = -1;
+            gp.splitMenu = null;
             gpRenderCtx();
+            gpRenderGrid();
         };
+
+        /* Both of the Analyse popovers close the way every popover should:
+           Escape, or a click on anything that is not them.
+
+           Escape is NOT handled here. The suite's own Escape handler is
+           registered at capture on document long before this workspace draws
+           anything, so a listener added now fires second — and by then Escape
+           has already closed the whole workspace, popover and all. It asks
+           this first instead. */
+        window.gpEscapeCaught = function () {
+            if (!gp.layoutsOpen && !gp.splitMenu) return false;
+            var wasMenu = !!gp.splitMenu;
+            gp.layoutsOpen = false; gp.splitMenu = null;
+            gpRenderCtx();
+            if (wasMenu && gp.view === "session") gpRenderGrid();
+            return true;
+        };
+        function gpPopDismissInit() {
+            if (gp._popDismiss) return;
+            gp._popDismiss = true;
+            document.addEventListener("pointerdown", function (e) {
+                if (!gp.layoutsOpen && !gp.splitMenu) return;
+                var t = e.target;
+                if (t.closest && (t.closest("#gpArrPop") || t.closest(".gpb-splitmenu") ||
+                                  t.closest(".gpb-arr") || t.closest("[data-gp-psplit]"))) return;
+                window.gpEscapeCaught();
+            }, true);
+        }
         window.gp_layName = function (v) { gp.layoutName = v; };
         window.gp_layEditName = function (v) { gp.layoutEditName = v; };
 
@@ -10204,14 +10591,7 @@
             var list = gpGrids();
             if (!name) name = "Layout " + (list.length + 1);
             var g = gpGrid();
-            list.push({
-                name: name,
-                rows: g.rows.map(function (r) {
-                    return { flex: r.flex || 1, panels: r.panels.map(function (p) {
-                        return { type: p.type, w: p.w || 1 };
-                    }) };
-                })
-            });
+            list.push({ name: name, v: 2, fit: !!g.fit, root: JSON.parse(JSON.stringify(g.root)) });
             gpGridsSave();
             gp.layoutName = "";
             if (inp) inp.value = "";
@@ -10219,13 +10599,13 @@
         };
         window.gpLayoutApply = function (i) {
             var v = gpGrids()[i];
-            if (!v) return;
-            var n = 1;
-            gp.grid = { preset: null, emphasis: null, rows: v.rows.map(function (r) {
-                return { flex: r.flex || 1, panels: r.panels.map(function (p) {
-                    return { id: n++, type: p.type, w: p.w || 1 };
-                }) };
-            }) };
+            /* Saved before ADR-0026? gpGridAdopt converts it on the way in,
+               which is the same path a stale live arrangement takes. */
+            var g = v && gpGridAdopt(v);
+            if (!g) return;
+            gp.grid = g;
+            gpRootCol(gp.grid);
+            gp.grid.preset = null;
             gp.layoutsOpen = false;
             gpGridSave();
             gpRenderGrid(); gpRenderCtx();
@@ -10249,71 +10629,185 @@
             gpGridsSave(); gpRenderCtx();
         };
 
-        /* ---- resize handles ---- */
-        function gpDragCol(ri, pi, ev) {
+        /* ---- resize handles ------------------------------------------------
+           One gesture, one rule at every depth: the divider you grabbed grows
+           the panel above (or left of) it, and the space comes out of the
+           NEXT sibling — and when that one is already as small as it is
+           allowed to be, out of the one after it, and so on down the spine.
+           That cascade is what makes a column of rows feel like a stack of
+           real things rather than a pair of things with a hinge.
+
+           The vertical spine of the whole grid is the one that is allowed to
+           run out of room. When every row below is at its floor and you are
+           still dragging, the arrangement stops fitting the window and starts
+           being taller than it: the grid scrolls. Drag back up and it eats
+           the overflow first, so it snaps back to fitting on the way home. */
+        function gpDragSplit(nodeId, idx, ev) {
             ev.preventDefault();
-            var rowEl = ev.currentTarget.parentNode;
-            var W = rowEl.getBoundingClientRect().width;
-            var g = gpGrid(), row = g.rows[ri];
-            if (!row || !W) return;
-            var sum = row.panels.reduce(function (a, p) { return a + (p.w || 1); }, 0);
-            var f0 = row.panels[pi].w || 1, f1 = row.panels[pi + 1].w || 1, x0 = ev.clientX;
+            var g = gpGrid();
+            var hit = gpNodeFind(g.root, nodeId);
+            if (!hit || !hit.node.kids || !hit.node.kids[idx + 1]) return;
+            var sp = hit.node, vert = sp.dir === "col", isRoot = sp === g.root;
+            var host = document.getElementById("gpGrid");
+            var spEl = host && host.querySelector("[data-gp-node='" + nodeId + "']");
+            if (!spEl) return;
+            /* Start from what is on screen, in pixels — the stored numbers may
+               be proportions, and a drag is inherently about pixels. */
+            var els = Array.prototype.filter.call(spEl.children, function (c) {
+                return !c.classList.contains("gpb-hcol") && !c.classList.contains("gpb-hrow");
+            });
+            var px0 = els.map(function (c) { return vert ? c.offsetHeight : c.offsetWidth; });
+            var total0 = px0.reduce(function (a, b) { return a + b; }, 0);
+            var avail = vert && isRoot ? gpSpineAvail(g) : total0;
+            var floors = sp.kids.map(vert ? gpNodeMinH : function () { return GP_COL_MIN; });
+            var p0 = vert ? ev.clientY : ev.clientX;
+            var grow = vert && isRoot;      /* only this spine may outgrow its box */
+
             var move = function (e) {
-                var d = (e.clientX - x0) / W * sum;
-                var a = Math.min(f0 + f1 - 0.25, Math.max(0.25, f0 + d));
-                row.panels[pi].w = a; row.panels[pi + 1].w = f0 + f1 - a;
+                var d = (vert ? e.clientY : e.clientX) - p0;
+                var px = px0.slice(), j, give;
+                if (d > 0) {
+                    px[idx] += d;
+                    /* Take it from the next one; when that one is already as
+                       small as its own contents allow, from the one after,
+                       and so on to the bottom of the spine. */
+                    var rem = d;
+                    for (j = idx + 1; j < px.length && rem > 0.01; j++) {
+                        give = Math.min(rem, px[j] - floors[j]);
+                        if (give > 0) { px[j] -= give; rem -= give; }
+                    }
+                    /* Nothing left to take: either the page gets taller, or
+                       the drag simply stops. */
+                    if (rem > 0.01 && !grow) px[idx] -= rem;
+                } else {
+                    var take = Math.min(-d, px[idx] - floors[idx]);
+                    px[idx] -= take;
+                    /* Coming back up: shed the overflow before handing any
+                       height to the neighbour, so the arrangement re-fits the
+                       window instead of just redistributing inside a canvas
+                       that stays too tall. */
+                    var over = grow ? Math.max(0, total0 - avail) : 0;
+                    var shed = Math.min(take, over);
+                    px[idx + 1] += take - shed;
+                }
+                sp.sz = px;
+                if (grow) {
+                    var sum = px.reduce(function (a, b) { return a + b; }, 0);
+                    g.fit = sum <= avail + 1;
+                }
                 g.preset = null;
                 gpGridApplyFlex();
             };
             var up = function () {
                 window.removeEventListener("pointermove", move);
                 window.removeEventListener("pointerup", up);
-                gpGridSave(); gpGridReflow();
+                gpGridSave(); gpGridLayout(); gpGridReflow();
             };
             window.addEventListener("pointermove", move);
             window.addEventListener("pointerup", up);
         }
-        function gpDragRow(ri, ev) {
-            ev.preventDefault();
-            var host = document.getElementById("gpGrid");
-            var H = host ? host.getBoundingClientRect().height : 0;
-            var g = gpGrid();
-            if (!H || !g.rows[ri + 1]) return;
-            var sum = g.rows.reduce(function (a, r) { return a + (r.flex || 1); }, 0);
-            var f0 = g.rows[ri].flex || 1, f1 = g.rows[ri + 1].flex || 1, y0 = ev.clientY;
-            var move = function (e) {
-                var d = (e.clientY - y0) / H * sum;
-                var a = Math.min(f0 + f1 - 0.25, Math.max(0.25, f0 + d));
-                g.rows[ri].flex = a; g.rows[ri + 1].flex = f0 + f1 - a;
-                g.emphasis = null;
-                gpGridApplyFlex();
-            };
-            var up = function () {
-                window.removeEventListener("pointermove", move);
-                window.removeEventListener("pointerup", up);
-                gpGridSave(); gpGridReflow();
-            };
-            window.addEventListener("pointermove", move);
-            window.addEventListener("pointerup", up);
-        }
-        /* Resizing writes flex straight onto the nodes rather than rebuilding
-           the grid: a rebuild during a drag destroys the element under the
-           pointer, and re-parenting a Leaflet map 60 times a second is not a
-           thing anyone should watch. */
+        /* Measure, then write — in that order, always. gpGridLayout is the
+           only thing that changes the numbers; this is the only thing that
+           puts them on the DOM. Doing it this way rather than rebuilding the
+           grid is what lets a drag be smooth: a rebuild destroys the element
+           under the pointer, and re-parenting a Leaflet map 60 times a second
+           is not a thing anyone should watch. */
         function gpGridApplyFlex() {
+            gpGridLayout();
+            gpGridWrite();
+        }
+        function gpGridWrite() {
             var host = document.getElementById("gpGrid");
             if (!host) return;
             var g = gpGrid();
-            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-row]"), function (rowEl) {
-                var ri = parseInt(rowEl.getAttribute("data-gp-row"), 10);
-                if (!g.rows[ri]) return;
-                rowEl.style.flex = (g.rows[ri].flex || 1) + " 1 0%";
-                Array.prototype.forEach.call(rowEl.querySelectorAll("[data-gp-panel]"), function (pel) {
-                    var pi = parseInt(pel.getAttribute("data-gp-panel"), 10);
-                    var p = g.rows[ri].panels[pi];
-                    if (p) pel.style.flex = (p.w || 1) + " 1 0%";
+            gpNodeWalk(g.root, function (n) {
+                if (!n.kids) return;
+                var el = host.querySelector("[data-gp-node='" + n.id + "']");
+                if (!el) return;
+                var k = 0;
+                Array.prototype.forEach.call(el.children, function (c) {
+                    if (c.classList.contains("gpb-hcol") || c.classList.contains("gpb-hrow")) return;
+                    c.style.flex = gpNum(n.sz[k], 1) + " 1 0%";
+                    k++;
                 });
             });
+        }
+        /* The least height a subtree can be drawn in. A row is only as short
+           as its tallest child needs, and a column needs the sum of its
+           children — so a stack of three panels beside a map makes the row
+           holding them three panels tall, rather than dividing one panel's
+           worth of height three ways and calling each result a panel. This is
+           what stops the mosaic from producing 35 px "panels". */
+        function gpNodeMinH(n) {
+            if (!n.kids) return GP_ROW_MIN;
+            var hs = n.kids.map(gpNodeMinH);
+            return n.dir === "col"
+                ? hs.reduce(function (a, b) { return a + b; }, 0) + (n.kids.length - 1) * GP_GAP
+                : Math.max.apply(null, hs);
+        }
+        /* A stack nested inside a row cannot make the page taller — it is
+           bounded by the row it is in. So rather than growing, its shares get
+           nudged: at the height the row is guaranteed (gpNodeMinH above),
+           every panel in the stack clears its own floor. Above that height
+           the proportions you dragged are kept exactly.
+
+           The surplus taken is always equal to the shortfall handed out —
+           both sets of fractions sum to one — so this settles in one pass. */
+        function gpColBalance(n) {
+            var mins = n.kids.map(gpNodeMinH);
+            var need = mins.reduce(function (a, b) { return a + b; }, 0) || 1;
+            var sum = n.sz.reduce(function (a, b) { return a + b; }, 0) || 1;
+            var f = n.sz.map(function (s) { return s / sum; });
+            var mf = mins.map(function (m) { return m / need; });
+            var deficit = 0, slack = 0;
+            f.forEach(function (v, i) {
+                if (v < mf[i]) deficit += mf[i] - v; else slack += v - mf[i];
+            });
+            if (deficit < 1e-6 || slack < 1e-6) return;
+            n.sz = f.map(function (v, i) {
+                return v < mf[i] ? mf[i] : v - (v - mf[i]) * deficit / slack;
+            });
+        }
+
+        /* The height the ROWS get, which is not the height the grid has: the
+           dividers between them are in the same box and are not panels. */
+        function gpSpineAvail(g) {
+            return Math.max(GP_ROW_MIN,
+                            gpGridAvail() - (g.root.kids.length - 1) * GP_GAP);
+        }
+
+        /* The one measurement pass, and the only place that decides whether
+           the arrangement fits the window or outgrows it.
+
+           Fitted, the spine's proportions become the pixels they describe, so
+           a window resize keeps the shape and never opens a scrollbar it did
+           not need. Then every row is grown to at least what it holds. If
+           that pushes the total past the window, the arrangement has stopped
+           fitting — the canvas is pinned to the total and the grid scrolls.
+           Nothing else in the file decides this. */
+        function gpGridLayout() {
+            var host = document.getElementById("gpGrid");
+            var cv = host && host.querySelector(".gpb-canvas");
+            if (!cv) return;
+            var g = gpGrid(), root = gpRootCol(g);
+            /* Nested stacks first: a row's minimum depends on the shares
+               inside it, so they have to settle before the spine is measured
+               against them. */
+            gpNodeWalk(root, function (n) {
+                if (n.kids && n.dir === "col" && n !== root) gpColBalance(n);
+            });
+            var gaps = (root.kids.length - 1) * GP_GAP;
+            var avail = gpSpineAvail(g);
+            var sum = root.sz.reduce(function (a, b) { return a + b; }, 0) || 1;
+            if (g.fit) root.sz = root.sz.map(function (s) { return s * avail / sum; });
+            var mins = root.kids.map(gpNodeMinH);
+            root.sz = root.sz.map(function (s, i) { return Math.max(s, mins[i]); });
+            var total = root.sz.reduce(function (a, b) { return a + b; }, 0);
+            g.fit = total <= avail + 1;
+            /* Fitted, the canvas just flexes into the port. Tall, its own
+               height is what the port scrolls through — the rows plus the
+               dividers standing between them. */
+            cv.style.minHeight = g.fit ? "0px" : Math.round(total + gaps) + "px";
         }
         /* After a resize the map and the canvases have new boxes and neither
            finds out on its own. */
@@ -10324,13 +10818,13 @@
         }
 
         /* ---- the panels ---- */
-        function gpPanelHeadHtml(p, ri, pi, nPanels) {
+        function gpPanelHeadHtml(p) {
             var opts = GP_PTYPES.map(function (t) {
                 return "<option value='" + t.id + "'" + (t.id === p.type ? " selected" : "") + ">" +
                        gpEsc(t.label) + "</option>";
             }).join("");
             var h = "<div class='gpb-phead'>" +
-                "<select class='ty' title='What this panel shows' data-gp-ptype='" + ri + ":" + pi + "'>" + opts + "</select>";
+                "<select class='ty' title='What this panel shows' data-gp-ptype='" + p.id + "'>" + opts + "</select>";
             /* The controls that used to sit in the shared playbar belong to
                the panel they act on — colouring the line is a MAP setting,
                and how the channels are stacked is a GRAPH one. Putting them
@@ -10350,15 +10844,35 @@
                      "</div>";
             }
             h += "<span class='sp'></span>";
-            if (nPanels < 3)
-                h += "<button class='gpb-picon' title='Add a panel beside this one' data-gp-pdup='" + ri + ":" + pi + "'>" +
-                     "<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'>" +
-                     "<rect x='9' y='9' width='12' height='12'></rect><path d='M5 15H4V4h11v1'></path></svg></button>";
-            h += "<button class='gpb-picon' title='Close this panel' data-gp-pclose='" + ri + ":" + pi + "'>" +
+            /* Splitting replaced "add a panel beside this one" and the
+               add-a-row banner both: cutting THIS panel is the one gesture
+               that reaches every arrangement the mosaic can hold, including
+               the ones the old row-major grid could not describe. */
+            h += "<button class='gpb-picon" + (gp.splitMenu === p.id ? " on" : "") +
+                 "' title='Split this panel' data-gp-psplit='" + p.id + "'>" +
                  "<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'>" +
-                 "<path d='M18 6 6 18M6 6l12 12'></path></svg></button></div>";
+                 "<rect x='3' y='3' width='18' height='18'></rect><path d='M12 3v18'></path></svg></button>";
+            h += "<button class='gpb-picon' title='Close this panel' data-gp-pclose='" + p.id + "'>" +
+                 "<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'>" +
+                 "<path d='M18 6 6 18M6 6l12 12'></path></svg></button>";
+            if (gp.splitMenu === p.id) {
+                h += "<div class='gpb-splitmenu' style='top:30px;right:4px'>" +
+                     "<button data-gp-dosplit='" + p.id + ":row'>" +
+                     "<svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'>" +
+                     "<rect x='3' y='4' width='18' height='16'></rect><path d='M12 4v16'></path></svg>" +
+                     "Split left / right</button>" +
+                     "<button data-gp-dosplit='" + p.id + ":col'>" +
+                     "<svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'>" +
+                     "<rect x='3' y='4' width='18' height='16'></rect><path d='M3 12h18'></path></svg>" +
+                     "Split top / bottom</button></div>";
+            }
+            h += "</div>";
             return h;
         }
+        window.gpSplitMenu = function (id) {
+            gp.splitMenu = gp.splitMenu === id ? null : id;
+            gpRenderGrid();
+        };
 
         function gpPanelTimesHtml() {
             if (!(gp.trace && gp.trace.length)) return gpPanelEmpty("No recording open.");
@@ -10488,23 +11002,73 @@
                    "Load video&hellip;<input type='file' accept='video/*' style='display:none' onchange='gpVideoOpen(this)'></label></div>";
         }
 
+        /* The key above the rack. It has to say what the swatches MEAN,
+           because that changes with what is ticked and with which mode the
+           rack is in — a swatch beside "LAP 1" that matches nothing on the
+           canvas is worse than no swatch at all. */
         function gpPanelGraphLegendHtml() {
             var shown = gpShownList();
             if (!shown.length) return "";
             var word = gpRunWord(true);
+            var over = gp.plotMode === "over", multi = shown.length > 1;
             var h = "<div class='gpb-glegend'>";
             shown.forEach(function (i) {
                 var l = gp.traceLaps[i];
                 if (!l) return;
-                h += "<span class='sw'><i style='background:" + gpLapColour(i) + "'></i>" +
+                var ref = i === gp.selLap;
+                /* Combined colours by channel, so the lap can only be told
+                   apart by its line: solid for the one being analysed,
+                   dashed for the rest. Say so, with the mark itself. */
+                var mark = over
+                    ? "<i style='background:none;border-bottom:2px " + (ref ? "solid" : "dashed") +
+                      " var(--gpb-n700);height:0;width:14px'></i>"
+                    : "<i style='background:" + gpLapColour(i) + "'></i>";
+                h += "<span class='sw'>" + mark +
                      "<b>" + word.toUpperCase() + " " + (i + 1) + "</b>" +
                      "<span style='color:var(--gpb-muted)'>" + gpLapTime(gpSecs(gp.trace, l.from, l.to)) + "</span></span>";
             });
+            h += "<span style='color:var(--gpb-muted);font-size:10px'>" +
+                 (over ? "colour&nbsp;=&nbsp;channel"
+                       : (multi ? "colour&nbsp;=&nbsp;" + gpRunWord() : "colour&nbsp;=&nbsp;channel")) +
+                 "</span>";
             h += "<span class='cur' id='gpGraphCur'></span></div>";
             return h;
         }
 
-        /* ---- render ---- */
+        /* ---- render ----
+           One recursive function for the whole mosaic: a split is a flex box
+           of its children with a divider between each pair, and a panel is a
+           panel. The `flex` argument is the size its parent gave it. */
+        function gpNodeHtml(n, flex) {
+            var st = " style='flex:" + gpNum(flex, 1) + " 1 0%'";
+            if (n.kids) {
+                var h = "<div class='gpb-node " + n.dir + "' data-gp-node='" + n.id + "'" + st + ">";
+                n.kids.forEach(function (k, i) {
+                    h += gpNodeHtml(k, n.sz[i]);
+                    if (i < n.kids.length - 1)
+                        h += "<div class='gpb-h" + (n.dir === "row" ? "col" : "row") +
+                             "' data-gp-hs='" + n.id + ":" + i + "' title='Drag to resize" +
+                             (n.dir === "col" ? " — past the bottom row the page starts scrolling" : "") +
+                             "'><i></i></div>";
+                });
+                return h + "</div>";
+            }
+            var p = n;
+            var h2 = "<section class='gpb-panel" +
+                     (p.type === "map" || p.type === "graph" || p.type === "video" ? " hosting" : "") +
+                     "' data-gp-panel='" + p.id + "'" + st + ">";
+            h2 += gpPanelHeadHtml(p);
+            h2 += "<div class='gpb-pbody' data-gp-pbody='" + p.id + "' data-gp-ptypeid='" + p.type + "'>";
+            if (p.type === "times") h2 += gpPanelTimesHtml();
+            else if (p.type === "report") h2 += gpPanelReportHtml();
+            else if (p.type === "corners") h2 += gpPanelCornersHtml();
+            else if (p.type === "splits") h2 += "<div class='gpb-pscroll' style='padding:6px 10px'>" +
+                (gp.trace && gp.trace.length ? gpSplitsHtml() : gpPanelEmpty("No recording open.")) + "</div>";
+            else if (p.type === "video") h2 += gpPanelVideoHtml();
+            else if (p.type === "graph") h2 += "<div class='gpb-graphwrap'>" + gpPanelGraphLegendHtml() + "</div>";
+            return h2 + "</div></section>";
+        }
+
         function gpRenderGrid() {
             var host = document.getElementById("gpGrid");
             if (!host) return;
@@ -10527,33 +11091,9 @@
                 if (el && el.parentNode !== gp._hold) gp._hold.appendChild(el);
             });
 
-            var html = "";
-            g.rows.forEach(function (row, ri) {
-                html += "<div class='gpb-row' data-gp-row='" + ri + "' style='flex:" + (row.flex || 1) + " 1 0%'>";
-                row.panels.forEach(function (p, pi) {
-                    html += "<section class='gpb-panel" +
-                            (p.type === "map" || p.type === "graph" || p.type === "video" ? " hosting" : "") +
-                            "' data-gp-panel='" + pi + "' style='flex:" + (p.w || 1) + " 1 0%'>";
-                    html += gpPanelHeadHtml(p, ri, pi, row.panels.length);
-                    html += "<div class='gpb-pbody' data-gp-pbody='" + ri + ":" + pi + "' data-gp-ptypeid='" + p.type + "'>";
-                    if (p.type === "times") html += gpPanelTimesHtml();
-                    else if (p.type === "report") html += gpPanelReportHtml();
-                    else if (p.type === "corners") html += gpPanelCornersHtml();
-                    else if (p.type === "splits") html += "<div class='gpb-pscroll' style='padding:6px 10px'>" +
-                        (gp.trace && gp.trace.length ? gpSplitsHtml() : gpPanelEmpty("No recording open.")) + "</div>";
-                    else if (p.type === "video") html += gpPanelVideoHtml();
-                    else if (p.type === "graph") html += "<div class='gpb-graphwrap'>" + gpPanelGraphLegendHtml() + "</div>";
-                    html += "</div></section>";
-                    if (pi < row.panels.length - 1)
-                        html += "<div class='gpb-hcol' data-gp-hcol='" + ri + ":" + pi + "' title='Drag to resize'><i></i></div>";
-                });
-                if (row.panels.length < 3)
-                    html += "<button class='gpb-addp' data-gp-padd='" + ri + "' title='Add a panel to this row'>+</button>";
-                html += "</div>";
-                if (ri < g.rows.length - 1)
-                    html += "<div class='gpb-hrow' data-gp-hrow='" + ri + "' title='Drag to resize rows'><i></i></div>";
-            });
-            html += "<button class='gpb-addrow' onclick='gpRowAdd()'>+ Add a row</button>";
+            var html = "<div class='gpb-canvas'>" + gpNodeHtml(gpRootCol(g), 1) + "</div>" +
+                "<button class='gpb-addrow' onclick='gpRowAdd()' " +
+                "title='Add a full-width row along the bottom'><i></i><span>+ Row</span><i></i></button>";
             host.innerHTML = html;
 
             /* Put the hosted elements into their panels. */
@@ -10574,10 +11114,16 @@
             });
 
             gpBindGrid(host);
+            gpPopDismissInit();
+            /* The markup above was built from the numbers as they stood; the
+               measurement that turns them into the numbers this window can
+               actually honour happens now, and has to be written back. */
+            gpGridApplyFlex();
             gpRenderDock();
             /* The map and the canvases all have new boxes now. */
             setTimeout(function () {
                 if (gp.view !== "session") return;
+                gpGridApplyFlex();
                 if (gp.map) gp.map.invalidateSize({ animate: false });
                 gpDrawTrace(); gpDrawStrip(); gpViewerSync();
             }, 30);
@@ -10591,12 +11137,12 @@
                 });
             };
             Array.prototype.forEach.call(host.querySelectorAll("[data-gp-ptype]"), function (sel) {
-                var p = sel.getAttribute("data-gp-ptype").split(":");
-                sel.addEventListener("change", function () { window.gpPanelType(+p[0], +p[1], sel.value); });
+                var id = sel.getAttribute("data-gp-ptype");
+                sel.addEventListener("change", function () { window.gpPanelType(id, sel.value); });
             });
-            pick("data-gp-pdup", function (p) { window.gpPanelDup(+p[0], +p[1]); });
-            pick("data-gp-pclose", function (p) { window.gpPanelClose(+p[0], +p[1]); });
-            pick("data-gp-padd", function (p) { window.gpPanelAdd(+p[0]); });
+            pick("data-gp-psplit", function (p) { window.gpSplitMenu(p[0]); });
+            pick("data-gp-dosplit", function (p) { window.gpPanelSplit(p[0], p[1]); });
+            pick("data-gp-pclose", function (p) { window.gpPanelClose(p[0]); });
             pick("data-gp-cjump", function (p) {
                 window.gpCoachJump(+p[0], +p[1], +p[2]);
             });
@@ -10614,13 +11160,9 @@
             Array.prototype.forEach.call(host.querySelectorAll("[data-gp-lapline]"), function (b) {
                 b.addEventListener("click", function () { window.gpLapAnalyse(b.getAttribute("data-gp-lapline")); });
             });
-            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-hcol]"), function (el) {
-                var p = el.getAttribute("data-gp-hcol").split(":");
-                el.addEventListener("pointerdown", function (e) { gpDragCol(+p[0], +p[1], e); });
-            });
-            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-hrow]"), function (el) {
-                var ri = parseInt(el.getAttribute("data-gp-hrow"), 10);
-                el.addEventListener("pointerdown", function (e) { gpDragRow(ri, e); });
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-hs]"), function (el) {
+                var p = (el.getAttribute("data-gp-hs") || "").split(":");
+                el.addEventListener("pointerdown", function (e) { gpDragSplit(p[0], +p[1], e); });
             });
             Array.prototype.forEach.call(host.querySelectorAll("[data-gp-ghost]"), function (b) {
                 b.addEventListener("click", function (e) {
@@ -11868,6 +12410,10 @@
             gp.plotMode = gp.plotMode === "over" ? "tiled" : "over";
             try { window.localStorage.setItem("rdm7_gp_plotmode", gp.plotMode); } catch (e) {}
             gp.stripCache = null;
+            /* The key above the rack says what a swatch means, and that
+               answer is different in the two modes — it has to be rebuilt
+               with the rack, not left describing the mode you just left. */
+            if (gp.view === "session") gpRenderGrid();
             gpDrawStrip();
             gpSyncLanesBtn();
         };
@@ -12355,6 +12901,25 @@
             return gpLaneLayout().bottom + 2 + GP_AXIS_H;
         }
 
+        /* ---- the Combined gutter -------------------------------------------
+           Combined has no lanes, so the name column becomes a legend: one row
+           per channel, its swatch, its name, its scale, and — under the
+           playhead — its reading. Three separate loops used to lay that out
+           by hand at a fixed 13 px pitch and drop anything that ran past the
+           bottom, so in a short Graph panel the last channels simply were not
+           listed. Ticking RPM and finding no RPM anywhere is how that reads
+           from the outside. One layout, computed from the room available, and
+           nothing is ever silently left out. */
+        function gpOverGutter(nRows, rackBottom) {
+            var room = Math.max(12, rackBottom - 8);
+            var step = Math.min(13, room / Math.max(1, nRows));
+            return {
+                step: step,
+                size: Math.max(6.5, Math.min(10, step - 2.6)),
+                y: function (i) { return 4 + step * (i + 0.78); }
+            };
+        }
+
         /* ---- the scale belongs to the LAP, not to what is on screen --------
            gpLaneScale was fed the visible window, so every scroll, zoom and
            navigator drag recomputed min/max and the axis moved under you.
@@ -12540,27 +13105,41 @@
 
                Each channel keeps its OWN scale. A shared one would put a 0.4 g
                trace flat against 180 km/h and call it a plot. What the eye is
-               reading here is shape and timing, not magnitude; the magnitudes
-               live in the tags and on the playhead. */
+               reading here is shape and timing, not magnitude — so the
+               magnitude has to be printed, and it is: every channel's own top
+               and bottom of scale sit in the gutter against its name. Without
+               them Combined was nine unlabelled curves in one box. */
             if (gp.plotMode === "over") {
                 var live = rows.filter(function (l) {
                     return !l.pending && !noData && !(l.absent && l.absent());
                 });
                 var wellTop = 2, wellH = rackBottom - 2;
-                /* The gutter becomes a legend: a swatch, the name, and the
-                   channel's own top-of-scale, one row each. */
+                var GU = gpOverGutter(rows.length, rackBottom);
+                var shownO = noData ? [] : gpShownList();
+                var multiO = shownO.length > 1;
                 rows.forEach(function (lane, li) {
-                    var ty = snapT(14 + li * 13);
-                    if (ty > rackBottom - 4) return;
+                    var ty = snapT(GU.y(li));
                     var dim = live.indexOf(lane) < 0;
+                    var sw = Math.max(4, Math.min(7, GU.step - 5));
                     g.fillStyle = dim ? "rgba(29,31,32,0.20)" : lane.colour;
-                    g.fillRect(6, ty - 7, 7, 7);
+                    g.fillRect(6, ty - sw, sw, sw);
                     g.fillStyle = dim ? "rgba(29,31,32,0.32)" : "rgba(29,31,32,0.80)";
-                    g.font = "10px system-ui";
+                    g.font = GU.size + "px system-ui";
                     var lbl = lane.label.replace(/&amp;/g, "&");
                     var lu2 = typeof lane.unit === "function" ? lane.unit() : lane.unit;
                     if (lu2) lbl += "  " + lu2;
-                    g.fillText(lbl, 18, ty);
+                    g.fillText(lbl, 8 + sw + 4, ty);
+                    /* The scale, right-aligned against the rule — the same
+                       place stacked mode prints it, for the same reason. */
+                    var sc0 = dim ? null : gpScaleFor(lane);
+                    if (sc0) {
+                        var nz0 = function (v) { return v === 0 ? 0 : v; };
+                        var rtxt = nz0(+sc0.lo.toFixed(lane.dp)).toFixed(lane.dp) + "–" +
+                                   nz0(+sc0.hi.toFixed(lane.dp)).toFixed(lane.dp);
+                        g.font = Math.max(6, GU.size - 1.5) + "px 'Barlow', system-ui";
+                        g.fillStyle = "rgba(29,31,32,0.45)";
+                        g.fillText(rtxt, plotX - 7 - g.measureText(rtxt).width, ty);
+                    }
                 });
                 if (!live.length) {
                     g.fillStyle = "rgba(29,31,32,0.40)";
@@ -12604,6 +13183,38 @@
                         }
                         g.stroke();
                         g.globalAlpha = 1;
+                    }
+                    /* The OTHER ticked laps, same channel, same scale. This
+                       was skipped entirely in Combined, so ticking two laps
+                       and switching to Combined drew one of them and said
+                       nothing about the other. Aligned by elapsed time from
+                       each lap's own start, exactly as stacked mode does it.
+                       Drawn dashed rather than in a second colour: the colour
+                       here already means the channel, and it has to keep
+                       meaning that with four laps on the well. */
+                    if (multiO) {
+                        var selSpanO = gpSecs(gp.trace, rng.from, rng.to) || 1;
+                        shownO.forEach(function (li2, k) {
+                            if (li2 === gp.selLap) return;
+                            var lpO = gp.traceLaps[li2];
+                            if (!lpO || lpO.to <= lpO.from) return;
+                            g.setLineDash([3 + (k % 3) * 2, 3]);
+                            g.lineWidth = 1; g.globalAlpha = 0.6;
+                            g.lineJoin = "round"; g.lineCap = "butt";
+                            g.beginPath();
+                            var st = false, q2;
+                            for (q2 = lpO.from; q2 <= lpO.to; q2++) {
+                                var e2 = gpSecs(gp.trace, lpO.from, q2);
+                                if (e2 > selSpanO) break;
+                                var vq2 = lane.get(q2);
+                                if (vq2 === null || vq2 === undefined || !isFinite(vq2)) { st = false; continue; }
+                                var xq2 = plotX + (e2 / selSpanO) * plotW;
+                                if (!st) { g.moveTo(xq2, yo(vq2)); st = true; }
+                                else g.lineTo(xq2, yo(vq2));
+                            }
+                            g.stroke();
+                            g.setLineDash([]); g.globalAlpha = 1;
+                        });
                     }
                 });
             } else
@@ -12669,7 +13280,16 @@
                    on the densest, most important thing in the view. Columns a
                    device pixel wide, a device pixel apart, tile exactly. */
                 var env = gpDecimate(lane, rng, Math.max(1, Math.round(plotW * sx)));
-                g.strokeStyle = lane.colour;
+                /* Whose lap is this line? With one lap on the rack the colour
+                   is free to mean the CHANNEL, which is the nicer default.
+                   With several, colour has to mean the LAP — the legend above
+                   the rack has always drawn a swatch per lap, and the
+                   analysed lap was the one line on the canvas ignoring it, so
+                   Lap 1's legend swatch was dark red and its speed trace was
+                   black. Same colour, same lap, or the key is a lie. */
+                var shownS = noData ? [] : gpShownList();
+                g.strokeStyle = (shownS.length > 1 && gp.selLap >= 0)
+                    ? gpLapColour(gp.selLap) : lane.colour;
                 if (env) {
                     g.lineWidth = hairV;
                     /* Butt caps, or every column grows half a stroke at each
@@ -12895,17 +13515,22 @@
                    beside the playhead: nine numbers stacked on one vertical
                    line is a column of digits over the traces they describe. */
                 if (gp.plotMode === "over") {
-                    gpLaneRows().forEach(function (lane, li) {
-                        var ty = 14 + li * 13;
-                        if (ty > h - GP_AXIS_H - 4) return;
+                    /* Same layout as the gutter legend underneath, or the
+                       reading lands on a different channel's name — and, at
+                       the old fixed pitch, silently vanished for whichever
+                       channels ran past the bottom of a short panel. */
+                    var rowsO = gpLaneRows();
+                    var GUp = gpOverGutter(rowsO.length, h - GP_AXIS_H - 2);
+                    rowsO.forEach(function (lane, li) {
                         if (lane.pending) return;
                         var v = lane.get(pi);
                         if (v === null || v === undefined || !isFinite(v)) return;
+                        var ty = GUp.y(li);
                         var txt = (lane.zero && v >= 0 ? "+" : "") + v.toFixed(lane.dp);
-                        g.font = "10px 'Barlow', system-ui";
+                        g.font = GUp.size + "px 'Barlow', system-ui";
                         var tw = g.measureText(txt).width;
-                        g.fillStyle = "rgba(255,255,255,0.92)";
-                        g.fillRect(GP_LANE_LBL - 9 - tw, ty - 9, tw + 6, 12);
+                        g.fillStyle = "rgba(255,255,255,0.94)";
+                        g.fillRect(GP_LANE_LBL - 9 - tw, ty - GUp.size, tw + 6, GUp.size + 3);
                         g.fillStyle = lane.colour;
                         g.fillText(txt, GP_LANE_LBL - 6 - tw, ty);
                     });
@@ -13239,8 +13864,15 @@
             }, true);
             cv.addEventListener("dblclick", function () { gp.stripZoom = null; gpDrawStrip(); });
             /* A resized window changes the pixel width, which invalidates the
-               cached layer — without this the strip stretches a stale bitmap. */
-            window.addEventListener("resize", function () { gpDrawStrip(); });
+               cached layer — without this the strip stretches a stale bitmap.
+               The mosaic has to be re-measured for the same reason: a fitted
+               arrangement is only fitted to the height it was last measured
+               against, and a shorter window would otherwise open a scrollbar
+               nobody asked for. */
+            window.addEventListener("resize", function () {
+                if (gp.view === "session") gpGridApplyFlex();
+                gpDrawStrip();
+            });
             /* Sora and JetBrains Mono arrive over the network. Canvas text does
                not re-flow when a webfont lands the way DOM text does — it just
                draws in whatever was available at the time and keeps it, so a
@@ -16766,6 +17398,12 @@
             gpDrawTrace();
             gpStripBind(); gpNavBind(); gpDrawStrip();
             gpBuildRail();
+            /* The hint is re-evaluated on the poll tick, which is up to half a
+               second away — long enough to see the band appear and vanish on
+               the way into Analyse. */
+            var hintEl = document.getElementById("gpHint");
+            if (hintEl && view === "session" && gp.trace && gp.trace.length) hintEl.textContent = "";
+            if (view !== "session") { gp.layoutsOpen = false; gp.splitMenu = null; }
             gpRenderCtx();
             /* Gates are drawn in ONE place: the Tracks editor. */
             gpDrawEditor();
@@ -20216,7 +20854,13 @@
                 }
             }
             var hint = document.getElementById("gpHint");
-            if (hint) hint.textContent = gpHintText();
+            /* Analyse is reading a recording that is already on this PC, and
+               the hint is entirely about the link to the puck: "No RDM GPS
+               connected" was 34 px of the stage saying something true and
+               irrelevant to what the user was doing. The chips in the bar
+               still say it, where it belongs. */
+            if (hint) hint.textContent =
+                (gp.view === "session" && gp.trace && gp.trace.length) ? "" : gpHintText();
             /* The link can drop mid-session, so re-assert this every tick
                rather than only when the inspector is rebuilt. */
             gpSyncEnabled();
@@ -20680,6 +21324,10 @@
         };
         document.addEventListener("keydown", function (e) {
             if (e.key !== "Escape") return;
+            /* A workspace with something open on top of it gets first refusal:
+               Escape means "close the popover", and only means "leave the
+               workspace" once there is no popover left to close. */
+            if (window.gpEscapeCaught && window.gpEscapeCaught()) { e.stopPropagation(); return; }
             var open = _wsVisible();
             var home = document.getElementById("suiteHome");
             if (open) { open.close(); e.stopPropagation(); }
