@@ -2292,10 +2292,17 @@
 
         /* ---- map chrome ---- */
         #gpWorkspace .gp-mapwrap { background: var(--gpb-n200); border: 1px solid var(--gpb-div); }
+        /* Imagery off is not "the map, but blank" — it is the driven line on
+           its own, which is a plot, and a plot wants a dark field. The light
+           grey this used to be was the workspace's own ground colour, so the
+           line had to fight the panel it was sitting in, and the grid ruled
+           right across it. Near-black with a faint grid: the line is the only
+           luminous thing on it, which is the reason to hide the imagery at
+           all. Same argument as the rack's plot well. */
         #gpWorkspace #gpMap.gp-notiles {
-            background: var(--gpb-n200);
-            background-image: linear-gradient(rgba(29,31,32,0.05) 1px, transparent 1px),
-                              linear-gradient(90deg, rgba(29,31,32,0.05) 1px, transparent 1px);
+            background: #16181a;
+            background-image: linear-gradient(rgba(255,255,255,0.055) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(255,255,255,0.055) 1px, transparent 1px);
             background-size: 44px 44px;
         }
         #gpWorkspace .gp-mapbtn {
@@ -15545,7 +15552,11 @@
                 var tp = [], TP = gpSmoothPath();
                 for (var tq = 0; tq < gp.trace.length; tq += 2)
                     tp.push(TP ? TP[tq] : [gp.trace[tq].lat, gp.trace[tq].lon]);
-                L.polyline(tp, { color: gp.tilesOn ? "#f2f2f3" : "#5d5d60", weight: 3, opacity: 0.7,
+                /* One colour either way: the field under it is dark whether
+                   that is satellite imagery or the plot ground the Hide-map
+                   button drops to, and a mid-grey line was only ever there to
+                   survive the light field that used to replace the tiles. */
+                L.polyline(tp, { color: "#f2f2f3", weight: 3, opacity: 0.7,
                                  renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
                 return;
             }
@@ -15568,7 +15579,7 @@
             if (gp.cmpLap >= 0 && gp.traceLaps[gp.cmpLap] && gp.cmpLap !== gp.selLap) {
                 var c = gp.traceLaps[gp.cmpLap], pts = [], P = gpSmoothPath();
                 for (var k = c.from; k <= c.to; k++) pts.push(P ? P[k] : [rows[k].lat, rows[k].lon]);
-                L.polyline(pts, { color: gp.tilesOn ? "#ffffff" : "#5d5d60", weight: 2.5, opacity: 0.9,
+                L.polyline(pts, { color: "#ffffff", weight: 2.5, opacity: 0.9,
                                   dashArray: "6 5", lineCap: "butt",
                                   renderer: gp._canvasRenderer }).addTo(gp.traceLayer);
             }
