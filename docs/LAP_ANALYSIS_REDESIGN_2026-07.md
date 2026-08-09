@@ -1,5 +1,39 @@
 # Lap recording and telemetry analysis — the redesign (2026-07-29)
 
+> **ADR-0027, 2026-08-09 — a corner does not care where the timing line is.**
+> Corner detection ran strictly between a lap's own two crossings, so a corner
+> sitting on or near the start/finish was invisible: its apex fell inside the
+> one-second guard band at one end of the lap and its approach was in the
+> other lap, and neither lap could see a minimum with real trace on both sides
+> of it. Tested against a synthetic six-corner circuit with known radii and a
+> gate 30 m past an apex — an utterly ordinary placement — the assessment
+> reported **five corners and never mentioned the sixth**. Everything it did
+> say was correct, which is what made it dangerous.
+>
+> The scan now reaches 300 samples past both ends of the lap, as far as the
+> samples stay contiguous, and a corner is claimed by the lap it was **entered**
+> in. Entry rather than apex because a slow corner holds its apex speed for a
+> second or more, so the detected minimum wanders inside that plateau: with a
+> line placed on such an apex the same corner fell either side of it lap to
+> lap, and the assessment reported seven corners on one lap and five on the
+> next. A braking point does not wander.
+>
+> A corner that genuinely straddles the line keeps its whole geometry — apex,
+> minimum speed, brake point, and the map framing — but only the seconds on
+> this side of the line count towards this lap, and the table says so rather
+> than calling half a corner "on pace". Without that clip the exit was driven
+> at the *next* lap's pace on both sides of the comparison, and a lap followed
+> by a slow one showed a loss in a corner it had actually driven better —
+> +0.20 s in a corner on a lap that was six tenths quicker.
+>
+> Verified by running the shipped `gpSplitRows` / `gpFindCorners` /
+> `gpCompareLaps` against generated laps of known geometry, from five different
+> start/finish placements (mid-straight, just after an apex, exactly on the
+> tightest apex, exactly on a fast apex, mid-braking-zone). All five: six
+> corners on every lap, the same six in the same order whichever lap is the
+> reference, none dropped by the position match across all 12 lap pairings,
+> and swapping the two laps negates every corner delta to within one sample.
+>
 > **ADR-0026, 2026-08-09 — Analyse is a mosaic, and it may be taller than
 > the window.** ADR-0025 made Analyse a grid of panels you arrange. Three
 > things were wrong with it once it was full of real panels.

@@ -9949,6 +9949,13 @@
                     : Math.abs(bl) < 3 ? "on point"
                     : Math.abs(Math.round(bl)) + " m " + (bl > 0 ? "late" : "early");
                 var say = onPace ? "On pace" : gain ? "Faster here — keep it" : gpEsc(gpPrescribe(o).try);
+                /* This corner runs across the timing line, so only the part of
+                   it on this side of the line is in this lap's time. Saying
+                   "on pace" about half a corner would be a small lie. */
+                if (o.clipped)
+                    say = "<span style='color:var(--gpb-muted)'>Runs across the line &mdash; only the part " +
+                          "before it counts to this " + gpRunWord() + ".</span>" +
+                          (onPace || gain ? "" : "<br>" + say);
                 var barW = lost > 0 ? Math.max(5, Math.round(lost / mx * 100)) : 0;
                 var hot = o.n === gp.cornerSel;
                 h += "<tr class='" + (hot ? "hot" : "") + "' data-gp-corner='" + o.n + "' style='cursor:pointer'>" +
@@ -15059,16 +15066,68 @@
         /* Corners, from the speed trace: a minimum meaningfully slower than the
            peaks either side of it. The threshold scales with the peak so a
            40 km/h kart hairpin and a 250 km/h kink both register. */
+        /* ---- corners do not care where the timing line is -------------------
+           Detection used to run strictly between a lap's own two crossings, so
+           a corner sitting ON the line was invisible: its apex fell inside the
+           GAP guard band at one end of the lap and its approach was in the
+           other lap, and neither lap could see a minimum with a full second of
+           trace on both sides of it.
+
+           Caught on a synthetic six-corner circuit whose gate sits 30 m past
+           the last apex — an utterly ordinary place to put a start/finish —
+           where the assessment quietly reported five corners and never
+           mentioned the sixth. Silently analysing a corner fewer than the
+           track has is the worst kind of wrong: everything it does say is
+           right.
+
+           So the scan reaches past both ends of the lap as far as the samples
+           stay contiguous, and a corner is CLAIMED by the lap its apex falls
+           in. Each corner is then found exactly once, by exactly one lap, with
+           its real entry and exit even when those are on the other side of the
+           line. */
+        /* Wide enough that the walk out of a corner reaches its peak inside the
+           window rather than being cut off by it: the walk itself is capped at
+           WALK (250) samples, so anything less would measure a corner sitting
+           on the timing line as shorter than the same corner in the middle of
+           a lap, and quietly under-report the time it cost. */
+        var GP_CORNER_PAD = 300;     /* samples; 12 s at 25 Hz */
+
+        function gpCornerScan(rows, from, to) {
+            /* Contiguity, not arithmetic: the sample before a lap may be the
+               end of a different stint, or the first row of a ghost lap
+               appended from another day. A step that is not a sample interval
+               is a seam, and the scan stops there. */
+            var lo = from, hi = to, k;
+            for (k = 0; k < GP_CORNER_PAD && lo > 0; k++) {
+                if (Math.abs(gpSecs(rows, lo - 1, lo)) > 0.5) break;
+                lo--;
+            }
+            for (k = 0; k < GP_CORNER_PAD && hi < rows.length - 1; k++) {
+                if (Math.abs(gpSecs(rows, hi, hi + 1)) > 0.5) break;
+                hi++;
+            }
+            return { from: lo, to: hi };
+        }
+
         function gpFindCorners(rows, from, to) {
-            var n = to - from + 1;
+            var sc = gpCornerScan(rows, from, to);
+            var base = sc.from;
+            var n = sc.to - base + 1;
             if (n < 60) return [];
+            /* Did the scan stop because it ran out of budget, or because it ran
+               out of RECORDING? Those are different facts. The first means
+               there is more trace we simply did not look at; the second means
+               the data ends there, and a corner leaning on it was never proven
+               to be one. */
+            var hardLo = (from - base) < GP_CORNER_PAD;
+            var hardHi = (sc.to - to) < GP_CORNER_PAD;
 
             /* Smooth hard. A raw 25 Hz speed trace has a local minimum every
                few samples and every one of them would read as a corner. */
             var sm = new Float32Array(n), W = 6, i, k;
             for (i = 0; i < n; i++) {
                 var a = i - W < 0 ? 0 : i - W, b = i + W >= n ? n - 1 : i + W, s = 0, c = 0;
-                for (k = a; k <= b; k++) { s += rows[from + k].kph; c++; }
+                for (k = a; k <= b; k++) { s += rows[base + k].kph; c++; }
                 sm[i] = s / c;
             }
 
@@ -15084,36 +15143,61 @@
                 while (lo > 0 && sm[lo - 1] >= sm[lo] && steps++ < WALK) lo--;
                 steps = 0;
                 while (hi < n - 1 && sm[hi + 1] >= sm[hi] && steps++ < WALK) hi++;
-                var atEdge = (lo === 0 || hi === n - 1);
                 /* The >= walk crosses flat sections, which it must — the apex
                    itself is one (the car holds apex speed through the arc). But
                    that also lets it swallow a flat-out plateau, so a lift half
                    a kilometre down the straight would be blamed on the corner.
                    Trim the trailing flat off each end: the bound comes back to
-                   where the speed last genuinely changed. A walk that hit the
-                   lap boundary keeps it — the trailing flat IS the recording's
-                   edge there, and trimming it would delete the corner. */
-                if (lo > 0)
+                   where the speed last genuinely changed. A walk that ran off
+                   the end of the RECORDING keeps it — the trailing flat IS the
+                   data's edge there, and trimming it would delete the corner.
+                   Running out of scan window is not the same thing: there is
+                   more trace, we simply stopped looking, so that end still
+                   trims. */
+                if (lo > 0 || !hardLo)
                     while (lo < i && sm[lo] - sm[lo + 1] < 0.05) lo++;
-                if (hi < n - 1)
+                if (hi < n - 1 || !hardHi)
                     while (hi > i && sm[hi] - sm[hi - 1] < 0.05) hi--;
 
-                /* Normally a corner has to be slower than the peaks on BOTH
-                   sides — judging on one side alone would call every braking
-                   zone on a long straight a corner.
-                   At a lap boundary that rule is wrong: the last corner before
-                   the start/finish line has no recovery inside this lap, and
-                   the first one may have no approach. Those get judged on the
-                   side we can actually see, so they are analysed rather than
-                   silently dropped. */
-                var edge = atEdge;
+                /* A corner has to be slower than the peaks on BOTH sides —
+                   judging on one side alone would call every braking zone on a
+                   long straight a corner. There used to be an exception for
+                   the lap boundary, because the last corner before the line
+                   had no recovery inside its own lap; the scan reaches past
+                   the line now, so that exception described a problem that no
+                   longer exists. */
                 var dropIn = sm[lo] - sm[i], dropOut = sm[hi] - sm[i];
-                var drop = edge ? Math.max(dropIn, dropOut) : Math.min(dropIn, dropOut);
-                var peak = edge ? Math.max(sm[lo], sm[hi]) : Math.min(sm[lo], sm[hi]);
+                var drop = Math.min(dropIn, dropOut);
+                var peak = Math.min(sm[lo], sm[hi]);
                 if (drop < Math.max(10, peak * 0.12)) continue;
 
-                out.push({ entry: from + lo, apex: from + i, exit: from + hi });
+                /* Whose corner is it? The lap you were in when you STARTED it.
+                   Claiming by apex is the obvious rule and it is not stable: a
+                   slow corner holds its apex speed for a second or more, so the
+                   detected minimum inside that plateau lands wherever the noise
+                   puts it. With a timing line on such an apex — a placement a
+                   user is perfectly entitled to make — the same corner fell one
+                   side of the line on one lap and the other side on the next,
+                   and the assessment reported seven corners on one lap and five
+                   on the next. The entry is a braking point, not a plateau; it
+                   does not wander.
+
+                   Half-open at the top because consecutive laps share their
+                   boundary sample, so a corner entered exactly on the line is
+                   claimed once rather than by both laps. */
+                var apex = base + i, entry = base + lo;
                 i = hi;                     /* never re-detect inside one corner */
+                if (entry < from || entry >= to) continue;
+                /* A corner whose approach or recovery runs off the end of the
+                   RECORDING is not measurable: the apex is wherever the guard
+                   band happened to put it rather than where the car was
+                   slowest. The first lap of this session reported seven
+                   corners on a six-corner track that way — the clipped opening
+                   corner, plus the same corner again, properly, at the end.
+                   Every other lap has it in full, so nothing is lost by
+                   declining to guess at this one. */
+                if ((lo === 0 && hardLo) || (hi === n - 1 && hardHi)) continue;
+                out.push({ entry: entry, apex: apex, exit: base + hi });
             }
             return out;
         }
@@ -15162,11 +15246,23 @@
         function gpNearestIndex(rows, range, lat, lon, frac) {
             var lo = range.from, hi = range.to;
             var span = hi - lo;
-            if (frac >= 0 && span > 0) {
-                var mid = lo + Math.round(span * frac);
-                var w = Math.round(span * 0.15) + 25;
+            /* `frac` is now allowed outside 0..1: a corner that straddles the
+               timing line has boundaries in the lap either side of the one
+               being measured, and the match for them is outside this lap too.
+               null means "no idea where — search the lot".
+
+               The proportional position is measured against the LAP, which is
+               what `frac` is a fraction of; `range` may be wider than the lap
+               because the search is allowed past its ends. Anchoring to the
+               wider range would slide every guess by the padding. */
+            var aFrom = range.anchorFrom === undefined ? range.from : range.anchorFrom;
+            var aSpan = range.anchorSpan === undefined ? span : range.anchorSpan;
+            if (frac !== null && frac !== undefined && aSpan > 0) {
+                var mid = aFrom + Math.round(aSpan * frac);
+                var w = Math.round(aSpan * 0.15) + 25;
                 lo = Math.max(range.from, mid - w);
                 hi = Math.min(range.to, mid + w);
+                if (hi < lo) { lo = range.from; hi = range.to; }
             }
             var best = lo, bd = Infinity, ref = { lat: lat, lon: lon };
             for (var i = lo; i <= hi; i++) {
@@ -15183,6 +15279,14 @@
         function gpCompareLaps(rows, sel, ref) {
             var corners = gpFindCorners(rows, ref.from, ref.to);
             var refSpan = ref.to - ref.from;
+            /* The analysed lap gets the same reach past its own ends as the
+               reference did: a corner claimed by this lap can legitimately
+               begin before its first sample and finish after its last, and
+               confining the match to the lap would pin those boundaries onto
+               the timing line and read the corner as half its length. */
+            var sc = gpCornerScan(rows, sel.from, sel.to);
+            var selScan = { from: sc.from, to: sc.to,
+                            anchorFrom: sel.from, anchorSpan: sel.to - sel.from };
             var out = [];
 
             for (var ci = 0; ci < corners.length; ci++) {
@@ -15190,8 +15294,8 @@
                 var mapped = [], ok = true;
                 for (var b = 0; b < ph.bounds.length; b++) {
                     var ri = ph.bounds[b];
-                    var m = gpNearestIndex(rows, sel, rows[ri].lat, rows[ri].lon,
-                                           refSpan > 0 ? (ri - ref.from) / refSpan : -1);
+                    var m = gpNearestIndex(rows, selScan, rows[ri].lat, rows[ri].lon,
+                                           refSpan > 0 ? (ri - ref.from) / refSpan : null);
                     /* A boundary that lands 40 m from anything the analysed lap
                        drove is not a match — an off, a pit entry, or a lap that
                        simply did not go there. Drop the corner rather than
@@ -15204,10 +15308,28 @@
                     if (mapped[q] < mapped[q - 1]) { ok = false; break; }
                 if (!ok) continue;
 
+                /* A corner that straddles the timing line is measured over the
+                   part of it that belongs to THIS lap. Its geometry stays
+                   whole — the apex, the minimum speed and the brake point are
+                   all still the real ones, and the map still frames the whole
+                   corner — but the seconds attributed to it stop at the line.
+
+                   Without the clip, the exit of the last corner is driven at
+                   the NEXT lap's pace on both sides of the comparison, and a
+                   lap that happened to be followed by a slow one showed a loss
+                   in a corner it had actually driven better. Seen here as a
+                   +0.20 s loss in Turn 6 on a lap that was six tenths quicker.
+                   A delta whose job is to explain a lap time cannot be partly
+                   about a different lap. */
+                var clip = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
+                var clipped = ph.bounds[0] < ref.from || ph.bounds[4] > ref.to ||
+                              mapped[0] < sel.from || mapped[4] > sel.to;
                 var phases = [], total = 0;
                 for (var k = 0; k < 4; k++) {
-                    var tr = gpSecs(rows, ph.bounds[k], ph.bounds[k + 1]);
-                    var ts = gpSecs(rows, mapped[k], mapped[k + 1]);
+                    var tr = gpSecs(rows, clip(ph.bounds[k], ref.from, ref.to),
+                                          clip(ph.bounds[k + 1], ref.from, ref.to));
+                    var ts = gpSecs(rows, clip(mapped[k], sel.from, sel.to),
+                                          clip(mapped[k + 1], sel.from, sel.to));
                     phases.push({ name: ph.names[k], ref_s: tr, sel_s: ts, delta_s: ts - tr });
                     total += ts - tr;
                 }
@@ -15227,7 +15349,7 @@
                     n: out.length + 1,
                     entry: corners[ci].entry, apex: ph.apexIdx, exit: corners[ci].exit,
                     selEntry: mapped[0], selApex: mapped[2], selExit: mapped[4],
-                    phases: phases, total_s: total,
+                    phases: phases, total_s: total, clipped: clipped,
                     brakeLater_m: brakeLater_m,
                     minKph_d: selPh.minKph - ph.minKph,
                     exitKph_d: selPh.exitKph - ph.exitKph,
