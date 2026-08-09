@@ -2554,6 +2554,14 @@
             border: 1px solid var(--gpb-div); padding: 1px 4px; cursor: pointer;
         }
         #gpWorkspace .gpb-phead .sp { flex: 1; }
+        #gpWorkspace .gpb-pseg { display: inline-flex; border: 1px solid var(--gpb-div); margin-left: 4px; }
+        #gpWorkspace .gpb-pseg button {
+            font-size: 10.5px; padding: 2px 7px; background: transparent; border: none;
+            cursor: pointer; color: var(--gpb-soft); white-space: nowrap;
+        }
+        #gpWorkspace .gpb-pseg button + button { border-left: 1px solid var(--gpb-div); }
+        #gpWorkspace .gpb-pseg button:hover { background: rgba(29,31,32,0.06); }
+        #gpWorkspace .gpb-pseg button.on { background: var(--gpb-red); color: #fff; }
         #gpWorkspace .gpb-picon {
             width: 24px; height: 24px; display: grid; place-items: center;
             background: transparent; border: none; cursor: pointer;
@@ -10317,6 +10325,24 @@
             }).join("");
             var h = "<div class='gpb-phead'>" +
                 "<select class='ty' title='What this panel shows' data-gp-ptype='" + ri + ":" + pi + "'>" + opts + "</select>";
+            /* The controls that used to sit in the shared playbar belong to
+               the panel they act on — colouring the line is a MAP setting,
+               and how the channels are stacked is a GRAPH one. Putting them
+               here is why the playbar could retire. */
+            if (p.type === "map") {
+                var mm = gpEffectiveMapMode();
+                h += "<div class='gpb-pseg'>" +
+                     [["pace", "Pace"], ["speed", "Speed"], ["ref", "vs Ref"], ["line", "Line"]].map(function (m) {
+                        return "<button data-gp-mapmode='" + m[0] + "' class='" + (mm === m[0] ? "on" : "") +
+                               "' onclick=\"gpMapModeSet('" + m[0] + "')\">" + m[1] + "</button>";
+                     }).join("") + "</div>";
+            } else if (p.type === "graph") {
+                h += "<div class='gpb-pseg'>" +
+                     "<button data-gp-plotmode onclick='gpPlotModeToggle()' title='One well or one lane per channel'>" +
+                     (gp.plotMode === "over" ? "Combined" : "Stacked") + "</button>" +
+                     "<button onclick='gpChanPopToggle()' title='Choose which channels the rack draws'>Channels</button>" +
+                     "</div>";
+            }
             h += "<span class='sp'></span>";
             if (nPanels < 3)
                 h += "<button class='gpb-picon' title='Add a panel beside this one' data-gp-pdup='" + ri + ":" + pi + "'>" +
@@ -10358,7 +10384,36 @@
             });
             h += "<div style='padding:7px 11px;font-size:11px;color:var(--gpb-muted)'>" +
                  "Ticked " + gpRunWord() + "s draw on every graph and map panel. Click a " +
-                 gpRunWord() + " to analyse it; <b>REF</b> is what it is measured against.</div></div>";
+                 gpRunWord() + " to analyse it; <b>REF</b> is what it is measured against.</div>";
+
+            /* Another day at the same track, as the reference. This lived in
+               the old laps rail; the rail is gone, so it lives with the laps. */
+            var meNow = (gp.sessions || []).filter(function (x) { return x.id === gp.sessionId; })[0];
+            var days = (gp.sessions || []).filter(function (x) {
+                return meNow && x.id !== meNow.id && x.trackId === meNow.trackId && x.lapCount > 0;
+            });
+            if (days.length) {
+                h += "<div class='ws-rail-title' style='margin:6px 11px 2px'>From another day</div>";
+                days.forEach(function (x) {
+                    var on = gp.ghostSrc && gp.ghostSrc.sesId === x.id;
+                    var who = [x.car, x.driver].filter(Boolean).join(" · ");
+                    h += "<button class='ws-item" + (on ? " on" : "") + "' style='margin:0 8px' data-gp-ghost='" +
+                         gpEsc(x.id) + "'><span class='st" + (on ? " on" : "") + "'></span>" +
+                         gpEsc(gpSesDay(x.recordedAt)) + "<span class='tag'>" +
+                         (x.bestLapS ? gpLapTime(x.bestLapS) : x.lapCount + " laps") + "</span>" +
+                         (who ? "<div class='gp-ses-n'>" + gpEsc(who) + "</div>" : "") + "</button>";
+                    if (on && gp.ghostSrc) {
+                        h += "<select class='gp-ghost-pick' style='margin:0 8px 6px' data-gp-ghost-lap>";
+                        gp.ghostSrc.laps.forEach(function (l, li) {
+                            h += "<option value='" + li + "'" + (li === gp.ghostSrc.cur ? " selected" : "") + ">" +
+                                 gpRunWord(true) + " " + (li + 1) + " — " +
+                                 gpLapTime(gpSecs(gp.ghostSrc.rows, l.from, l.to)) + "</option>";
+                        });
+                        h += "</select>";
+                    }
+                });
+            }
+            h += "</div>";
             return h;
         }
 
@@ -10560,6 +10615,15 @@
             Array.prototype.forEach.call(host.querySelectorAll("[data-gp-hrow]"), function (el) {
                 var ri = parseInt(el.getAttribute("data-gp-hrow"), 10);
                 el.addEventListener("pointerdown", function (e) { gpDragRow(ri, e); });
+            });
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-ghost]"), function (b) {
+                b.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    window.gpCompareGhost(b.getAttribute("data-gp-ghost"));
+                });
+            });
+            Array.prototype.forEach.call(host.querySelectorAll("[data-gp-ghost-lap]"), function (sel) {
+                sel.addEventListener("change", function () { window.gpGhostLap(sel.value); });
             });
             gpSplitsBind(host);
             gpTipInit();
@@ -11731,6 +11795,7 @@
         }
 
         function gpSyncLanesBtn() {
+            gpSyncPanelHeads();
             var b = document.getElementById("gpLanesBtn");
             if (!b) return;
             var s = gpLanesBtnLabel();
@@ -11767,7 +11832,18 @@
             gpRenderInspector();
         };
 
+        function gpSyncPanelHeads() {
+            var mm = gpEffectiveMapMode();
+            Array.prototype.forEach.call(document.querySelectorAll("[data-gp-mapmode]"), function (b) {
+                b.classList.toggle("on", b.getAttribute("data-gp-mapmode") === mm);
+            });
+            Array.prototype.forEach.call(document.querySelectorAll("[data-gp-plotmode]"), function (b) {
+                b.textContent = gp.plotMode === "over" ? "Combined" : "Stacked";
+            });
+        }
+
         function gpSyncModeButtons() {
+            gpSyncPanelHeads();
             var box = document.getElementById("gpModes");
             if (!box) return;
             var refOk = gp.selLap >= 0 && gp.cmpLap >= 0 && gp.cmpLap !== gp.selLap;
