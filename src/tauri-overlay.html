@@ -9516,7 +9516,7 @@
 
         function gpVboParse(text, fileName) {
             var lines = String(text || "").split(/\r\n|\r|\n/);
-            var sect = "", head = [], colLine = "", data = [], comments = [], created = null;
+            var sect = "", head = [], units = [], colLine = "", data = [], comments = [], timing = [], created = null;
             for (var i = 0; i < lines.length; i++) {
                 var ln = lines[i].trim();
                 if (!ln) continue;
@@ -9528,6 +9528,8 @@
                     continue;
                 }
                 if (sect === "header") head.push(ln);
+                else if (sect === "channel units") units.push(ln);
+                else if (sect === "laptiming") timing.push(ln);
                 else if (sect === "column names") { if (!colLine) colLine = ln; }
                 else if (sect === "comments") comments.push(ln);
                 else if (sect === "data") data.push(ln);
@@ -9550,6 +9552,32 @@
             var vs = 1;
             for (var q = 0; q < cols.length; q++)
                 if (roles[q] === "kph") vs = gpVboSpeedScale(unitOf[String(cols[q]).toLowerCase()]);
+
+            /* Everything the format does not name becomes a CHANNEL. The
+               logger's own bookkeeping columns are not channels though —
+               they describe the file, not the car, and a lane called
+               "avifileindex" is a lane nobody wants.
+
+               `[channel units]` lines up with the LAST N columns, which is
+               how both real VBOX hardware and this app's own exporter write
+               it: the fixed GPS columns carry their units in their names, so
+               the units block only ever describes the tail. Checked against a
+               genuine VBVDHD2 log — 35 columns, 25 units, and they align from
+               the end exactly. */
+            var NOT_A_CHANNEL = /^(avifileindex|avisynctime|avitime|sampleperiod|tsample|event\d*)$/i;
+            var unitFor = {};
+            if (units.length && units.length <= cols.length)
+                for (var uu = 0; uu < units.length; uu++)
+                    unitFor[cols.length - units.length + uu] = units[uu];
+
+            var chanCols = [];
+            for (var cc = 0; cc < cols.length; cc++) {
+                if (roles[cc] || NOT_A_CHANNEL.test(cols[cc])) continue;
+                var un = String(unitFor[cc] || "").trim();
+                if (un === "(null)") un = "";
+                chanCols.push({ col: cc, name: cols[cc], unit: un,
+                                min: Infinity, max: -Infinity, vals: [] });
+            }
 
             var rows = [], wrap = 0, prev = null, skipped = 0;
             for (var d = 0; d < data.length; d++) {
@@ -9575,7 +9603,18 @@
                     if (prev !== null && abs < prev - 1000) { wrap += 86400000; abs = ms + wrap; }
                     prev = abs; ms = abs;
                 }
-                rows.push({ lat: lat, lon: lon, kph: kph, hdg: ((hdg % 360) + 360) % 360, ms: ms });
+                var cv = null;
+                if (chanCols.length) {
+                    cv = new Array(chanCols.length);
+                    for (var q2 = 0; q2 < chanCols.length; q2++) {
+                        var raw = parseFloat(tok[chanCols[q2].col]);
+                        if (!isFinite(raw)) { cv[q2] = null; continue; }
+                        cv[q2] = raw;
+                        if (raw < chanCols[q2].min) chanCols[q2].min = raw;
+                        if (raw > chanCols[q2].max) chanCols[q2].max = raw;
+                    }
+                }
+                rows.push({ lat: lat, lon: lon, kph: kph, hdg: ((hdg % 360) + 360) % 360, ms: ms, cv: cv });
             }
             if (rows.length < 2)
                 throw new Error("only " + rows.length + " usable row(s) of " + data.length);
@@ -9604,9 +9643,45 @@
             var n = rows.length;
             var haveT = rows[0].ms !== null && rows[0].ms !== undefined;
             var t0 = haveT ? rows[0].ms : 0;
+            /* Channels are stored as u16, so each one gets its own scale and
+               offset fitted to the range it actually used. Fitting per channel
+               rather than picking a fixed scale is what keeps 8,000 rpm and a
+               0-1 g trace both to better than a thousandth of their span: rpm
+               lands at 0.12 rpm a step, throttle at 0.0015%.
+
+               65535 is not available — it is GP_CHAN_STALE, the "this channel
+               said nothing here" marker — so the range maps onto 0..65534. */
+            var defs = [], stamp = Date.now().toString(36);
+            chanCols.forEach(function (c, ci) {
+                var lo = isFinite(c.min) ? c.min : 0, hi = isFinite(c.max) ? c.max : 0;
+                if (!(hi > lo)) { hi = lo + 1; }
+                var scale = (hi - lo) / 65534;
+                var span = hi - lo;
+                /* Decimals from the span, not the unit: a channel that moves
+                   over thousands does not want three decimal places and one
+                   that moves over 1.5 does. */
+                var dp = span >= 500 ? 0 : (span >= 20 ? 1 : (span >= 2 ? 2 : 3));
+                if (/rpm/i.test(c.unit)) dp = 0;
+                defs.push({ id: "vbo:" + stamp + "_" + ci,
+                            name: String(c.name).replace(/_/g, " ").slice(0, 40),
+                            unit: c.unit.slice(0, 12), decimals: dp,
+                            scale: scale, offset: lo });
+                c.scale = scale; c.offset = lo;
+            });
+
             var packed = gpRowsPack(rows.map(function (r) {
+                var can = null;
+                if (chanCols.length) {
+                    can = new Array(chanCols.length);
+                    for (var q3 = 0; q3 < chanCols.length; q3++) {
+                        var v3 = r.cv ? r.cv[q3] : null;
+                        if (v3 === null || v3 === undefined || !isFinite(v3)) { can[q3] = null; continue; }
+                        var u16 = Math.round((v3 - chanCols[q3].offset) / chanCols[q3].scale);
+                        can[q3] = u16 < 0 ? 0 : (u16 > 65534 ? 65534 : u16);
+                    }
+                }
                 return { lat: r.lat, lon: r.lon, kph: r.kph, hdg: r.hdg,
-                         t: (haveT && r.ms !== null) ? (r.ms - t0) : undefined, g: 0, can: null };
+                         t: (haveT && r.ms !== null) ? (r.ms - t0) : undefined, g: 0, can: can };
             }));
 
             var pick = function (label) {
@@ -9634,19 +9709,42 @@
                 samples: n,
                 durationS: haveT ? (rows[n - 1].ms - t0) / 1000 : 0,
                 lapCount: 0, bestLapS: null, lapTimesS: [], corners: [],
-                car: pick("Vehicle"), driver: pick("Driver"), chanIds: []
+                car: pick("Vehicle"), driver: pick("Driver"),
+                chanIds: defs.map(function (d) { return d.id; }),
+                /* The definitions ride WITH the recording rather than joining
+                   the channel library. They describe someone else's car on
+                   someone else's logger — offering them in Setup as things to
+                   tick and log on this puck would be nonsense, and importing
+                   two files would put two of everything in that list. */
+                chanDefs: defs
             };
 
-            var unknown = [];
-            for (var z = 0; z < cols.length; z++) if (!roles[z]) unknown.push(cols[z]);
+            /* The gates the logger timed with, which are the inverse of
+               gpVboGate: two ends per line, each written longitude-then-
+               latitude, in minutes, longitude positive west. A file that
+               brings its own start/finish is a file whose laps can be timed
+               the moment it lands — otherwise an imported session is a shape
+               with no lap in it. */
+            var gates = [];
+            timing.forEach(function (ln2) {
+                var m3 = /^(Start|Split|Finish)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)(?:\s+(.*))?$/i.exec(ln2);
+                if (!m3) return;
+                var a = [parseFloat(m3[3]) / 60, -parseFloat(m3[2]) / 60];
+                var b = [parseFloat(m3[5]) / 60, -parseFloat(m3[4]) / 60];
+                if (!isFinite(a[0]) || !isFinite(a[1]) || !isFinite(b[0]) || !isFinite(b[1])) return;
+                gates.push({ kind: m3[1].toLowerCase(), a: a, b: b,
+                             label: String(m3[6] || "").replace(/[^\w \/-]+/g, "").trim() });
+            });
+
             var note = n + " samples";
             if (meta.durationS) note += " over " + meta.durationS.toFixed(1) + " s";
             if (dated !== "gps") note += "; no date in the file, so the clock is time-of-day only";
             if (flipped) note += "; longitude sign was mirrored and has been corrected";
             if (skipped) note += "; " + skipped + " unreadable row(s) skipped";
-            if (unknown.length)
-                note += "; extra channels not imported: " + unknown.join(", ");
-            return { meta: meta, pk: packed, note: note };
+            if (defs.length)
+                note += "; " + defs.length + " channel" + (defs.length === 1 ? "" : "s") + " imported";
+            if (gates.length) note += "; " + gates.length + " timing gate" + (gates.length === 1 ? "" : "s");
+            return { meta: meta, pk: packed, note: note, gates: gates, rows: rows };
         }
 
         window.gpSessionExportVbo = function (id) {
@@ -9685,6 +9783,55 @@
             gpSetMsg("gpTraceMsg", text, tone === "error" ? "bad" : "ok");
         }
 
+        /* A track built out of the gates the file carried. It goes in as one
+           of YOUR OWN — it came from a file, not from the circuit library, and
+           the shape of it is whatever the driver's own logger was set to.
+
+           Which way the gate faces cannot be read off the line: two ends
+           describe a segment, and a segment has two perpendiculars 180 apart.
+           The trace settles it — the car's own heading where it crossed is
+           the direction of travel, and the perpendicular within 90 degrees of
+           that is the one the firmware wants. */
+        function gpTrackFromVbo(name, gates, rows) {
+            if (!gates || !gates.length || !gp.tracks) return null;
+            var mk = function (g) {
+                var lat = (g.a[0] + g.b[0]) / 2, lon = (g.a[1] + g.b[1]) / 2;
+                var line = { lat: lat, lon: lon, heading: 0, half_width_m: 15 };
+                var r = gpGateFromEnd(line, g.a[0], g.a[1]);
+                /* The two points give the POSITION and nothing else. Their
+                   direction is noise: the pair is about two metres apart, and
+                   in the Sonoma file they happen to lie almost ALONG the road,
+                   so the perpendicular came out 91 degrees wrong and timed
+                   nothing. The heading a gate stores is the direction of
+                   travel across the line, and the trace states that outright —
+                   the car's own heading where it passed closest. */
+                var best = null, bd = Infinity;
+                for (var i = 0; i < rows.length; i += 3) {
+                    var d = gpMetres({ lat: lat, lon: lon }, { lat: rows[i].lat, lon: rows[i].lon });
+                    if (d < bd) { bd = d; best = rows[i]; }
+                }
+                var hdg = (best && bd < 200) ? best.hdg : r.heading;
+                /* Same reasoning for the width: half of a two-metre stub is not
+                   a measurement. Only believe it if the file drew a real line. */
+                var half = r.half_width_m > 30 ? r.half_width_m : 15;
+                return { lat: Math.round(lat * 1e7) / 1e7, lon: Math.round(lon * 1e7) / 1e7,
+                         heading: Math.round(hdg * 10) / 10, half_width_m: half };
+            };
+            var t = { id: gpTrackUid(), name: String(name || "Imported").slice(0, 31),
+                      center: [(gates[0].a[0] + gates[0].b[0]) / 2, (gates[0].a[1] + gates[0].b[1]) / 2],
+                      zoom: 16, start_finish: null, sectors: [], min_lap_time_s: 10 };
+            gates.forEach(function (g) {
+                if (g.kind === "start" && !t.start_finish) t.start_finish = mk(g);
+                else if (g.kind === "finish") t.finish = mk(g);
+                else if (t.sectors.length < GP_MAX_SECTORS) t.sectors.push(mk(g));
+            });
+            if (!t.start_finish) return null;
+            gp.tracks.tracks.push(t);
+            gp.tracks.active = t.id;
+            gpTracksSave();
+            return t;
+        }
+
         window.gpSessionImport = function (input) {
             var f = input && input.files && input.files[0];
             if (!f) return;
@@ -9699,6 +9846,10 @@
                     var isVbo = /^\s*\[data\]\s*$/im.test(txt) &&
                                 /^\s*\[(header|column names)\]\s*$/im.test(txt);
                     var r = isVbo ? gpVboParse(txt, f.name) : gpSessionFileParse(txt);
+                    if (r.gates && r.gates.length) {
+                        var vt = gpTrackFromVbo(r.meta.name, r.gates, r.rows);
+                        if (vt) { r.meta.trackId = vt.id; r.meta.trackName = vt.name; }
+                    }
                     gpStore.put(r.meta, r.pk).then(function () {
                         return gpSessionsRefresh();
                     }).then(function () {
@@ -10050,6 +10201,10 @@
                    the LAST recording's channel names would be printed over
                    this one's numbers. */
                 gp.traceChanIds = (meta.chanIds && meta.chanIds.length) ? meta.chanIds.slice() : null;
+                /* Definitions that came with the file, for ids the channel
+                   library has never heard of. Cleared with the ids for the
+                   same reason they are. */
+                gp.traceChanDefs = (meta.chanDefs && meta.chanDefs.length) ? meta.chanDefs.slice() : null;
                 gp.stripCache = null;
                 /* A video opened before any recording existed has been playing
                    untethered — tether it now: its clock against this session's,
@@ -13855,6 +14010,13 @@
             if (ids.length) {
                 var byId = {};
                 gpAllChans().forEach(function (c) { byId[c.id] = c; });
+                /* A recording can bring its own definitions — an imported VBO
+                   does. They win for their own ids, and they are the only
+                   thing that can describe them. */
+                (gp.traceChanDefs || []).forEach(function (d) {
+                    byId[d.id] = { id: d.id, name: d.name, unit: d.unit, decimals: d.decimals,
+                                   decode: { scale: d.scale, offset: d.offset } };
+                });
                 var chosen = ids.map(function (id, idx) {
                     var c = byId[id];
                     var scale = (c && c.decode && gpN(c.decode.scale)) || 1;
