@@ -20,3 +20,10 @@ Thumbs.db
 # Claude Code session data
 .claude/
 src/dist/
+
+# Generated test fixtures — rebuild with tools/make_drift_fixture.js.
+# Nearly a megabyte of synthetic drive that any checkout can regenerate
+# byte-identically from a fixed seed, so committing it buys nothing.
+mallala-drift.vbo
+mallala-drift.truth.json
+mallala-drift.rates.json

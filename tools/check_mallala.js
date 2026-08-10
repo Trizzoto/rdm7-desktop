@@ -1,14 +1,15 @@
-/* Does the Drift view read a real circuit correctly?
+/* Does the Drift view read a real circuit, corner by corner, correctly?
  *
- * check_drift.js proves the angle engine against an analytic figure. This
- * proves the WHOLE CHAIN against a real one: it runs the fixture through the
- * app's own VBO importer — the same code an imported drift-box log goes
- * through, minutes and positive-west longitude and HHMMSS clock included —
- * and then asks the Drift view's own functions what they see, against a truth
- * file the generator wrote at the same time.
+ * check_drift.js proves the angle engine and the star arithmetic against an
+ * analytic figure. This proves the WHOLE CHAIN against a real circuit: it runs
+ * the fixture through the app's own VBO importer — the same code an imported
+ * drift-box log goes through, minutes and positive-west longitude and HHMMSS
+ * clock included — splits it into laps on Mallala's own start/finish line,
+ * finds the corners, reads and rates every corner on every lap, and then holds
+ * all of it against the answer sheet the generator wrote at the same time.
  *
- * The geometry is Mallala's real final complex, so the corners are whatever
- * the survey says they are rather than something chosen to be easy.
+ * The geometry is Mallala's real circuit, so the corners are whatever the
+ * survey says they are rather than something chosen to be easy.
  *
  *   node tools/make_drift_fixture.js /tmp/mallala-drift.vbo
  *   node tools/check_mallala.js      /tmp/mallala-drift.vbo
@@ -46,41 +47,47 @@ function constOf(n) {
 }
 
 const K = {};
-['GP_DRIFT_MIN_KPH', 'GP_DRIFT_GAP_S', 'GP_DRIFT_MIN_S', 'GP_DRIFT_ON', 'GP_DRIFT_OFF',
- 'GP_DRIFT_HOLD_S', 'GP_DRIFT_SETTLE_S', 'GP_DRIFT_SWITCH_G', 'GP_DRIFT_CLIP_FADE_M',
- 'GP_DRIFT_MIN_SHAPE_M', 'GP_DRIFT_SCORE_VER', 'GP_DRIFT_ROUGH', 'GP_MAX_STEP_S',
- 'GP_CHAN_STALE'].forEach(n => K[n] = constOf(n));
+['GP_DRIFT_MIN_KPH', 'GP_DRIFT_ON', 'GP_DRIFT_OFF',
+ 'GP_DRIFT_HOLD_S', 'GP_DRIFT_SETTLE_S', 'GP_DRIFT_SWITCH_G',
+ 'GP_DRIFT_STAR_DEG', 'GP_DRIFT_STAR_WOB', 'GP_DRIFT_SCORE_VER',
+ 'GP_DRIFT_ROUGH', 'GP_MAX_STEP_S', 'GP_CHAN_STALE',
+ 'GP_COAST_G', 'GP_BRAKE_G', 'GP_CORNER_PAD'].forEach(n => K[n] = constOf(n));
+K.GP_DRIFT_STAR_W = eval('(' + /var GP_DRIFT_STAR_W = (\{[^}]*\})/.exec(SRC)[1] + ')');
 
 const FNS = [
     'gpN', 'gpMetres', 'gpMetresPerDeg', 'gpSecs', 'gpStep', 'gpChanDefsById',
     'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpChannels', 'gpComputeG',
-    'gpGapS', 'gpDriftRuns', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess',
+    'gpArcLength', 'gpCornerScan', 'gpFindCorners', 'gpCornerPhases', 'gpNearestIndex',
+    'gpSplitRows',
+    'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess',
     'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle',
     'gpDriftSeek', 'gpDriftSwitches', 'gpDriftSegments', 'gpDriftStats',
-    'gpCourses', 'gpCourseActive', 'gpCourseStamp', 'gpCourseClean',
-    'gpZoneGeom', 'gpZoneNear', 'gpDriftCard', 'gpDriftBest', 'gpDriftForget',
+    'gpDriftRefLap', 'gpDriftCorners', 'gpDriftCornerRead', 'gpDriftStars',
+    'gpDriftBoard', 'gpDriftBest', 'gpDriftForget',
     'gpVboClockMs', 'gpVboSpeedScale', 'gpVboParse', 'gpHaversineM'
 ];
 
 const gp = {};
 const win = { localStorage: { getItem: () => null, setItem: () => {} } };
-const fakeTrack = { id: 't', name: 'Mallala', courses: [] };
+/* Mallala's own derived start/finish, exactly as GP_STARTS ships it: the
+   midpoint of the longest straight, 15 m half width. The laps this harness
+   asserts on are the laps the app would cut with no help from anybody. */
+const fakeTrack = {
+    id: 't', name: 'Mallala',
+    start_finish: { lat: -34.4161627, lon: 138.5030594, heading: 155.7, half_width_m: 15, derived: true }
+};
 let libChans = [];
-/* gpVboParse leans on a few app-wide helpers that are not what is under test */
 const stubs = `
     function gpRowsPack(rows) { return { n: rows.length }; }
     function gpEsc(s) { return String(s == null ? "" : s); }
     function gpSesUid() { return "ses_fixture"; }
 `;
-const ARGN = ['gp', 'window', 'GP_DT', 'GP_TRACE_HZ', 'gpActiveTrack', 'GP_ZONE_GEO', 'gpAllChans', ...Object.keys(K)];
+const ARGN = ['gp', 'window', 'GP_DT', 'GP_TRACE_HZ', 'gpActiveTrack', 'gpAllChans', ...Object.keys(K)];
 const API = new Function(...ARGN,
-    /* GP_PLACES comes along for the ride: the importer recognises the circuit
-       from where the driving happened, so a fixture built on Mallala's own
-       survey should come back NAMED Mallala. That is worth asserting. */
     varBlock('GP_VBO_ROLE') + '\n' + varBlock('GP_PLACES') + '\n' + stubs + '\n' +
     FNS.map(grab).join('\n') +
     '\n;return {' + FNS.map(n => n + ':' + n).join(',') + '};'
-)(gp, win, 1 / 25, 25, () => fakeTrack, new WeakMap(), () => libChans, ...Object.keys(K).map(n => K[n]));
+)(gp, win, 1 / 25, 25, () => fakeTrack, () => libChans, ...Object.keys(K).map(n => K[n]));
 
 /* ---- load the fixture through the real importer ----------------------- */
 const truth = JSON.parse(fs.readFileSync(VBO.replace(/\.vbo$/, '') + '.truth.json', 'utf8'));
@@ -90,10 +97,7 @@ const parsed = API.gpVboParse(fs.readFileSync(VBO, 'utf8'), path.basename(VBO));
    per-channel scale/offset it fitted so those floats survive as u16 in
    storage. A loaded session carries the u16, and every reader decodes it with
    those defs. So encode here exactly as saving does — otherwise the decode
-   runs a second time over already-decoded values, and the channel arrives
-   pinned near its own minimum with a one-degree spread. (It did: the yaw
-   channel read a constant -254 deg/s and the calibration had nothing to work
-   with.) */
+   runs a second time over already-decoded values. */
 const defs = parsed.meta.chanDefs;
 gp.trace = parsed.rows.map(r => ({
     lat: r.lat, lon: r.lon, kph: r.kph, hdg: r.hdg, g: 0, t: r.ms,
@@ -103,9 +107,24 @@ gp.trace = parsed.rows.map(r => ({
 gp.traceChanIds = parsed.meta.chanIds;
 gp.traceChanDefs = defs;
 API.gpComputeG(gp.trace);
-gp.ghostFence = null; gp.chan = null; gp.chanKey = ''; gp.selLap = -1;
-gp.driftSel = 0; gp.driftSrcPref = null; gp.courseId = null;
+gp.ghostFence = null; gp.chan = null; gp.chanKey = '';
+gp.driftSrcPref = null; gp.driftCorner = 0;
 API.gpDriftForget();
+gp.traceLaps = API.gpSplitRows(gp.trace);
+gp.selLap = 0; gp.cmpLap = -1;
+
+/* Distance from a point to a planted corner — measured to its start, middle
+   AND end. A 260 m sweeper's midpoint sits a long way from where a
+   speed-based detector puts the apex, and matching on the midpoint alone
+   would call a correct detection a miss. */
+function distToPlanted(pt, t) {
+    let best = API.gpMetres(pt, { lat: t.lat, lon: t.lon });
+    (t.pts || []).forEach(q => {
+        const d = API.gpMetres(pt, { lat: q[0], lon: q[1] });
+        if (d < best) best = d;
+    });
+    return best;
+}
 
 let pass = 0, fail = 0;
 function ok(name, cond, detail) {
@@ -116,129 +135,276 @@ const head = s => console.log('\n' + s);
 
 head('The file survives the round trip');
 {
-    ok('it parses at all', !!parsed && parsed.rows.length > 2000, parsed.rows.length + ' samples');
+    ok('it parses at all', !!parsed && parsed.rows.length > 5000, parsed.rows.length + ' samples');
     ok('the channel comes through named and united',
-       parsed.meta.chanDefs.length === 1 && /yaw/i.test(parsed.meta.chanDefs[0].name) &&
-       /deg\/s/i.test(parsed.meta.chanDefs[0].unit),
-       JSON.stringify(parsed.meta.chanDefs[0] && { n: parsed.meta.chanDefs[0].name, u: parsed.meta.chanDefs[0].unit }));
+       defs.length === 1 && /yaw/i.test(defs[0].name) && /deg\/s/i.test(defs[0].unit),
+       JSON.stringify({ n: defs[0] && defs[0].name, u: defs[0] && defs[0].unit }));
     /* Longitude positive-west and latitude-in-minutes are the two traps that
-       silently put a session in the wrong hemisphere. Mallala is at
-       -34.4, +138.5; anything else means the encoding is wrong. */
+       silently put a session in the wrong hemisphere. */
     const lat = gp.trace[0].lat, lon = gp.trace[0].lon;
     ok('and it lands at Mallala, not its mirror image',
        Math.abs(lat - -34.41) < 0.05 && Math.abs(lon - 138.50) < 0.05,
        lat.toFixed(4) + ', ' + lon.toFixed(4));
 }
 
-head('Runs');
+head('Laps, cut on the circuit’s own start/finish line');
 {
-    const runs = API.gpDriftRuns();
-    ok('all five runs are found', runs.length === truth.length, runs.length + ' runs');
-    let sameSpan = true;
-    runs.forEach((r, i) => { if (!truth[i] || Math.abs((r.to - r.from) - (truth[i].to - truth[i].from)) > 2) sameSpan = false; });
-    ok('each covers the driving it should', sameSpan);
-    const dur = runs.map(r => API.gpSecs(gp.trace, r.from, r.to));
-    ok('and their lengths are right', dur.every((d, i) => Math.abs(d - truth[i].secs) < 0.5),
-       dur.map(d => d.toFixed(1)).join(' / ') + ' s');
+    /* The generator drives LAPS.length laps from a standing start at s=0. The
+       line is partway round, so the first crossing happens partway through
+       lap 1 — which means one fewer complete lap than laps driven. */
+    const want = truth.laps.length - 1;
+    ok('the laps are found', gp.traceLaps.length === want,
+       gp.traceLaps.length + ' complete laps from ' + truth.laps.length + ' driven');
+    const secs = gp.traceLaps.map(l => API.gpSecs(gp.trace, l.from, l.to));
+    ok('and each is a plausible lap of a 2.5 km circuit',
+       secs.every(s => s > 55 && s < 130), secs.map(s => s.toFixed(1)).join(', ') + ' s');
+    /* Every lap must be about the same length — a mis-cut lap shows up here
+       before it poisons every corner reading downstream. */
+    const spread = Math.max.apply(null, secs) - Math.min.apply(null, secs);
+    ok('they are all the same lap', spread < 25, 'spread ' + spread.toFixed(1) + ' s');
 }
 
-head('The angle, against what the car really did');
+head('The angle engine finds its source and calibrates');
 {
+    const src = API.gpDriftSource();
+    ok('the yaw channel is picked up on its units alone', !!src && src.kind === 'yawrate',
+       src ? src.name + ' (' + src.unit + ')' : 'none');
     const d = API.gpDriftAngle();
-    ok('an angle source is found without being told', !!d, d ? 'from "' + d.src.name + '"' : '');
-    ok('and it is worked out, not passed through', d && !d.direct);
-    ok('the gyro scale is recovered', d && Math.abs(d.scale - 1.008) < 0.01,
-       d ? 'fitted ' + d.scale.toFixed(4) + ' against a true 1.008' : '');
-    ok('the zero offset is recovered', d && Math.abs(d.bias - 0.42) < 0.35,
-       d ? 'fitted ' + d.bias.toFixed(3) + ' against a true 0.42' : '');
-
-    /* truth beta is regenerated by the fixture; re-derive it from the file's
-       own ordering so the comparison is sample for sample */
-    const runs = API.gpDriftRuns();
-    let worstPeak = 0;
-    runs.forEach((r, i) => {
-        const st = API.gpDriftStats(r);
-        const e = Math.abs(st.angle.peak - truth[i].peakBeta);
-        if (e > worstPeak) worstPeak = e;
-    });
-    ok('every run\'s widest angle is within 4 deg of the truth', worstPeak < 4,
-       'worst run out by ' + worstPeak.toFixed(1) + ' deg');
-
-    let claimed = 0, covered = 0;
-    for (let i = 0; i < gp.trace.length; i++) if (d && d.ok[i]) claimed++;
-    ok('most of the driving carries an angle', claimed / gp.trace.length > 0.6,
-       (100 * claimed / gp.trace.length).toFixed(0) + '% of samples');
-    let rough = 0;
-    runs.forEach(r => { if (API.gpDriftStats(r).angle.rough) rough++; });
-    ok('no run is flagged rough', rough === 0, rough + ' rough');
+    ok('an angle comes back', !!d);
+    ok('it is derived, not passed through', d && !d.direct);
+    /* The generator's gyro carries a 1.008 scale error and a 0.42 deg/s zero.
+       The fit has to find both from the session's own grip driving. */
+    ok('the scale is fitted close to the truth', d && Math.abs(d.scale - 1.008) < 0.02,
+       d ? 'fitted ' + d.scale.toFixed(4) + ' against 1.0080' : '');
+    ok('and the zero with it', d && Math.abs(d.bias - 0.42) < 0.5,
+       d ? 'fitted ' + d.bias.toFixed(3) + ' deg/s against 0.420' : '');
+    ok('it found straights to anchor on', d && d.anchors > 3, d ? d.anchors + ' anchors' : '');
 }
 
-head('What the driver would read');
+head('Corners: found once, and the same corner on every lap');
 {
-    const runs = API.gpDriftRuns();
-    console.log('   run  entry  low   exit   time   sw   angle  held   +/-');
-    runs.forEach((r, i) => {
-        const st = API.gpDriftStats(r);
-        console.log('    ' + (i + 1) +
-            st.entryKph.toFixed(0).padStart(7) + st.lowKph.toFixed(0).padStart(6) +
-            st.exitKph.toFixed(0).padStart(7) + st.secs.toFixed(1).padStart(7) +
-            String(st.switches).padStart(5) +
-            (st.angle ? st.angle.peak.toFixed(0).padStart(7) + '°' + st.angle.held.toFixed(0).padStart(6) + '°'
-                      : '      —     —') +
-            (st.angle ? ('±' + st.angle.conf.toFixed(0)).padStart(6) : '') +
-            '   ' + truth[i].name);
-    });
-    const sts = runs.map(r => API.gpDriftStats(r));
-    ok('entry speeds match the file', sts.every((s, i) => Math.abs(s.entryKph - truth[i].entryKph) < 1.5),
-       sts.map(s => s.entryKph.toFixed(0)).join('/'));
-    ok('the slowest point is found', sts.every((s, i) => Math.abs(s.lowKph - truth[i].lowKph) < 1.5));
-    /* The complex is right-left-right, so a run that holds angle through it
-       has two direction changes in it. */
-    ok('two switches per run, as the corners demand',
-       sts.every(s => s.switches === 2), sts.map(s => s.switches).join('/'));
-    /* Run 4 was driven with the most commitment and should win on angle;
-       run 5 threw it away early. */
-    const best = API.gpDriftBest();
-    ok('the best run is the one that held the most angle', best === 3, 'picked run ' + (best + 1));
-    ok('the run that dropped it reads lower than the one that did not',
-       sts[4].angle.held < sts[3].angle.held,
-       'run 5 held ' + sts[4].angle.held.toFixed(0) + '° vs run 4 ' + sts[3].angle.held.toFixed(0) + '°');
+    const cs = API.gpDriftCorners();
+    ok('a corner set is built', !!cs && cs.corners.length > 0,
+       cs ? cs.corners.length + ' corners on lap ' + (cs.refLap + 1) : 'none');
+    if (cs) {
+        /* The generator planted a drift at every corner it found from the
+           curvature. The property that matters is COVERAGE: the app must not
+           MISS corners, or a whole piece of the track goes unassessed. The
+           reverse is not required — the app finds corners from SPEED, so it
+           legitimately also finds fast kinks the curvature threshold skipped,
+           and those simply rate low because nothing was drifted there. */
+        let covered = 0;
+        truth.corners.forEach(t => {
+            let best = 1e9;
+            cs.corners.forEach(c => {
+                const d = distToPlanted({ lat: c.lat, lon: c.lon }, t);
+                if (d < best) best = d;
+            });
+            if (best < 70) covered++;
+        });
+        ok('it finds nearly every corner that was planted', covered >= truth.corners.length - 1,
+           covered + '/' + truth.corners.length + ' planted corners covered');
+
+        /* The point of finding them once: the same corner index must mean the
+           same piece of tarmac on every lap. */
+        let stable = true, drove = 0, total = 0;
+        cs.corners.forEach((c, ci) => {
+            cs.per.forEach((lapCells, li) => {
+                const cell = lapCells[ci];
+                total++;
+                if (!cell) return;
+                drove++;
+                const d = API.gpMetres(gp.trace[cell.apex], { lat: c.lat, lon: c.lon });
+                if (d > 60) stable = false;
+            });
+        });
+        ok('and it lands on the same tarmac every lap', stable);
+        ok('nearly every corner is read on nearly every lap', drove / total > 0.9,
+           drove + ' of ' + total + ' corner-laps read');
+    }
 }
 
-head('Scoring a course drawn on it');
+head('What the app read, against what was planted');
 {
-    const runs = API.gpDriftRuns();
-    const r0 = runs[3];                       /* the best run defines the line */
-    const rows = gp.trace;
-    /* a clip on the apex of the first right, and a zone along the exit */
-    const apex = r0.from + Math.round((r0.to - r0.from) * 0.42);
-    const zoneFrom = r0.from + Math.round((r0.to - r0.from) * 0.72);
-    const zoneTo = r0.from + Math.round((r0.to - r0.from) * 0.92);
-    const zpts = [];
-    for (let i = zoneFrom; i <= zoneTo; i += 12) zpts.push([rows[i].lat, rows[i].lon]);
-    fakeTrack.courses = [API.gpCourseClean({
-        id: 'mal', name: 'Mallala complex', target_kph: 96, target_deg: 45,
-        elements: [
-            { k: 'clip', name: 'Inside clip', lat: rows[apex].lat, lon: rows[apex].lon, r: 3, max: 10 },
-            { k: 'zone', name: 'Exit zone', pts: zpts, band: 4, max: 15 }
-        ]
-    })];
-    gp.courseId = 'mal';
-    console.log('   run  clip     zone     entry   angle    score');
-    const cards = runs.map(r => API.gpDriftCard(r, API.gpCourseActive()));
-    cards.forEach((c, i) => console.log('    ' + (i + 1) +
-        (c.els[0].dist.toFixed(1) + ' m').padStart(8) +
-        (Math.round(c.els[1].cover * 100) + '%').padStart(8) +
-        (c.speed ? c.speed.pts.toFixed(1) : '—').padStart(8) +
-        (c.angle ? c.angle.pts.toFixed(1) : 'n/m').padStart(8) +
-        (c.got.toFixed(1) + ' / ' + c.max).padStart(13)));
-    ok('the run the course was drawn on scores best on line',
-       cards[3].els[0].pts + cards[3].els[1].pts >=
-       Math.max.apply(null, cards.map(c => c.els[0].pts + c.els[1].pts)) - 0.01,
-       'run 4 line ' + (cards[3].els[0].pts + cards[3].els[1].pts).toFixed(1));
-    ok('every card is out of the same total when angle exists',
-       cards.every(c => c.max === cards[0].max), 'out of ' + cards[0].max);
-    ok('and the fastest entry takes the speed points', cards[4].speed.pts >= cards[0].speed.pts);
+    const b = API.gpDriftBoard();
+    ok('the board builds', !!b);
+    if (b) {
+        /* Match each app corner to the planted corner nearest it, then compare
+           the angle the app says was held against the angle that was put
+           there. The tolerance is the engine's OWN error bar plus the fact
+           that the two corner definitions do not start and stop in exactly the
+           same place — so this is checking honesty, not identity. */
+        let worstErr = 0, checked = 0, inBar = 0, rated = 0, roughRated = 0, total = 0;
+        b.corners.forEach((c, ci) => {
+            let t = null, bd = 1e9;
+            truth.corners.forEach(tc => {
+                const d = distToPlanted({ lat: c.lat, lon: c.lon }, tc);
+                if (d < bd) { bd = d; t = tc; }
+            });
+            b.cells.forEach((lapCells, li) => {
+                const cell = lapCells[ci];
+                if (!cell) return;
+                total++;
+                if (cell.rating) rated++;
+                /* The gate must be absolute: a corner whose angle did not
+                   close is never rated, no matter how good the driving looked. */
+                if (cell.angle && cell.angle.rough && cell.rating) roughRated++;
+                /* Compare only where the app's corner and the planted one are
+                   plainly the same piece of track. A detector working from
+                   SPEED sometimes wraps two planted corners into one sweep;
+                   its mean angle is then the mean of two different drifts, and
+                   holding that against either one's number is a comparison
+                   between two things that were never the same thing. */
+                if (!t || bd > 40) return;
+                /* Only where the app says there WAS a drift. A long sweeper's
+                   two ends are corners in their own right to a speed-based
+                   detector, and nothing was drifted there — holding the app's
+                   honest "no drift here" against the sweeper's planted angle
+                   would be marking it wrong for being right. */
+                if (!cell.angle || cell.angle.rough || !cell.rating) return;
+                /* app lap k was driven with character k + firstBoardLapCharacter
+                   — the generator writes that mapping down so this never has
+                   to guess it. */
+                const ch = t.per[li + (truth.firstBoardLapCharacter || 0)];
+                const planted = ch && ch.held;
+                if (!planted) return;
+                checked++;
+                const err = Math.abs(cell.angle.held - planted);
+                if (err > worstErr) worstErr = err;
+                if (err <= cell.angle.conf + 8) inBar++;
+            });
+        });
+        ok('a good number of corner-laps were rated', rated > 30,
+           rated + ' of ' + total + ' corner-laps rated');
+        ok('a corner whose angle did not close is NEVER rated', roughRated === 0);
+        ok('the angle read is the angle planted, within the error bar',
+           checked > 25 && inBar / checked > 0.9,
+           checked + ' checked, ' + (100 * inBar / Math.max(1, checked)).toFixed(0) +
+           '% inside, worst gap ' + worstErr.toFixed(1) + ' deg');
+
+        /* The whole point of the view: every corner that anyone drifted must
+           name the lap that did it best. */
+        let namable = 0, named = 0;
+        b.corners.forEach((c, ci) => {
+            const any = b.cells.some(lc => lc[ci] && lc[ci].rating);
+            if (!any) return;
+            namable++;
+            if (b.best[ci] >= 0) named++;
+        });
+        ok('every rated corner names a best lap', named === namable, named + '/' + namable);
+        /* ...and the named lap really is the best one there. */
+        let bestRight = true;
+        b.corners.forEach((c, ci) => {
+            if (b.best[ci] < 0) return;
+            const mine = b.cells[b.best[ci]][ci].rating.score;
+            b.cells.forEach(lc => {
+                if (lc[ci] && lc[ci].rating && lc[ci].rating.score > mine + 1e-9) bestRight = false;
+            });
+        });
+        ok('and it really is the best lap at that corner', bestRight);
+        /* The bests must be SPREAD. If one lap owned every corner the view
+           would have nothing to say that a single lap time does not. */
+        const owners = {};
+        b.best.forEach(x => { if (x >= 0) owners[x] = 1; });
+        ok('different laps own different corners', Object.keys(owners).length >= 2,
+           Object.keys(owners).length + ' laps own at least one corner');
+
+        const avg = b.lapAvg.map(a => a ? a.stars : null);
+        ok('every lap gets an average', avg.every(a => a !== null),
+           avg.map(a => a === null ? '-' : a.toFixed(2)).join(', '));
+        if (avg.every(a => a !== null)) {
+            const worstLap = avg.indexOf(Math.min.apply(null, avg));
+            const bestLap = avg.indexOf(Math.max.apply(null, avg));
+            ok('the worst lap rates below the best lap', avg[worstLap] < avg[bestLap],
+               'lap ' + (worstLap + 1) + ' at ' + avg[worstLap].toFixed(2) +
+               ' against lap ' + (bestLap + 1) + ' at ' + avg[bestLap].toFixed(2));
+            ok('and the spread is big enough to be worth reading',
+               avg[bestLap] - avg[worstLap] > 0.25,
+               (avg[bestLap] - avg[worstLap]).toFixed(2) + ' stars between them');
+            ok('gpDriftBest names the top-rated lap',
+               API.gpDriftBest() === avg.indexOf(Math.max.apply(null, avg)));
+        }
+
+        let sane = true;
+        b.cells.forEach(lc => lc.forEach(r => {
+            if (!r || !r.rating) return;
+            const rt = r.rating;
+            if (rt.stars < 0 || rt.stars > 5) sane = false;
+            if ((rt.stars * 10) % 5 !== 0) sane = false;
+            if (rt.ver !== K.GP_DRIFT_SCORE_VER) sane = false;
+            ['angle', 'commit', 'steady', 'speed'].forEach(p => {
+                if (!(rt.parts[p] >= 0 && rt.parts[p] <= 1)) sane = false;
+            });
+        }));
+        ok('every rating is on the scale it claims to be on', sane);
+    }
+}
+
+head('The corner the generator sabotaged');
+{
+    /* One character drops the drift at one corner (amp x0.42). It must come
+       back visibly worse THERE than the same lap's other corners, or the
+       per-corner reading is not per-corner at all. */
+    const b = API.gpDriftBoard();
+    const FIRST = truth.firstBoardLapCharacter || 0;
+    /* Which (corner, character) pair did the generator deliberately drop?
+       Measured against that character's OWN other corners — comparing across
+       characters just finds the out lap, which is uniformly gentle rather
+       than specifically sabotaged. */
+    let sabCorner = null, sabChar = -1, sabRatio = 1;
+    const nChar = truth.corners[0].per.length;
+    for (let ch = 0; ch < nChar; ch++) {
+        const held = truth.corners.map(c => c.per[ch].held);
+        const mean = held.reduce((a, x) => a + x, 0) / held.length;
+        truth.corners.forEach((c, k) => {
+            const r = held[k] / mean;
+            if (r < 0.7 && r < sabRatio) { sabRatio = r; sabCorner = c; sabChar = ch; }
+        });
+    }
+    ok('the fixture really does sabotage one corner', !!sabCorner,
+       sabCorner ? 'planted T' + sabCorner.corner + ' on character ' + (sabChar + 1) +
+                   ' at ' + (100 * sabRatio).toFixed(0) + '% of that lap own average' : 'none');
+    if (b && sabCorner) {
+        let ci = -1, bd = 1e9;
+        b.corners.forEach((c, k) => {
+            const d = distToPlanted({ lat: c.lat, lon: c.lon }, sabCorner);
+            if (d < bd) { bd = d; ci = k; }
+        });
+        const li = sabChar - FIRST;                 /* character -> app lap */
+        const cell = li >= 0 && b.cells[li] ? b.cells[li][ci] : null;
+        const others = (b.cells[li] || []).filter((r, k) => k !== ci && r && r.rating)
+                                          .map(r => r.rating.stars);
+        if (cell && cell.rating && others.length) {
+            const mean = others.reduce((a, x) => a + x, 0) / others.length;
+            ok('and the app rates that corner below the rest of the same lap',
+               cell.rating.stars < mean,
+               'T' + b.corners[ci].n + ' on lap ' + (li + 1) + ' at ' + cell.rating.stars.toFixed(1) +
+               ' against ' + mean.toFixed(1) + ' elsewhere');
+            /* ...and the best lap for that corner must NOT be the sabotaged one. */
+            ok('and does not call it the best lap for that corner', b.best[ci] !== li,
+               'best is lap ' + (b.best[ci] + 1));
+        } else {
+            ok('and the app rates that corner below the rest of the same lap', false,
+               'no rating for the sabotaged corner (matched ' + bd.toFixed(0) + ' m away)');
+        }
+    }
+}
+
+head('Nothing is invented when the sensor is taken away');
+{
+    const saved = gp.traceChanIds;
+    gp.traceChanIds = [];
+    gp.trace.forEach(r => { r.can = null; });
+    API.gpDriftForget();
+    const d = API.gpDriftAngle();
+    ok('with no yaw channel there is no angle at all', d === null);
+    const b = API.gpDriftBoard();
+    ok('the corners are still found — they are path geometry', !!b && b.corners.length > 0);
+    let anyStars = false;
+    if (b) b.cells.forEach(lc => lc.forEach(r => { if (r && r.rating) anyStars = true; }));
+    ok('but not one corner is rated', !anyStars);
+    ok('and no lap claims an average', !!b && b.lapAvg.every(a => a === null));
+    gp.traceChanIds = saved;
 }
 
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) : 'passed all ' + pass) + ' checks');

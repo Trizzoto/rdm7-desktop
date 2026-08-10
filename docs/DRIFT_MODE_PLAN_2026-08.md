@@ -1,17 +1,37 @@
 # Drift mode — plan (2026-08)
 
-**Status: BUILT 2026-08-10.** Cuts 1 and 2, plus the whole Studio side of cut 3,
-shipped together in `src/tauri-overlay.html`. The decisions are recorded in
-**ADR-0028 "Angle waits for its sensor"**; this doc is kept as the reasoning
-behind them and the roadmap for what is left. Verified by
-`node tools/check_drift.js` (56 checks against a known-angle drive) and driven
-end to end in the app through the VBO import path.
+**Status: REDESIGNED 2026-08-10.** The first cut shipped runs-and-courses: a
+run was a burst of driving, and you scored it by drawing clips and zones on the
+map. That is how a drift *event* is judged, and it turned out to be the wrong
+shape for how a drifter *practises*. On a circuit you do laps, you drift every
+corner of the lap, and the only question you ever ask afterwards is **"was turn
+three better that time?"**
 
-Two things changed on the way from plan to build, both noted in the ADR:
-- **Course authoring lives in the Drift view, not Tracks** — you draw a clip
-  and immediately see it scored against the run you just did.
-- **Scoring shipped in cut 1**, not held back to cut 2; the honest-denominator
-  rule made it safe to ship before an angle sensor exists.
+So the unit of judgement is now the **corner-on-a-lap**, and each one is rated
+**out of five stars**. Courses, clips and zones are gone.
+
+What replaced them:
+
+- **Laps, not runs.** Drift shares `selLap`/`cmpLap` with Analyse and Corners,
+  so playback, ghosts, the scrubber, framing and the legend all work unchanged
+  and switching views keeps your place.
+- **Corners found once, mapped everywhere.** One reference lap supplies the
+  corner set; every other lap is matched onto it by position under the same
+  40 m rule `gpCompareLaps` uses. Finding them per lap would renumber the
+  whole track whenever one lap missed one, and silently compare turn 4 against
+  turn 3.
+- **A rating out of five**, from four measured parts — angle held, how much of
+  the corner it was held for, how steady it was, and speed. Three are graded
+  against a fixed standard printed on screen; only speed is graded against your
+  own best there.
+- **Best lap per corner**, named in the table. Different laps win different
+  corners, which is the entire point.
+
+Verified by `node tools/check_drift.js` (80 checks: the angle engine and the
+star arithmetic) and `node tools/check_mallala.js` (35 checks: the whole chain,
+against six laps of synthetic Mallala drifting whose planted angle is known
+corner by corner and lap by lap). Driven end to end in the app through the VBO
+import path.
 
 Companion docs: `LAP_ANALYSIS_REDESIGN_2026-07.md` (the lap-timing side this
 builds on), `../../rdm-gps-node/docs/TRACE_V2_CAN_CHANNELS.md` (the CAN
@@ -82,117 +102,93 @@ and line repeatability is arguably the most coachable practice-day metric.
 ### A seventh view: **Drift**
 
 Not an Analyse mode. Analyse's model is one lap against one reference over
-gate-split laps; drifting's unit is the **run**, its glance is a ranked run table,
-its map default is all runs overlaid. The Corners view is the template: a
-full-page view borrowing the map singleton, `gp.trace`, and the coach-ops
-memoisation pattern. Cost is known: `gpSetView` whitelist + button, branches at
-the ~8 string-dispatch sites (gpSetView, gpBuildRail, gpRenderInspector,
-gpDrawTrace, poll-rate, map-pan, keyboard, boot), one wrap div, CSS scoped under
-`#gpWorkspace`. One law inherited from ADR-0025: one run against one reference,
-never N-way.
+gate-split laps, and Corners ranks where the TIME went. Drift ranks where the
+ANGLE went, corner by corner, and its glance is a corner-by-lap table. The
+Corners view is the template: a full-page view borrowing the map singleton,
+`gp.trace` and the coach-ops memoisation pattern.
 
-### Runs, not laps
+It uses the ordinary lap selection — `selLap`, `cmpLap`, `shownLaps` — rather
+than owning its own. That was the single biggest simplification of the
+redesign: playback, the scrubber, ghosts, framing, the legend and the dock all
+worked on laps already, so pointing Drift at laps deleted the branches instead
+of rewriting them. Only the corner selection (`gp.driftCorner`) is Drift's own.
 
-- **No course drawn:** a run is a burst of movement. The trace records nothing
-  below 8 km/h, so practice runs arrive naturally bracketed; a >10 s hole in `t`
-  splits runs. The view is useful the first time it opens.
-- **Course drawn:** entry line → end line, using the shipped point-to-point trial
-  machinery unchanged (ADR-0013: "a finish line is a thing you add, not a mode you
-  pick"). Spans are `{from,to}` shaped like `gp.traceLaps`, so playback, `gpSecs`,
-  ghosts, and framing work day one — and the puck beeps at the entry line
-  trackside because it's an ordinary two-gate track.
+### Corners, not runs
+
+- Corners are detected **once**, on one reference lap, with the shipped
+  `gpFindCorners` — the same detector the Corners view uses.
+- The reference lap is the first lap whose corner count is the **modal** count
+  for the session. Not the fastest lap: a drifter's fastest lap is meaningless
+  and may be the one they gave up on. Ties go to the higher count, because a
+  corner nobody assessed is worse than one assessed on fewer laps.
+- Every other lap is mapped onto that set by position, boundary by boundary,
+  rejecting anything more than 40 m from what the lap actually drove — the
+  middle of `gpCompareLaps`, not its output. A lap that went off, pitted, or
+  never reached a corner has **no reading** for it, and that null travels all
+  the way to the table as an em-dash.
+- Corner identity is therefore stable: "turn 3" is the same tarmac on every
+  lap. `gpCompareLaps`'s own `n` is NOT stable — it counts only corners that
+  survived matching, so a lap that dropped turn 3 renumbers everything after
+  it. That trap is why the corner set is built here rather than borrowed.
+
+### The rating: five stars, four measured parts
+
+| Part | Weight | Measured | Full marks |
+|---|---|---|---|
+| **Angle** | 40% | mean angle held while above the drift threshold | 40° held |
+| **Committed** | 25% | fraction of the corner spent above the threshold | all of it |
+| **Steady** | 20% | RMS of the angle against a 0.6 s rolling mean of itself | no wander |
+| **Speed** | 15% | mean speed through the corner | your own best there |
+
+Three of the four are graded against a **fixed standard**, printed on screen
+beside the stars. Grading everything on your own best would hand five stars to
+the best of a bad night, and — worse — would silently restate every old score
+the moment a better lap arrived. Only speed has no fixed bar, because what is
+fast through a corner depends entirely on the corner.
+
+Half stars, because five whole ones cannot separate a good corner from a very
+good one and ten would imply a precision the angle does not have.
+
+Two refusals are load-bearing:
+
+- **No angle source, no stars at all.** Not a rating out of the three parts
+  that survive — a drift rated without the angle rates everything except the
+  thing being judged.
+- **A corner nobody drifted is UNRATED, not nought-star.** This one only showed
+  up against the fixture: a car driven round on the grip scored full marks for
+  *steadiness* and for *speed*, the two things easiest to score by not trying,
+  and landed above a corner somebody nearly held.
+
+Style is never machine-scored. The community fight over Wally is the
+cautionary tale, and the facts table is the product — the stars are the glance,
+the four parts are shown underneath, and the standard is written out in words.
 
 ### Panels (each one fact per column, plain words)
 
 | Panel | Draws | Interaction |
 |---|---|---|
-| Runs | one ruled row per run, newest first: When · Entry · Lowest · Exit · Time · Switches · Angle | click selects; pin one as the shadow run |
-| Map | all ticked runs in the 8 lap colours; shadow run dashed; selected run coloured by mode; transition dots T1/T2/T3 | tick/untick, colour mode, scrub with ghost dot |
-| Run tiles | Entry speed · Exit speed · Time in course · Switches · Strongest cornering · Widest angle | glance |
-| Switches | one row per direction change: Where · Speed in · Speed out | click jumps playback there |
-| Channels | the existing graph rack; Angle and Steering sit as honest empty frames until backed | scrub, toggle lanes |
+| Laps | one row per lap: When · Time · Rated (n of N) · Best angle · Stars | click selects; tick to draw on the map |
+| Corners | one row per corner of the selected lap: Turn · Angle · Comm · Wob · Stars · Best lap | click selects and frames it |
+| Corner | tiles (in/slowest/out, angle held/widest/sideways for), the stars, the four parts as bars, and the difference against your best lap there | glance |
+| Map | every ticked lap; selected lap coloured by Lap / Speed / Angle; numbered corner badges; switch marks | tick, colour mode, scrub |
 
-"Entry / Lowest / Exit" is the practice-day glance: Lowest is the "did the drift
-die mid-course" number. Map reuses `gpTraceCv`/`gpDrawTrace` wholesale — never
-decimated, never displaced (ADR-0027). Line repeatability in v1 is the overlay
-itself: eight runs ticked on one map.
 
-### Transition ("switch") detection — tier 0, honest
+### Courses, clips and zones — retired 2026-08-10
 
-Sign flips of the derived lateral-g series with hysteresis (hold the new sign
-above a small g floor, speed ≥ the existing 8 km/h gate). This is measured path
-geometry — the car verifiably swapped turning direction — so it's honest without
-body attitude. UI word: "moments the car swapped from turning one way to the
-other." With a yaw channel it upgrades to the full state machine below.
+The first cut let you draw a clip (a point the car should get to) and a zone (a
+stretch it should ride), and scored a run against them out of a shrinking
+denominator. It worked, it was verified, and it is gone.
 
-### The angle engine (one implementation, fed by tiers 0i/1/2)
+Why: a clip is a **place on the track**, and a corner is a **stretch of
+driving**. Practising is corner-shaped — you do not ask "did I hit the clip on
+run 4", you ask "was turn three better that time". Keeping both would have
+meant two scoring systems that could disagree about the same drift.
 
-Offline, two-pass, treating grip driving as the calibration lab:
+`courses:[]` is deleted from the track record on load rather than migrated:
+there is no honest way to turn a clip into a corner. The idea is not wrong, it
+is just an EVENT feature rather than a practice one — if grassroots event
+scoring is ever built, this doc's git history has the whole design.
 
-1. **ρ = r_body − r_path** per sample — yaw-rate channel minus the existing
-   verified course-rate derivation. In grip ρ ≈ 0; in a drift ρ is the rate of
-   change of drift angle.
-2. **Calibrate from grip (pass 1):** fit per-session gyro bias (near-straights)
-   and scale (regression of r_body vs r_path on grip corners). Kills the sleeper
-   dominant term — ±1% scale error is 2–6° over a ten-second drift. Also
-   self-calibrates unknown-spec ECU sensors.
-3. **Anchor** at the last low-load grip moment (|glat| < 0.3 g), integrate ρ.
-4. **Closure:** each segment ends back in grip where β must return to ~0. The
-   misclosure IS the segment's measured error — redistribute it (surveyor's
-   traverse) and **display ± max(|m|/2, 1°)**. |m| > 8° greys the row out. The
-   error bar on screen is a measurement of this run, not a datasheet claim.
-
-Budget: ±2° typical for drifts up to ~15 s — DriftBox-class, against angles of
-interest of 20–60°. Validity floor 25 km/h (COG noise blows up ~1/v below;
-DriftBox's own run definition). Verification per the ADR-0012 discipline:
-synthetic drift trace with known slip + closure-on-grip-only regression +
-one real imported log.
-
-State machine (only with a yaw channel), plain UI words: Grip → Entering
-(|ρ| ≥ 15 °/s or |β| ≥ 3°) → Drifting (|β| ≥ 10° held 0.5 s) → Straightening
-(|β| < 5° for 0.5 s). All event times interpolated between samples via `gpSecs`,
-displayed to 0.1 s. Steering (when present) cross-checks: opposite lock —
-steering sign against path curvature — is *directly measured* drift confirmation
-grip can never produce.
-
-**Naming repair that ships with any yaw channel:** the current "Yaw rate" lane is
-course rate. When a body-yaw channel exists show both as **Turning (path)** and
-**Turning (car)** — the divergence is the whole signal; never let one impersonate
-the other.
-
-### Courses: scored shapes beside the gates
-
-Stored on the `rdm7_tracks_v1` track record as `courses:[]` — versioned JSON
-normalised on load, the same way `outline` already lives there. **Studio-side
-only**; `gpTrackSend` keeps whitelisting only start/finish/sectors (verify).
-Authoring lives in Tracks, next to gate placement. Two element shapes only, both
-provable from a single-point path:
-
-| Shape | FD equivalent | Stored as | Scored on |
-|---|---|---|---|
-| Clip | inner clipping point | `{lat, lon, radius_m, max_points}` | closest the path came, in metres |
-| Zone | outside zone / touch-and-go | `{points:[…], band_m, max_points}` | % of zone length covered while inside the band |
-
-No polygons — an outside zone in real judging is a wall-side line the car should
-ride. The editor **refuses** shapes tighter than 2 m: the M9N is metre-class, and
-the tool must not pretend otherwise.
-
-### Scoring: measured points, honest denominator, style never machine-scored
-
-| Criterion | Scoreable? | How |
-|---|---|---|
-| Line | yes, today | per-element points from path geometry, every point pointable-at on the map |
-| Speed | yes, today | entry speed vs the course's target (defaults to best recorded, author can override) |
-| Angle | only when a sensor backs it | angle held / biggest angle / wobble deduction per drift span |
-| Style | **never by the machine** | a labelled human-entry field, or absent |
-
-Rules that keep it honest: **never renormalise around a missing sensor** — a run
-with no angle source reads "46 of 60 measured", the denominator shrinks visibly.
-Every scorecard carries a **scoring version**; old runs keep the score they earned
-under the rules they ran under. No blended mystery number — the community fight
-over Wally is the cautionary tale, and the facts table is the product.
-The reference is always **your own best run on this course** — dashed ghost,
-per-element difference table — never another driver.
 
 ### The honesty ladder (proposed ADR-0011 A4 widening, lands with cut 1)
 
@@ -208,66 +204,98 @@ recorded, or from an imported log that carries one."
 
 ## 3a. What the build taught (not in the original plan)
 
-Three things only showed up once there was a ground-truth harness to run
-against. All three are load-bearing, and all three are in ADR-0028:
+From the first cut, all still load-bearing and all in ADR-0028:
 
 1. **An anchor is a car going STRAIGHT, not a car whose angle is steady.**
    A car holding 40° through a long corner has ρ = 0 there too, so anchoring on
-   ρ ≈ 0 zeroes the angle in the middle of the very drift being measured. The
-   harness read a 38° corner as 29° and split one drift into three. The anchor
-   now also requires the path not to be turning and the load to be low.
+   ρ ≈ 0 zeroes the angle in the middle of the very drift being measured.
 2. **A gap in the recording poisons several samples either side, not one.**
    The course rate is a central difference over ±3 samples, so a car heading
    south before a gap and north after it reads as an enormous turn that never
-   happened. Blank the rate across that window, anchor outside it. Before this,
-   a run beside a 95 s gap claimed ±16° when its own driving was worth ±1.
-3. **A flat error bar on open ends is wrong in both directions** — it called
-   two seconds of run-in as doubtful as a minute of it, and made every
-   recording's first and last run inherit the worst case. It now grows with
-   distance from the anchor.
-4. **Least squares is the wrong fit for the gyro scale.** It assumes the
+   happened.
+3. **A flat error bar on open ends is wrong in both directions.** It now grows
+   with distance from the anchor.
+4. **Least squares is the wrong fit for the gyro scale** — it assumes the
    regressor is exact, and the regressor is course-over-ground differentiated
-   over a quarter of a second — the noisiest thing in the room. With an
-   ordinary 0.3° of heading noise the slope came back 0.964 for a gyro that
-   was truly 1.008, putting a 38° corner on screen as 41°. A lagged instrument
-   fixes it (1.0042). The harness had been giving the synthetic receiver a
-   *perfect* heading, which is why it passed while the code was 4.5% out —
-   fixture realism is load-bearing, not decoration.
-5. **One channel resolver, not two.** Name/unit/decode for a channel id come
-   from the channel library first, the recording's own definitions second.
-   Reading only the second meant every puck-recorded channel reached the Drift
-   view as raw CAN counts while the graph rack drew it correctly.
+   over a quarter of a second. A lagged instrument fixes it.
+5. **One channel resolver, not two.** Name/unit/decode come from the channel
+   library first, the recording's own definitions second.
+
+From the corner redesign:
+
+6. **"Wobble" must measure wander, not the shape of the drift.** Measured as
+   the spread of the angle around the corner's own mean — which is what the
+   segment machinery does — a drift's natural rise and fall dominates
+   everything else, and a perfectly smooth 30° drift scored the same 9° of
+   "wobble" as a ragged one. Worse, the corner that was barely drifted came
+   out the *steadiest on the lap*, purely because it had less shape to it. It
+   is now the RMS of the angle against a 0.6 s rolling mean of itself: the
+   envelope survives that, the wander does not.
+7. **A corner driven on the grip is not a nought-star drift.** Rating it gave
+   full marks for steadiness and for speed — the two parts easiest to score by
+   not trying — and put a corner nobody drifted above one somebody nearly
+   held. Under the drift-hold floor it is now unrated, and says so.
+8. **Quote the typical error, not the worst.** One leg that failed to close
+   made a session that is ±1° almost everywhere announce itself as "±40°",
+   which reads as "this tool cannot measure angle" when it means "this tool
+   knows which corner it could not measure". Both numbers are now shown.
+9. **Fixture realism is load-bearing, again.** Three separate "app bugs" found
+   during this work were all bugs in the synthetic drive:
+   - a lateral offset keyed on lap index **teleported the car sideways** at
+     every start/finish crossing — an impossible turn rate the engine
+     correctly read as a 90° misclosure;
+   - restarting the integration at each lap boundary put the car a metre
+     **behind** where the previous lap left it, which is a reversed heading;
+   - a speed ceiling taken straight from the simplified survey's curvature
+     asked the car to take a kink at **22 km/h**, below the floor where course
+     over ground stops being a direction at all.
+   Each one presented as the app being wrong about a real corner. None was.
+10. **The driver's character must change at the TIMING LINE**, not at distance
+    zero. The app cuts laps at the line, which is partway round the circuit, so
+    a fixture that changes character at s=0 gives every measured lap half of
+    one character and half of the next — and the corner-to-corner comparison
+    then compares nothing.
+
+### Known limit: a flick the angle cannot close
+
+At Mallala's final complex — a right–left–right where the planted drifts
+overlap and the angle swings through ±80° in a couple of seconds — the angle
+engine's closure fails and the corner reads **rough** on every lap. That is the
+honest answer (there is no straight inside the flick to close against), the
+view greys it out and says why, and it is never rated. But it is a real
+limitation of closure-on-grip rather than a property of that corner, and a
+transition-aware anchor is the obvious next thing to try. Deliberately NOT
+papered over: the harness asserts that a rough corner is never rated.
+
 
 ## 4. Build phases
 
-### Cut 1 — ships on today's data, Studio-only, no firmware change — **DONE**
+### Cut 1 — the view, on today's data, Studio-only — **DONE, then redesigned**
 
-1. Seventh view **Drift**: button, whitelist, ~8 dispatch branches, wrap div,
-   scoped CSS.
-2. Run segmentation: gap-based; gate-based when a course has entry/end lines
-   (existing trial spans).
-3. Runs table + run tiles + switches table (lateral-g flip detection), memoised
-   on the `gp.coach` pattern, cleared in `gpSplitLaps`.
-4. Map reuse: runs overlaid, shadow dash, ghost playback; disabled **Angle** map
-   mode with its unlock sentence.
-5. The angle engine, activated by any yaw/angle channel — which today means VBO
-   imports (DriftBox/RaceBox/VBOX columns already flow through `gpVboParse` into
-   `rows.can` with zero import changes). Explicit "use this column as Angle/Yaw"
-   picker against `chanDefs` — require °/s or °, ask once, store, never guess.
-6. Angle + Steering as honest empty frames everywhere else.
-7. ADR: the A4 widening of ADR-0011 with the measured/derived/estimated ladder.
+Shipped as runs + gap/gate segmentation + the angle engine + honest empty
+frames. The angle engine, the switch detection, the channel picker and the
+honesty ladder all survive the redesign untouched; the run segmentation and the
+scorecard do not. See "Courses, clips and zones — retired" above.
 
-No composite score in cut 1. A drifter with only the puck gets entry/lowest/exit,
-switches, line overlay, and ghost replay the first day; a drifter who owns a
-DriftBox gets the angle column by dragging in the file they already have.
+### Cut 2 — courses and points — **DONE, then retired**
 
-### Cut 2 — courses and points (still Studio-only) — **DONE**
+Clips, zones, per-element points with a shrinking denominator, personal-best
+comparison, scoring-version stamp. Retired 2026-08-10 in favour of per-corner
+ratings. `GP_DRIFT_SCORE_VER` went 1 → 2 at the same time, which is exactly
+what that constant exists for: no run keeps a score it earned under different
+rules.
 
-Clips + zones authoring **in the Drift view** (not Tracks — see the status
-note), `courses:[]` on the track record, per-element points with the visible
-shrinking denominator, personal-best comparison table, scoring-version stamp.
-Not built: the trend strip (best-score-per-session over time) — it wants more
-than one session's worth of runs to mean anything.
+### Cut 2b — corners, lap by lap, out of five — **DONE 2026-08-10**
+
+The current design. Corner set from one reference lap mapped onto all of them;
+four-part rating; best lap per corner; the map showing every ticked lap with
+numbered corner badges. Verified by `check_drift.js` (80) and
+`check_mallala.js` (35, whole chain against a known-angle six-lap fixture).
+
+Not built: a trend strip across sessions (best stars per corner over the year).
+It wants more than one session's worth of laps to mean anything, and the
+per-session board is the thing that had to be right first.
+
 
 ### Cut 3 — car CAN yaw/steering — **Studio side DONE; needs the bus proved**
 
@@ -332,11 +360,17 @@ lead-vs-chase *replay* before RTK gives measured *proximity*.
 ## 5. Open questions
 
 1. Has ADR-0011 been formally widened per STUDIO_SHELL_PLAN §7 A4? This feature
-   is the right moment to land it.
-2. `gpTrackSend` whitelist — confirm strictly start/finish/sectors before hanging
-   `courses:[]` on the track record.
-3. Trace v2 CAN sniffing is compile-only — bench verification is a prerequisite
+   is still the right moment to land it.
+2. Trace v2 CAN sniffing is compile-only — bench verification is a prerequisite
    for cut 3, not part of it.
-4. Any target car with a steering signal wider than 16 bits? (v2 slots are u16.)
-5. Composite score: deliberately out. Revisit only if users ask, and then with
-   the formula printed on the panel.
+3. Any target car with a steering signal wider than 16 bits? (v2 slots are u16.)
+4. **The flick that will not close** (see the known limit above). Worth trying:
+   an anchor that accepts "the angle passed through zero on its way to the
+   other side" as a closure point, which is what a transition physically IS.
+5. **Is 40° the right bar for five stars?** It is defensible and it is printed
+   on screen, but it is one number chosen from the D1/FD literature rather than
+   from this user's own driving. Revisit once there is a season of real
+   sessions to look at — and bump `GP_DRIFT_SCORE_VER` when it moves.
+6. Should the corner set be pickable rather than the modal-count lap? Automatic
+   and deterministic is right for now; a session where the driver goes off on
+   the reference lap would want an override.

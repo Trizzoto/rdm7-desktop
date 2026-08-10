@@ -48,30 +48,33 @@ function constOf(name) {
 const WANT = [
     'gpN', 'gpMetres', 'gpMetresPerDeg', 'gpSecs', 'gpStep', 'gpChanDefsById',
     'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpChannels',
-    'gpGapS', 'gpDriftRuns', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess',
+    'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess',
     'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle',
     'gpDriftSeek', 'gpDriftSwitches', 'gpDriftSegments', 'gpDriftStats',
-    'gpCourses', 'gpCourseActive', 'gpCourseStamp', 'gpCourseClean',
-    'gpZoneGeom', 'gpZoneNear', 'gpDriftCard', 'gpDriftBest', 'gpDriftForget',
+    'gpDriftStars', 'gpDriftForget',
     'gpRowsPack', 'gpRowsUnpack'
 ];
 const K = {};
-['GP_DRIFT_MIN_KPH', 'GP_DRIFT_GAP_S', 'GP_DRIFT_MIN_S', 'GP_DRIFT_ON', 'GP_DRIFT_OFF',
- 'GP_DRIFT_HOLD_S', 'GP_DRIFT_SETTLE_S', 'GP_DRIFT_SWITCH_G', 'GP_DRIFT_CLIP_FADE_M',
- 'GP_DRIFT_MIN_SHAPE_M', 'GP_DRIFT_SCORE_VER', 'GP_DRIFT_ROUGH', 'GP_MAX_STEP_S',
+['GP_DRIFT_MIN_KPH', 'GP_DRIFT_ON', 'GP_DRIFT_OFF',
+ 'GP_DRIFT_HOLD_S', 'GP_DRIFT_SETTLE_S', 'GP_DRIFT_SWITCH_G',
+ 'GP_DRIFT_STAR_DEG', 'GP_DRIFT_STAR_WOB',
+ 'GP_DRIFT_SCORE_VER', 'GP_DRIFT_ROUGH', 'GP_MAX_STEP_S',
  'GP_NO_T', 'GP_CHAN_STALE'].forEach(n => K[n] = constOf(n));
+/* an object literal, so constOf's number regex cannot read it */
+K.GP_DRIFT_STAR_W = (function () {
+    const m = /var GP_DRIFT_STAR_W = (\{[^}]*\})/.exec(SRC);
+    if (!m) throw new Error('not found: var GP_DRIFT_STAR_W');
+    return eval('(' + m[1] + ')');
+})();
 const GP_DT = 1 / 25;
 
 const gp = {};
 const win = { localStorage: { getItem: () => null, setItem: () => {} } };
-/* gpZoneGeom's projection cache — an implementation detail of the app's
-   module scope, supplied here so the extracted function runs. It lives in a
-   WeakMap rather than on the element so it never reaches localStorage. */
-const ARGN = ['gp', 'window', 'GP_DT', 'gpActiveTrack', 'GP_ZONE_GEO', 'gpAllChans', ...Object.keys(K)];
+const ARGN = ['gp', 'window', 'GP_DT', 'gpActiveTrack', 'gpAllChans', ...Object.keys(K)];
 /* The one shell function the engine reaches for. Stubbed rather than
    extracted: it walks the whole track library, which is not what is under
    test here. */
-const fakeTrack = { id: 't', name: 'Test', courses: [] };
+const fakeTrack = { id: 't', name: 'Test' };
 /* The channel LIBRARY — what was picked off the dash or typed in. A puck
    download's channel ids are described here and nowhere else, which is the
    path the Drift view used to miss entirely. */
@@ -79,7 +82,7 @@ let libChans = [];
 const API = new Function(...ARGN,
     WANT.map(n => grab(SRC, n)).join('\n') +
     '\n;return {' + WANT.map(n => n + ':' + n).join(',') + '};'
-)(gp, win, GP_DT, () => fakeTrack, new WeakMap(), () => libChans, ...Object.keys(K).map(n => K[n]));
+)(gp, win, GP_DT, () => fakeTrack, () => libChans, ...Object.keys(K).map(n => K[n]));
 
 /* ---- ground truth ------------------------------------------------------- */
 const CLAT = -36.5266, CLON = 146.0899;
@@ -397,11 +400,10 @@ head('An angle with nothing to anchor it is not scored');
     const st = API.gpDriftStats({ from: 0, to: rows.length - 1 });
     ok('it is flagged rough', st.angle && st.angle.rough, 'conf +/-' + (st.angle ? st.angle.conf.toFixed(0) : '?'));
     ok('and says WHY — nothing was straight, not "it did not close"', st.angle && st.angle.soft);
-    fakeTrack.courses = [API.gpCourseClean({ id: 'c', name: 'c', target_kph: 60, target_deg: 30, elements: [] })];
-    gp.courseId = 'c';
-    const card = API.gpDriftCard({ from: 0, to: rows.length - 1 }, API.gpCourseActive());
-    ok('so the scorecard leaves angle out entirely', card.noAngle && !card.angle,
-       'out of ' + card.max);
+    /* A rating built on an angle nobody can vouch for would be a rating of
+       nothing. The gate is the same GP_DRIFT_ROUGH every other surface uses. */
+    ok('so it earns no stars at all',
+       API.gpDriftStars({ angle: st.angle, commit: 1, wobble: 0, kph: 60 }, 60) === null);
 }
 
 head('An instrument that measured the angle itself');
@@ -472,113 +474,82 @@ head('Runs');
     const shift = (rows, ms) => rows.map(r => Object.assign({}, r, { t: r.t + ms }));
     const all = shift(a, 0).concat(shift(b, T * 1000 + GAP),
                                    shift(c, 2 * (T * 1000 + GAP)));
-    load(all);
-    const runs = API.gpDriftRuns();
-    ok('three runs found from the gaps', runs.length === 3, runs.length + ' runs');
-    if (runs.length === 3) {
-        ok('the first ends where the gap starts', runs[0].to === a.length - 1);
-        ok('the second starts after it', runs[1].from === a.length);
-    }
-    /* The seam between two runs must not leak into either of them. Before the
+    /* The seam between two stints must not leak into either of them. Before the
        gap was made a hard break, a run beside a 95 s hole came back claiming
        four times the error bar its own driving was worth. */
     load(all);
     const d3 = API.gpDriftAngle();
     let mid = 0;
     for (let i = a.length; i < a.length + b.length; i++) if (d3.ok[i]) mid = Math.max(mid, d3.conf[i]);
-    ok('a gap does not widen the error bar beside it', mid < 4, 'run 2 worst +/-' + mid.toFixed(1) + ' deg');
+    ok('a gap does not widen the error bar beside it', mid < 4, 'stint 2 worst +/-' + mid.toFixed(1) + ' deg');
     let e2 = 0;
     for (let i = a.length; i < a.length + b.length; i++)
         if (d3.ok[i]) e2 = Math.max(e2, Math.abs(d3.beta[i] - betaOf((i - a.length) * GP_DT)));
-    ok('and the run beside it is still right', e2 < 3, 'worst error ' + e2.toFixed(2) + ' deg');
-
-    /* one unbroken stretch is one run */
-    load(makeRun({ T: 40 }));
-    ok('one unbroken stretch is one run', API.gpDriftRuns().length === 1);
-    /* a stretch shorter than the floor is not a run at all */
-    load(makeRun({ T: 3 }));
-    ok('three seconds is not a run', API.gpDriftRuns().length === 0);
+    ok('and the stint beside it is still right', e2 < 3, 'worst error ' + e2.toFixed(2) + ' deg');
 }
 
-head('Courses: clips, zones and the shrinking denominator');
+head('The rating: five stars, and what earns them');
 {
-    const rows = makeRun();
-    load(rows);
-    /* a clip planted exactly 4 m to the side of a point the car passes */
-    const at = 500;
-    const m = API.gpMetresPerDeg(rows[at].lat);
-    const h = rows[at].hdg * D2R;
-    const clipLat = rows[at].lat + (4 * Math.cos(h + Math.PI / 2)) / m.la;
-    const clipLon = rows[at].lon + (4 * Math.sin(h + Math.PI / 2)) / m.lo;
-    /* a zone laid along 60 m of the path the car definitely drives */
-    const zpts = [];
-    for (let i = 200; i <= 290; i += 10) zpts.push([rows[i].lat, rows[i].lon]);
+    /* The rating is pure arithmetic on four measured numbers, so it is tested
+       directly rather than through a drive. Every one of these is a claim the
+       UI makes in words beside the stars, and a formula change that breaks one
+       of them is a formula change that makes the screen lie. */
+    const R = (held, commit, wobble, kph) =>
+        API.gpDriftStars({ angle: { held, rough: false, conf: 1, direct: true, secs: 4 },
+                           commit, wobble, kph }, 100);
 
-    fakeTrack.courses = [API.gpCourseClean({
-        id: 'c1', name: 'Test course', target_kph: 60, target_deg: 30,
-        elements: [
-            { k: 'clip', name: 'Clip 1', lat: clipLat, lon: clipLon, r: 3, max: 10 },
-            { k: 'zone', name: 'Zone 1', pts: zpts, band: 3, max: 15 }
-        ]
-    })];
-    gp.courseId = 'c1';
-    const card = API.gpDriftCard({ from: 0, to: rows.length - 1 }, API.gpCourseActive());
-    ok('the clip distance is the distance', Math.abs(card.els[0].dist - 4) < 1.2,
-       'planted 4 m out, measured ' + card.els[0].dist.toFixed(2) + ' m');
-    ok('a zone the car rides is fully covered', card.els[1].cover > 0.95,
-       (100 * card.els[1].cover).toFixed(0) + '% covered');
-    ok('full marks for the zone', card.els[1].pts > 14.2, card.els[1].pts.toFixed(1) + ' of 15');
-    ok('the scorecard is stamped with its version', card.ver === K.GP_DRIFT_SCORE_VER);
-    ok('angle is scored when it is measured', !!card.angle && !card.noAngle);
-    const withAngle = card.max;
+    const perfect = R(K.GP_DRIFT_STAR_DEG, 1, 0, 100);
+    ok('the stated standard is exactly five stars', perfect.stars === 5,
+       K.GP_DRIFT_STAR_DEG + ' deg held, all corner, no wander, best speed');
+    ok('...and nothing beyond it scores more than five', R(90, 1, 0, 200).stars === 5);
 
-    /* Same course, same driving, no angle sensor: the DENOMINATOR must fall.
-       If it did not, a card with no angle on it could look like a full one. */
-    const rows2 = makeRun({ noChan: true });
-    load(rows2, [], []);
-    fakeTrack.courses = [API.gpCourseClean({
-        id: 'c1', name: 'Test course', target_kph: 60, target_deg: 30,
-        elements: [
-            { k: 'clip', name: 'Clip 1', lat: clipLat, lon: clipLon, r: 3, max: 10 },
-            { k: 'zone', name: 'Zone 1', pts: zpts, band: 3, max: 15 }
-        ]
-    })];
-    gp.courseId = 'c1';
-    const card2 = API.gpDriftCard({ from: 0, to: rows2.length - 1 }, API.gpCourseActive());
-    ok('with no angle sensor the total shrinks', card2.max === withAngle - 20,
-       'out of ' + withAngle + ' with angle, ' + card2.max + ' without');
-    ok('and it says the angle was not measured', card2.noAngle && !card2.angle);
-}
+    const none = R(0, 0, K.GP_DRIFT_STAR_WOB * 2, 0);
+    ok('nothing measured on any part is zero stars', none.stars === 0);
 
-head('Shapes cannot be drawn finer than the receiver');
-{
-    const c = API.gpCourseClean({
-        id: 'x', name: 'x',
-        elements: [{ k: 'clip', name: 'tiny', lat: CLAT, lon: CLON, r: 0.3, max: 10 },
-                   { k: 'zone', name: 'thin', pts: [[CLAT, CLON], [CLAT + 0.001, CLON]], band: 0.1, max: 10 }]
-    });
-    ok('a 30 cm clip is widened to the floor', c.elements[0].r === K.GP_DRIFT_MIN_SHAPE_M,
-       c.elements[0].r + ' m');
-    ok('a 10 cm band is widened to the floor', c.elements[1].band === K.GP_DRIFT_MIN_SHAPE_M,
-       c.elements[1].band + ' m');
-    /* The track record is JSON.stringify'd into localStorage. A zone's
-       projected geometry must never ride along with it: it would be saved
-       into the user's track library, reloaded for ever, and wrong the moment
-       the zone moved. */
-    const z = API.gpCourseClean({ id: 'z', name: 'z', elements: [
-        { k: 'zone', name: 'Zone', pts: [[CLAT, CLON], [CLAT + 0.0005, CLON + 0.0005]], band: 4, max: 10 }
-    ]});
-    API.gpZoneGeom(z.elements[0]);
-    const json = JSON.stringify(z);
-    ok('zone geometry is never persisted with the track', json.indexOf('cum') < 0 && json.indexOf('_geo') < 0,
-       Object.keys(z.elements[0]).join(','));
+    /* Each part must MOVE the score on its own, or it is decoration. */
+    const base = R(20, 0.5, 5, 50);
+    ok('more angle raises it', R(30, 0.5, 5, 50).score > base.score);
+    ok('holding it longer raises it', R(20, 0.8, 5, 50).score > base.score);
+    ok('holding it steadier raises it', R(20, 0.5, 2, 50).score > base.score);
+    ok('carrying more speed raises it', R(20, 0.5, 5, 70).score > base.score);
 
-    const bad = API.gpCourseClean({ id: 'y', name: 'y', elements: [
-        { k: 'clip', lat: 999, lon: 0, r: 3, max: 10 },
-        { k: 'zone', pts: [[CLAT, CLON]], band: 4, max: 10 },
-        { k: 'nonsense' }, null
-    ]});
-    ok('malformed shapes are dropped, not drawn', bad.elements.length === 0);
+    /* The weights are a published claim: angle is the biggest single part.
+       If that stops being true the sentence in the UI has to change too. */
+    const W = K.GP_DRIFT_STAR_W;
+    ok('angle is the heaviest part', W.angle > W.commit && W.angle > W.steady && W.angle > W.speed);
+    ok('the four parts are a whole',
+       Math.abs(W.angle + W.commit + W.steady + W.speed - 1) < 1e-9);
+
+    /* Half stars are real halves — 4.4 and 4.6 must not read the same. */
+    const halves = {};
+    for (let h = 0; h <= 44; h += 0.5) halves[R(h, 1, 0, 100).stars] = 1;
+    ok('the scale has halves in it', Object.keys(halves).some(k => (+k * 2) % 2 === 1));
+    ok('and never lands off the half', Object.keys(halves).every(k => (+k * 10) % 5 === 0));
+
+    /* Wobble past the stated bar scores nothing, and never goes negative —
+       a corner cannot be worse than unrated on one part and claw it back on
+       another. */
+    ok('wander past the bar scores nothing, not less than nothing',
+       R(40, 1, K.GP_DRIFT_STAR_WOB * 3, 100).parts.steady === 0);
+
+    /* Speed is the only part graded against you rather than a fixed bar. */
+    ok('speed is measured against your own best here', R(20, 0.5, 5, 100).parts.speed === 1);
+
+    /* And the version travels with the number, so a tuned formula can never
+       silently restate a score a corner already earned. */
+    ok('every rating carries its version', perfect.ver === K.GP_DRIFT_SCORE_VER);
+
+    /* A corner with no angle at all is not a nought-star corner — it is an
+       unrated one. Nought would say the driver tried and failed. */
+    ok('no angle source is unrated, not zero-rated',
+       API.gpDriftStars({ angle: null, commit: 0, wobble: 0, kph: 60 }, 60) === null);
+
+    /* A corner driven on the grip is not a nought-star drift — it is not a
+       drift, and rating it would put a car that never tried above one that
+       nearly held it. */
+    ok('a corner nobody drifted is unrated, not zero-rated',
+       API.gpDriftStars({ angle: { held: 0, rough: false, conf: 1, direct: true, secs: 0 },
+                          commit: 0, wobble: 0, kph: 140 }, 140) === null);
 }
 
 head('A channel that is not what we think it is');
@@ -638,9 +609,9 @@ head('Degenerate recordings');
 {
     const one = makeRun({ T: 78 }).slice(0, 1);
     load(one);
-    ok('one sample does not throw', API.gpDriftAngle() === null && API.gpDriftRuns().length === 0);
+    ok('one sample does not throw', API.gpDriftAngle() === null);
     load(makeRun({ T: 78 }).slice(0, 2));
-    ok('two samples do not throw', API.gpDriftRuns().length === 0);
+    ok('two samples do not throw', API.gpDriftAngle() === null);
     load([]);
     ok('an empty recording does not throw', API.gpDriftAngle() === null && API.gpDriftSwitches().length === 0);
     /* no timestamps at all: gpSecs falls back to the nominal rate */
