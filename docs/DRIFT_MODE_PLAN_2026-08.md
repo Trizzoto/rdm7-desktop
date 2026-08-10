@@ -57,6 +57,28 @@ Racelogic DriftBox. The precedents worth stealing:
 | Racelogic DriftBox | 10 Hz GPS course-over-ground + internal yaw gyro | 1° | run = >5° drift at >25 km/h; speed/angle/g + a score |
 | VBOX 3i dual antenna | second antenna gives true body heading | 0.04–0.2° RMS | measured slip angle outright |
 | DriftMeter (phone app) | EKF: phone gyro + GPS COG | ±0.5° claimed | 50% max angle / 30% entry speed / 20% duration |
+| **BMW M Drift Analyser** (M3/M4) | production yaw sensor | — | duration, distance, average angle → stars, "and some magic dust" |
+
+**BMW is the closest precedent to what this view is**, because it is the only
+one aimed at a driver practising rather than a judge scoring: it rates each
+drift out of five stars and leads on three numbers — **how long, how far, and
+what angle**. Two things are worth taking from it verbatim. First, it is
+reported as being *"much more interested in the angle of the drift than the
+speed or distance"* — which is why angle is the heaviest part of the rating
+here and speed the lightest. Second, it scores **alternating curves higher**,
+which is the same instinct as linking corners into one unit.
+
+The one thing NOT to take is the magic dust. BMW say outright that the star
+rating is duration, length, average angle "and some magic dust"; the parts are
+shown here as four bars with the standard written underneath, because a rating
+you cannot argue with is a rating nobody trusts.
+
+The one number of theirs with a published definition is the
+**Schwimmwinkelbetragsintegral** — the integral of the slip-angle magnitude
+over time, degree-seconds. It is worth having precisely because it has *no
+weights in it*: more angle and more time both raise it, and nobody had to
+decide how to trade the two off. It is shown beside the stars, per corner and
+per lap, as the un-opinionated counterpart to them.
 
 ## 2. The physics fact that shapes everything
 
@@ -169,10 +191,17 @@ A linked unit reads `Turns 6–7` with a chain mark, on the table and on the map
 
 | Part | Weight | Measured | Full marks |
 |---|---|---|---|
-| **Angle** | 40% | mean angle held while above the drift threshold | 40° held |
+| **Angle** | 45% | mean angle held while above the drift threshold | 40° held |
 | **Committed** | 25% | fraction of the corner spent above the threshold | all of it |
 | **Steady** | 20% | RMS of the angle against a 0.6 s rolling mean of itself | no wander |
-| **Speed** | 15% | mean speed through the corner | your own best there |
+| **Speed** | 10% | **entry** speed | your own best entry there |
+
+Speed reads the ENTRY, not the average through the stretch. Average speed is
+the number that goes *up* when you do not commit — a car that straightens and
+drives through is quicker across the same tarmac than one holding forty
+degrees, so rewarding it is backwards. Entry speed is what a judge watches and
+it cannot be gamed by giving up. It is also the smallest part, per BMW and
+per every system in the table above.
 
 Three of the four are graded against a **fixed standard**, printed on screen
 beside the stars. Grading everything on your own best would hand five stars to
@@ -199,11 +228,19 @@ the four parts are shown underneath, and the standard is written out in words.
 
 ### Panels (each one fact per column, plain words)
 
+Order matters and was got wrong first time: the panel opened with two tables
+and buried the rating below them, so the first thing on screen was navigation
+rather than the answer. It now opens with the rating and the angle, and the
+tables that pick which corner and which lap sit under it — you arrive wanting
+to know how that corner went, not wanting to browse. In/out speeds are a
+quieter second row for the same reason: they are circuit-racing's headline,
+not drifting's.
+
 | Panel | Draws | Interaction |
 |---|---|---|
-| Laps | one row per lap: When · Time · Rated (n of N) · Best angle · Stars | click selects; tick to draw on the map |
-| Corners | one row per corner of the selected lap: Turn · Angle · Comm · Wob · Stars · Best lap | click selects and frames it |
-| Corner | tiles (in/slowest/out, angle held/widest/sideways for), the stars, the four parts as bars, and the difference against your best lap there | glance |
+| Corners | one row per unit of the selected lap: Turn · Angle · Comm · °·s · Stars · Best lap | click selects and frames it |
+| Laps | one row per lap: Lap · Time · Angle · °·s · Stars | click selects; tick to draw on the map |
+| The rating | **opens the panel**: stars and the angle held, big, then widest / sideways for / distance, then degree-seconds / switches / entry speed, then the four parts as bars | glance |
 | Map | every ticked lap; selected lap coloured by Lap / Speed / Angle; numbered corner badges; switch marks | tick, colour mode, scrub |
 
 
@@ -357,6 +394,14 @@ one, with each member still readable underneath. Detection reuses
 linkage is fixed for the session so the table keeps its shape lap to lap.
 The fixture now contains a lap that deliberately straightens mid-link, and the
 harness asserts it scores worse on commitment there and loses ownership of it.
+
+### Cut 2d — BMW's numbers, and the rating led with — **DONE 2026-08-11**
+
+Distance travelled sideways added; degree-seconds promoted from a buried tile
+to a column on both tables and a headline beside the stars. The rating's speed
+part now reads ENTRY speed rather than the mean through the stretch, and
+weights moved to 45/25/20/10 so angle leads and speed trails — `SCORE_VER` 2 → 3.
+The panel was reordered to open with the rating.
 
 ### Cut 3 — car CAN yaw/steering — **Studio side DONE; needs the bus proved**
 

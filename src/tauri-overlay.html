@@ -2655,6 +2655,25 @@
             width: 13px; height: 7px; border: 1.5px solid var(--gpb-red); border-radius: 4px;
         }
         #gpWorkspace .gpb-corner-badge.linked { border-radius: 9px; padding: 0 4px; letter-spacing: -0.02em; }
+        /* the hero: the two things you opened this view to see, side by side
+           and above everything that picks which corner you are looking at */
+        #gpWorkspace .gpb-dhero {
+            display: flex; align-items: center; gap: 16px;
+            padding: 10px 0 12px; border-bottom: 1px solid var(--gpb-div-lt); margin-bottom: 10px;
+        }
+        #gpWorkspace .gpb-dstars { display: flex; flex-direction: column; gap: 4px; }
+        #gpWorkspace .gpb-dstars .gpb-stars { gap: 3px; }
+        #gpWorkspace .gpb-dstars .gpb-star { width: 19px; height: 19px; }
+        #gpWorkspace .gpb-dbig { margin-left: auto; text-align: right; line-height: 1; }
+        #gpWorkspace .gpb-dbig .v {
+            display: block; font-family: var(--gpb-head); font-size: 40px; font-weight: 600;
+            font-variant-numeric: tabular-nums; color: var(--gpb-ink);
+        }
+        #gpWorkspace .gpb-dbig .v .u { font-size: 22px; font-weight: 500; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-dbig .k {
+            display: block; margin-top: 3px; font-size: 10.5px; letter-spacing: 0.07em;
+            text-transform: uppercase; color: var(--gpb-muted); font-family: var(--gpb-head); font-weight: 600;
+        }
         #gpWorkspace .gpb-drate { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
         #gpWorkspace .gpb-drate .gpb-stars { gap: 3px; }
         #gpWorkspace .gpb-drate .gpb-star { width: 17px; height: 17px; }
@@ -16618,10 +16637,22 @@
            can feel. Past this, steadiness scores nothing. */
         var GP_DRIFT_STAR_WOB = 10;
         /* Speed is the one part with no fixed bar: what is fast through a
-           corner depends entirely on the corner. It is graded against your own
-           best there, which is also the comparison the view is FOR. */
-        var GP_DRIFT_STAR_W = { angle: 0.40, commit: 0.25, steady: 0.20, speed: 0.15 };
-        var GP_DRIFT_SCORE_VER = 2;   /* stamped on every rating; tuning the
+           corner depends entirely on the corner, so it is graded against your
+           own best there — which is also the comparison the view is FOR.
+           It reads ENTRY speed, not the average through the stretch. Average
+           speed is the number that goes UP when you do not commit: a car that
+           straightens and drives through is quicker across the same tarmac
+           than one holding forty degrees, and rewarding that is backwards.
+           Entry speed is what a judge actually watches, and it cannot be
+           gamed by giving up.
+
+           And it is the smallest part on purpose. BMW's own analyser is, in
+           the words of the people who report on it, "much more interested in
+           the angle of the drift than the speed or distance", and every
+           judging system in section 1 agrees: angle first, then how long it
+           was held, then how tidily. Speed is a tiebreak, not the point. */
+        var GP_DRIFT_STAR_W = { angle: 0.45, commit: 0.25, steady: 0.20, speed: 0.10 };
+        var GP_DRIFT_SCORE_VER = 3;   /* stamped on every rating; tuning the
                                          formula must never silently restate
                                          a score a corner already earned */
 
@@ -17377,9 +17408,21 @@
                 from: span.from, to: span.to, apex: span.apex,
                 secs: st.secs, kph: kN ? kSum / kN : 0,
                 entryKph: st.entryKph, exitKph: st.exitKph, lowKph: st.lowKph,
-                switches: st.switches, angle: st.angle, wobble: 0, commit: 0
+                switches: st.switches, angle: st.angle, wobble: 0, commit: 0, metres: 0
             };
             if (!st.angle) return out;
+            /* How FAR the car travelled sideways. BMW's drift analyser leads on
+               exactly this alongside duration and average angle, and it is the
+               number a driver quotes afterwards — "a hundred metres of it" says
+               something "six seconds" does not, because six seconds at 40 km/h
+               and six at 100 are not the same drift. Measured only above the
+               drift threshold, so rolling up to a corner never accumulates. */
+            if (d) {
+                for (i = span.from; i <= span.to && i < rows.length; i++) {
+                    if (!d.ok[i] || Math.abs(d.beta[i]) < GP_DRIFT_ON) continue;
+                    out.metres += (rows[i].kph / 3.6) * gpStep(rows, i);
+                }
+            }
             /* Sideways for how much of the corner. Time, not distance: a corner
                is a stretch of driving, and the fraction of it spent above the
                drift threshold is what "committed" means to a driver. */
@@ -17438,7 +17481,7 @@
                 angle: Math.max(0, Math.min(1, a.held / GP_DRIFT_STAR_DEG)),
                 commit: Math.max(0, Math.min(1, read.commit)),
                 steady: Math.max(0, Math.min(1, 1 - read.wobble / GP_DRIFT_STAR_WOB)),
-                speed: bestKph > 0 ? Math.max(0, Math.min(1, read.kph / bestKph)) : 0
+                speed: bestKph > 0 ? Math.max(0, Math.min(1, read.entryKph / bestKph)) : 0
             };
             var s = parts.angle * GP_DRIFT_STAR_W.angle +
                     parts.commit * GP_DRIFT_STAR_W.commit +
@@ -17550,10 +17593,12 @@
             var reads = spans.map(function (ls) {
                 return ls.map(function (sp) { return sp ? gpDriftCornerRead(sp) : null; });
             });
-            /* Best speed per unit, over every lap that drove it. */
+            /* Best ENTRY speed per unit, over every lap that drove it — the
+               speed the rating is graded against. Not the average through the
+               stretch: that one rewards straightening up and driving. */
             var bestKph = units.map(function (u, ui) {
                 var b = 0;
-                reads.forEach(function (lr) { if (lr[ui] && lr[ui].kph > b) b = lr[ui].kph; });
+                reads.forEach(function (lr) { if (lr[ui] && lr[ui].entryKph > b) b = lr[ui].entryKph; });
                 return b;
             });
             var cells = reads.map(function (lr, li) {
@@ -17764,6 +17809,7 @@
             if (gp.cmpLap < 0 || gp.cmpLap >= laps.length) gp.cmpLap = gpDriftBest();
 
             var sel = gp.selLap, ci = gp.driftUnit;
+            var anyLink = b.units.some(function (u) { return u.linked; });
             var h = "";
 
             /* ---- toolbar: what the map is coloured by --------------------- */
@@ -17775,59 +17821,126 @@
                      return "<button data-gp-mapmode='" + m[0] + "' class='" + (mm === m[0] ? "on" : "") +
                             "' onclick=\"gpMapModeSet('" + m[0] + "')\">" + m[1] + "</button>";
                  }).join("") + "</div><span class='sp'></span>" +
-                 "<span class='gpb-dpm'>" + b.corners.length + " corner" +
-                 (b.corners.length === 1 ? "" : "s") + " &middot; speeds in " + gpSpdU() + "</span></div>";
+                 "<span class='gpb-dpm'>lap " + (sel + 1) + " of " + laps.length + "</span></div>";
 
-            /* ---- laps ------------------------------------------------------ */
-            h += "<div class='gpb-dsect'><h4>Laps<span class='sp'></span>" +
-                 "<span class='gpb-dnorm'>corners found on lap " + (b.refLap + 1) + "</span></h4>";
-            h += "<table class='gpb-table gpb-dlaps'><thead><tr><th></th><th>Lap</th>" +
-                 "<th class='n'>Time</th>" +
-                 "<th class='n' title='corners this lap was rated on'>Rated</th>" +
-                 "<th class='n' title='the widest angle held anywhere on the lap'>Best angle</th>" +
-                 "<th class='n' title='the average of this lap&rsquo;s corner ratings'>Stars</th>" +
-                 "</tr></thead><tbody>";
-            laps.forEach(function (l, li) {
-                if (l.ghost) return;
-                var avg = b.lapAvg[li];
-                var peak = 0, cells = b.cells[li] || [];
-                cells.forEach(function (r) {
-                    if (r && r.angle && !r.angle.rough && r.angle.peak > peak) peak = r.angle.peak;
-                });
-                var shownOn = gpShownList().indexOf(li) >= 0;
-                h += "<tr class='" + (li === sel ? "hot" : "") + "' data-gp-dlap='" + li + "'>" +
-                     "<td><i class='gpb-dsw' " + (li === sel ? "" : "data-gp-dshow='" + li + "' ") +
-                     "title='" + (li === sel ? "The lap you are reading is always drawn" : "Draw this lap on the map") +
-                     "' style='background:" + gpLapColour(li) + ";opacity:" +
-                     ((li === sel || shownOn) ? 1 : 0.18) + (li === sel ? ";cursor:default" : "") + "'></i></td>" +
-                     "<td style='white-space:nowrap'>" + (li + 1) +
-                     (li === gp.cmpLap ? " <span class='gpb-dpm'>best</span>" : "") + "</td>" +
-                     "<td class='n mut'>" + gpDriftClock(gpSecs(rows, l.from, l.to)) + "</td>" +
-                     "<td class='n mut'>" + (avg ? avg.n : 0) + "<span class='gpb-dpm'>/" +
-                     b.corners.length + "</span></td>" +
-                     "<td class='n'>" + (peak ? Math.round(peak) + "&deg;" : "<span class='gpb-dpm'>&mdash;</span>") + "</td>" +
-                     "<td class='n'>" + (avg ? avg.stars.toFixed(1) : "<span class='gpb-dpm'>&mdash;</span>") + "</td></tr>";
-            });
-            h += "</tbody></table></div>";
-
-            /* ---- the corners of the selected lap --------------------------- */
-            h += "<div class='gpb-dsect'><h4>Lap " + (sel + 1) + ", corner by corner" +
-                 "<span class='sp'></span><span class='gpb-dnorm'>" +
-                 (b.units.some(function (u) { return u.linked; })
-                    ? "linked corners are rated as one drift"
-                    : "best lap for each on the right") + "</span></h4>";
+            /* ---- the rating, first ----------------------------------------
+               This is what the view is for, so it opens with it. The tables
+               that pick which corner and which lap sit UNDER it: you arrive
+               wanting to know how that corner went, not wanting to browse. */
             if (!d) {
-                h += "<div class='gpb-dsay'>" + gpDriftAngleWhy() + "</div>";
-                h += gpDriftSourceLine(d);
-                h += "</div>";
+                h += "<div class='gpb-dsect'><h4>Angle</h4>" +
+                     "<div class='gpb-dsay'>" + gpDriftAngleWhy() + "</div>" +
+                     gpDriftSourceLine(d) + "</div>";
                 el.innerHTML = h;
                 gpDriftBind(el);
                 return;
             }
+
+            var cur = (b.cells[sel] || [])[ci];
+            var un = b.units[ci];
+            h += "<div class='gpb-dsect'><h4>" + (un ? un.name : "?") +
+                 "<span class='sp'></span><span class='gpb-dnorm'>lap " + (sel + 1) +
+                 (un && un.linked ? " &middot; " + un.members.length + " corners, one drift" : "") +
+                 "</span></h4>";
+
+            if (!cur) {
+                h += "<div class='gpb-dsay'>This lap did not drive that &mdash; it went more than " +
+                     "40 m from where the corner is, so there is nothing here to read.</div>";
+            } else if (!cur.angle || cur.angle.rough) {
+                h += "<div class='gpb-dsay'>" +
+                     (cur.angle && cur.angle.soft
+                        ? "Nothing around this corner is provably straight — no stretch where the car is not turning, not loaded up and above " + GP_DRIFT_MIN_KPH + " km/h. Without one there is no zero to measure the angle from."
+                      : cur.angle
+                        ? "The angle over this stretch did not close: it should come back to straight where the car provably is, and it does not. Rather than print a number wrong by an unknown amount, it is left out."
+                        : "The car never went far enough sideways here to call it a drift.") + "</div>";
+            } else {
+                /* The stars and the angle, together, at the top. */
+                h += "<div class='gpb-dhero'>";
+                if (cur.rating) {
+                    h += "<div class='gpb-dstars'>" + gpStarsHtml(cur.rating.stars) +
+                         "<span class='gpb-dnum'>" + cur.rating.stars.toFixed(1) +
+                         "<small> of 5</small></span></div>";
+                }
+                h += "<div class='gpb-dbig'><span class='v'>" + Math.round(cur.angle.held) +
+                     "<span class='u'>&deg;</span></span>" +
+                     "<span class='k'>held" +
+                     (cur.angle.direct ? "" : " <span class='gpb-dpm'>&plusmn;" +
+                        Math.round(cur.angle.conf) + "&deg;</span>") + "</span></div>";
+                h += "</div>";
+
+                /* The three numbers every drift analyser in section 1 leads on
+                   — how much angle, for how long, and how far — with the
+                   degree-seconds beside them. */
+                h += "<div class='gpb-dtiles'>" +
+                     gpDriftTile("Widest", Math.round(cur.angle.peak) + "&deg;", "") +
+                     gpDriftTile("Sideways for", cur.angle.secs.toFixed(1), "s") +
+                     gpDriftTile("Distance", Math.round(cur.metres), "m",
+                                 false, "How far the car travelled while it was sideways") +
+                     "</div>";
+                h += "<div class='gpb-dtiles' style='margin-top:1px'>" +
+                     gpDriftTile("Angle &times; time", Math.round(cur.angle.area), "&deg;&middot;s",
+                                 false, "The area under the angle trace. BMW define exactly this " +
+                                 "for their M cars — it is the one number here with no weights " +
+                                 "in it at all: more angle and more time both raise it, and " +
+                                 "nobody had to decide how to trade the two off") +
+                     gpDriftTile("Switches", cur.switches, "",
+                                 false, "Times the car swapped from turning one way to the other") +
+                     gpDriftTile("Came in at", gpDriftKph(cur.entryKph), gpSpdU(),
+                                 false, "Entry speed — the speed part of the rating is graded on this") +
+                     "</div>";
+
+                if (cur.rating) {
+                    h += gpDriftPartsHtml(cur.rating);
+                    var bi2 = b.best[ci];
+                    if (bi2 >= 0 && bi2 !== sel) {
+                        var bc = b.cells[bi2][ci];
+                        h += "<div class='gpb-dsay'>Your best here was <b>lap " + (bi2 + 1) +
+                             "</b> at " + bc.rating.stars.toFixed(1) + " stars &mdash; " +
+                             Math.round(bc.angle.held) + "&deg; held over " +
+                             Math.round(bc.commit * 100) + "% of it, against " +
+                             Math.round(cur.angle.held) + "&deg; over " +
+                             Math.round(cur.commit * 100) + "% here.</div>";
+                    } else if (bi2 === sel) {
+                        h += "<div class='gpb-dsay'>This is your best lap here.</div>";
+                    }
+                }
+
+                /* Inside a link, where the angle actually was. The unit says
+                   whether the link held; this says which corner of it was the
+                   weak one, which is the thing a driver can go and fix. */
+                if (un.linked && cur.members) {
+                    h += "<div class='gpb-dsect' style='margin-top:12px'><h4>Through the link" +
+                         "<span class='sp'></span><span class='gpb-dnorm'>each corner on its own</span></h4>" +
+                         "<table class='gpb-table gpb-dcorn'><thead><tr><th>Turn</th>" +
+                         "<th class='n'>Angle</th><th class='n'>Widest</th>" +
+                         "<th class='n'>Sideways</th></tr></thead><tbody>";
+                    cur.members.forEach(function (m) {
+                        if (!m) return;
+                        var okm = m.angle && !m.angle.rough;
+                        h += "<tr data-gp-dgo='" + m.apex + "' style='cursor:pointer'>" +
+                             "<td style='white-space:nowrap'>Turn " + m.n + "</td>" +
+                             "<td class='n'>" + (okm ? Math.round(m.angle.held) + "&deg;"
+                                                     : "<span class='gpb-dpm'>&mdash;</span>") + "</td>" +
+                             "<td class='n mut'>" + (okm ? Math.round(m.angle.peak) + "&deg;"
+                                                         : "<span class='gpb-dpm'>&mdash;</span>") + "</td>" +
+                             "<td class='n mut'>" + (okm ? m.angle.secs.toFixed(1) + " s"
+                                                         : "<span class='gpb-dpm'>&mdash;</span>") + "</td></tr>";
+                    });
+                    h += "</tbody></table></div>";
+                }
+            }
+            h += "</div>";
+
+            /* ---- every corner of this lap ---------------------------------- */
+            h += "<div class='gpb-dsect'><h4>Every corner, lap " + (sel + 1) +
+                 "<span class='sp'></span><span class='gpb-dnorm'>" +
+                 (anyLink ? "linked corners rated as one drift" : "best lap for each on the right") +
+                 "</span></h4>";
             h += "<table class='gpb-table gpb-dcorn'><thead><tr><th>Turn</th>" +
                  "<th class='n' title='the average angle held while the car was sideways'>Angle</th>" +
-                 "<th class='n' title='how much of it was spent above " + GP_DRIFT_ON + " degrees — for a linked run of corners this is the number that says whether the link was held'>Comm</th>" +
-                 "<th class='n' title='how little the angle wandered — smaller is steadier'>Wob</th>" +
+                 "<th class='n' title='how much of it was spent above " + GP_DRIFT_ON +
+                 " degrees — for a linked run of corners this is the number that says whether the link was held'>Comm</th>" +
+                 "<th class='n' title='degree-seconds: the area under the angle trace, with no weights in it'>&deg;&middot;s</th>" +
                  "<th class='n'>Stars</th><th class='n' title='the best any lap did here'>Best</th>" +
                  "</tr></thead><tbody>";
             b.units.forEach(function (u, k) {
@@ -17835,33 +17948,33 @@
                 var bi = b.best[k];
                 var bestCell = bi >= 0 ? b.cells[bi][k] : null;
                 var hot = k === ci;
-                var mine, comm, wob, stars;
+                var mine, comm, area, stars;
                 if (!r) {
-                    mine = comm = wob = stars = "<span class='gpb-dpm'>&mdash;</span>";
+                    mine = comm = area = stars = "<span class='gpb-dpm'>&mdash;</span>";
                 } else if (!r.angle || r.angle.rough) {
                     mine = "<span class='gpb-dpm' title='" +
                            (r.angle && r.angle.soft
                               ? "Nothing here was provably straight, so there is no zero to measure from"
                               : "The angle over this stretch did not come back to straight where it must") +
                            "'>rough</span>";
-                    comm = wob = stars = "<span class='gpb-dpm'>&mdash;</span>";
+                    comm = area = stars = "<span class='gpb-dpm'>&mdash;</span>";
                 } else {
                     mine = Math.round(r.angle.held) + "&deg;" +
                            (r.angle.direct ? "" : "<span class='gpb-dpm'>&plusmn;" + Math.round(r.angle.conf) + "</span>");
                     comm = Math.round(r.commit * 100) + "<span class='gpb-dpm'>%</span>";
-                    wob = Math.round(r.wobble) + "&deg;";
+                    area = Math.round(r.angle.area);
                     stars = r.rating ? gpStarsHtml(r.rating.stars) : "<span class='gpb-dpm'>&mdash;</span>";
                 }
-                /* The chain mark says this row is several corners driven as
-                   one drift — without it a reader would think the tool had
-                   simply lost two turns. */
+                /* The chain mark says this row is several corners driven as one
+                   drift — without it a reader would think the tool had simply
+                   lost two turns. */
                 h += "<tr class='" + (hot ? "hot" : "") + "' data-gp-dcorn='" + k + "'>" +
                      "<td style='white-space:nowrap'>" +
                      (u.linked ? "<i class='gpb-dlink-mark' title='driven as one drift'></i>" : "") +
                      u.name + "</td>" +
                      "<td class='n'>" + mine + "</td>" +
                      "<td class='n mut'>" + comm + "</td>" +
-                     "<td class='n mut'>" + wob + "</td>" +
+                     "<td class='n mut'>" + area + "</td>" +
                      "<td class='n'>" + stars + "</td>" +
                      "<td class='n " + (bi === sel ? "" : "mut") + "'>" +
                      (bestCell && bestCell.rating
@@ -17872,101 +17985,53 @@
             });
             h += "</tbody></table></div>";
 
-            /* ---- the corner being read ------------------------------------- */
-            var cur = (b.cells[sel] || [])[ci];
-            var un = b.units[ci];
-            h += "<div class='gpb-dsect'><h4>" + (un ? un.name : "?") + " on lap " + (sel + 1) +
-                 (un && un.linked ? "<span class='sp'></span><span class='gpb-dnorm'>" +
-                                    un.members.length + " corners, one drift</span>" : "") + "</h4>";
-            if (!cur) {
-                h += "<div class='gpb-dsay'>This lap did not drive that &mdash; it went more than " +
-                     "40 m from where the corner is, so there is nothing here to read.</div>";
-            } else {
-                h += "<div class='gpb-dtiles'>" +
-                     gpDriftTile("Came in at", gpDriftKph(cur.entryKph), gpSpdU()) +
-                     gpDriftTile("Slowest", gpDriftKph(cur.lowKph), gpSpdU(),
-                                 false, "Where a drift dies partway through, this is the number that shows it") +
-                     gpDriftTile("Came out at", gpDriftKph(cur.exitKph), gpSpdU()) +
-                     "</div>";
-                if (cur.angle && !cur.angle.rough) {
-                    h += "<div class='gpb-dtiles' style='margin-top:1px'>" +
-                         gpDriftTile("Angle held", Math.round(cur.angle.held) + "&deg;",
-                                     cur.angle.direct ? "measured"
-                                       : "<span class='gpb-dpm'>&plusmn;" + Math.round(cur.angle.conf) + "&deg;</span>") +
-                         gpDriftTile("Widest", Math.round(cur.angle.peak) + "&deg;", "") +
-                         gpDriftTile("Sideways for", cur.angle.secs.toFixed(1), "s") +
-                         "</div>";
-                    if (cur.rating) {
-                        h += "<div class='gpb-drate'>" + gpStarsHtml(cur.rating.stars) +
-                             "<span class='gpb-dnum'>" + cur.rating.stars.toFixed(1) +
-                             "<small> of 5</small></span></div>";
-                        h += gpDriftPartsHtml(cur.rating);
-                        /* Inside a link, where the angle actually was. The unit
-                           says whether the link held; this says which corner of
-                           it was the weak one, which is the thing a driver can
-                           go and do something about. */
-                        if (un.linked && cur.members) {
-                            h += "<div class='gpb-dsect' style='margin-top:12px'><h4>Through the link" +
-                                 "<span class='sp'></span><span class='gpb-dnorm'>each corner on its own</span></h4>" +
-                                 "<table class='gpb-table gpb-dcorn'><thead><tr><th>Turn</th>" +
-                                 "<th class='n'>Angle</th><th class='n'>Widest</th>" +
-                                 "<th class='n'>Sideways</th></tr></thead><tbody>";
-                            cur.members.forEach(function (m) {
-                                if (!m) return;
-                                var okm = m.angle && !m.angle.rough;
-                                h += "<tr data-gp-dgo='" + m.apex + "' style='cursor:pointer'>" +
-                                     "<td style='white-space:nowrap'>Turn " + m.n + "</td>" +
-                                     "<td class='n'>" + (okm ? Math.round(m.angle.held) + "&deg;"
-                                                             : "<span class='gpb-dpm'>&mdash;</span>") + "</td>" +
-                                     "<td class='n mut'>" + (okm ? Math.round(m.angle.peak) + "&deg;"
-                                                                 : "<span class='gpb-dpm'>&mdash;</span>") + "</td>" +
-                                     "<td class='n mut'>" + (okm ? m.angle.secs.toFixed(1) + " s"
-                                                                 : "<span class='gpb-dpm'>&mdash;</span>") + "</td></tr>";
-                            });
-                            h += "</tbody></table></div>";
-                        }
-                        /* Against the best anyone did here — which is the whole
-                           reason the view exists. Never against another driver
-                           (ADR-0025): the reference is always your own. */
-                        var bi2 = b.best[ci];
-                        if (bi2 >= 0 && bi2 !== sel) {
-                            var bc = b.cells[bi2][ci];
-                            h += "<div class='gpb-dsay'>Your best here was <b>lap " + (bi2 + 1) +
-                                 "</b> at " + bc.rating.stars.toFixed(1) + " stars &mdash; " +
-                                 Math.round(bc.angle.held) + "&deg; held over " +
-                                 Math.round(bc.commit * 100) + "% of it, against " +
-                                 Math.round(cur.angle.held) + "&deg; over " +
-                                 Math.round(cur.commit * 100) + "% here.</div>";
-                        } else if (bi2 === sel) {
-                            h += "<div class='gpb-dsay'>This is your best lap here.</div>";
-                        }
-                    }
-                } else {
-                    h += "<div class='gpb-dtiles' style='margin-top:1px'>" +
-                         gpDriftTile("Angle held", "&mdash;", "", true) +
-                         gpDriftTile("Widest", "&mdash;", "", true) +
-                         gpDriftTile("Sideways for", "&mdash;", "", true) +
-                         "</div>";
-                    h += "<div class='gpb-dsay'>" +
-                         (cur.angle && cur.angle.soft
-                            ? "Nothing around this corner is provably straight — no stretch where the car is not turning, not loaded up and above " + GP_DRIFT_MIN_KPH + " km/h. Without one there is no zero to measure the angle from."
-                          : cur.angle
-                            ? "The angle over this corner did not close: it should come back to straight where the car provably is, and it does not. Rather than print a number wrong by an unknown amount, it is left out."
-                            : "The car never went far enough sideways here to call it a drift.") + "</div>";
-                }
-            }
-            if (b.units.some(function (u) { return u.linked; })) {
+            /* ---- the laps ------------------------------------------------- */
+            h += "<div class='gpb-dsect'><h4>Laps<span class='sp'></span>" +
+                 "<span class='gpb-dnorm'>corners found on lap " + (b.refLap + 1) + "</span></h4>";
+            h += "<table class='gpb-table gpb-dlaps'><thead><tr><th></th><th>Lap</th>" +
+                 "<th class='n'>Time</th>" +
+                 "<th class='n' title='the widest angle held anywhere on the lap'>Angle</th>" +
+                 "<th class='n' title='degree-seconds over the whole lap: how much angle, for how long, added up'>&deg;&middot;s</th>" +
+                 "<th class='n' title='the average of this lap&rsquo;s corner ratings'>Stars</th>" +
+                 "</tr></thead><tbody>";
+            laps.forEach(function (l, li) {
+                if (l.ghost) return;
+                var avg = b.lapAvg[li];
+                var peak = 0, area = 0, cells = b.cells[li] || [];
+                cells.forEach(function (r) {
+                    if (!r || !r.angle || r.angle.rough) return;
+                    if (r.angle.peak > peak) peak = r.angle.peak;
+                    area += r.angle.area;
+                });
+                var shownOn = gpShownList().indexOf(li) >= 0;
+                h += "<tr class='" + (li === sel ? "hot" : "") + "' data-gp-dlap='" + li + "'>" +
+                     "<td><i class='gpb-dsw' " + (li === sel ? "" : "data-gp-dshow='" + li + "' ") +
+                     "title='" + (li === sel ? "The lap you are reading is always drawn" : "Draw this lap on the map") +
+                     "' style='background:" + gpLapColour(li) + ";opacity:" +
+                     ((li === sel || shownOn) ? 1 : 0.18) + (li === sel ? ";cursor:default" : "") + "'></i></td>" +
+                     "<td style='white-space:nowrap'>" + (li + 1) +
+                     (li === gp.cmpLap ? " <span class='gpb-dpm'>best</span>" : "") + "</td>" +
+                     "<td class='n mut'>" + gpDriftClock(gpSecs(rows, l.from, l.to)) + "</td>" +
+                     "<td class='n'>" + (peak ? Math.round(peak) + "&deg;" : "<span class='gpb-dpm'>&mdash;</span>") + "</td>" +
+                     "<td class='n mut'>" + (area ? Math.round(area) : "<span class='gpb-dpm'>&mdash;</span>") + "</td>" +
+                     "<td class='n'>" + (avg ? avg.stars.toFixed(1) : "<span class='gpb-dpm'>&mdash;</span>") + "</td></tr>";
+            });
+            h += "</tbody></table></div>";
+
+            /* ---- how it is rated, in words --------------------------------- */
+            h += "<div class='gpb-dsect'><h4>How this is rated</h4>";
+            if (anyLink) {
                 h += "<div class='gpb-dsay'>Corners the car went through <b>without ever straightening</b> " +
                      "are rated as one drift, because that is what they are &mdash; scoring them separately " +
                      "would mark the transitions as if you kept losing it and getting it back. A run of " +
                      "corners counts as linked when at least half the laps that drove it did it in one " +
                      "go.</div>";
             }
-            h += "<div class='gpb-dsay'>A corner is rated out of five on four measured things: how much " +
-                 "<b>angle</b> was held (" + GP_DRIFT_STAR_DEG + "&deg; is full marks), how much of the corner " +
-                 "it was held for, how <b>steady</b> it was, and the <b>speed</b> carried against your own best " +
-                 "here. Nothing is guessed, and style is not scored &mdash; a person does that. " +
-                 "<span class='gpb-dpm'>Rating v" + GP_DRIFT_SCORE_VER + "</span></div>";
+            h += "<div class='gpb-dsay'>Five stars is " + GP_DRIFT_STAR_DEG + "&deg; held, held for all " +
+                 "of the corner, held steadily, at your best entry speed for it. Angle is the biggest " +
+                 "part of that by some way and speed the smallest &mdash; which is where every judging " +
+                 "system worth copying puts them. Nothing is guessed, and style is not scored: a person " +
+                 "does that. <span class='gpb-dpm'>Rating v" + GP_DRIFT_SCORE_VER + "</span></div>";
             h += gpDriftSourceLine(d);
             h += "</div>";
 

@@ -403,7 +403,7 @@ head('An angle with nothing to anchor it is not scored');
     /* A rating built on an angle nobody can vouch for would be a rating of
        nothing. The gate is the same GP_DRIFT_ROUGH every other surface uses. */
     ok('so it earns no stars at all',
-       API.gpDriftStars({ angle: st.angle, commit: 1, wobble: 0, kph: 60 }, 60) === null);
+       API.gpDriftStars({ angle: st.angle, commit: 1, wobble: 0, entryKph: 60 }, 60) === null);
 }
 
 head('An instrument that measured the angle itself');
@@ -496,7 +496,7 @@ head('The rating: five stars, and what earns them');
        of them is a formula change that makes the screen lie. */
     const R = (held, commit, wobble, kph) =>
         API.gpDriftStars({ angle: { held, rough: false, conf: 1, direct: true, secs: 4 },
-                           commit, wobble, kph }, 100);
+                           commit, wobble, entryKph: kph }, 100);
 
     const perfect = R(K.GP_DRIFT_STAR_DEG, 1, 0, 100);
     ok('the stated standard is exactly five stars', perfect.stars === 5,
@@ -511,12 +511,16 @@ head('The rating: five stars, and what earns them');
     ok('more angle raises it', R(30, 0.5, 5, 50).score > base.score);
     ok('holding it longer raises it', R(20, 0.8, 5, 50).score > base.score);
     ok('holding it steadier raises it', R(20, 0.5, 2, 50).score > base.score);
-    ok('carrying more speed raises it', R(20, 0.5, 5, 70).score > base.score);
+    ok('carrying more entry speed raises it', R(20, 0.5, 5, 70).score > base.score);
 
     /* The weights are a published claim: angle is the biggest single part.
        If that stops being true the sentence in the UI has to change too. */
     const W = K.GP_DRIFT_STAR_W;
     ok('angle is the heaviest part', W.angle > W.commit && W.angle > W.steady && W.angle > W.speed);
+    /* BMW's own analyser is "much more interested in the angle of the drift
+       than the speed or distance", and every system in the plan doc agrees.
+       If speed ever outweighs holding it, the sentence on screen is a lie. */
+    ok('and speed is the lightest', W.speed < W.angle && W.speed < W.commit && W.speed < W.steady);
     ok('the four parts are a whole',
        Math.abs(W.angle + W.commit + W.steady + W.speed - 1) < 1e-9);
 
@@ -533,7 +537,7 @@ head('The rating: five stars, and what earns them');
        R(40, 1, K.GP_DRIFT_STAR_WOB * 3, 100).parts.steady === 0);
 
     /* Speed is the only part graded against you rather than a fixed bar. */
-    ok('speed is measured against your own best here', R(20, 0.5, 5, 100).parts.speed === 1);
+    ok('speed is measured against your own best ENTRY here', R(20, 0.5, 5, 100).parts.speed === 1);
 
     /* And the version travels with the number, so a tuned formula can never
        silently restate a score a corner already earned. */
@@ -542,14 +546,14 @@ head('The rating: five stars, and what earns them');
     /* A corner with no angle at all is not a nought-star corner — it is an
        unrated one. Nought would say the driver tried and failed. */
     ok('no angle source is unrated, not zero-rated',
-       API.gpDriftStars({ angle: null, commit: 0, wobble: 0, kph: 60 }, 60) === null);
+       API.gpDriftStars({ angle: null, commit: 0, wobble: 0, entryKph: 60 }, 60) === null);
 
     /* A corner driven on the grip is not a nought-star drift — it is not a
        drift, and rating it would put a car that never tried above one that
        nearly held it. */
     ok('a corner nobody drifted is unrated, not zero-rated',
        API.gpDriftStars({ angle: { held: 0, rough: false, conf: 1, direct: true, secs: 0 },
-                          commit: 0, wobble: 0, kph: 140 }, 140) === null);
+                          commit: 0, wobble: 0, entryKph: 140 }, 140) === null);
 }
 
 head('A channel that is not what we think it is');
