@@ -81,13 +81,25 @@ function atS(s) {
    spike at each vertex — which is not a heading trace any receiver ever
    produced, and not something a gyro channel can be derived from.
    So: sample the CHORD direction on a fine grid, unwrap it into a continuous
-   angle, smooth THAT, and interpolate. Position is continuous, so the chord
-   direction is too, and the smoothed table has an honest derivative.
-   The grid wraps, because a lap does. */
-const TSTEP = 2;
-const NT = Math.ceil(LEN / TSTEP) + 1;
-const HSM = new Float64Array(NT);
-const HWRAP = [];      /* total turning over one lap, so s+LEN reads continuously */
+   angle, smooth THAT, and interpolate.
+
+   The grid must be EXACTLY periodic in the lap, and that is the whole battle.
+   A grid whose last sample sits a little past the finish line, smoothed with a
+   wrap that assumes it sits exactly on it, leaves a step in the heading at the
+   seam — and a step in heading is an infinite turn rate. It showed up as the
+   generator's own course rate jumping to +235 deg/s for four samples in the
+   middle of a −55 deg/s corner, once per lap, which the angle engine then
+   faithfully integrated into an 80-degree misclosure. The app was right; the
+   drive it was given was impossible.
+
+   So: the heading is written as a periodic part plus a linear ramp of exactly
+   one full turn per lap. Both are exact by construction, so hdgAt is smooth
+   across the seam no matter how the grid divides. */
+const NT = 2048;                       /* points per lap, exactly periodic */
+const TSTEP = LEN / (NT - 1);
+const RES = new Float64Array(NT);      /* the periodic part, smoothed */
+let TURN = 0;                          /* radians of heading per lap: +/-2pi */
+let H0 = 0;
 {
     const un = new Float64Array(NT);
     let prev = null;
@@ -103,25 +115,31 @@ const HWRAP = [];      /* total turning over one lap, so s+LEN reads continuousl
         }
         prev = h;
     }
-    const W = Math.round(10 / TSTEP);          /* +/-10 m of smoothing, wrapping */
-    for (let k = 0; k < NT; k++) {
-        let acc = 0, c = 0;
-        for (let j = k - W; j <= k + W; j++) {
-            let m = ((j % (NT - 1)) + (NT - 1)) % (NT - 1);
-            /* unwrap the wrapped sample back onto this neighbourhood */
-            acc += un[m] + (j < 0 ? -un[NT - 1] : j >= NT - 1 ? un[NT - 1] : 0);
-            c++;
-        }
-        HSM[k] = acc / c;
+    H0 = un[0];
+    /* A closed circuit turns through exactly one revolution. Snapping to it
+       rather than trusting the accumulated sum is what makes the seam exact. */
+    TURN = Math.round((un[NT - 1] - un[0]) / (2 * Math.PI)) * 2 * Math.PI;
+    /* Strip the ramp, leaving something genuinely periodic to smooth. */
+    const res = new Float64Array(NT);
+    for (let k = 0; k < NT; k++) res[k] = un[k] - H0 - (k / (NT - 1)) * TURN;
+    const P = NT - 1;                              /* the period, in samples */
+    const W = Math.max(1, Math.round(10 / TSTEP)); /* +/-10 m of smoothing */
+    for (let k = 0; k < P; k++) {
+        let acc = 0;
+        for (let j = k - W; j <= k + W; j++) acc += res[((j % P) + P) % P];
+        RES[k] = acc / (2 * W + 1);
     }
-    HWRAP.push(un[NT - 1] - un[0]);            /* -2pi for an anticlockwise lap */
+    RES[NT - 1] = RES[0];                          /* periodic, exactly */
 }
-/* Continuous and UNWRAPPED across the start/finish seam. */
+/* Continuous and UNWRAPPED across the start/finish seam, by construction. */
 function hdgAt(s) {
-    const laps = Math.floor(s / LEN);
-    const r = s - laps * LEN;
-    const f = Math.max(0, Math.min(NT - 1.001, r / TSTEP)), k = Math.floor(f);
-    return HSM[k] + (HSM[k + 1] - HSM[k]) * (f - k) + laps * HWRAP[0];
+    const u = s / LEN;                    /* laps, fractional */
+    const laps = Math.floor(u);
+    const r = (u - laps) * LEN;           /* 0 .. LEN */
+    const f = r / TSTEP;
+    const k = Math.min(NT - 2, Math.floor(f));
+    const t = f - k;
+    return H0 + RES[k] + (RES[k + 1] - RES[k]) * t + u * TURN;
 }
 function dHdgDs(s) { return (hdgAt(s + TSTEP) - hdgAt(s - TSTEP)) / (2 * TSTEP); }  /* rad/m */
 function turnAt(s) { return dHdgDs(s) * 180 / Math.PI; }                            /* deg/m, + is right */
@@ -191,7 +209,9 @@ const LAPS = [
     { name: 'building up',             commit: 0.78, wob: 1.1, wide: 2.2, focus: 1,  dies: -1 },
     { name: 'good through the first',  commit: 0.88, wob: 0.8, wide: 3.0, focus: 0,  dies: 3 },
     { name: 'best of the day',         commit: 1.02, wob: 0.5, wide: 3.6, focus: 2,  dies: -1 },
-    { name: 'greedy, caught it twice', commit: 1.10, wob: 2.3, wide: 4.1, focus: 4,  dies: -1 },
+    /* breakAt: this lap STRAIGHTENS between corner N and N+1 instead of
+       linking them — the mistake the whole link feature exists to show. */
+    { name: 'greedy, caught it twice', commit: 1.10, wob: 2.3, wide: 4.1, focus: 4,  dies: -1, breakAt: 7 },
     { name: 'tidy cool-down',          commit: 0.72, wob: 0.6, wide: 1.8, focus: 3,  dies: -1 }
 ];
 
@@ -296,6 +316,28 @@ function offAt(S) {
    A hard switch is safe there and only there: the line sits at the midpoint
    of the longest straight, clear of every corner's reach, so beta is exactly
    zero on both sides of the switch and there is nothing to step. */
+/* A lap that does NOT link a pair of corners: the angle is squeezed to zero
+   in a short window between them, which is what straightening up and
+   re-initiating actually looks like. Everything else about the lap is
+   unchanged, so the only thing the comparison can be measuring is the link. */
+function breakFactor(S, li) {
+    const L = LAPS[li];
+    if (L.breakAt === undefined) return 1;
+    const c0 = CORNERS[L.breakAt], c1 = CORNERS[L.breakAt + 1];
+    if (!c0 || !c1) return 1;
+    /* Wide enough to be a real straighten. A driver who catches it and
+       re-initiates is upright for the best part of a second, and at 60 km/h
+       that is 15-20 m of nothing plus the ramp down and back up either side.
+       A narrower notch cost three points of commitment and proved nothing. */
+    const mid = (c0.sMid + c1.sMid) / 2, half = 55;
+    const r = ((S % LEN) + LEN) % LEN;
+    let x = r;
+    if (x < mid - LEN / 2) x += LEN;
+    if (x > mid + LEN / 2) x -= LEN;
+    const t = Math.abs(x - mid) / half;
+    return t >= 1 ? 1 : ss(t);
+}
+
 function betaShape(S, forceChar) {
     /* `forceChar` lets the answer sheet ask "what would character N have done
        at this point on the track", without having to fake a distance that
@@ -331,7 +373,7 @@ function betaShape(S, forceChar) {
         const wob = LAPS[li].wob * 2.2 * Math.sin(u * 15.5 + ci) * Math.sin(u * 5.7);
         b += (amp + wob) * env * c.sign;
     }
-    return b;
+    return b * breakFactor(S, li);
 }
 
 /* ---- integrate the whole session --------------------------------------- */
@@ -458,6 +500,14 @@ fs.writeFileSync(base + '.truth.json', JSON.stringify({
        the second, and that whole lap is driven with character 1 — character 0
        is the out lap before timing starts. So: app lap k <-> per[k + 1]. */
     firstBoardLapCharacter: 1,
+    /* The character that straightens between two corners instead of linking
+       them, and which pair — so the harness can check the app noticed. */
+    brokeLink: (function () {
+        for (let i = 0; i < LAPS.length; i++)
+            if (LAPS[i].breakAt !== undefined)
+                return { character: i, betweenCorners: [LAPS[i].breakAt + 1, LAPS[i].breakAt + 2] };
+        return null;
+    })(),
     laps: lapTruth, corners: cornerTruth
 }, null, 1));
 /* Per-sample truth, for checks that need to hold a derived channel to account

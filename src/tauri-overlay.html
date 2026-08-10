@@ -2641,6 +2641,20 @@
         /* the half is the same shape, filled from the left only — so a 3.5
            reads as three and a half at a glance rather than as four */
         #gpWorkspace .gpb-star.half { background: linear-gradient(90deg, var(--gpb-red) 50%, var(--gpb-n300) 50%); }
+        /* the chain mark: this row is several corners driven as one drift.
+           Two links of a chain, drawn rather than a glyph, because the chain
+           emoji renders at a different size and colour on all three platforms
+           and a coloured picture beside a red table is noise. */
+        #gpWorkspace .gpb-dlink-mark {
+            display: inline-block; width: 13px; height: 7px; margin-right: 5px; vertical-align: 1px;
+            border: 1.5px solid var(--gpb-red); border-radius: 4px;
+            position: relative;
+        }
+        #gpWorkspace .gpb-dlink-mark::after {
+            content: ""; position: absolute; left: 4px; top: -1.5px;
+            width: 13px; height: 7px; border: 1.5px solid var(--gpb-red); border-radius: 4px;
+        }
+        #gpWorkspace .gpb-corner-badge.linked { border-radius: 9px; padding: 0 4px; letter-spacing: -0.02em; }
         #gpWorkspace .gpb-drate { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
         #gpWorkspace .gpb-drate .gpb-stars { gap: 3px; }
         #gpWorkspace .gpb-drate .gpb-star { width: 17px; height: 17px; }
@@ -7472,7 +7486,7 @@
             driftSw: null, driftSwKey: "",
             driftCorn: null, driftCornKey: "",   /* the corner set + per-lap mapping */
             driftBoard: null, driftBoardKey: "", /* every corner read and rated, every lap */
-            driftCorner: 0,                  /* which corner is being read */
+            driftUnit: 0,                    /* which unit (corner, or linked run of them) is being read */
             driftSrcPref: null,              /* which channel the angle comes from */
             driftSrcOpen: false,             /* ...and whether the picker for it is showing */
             driftLayer: null,                /* corner badges and switch marks */
@@ -16424,7 +16438,7 @@
             /* Corners are found in the same samples and mapped onto laps by
                index, so everything about them is stale for the same reasons. */
             gpDriftForget();
-            gp.driftCorner = 0;
+            gp.driftUnit = 0;
             gp.traceLaps = gpSplitRows(gp.trace || []);
             /* Circuit Tools auto-selects the fastest lap as the reference and
                nobody has ever complained: it is what you compare against nearly
@@ -17442,6 +17456,70 @@
            Two passes, and they cannot be merged: the speed part of the rating
            is graded against the best speed at that corner, which is not known
            until every lap has been read. */
+        /* ---- links -----------------------------------------------------------
+           A good drifter does not drive a complex as three corners. The car
+           goes sideways at the entry to the first and stays sideways through
+           all of it, flicking from one side to the other without ever
+           straightening — and that is the thing being judged. Reading it as
+           three separate corners scores the transitions as if the driver kept
+           losing it and getting it back, and hides the one number that says
+           whether the link was actually held: how much of the WHOLE stretch
+           the car spent sideways.
+
+           So consecutive corners driven as one drift are grouped into a UNIT
+           and rated as one. Linkage is decided ONCE for the session, not per
+           lap: it has to be, or the table changes shape from lap to lap and
+           there is nothing left to compare. A pair counts as linked when at
+           least half the laps that drove both did it in one unbroken drift —
+           so a driver who links them most of the time is measured on the link,
+           and the lap that broke it scores badly on commitment, which is
+           exactly the coaching signal. */
+        function gpDriftLinkMap(cs) {
+            var n = cs.corners.length, link = [], i;
+            for (i = 0; i < n - 1; i++) link.push(false);
+            var d = gpDriftAngle();
+            if (!d || n < 2) return link;
+            /* gpDriftSegments already treats a flick through neutral as ONE
+               drift with a switch in it rather than two drifts, which is
+               precisely the right reading for a linked complex. */
+            var segs = gpDriftSegments();
+            for (i = 0; i < n - 1; i++) {
+                var yes = 0, tot = 0;
+                for (var li = 0; li < cs.per.length; li++) {
+                    var a = cs.per[li][i], b = cs.per[li][i + 1];
+                    if (!a || !b) continue;
+                    tot++;
+                    for (var k = 0; k < segs.length; k++) {
+                        if (segs[k].from <= a.apex && segs[k].to >= b.apex) { yes++; break; }
+                    }
+                }
+                link[i] = tot > 0 && yes * 2 >= tot;
+            }
+            return link;
+        }
+
+        /* Corners grouped into what is actually judged. A unit is one corner
+           unless the link map says otherwise. */
+        function gpDriftUnits(cs, link) {
+            var groups = [], cur = [0], i;
+            for (i = 1; i < cs.corners.length; i++) {
+                if (link[i - 1]) cur.push(i);
+                else { groups.push(cur); cur = [i]; }
+            }
+            if (cs.corners.length) groups.push(cur);
+            return groups.map(function (members, ui) {
+                var first = cs.corners[members[0]];
+                var last = cs.corners[members[members.length - 1]];
+                var mid = cs.corners[members[(members.length - 1) >> 1]];
+                return { i: ui, members: members, linked: members.length > 1,
+                         n0: first.n, n1: last.n,
+                         name: members.length > 1
+                                 ? "Turns " + first.n + "–" + last.n
+                                 : "Turn " + first.n,
+                         lat: mid.lat, lon: mid.lon };
+            });
+        }
+
         function gpDriftBoard() {
             var cs = gpDriftCorners();
             if (!cs) return null;
@@ -17452,44 +17530,73 @@
                       (d ? d.src.id + d.src.kind : "-");
             if (gp.driftBoardKey === key && gp.driftBoard) return gp.driftBoard;
 
-            var reads = cs.per.map(function (lapCells) {
-                return lapCells.map(function (sp) { return sp ? gpDriftCornerRead(sp) : null; });
+            var link = gpDriftLinkMap(cs);
+            var units = gpDriftUnits(cs, link);
+
+            /* A unit's span on a lap runs from the first member that lap
+               actually drove to the last — a lap that missed the middle of a
+               link is still measured over what it did drive, and one that
+               missed all of it has no reading at all. */
+            var spans = cs.per.map(function (lapCells) {
+                return units.map(function (u) {
+                    var got = [];
+                    u.members.forEach(function (m) { if (lapCells[m]) got.push(lapCells[m]); });
+                    if (!got.length) return null;
+                    return { from: got[0].from, to: got[got.length - 1].to,
+                             apex: got[(got.length - 1) >> 1].apex };
+                });
             });
-            /* Best speed per corner, over every lap that drove it. */
-            var bestKph = cs.corners.map(function (c, ci) {
+
+            var reads = spans.map(function (ls) {
+                return ls.map(function (sp) { return sp ? gpDriftCornerRead(sp) : null; });
+            });
+            /* Best speed per unit, over every lap that drove it. */
+            var bestKph = units.map(function (u, ui) {
                 var b = 0;
-                reads.forEach(function (lc) { if (lc[ci] && lc[ci].kph > b) b = lc[ci].kph; });
+                reads.forEach(function (lr) { if (lr[ui] && lr[ui].kph > b) b = lr[ui].kph; });
                 return b;
             });
-            var cells = reads.map(function (lc) {
-                return lc.map(function (r, ci) {
+            var cells = reads.map(function (lr, li) {
+                return lr.map(function (r, ui) {
                     if (!r) return null;
-                    r.rating = gpDriftStars(r, bestKph[ci]);
+                    r.rating = gpDriftStars(r, bestKph[ui]);
+                    /* Inside a link every corner is still read on its own: the
+                       unit says whether the link was held, the members say
+                       WHERE in it the angle was strongest and weakest, and a
+                       driver who cannot see that cannot fix it. */
+                    if (units[ui].linked) {
+                        r.members = units[ui].members.map(function (m) {
+                            var sp = cs.per[li][m];
+                            var mr = sp ? gpDriftCornerRead(sp) : null;
+                            if (mr) mr.n = cs.corners[m].n;
+                            return mr;
+                        });
+                    }
                     return r;
                 });
             });
-            /* Who owns each corner. Ties keep the earlier lap: it got there
+            /* Who owns each unit. Ties keep the earlier lap: it got there
                first and nothing later beat it. */
-            var best = cs.corners.map(function (c, ci) {
+            var best = units.map(function (u, ui) {
                 var bi = -1, bs = -1;
-                cells.forEach(function (lc, li) {
-                    var r = lc[ci];
+                cells.forEach(function (lr, li) {
+                    var r = lr[ui];
                     if (r && r.rating && r.rating.score > bs) { bs = r.rating.score; bi = li; }
                 });
                 return bi;
             });
-            /* A lap's own number: the mean of the corners it was rated on. Not
-               a sum — a lap that missed a corner would otherwise look worse
-               than one that drove it badly, and the count is shown beside it
-               so a mean over three corners is never mistaken for one over six. */
-            var lapAvg = cells.map(function (lc) {
+            /* A lap's own number: the mean of the units it was rated on. Not a
+               sum — a lap that missed one would otherwise look worse than one
+               that drove it badly, and the count is shown beside it so a mean
+               over three is never mistaken for one over six. */
+            var lapAvg = cells.map(function (lr) {
                 var s = 0, n = 0;
-                lc.forEach(function (r) { if (r && r.rating) { s += r.rating.stars; n++; } });
+                lr.forEach(function (r) { if (r && r.rating) { s += r.rating.stars; n++; } });
                 return n ? { stars: s / n, n: n } : null;
             });
 
-            var out = { refLap: cs.refLap, corners: cs.corners, cells: cells,
-                        best: best, lapAvg: lapAvg, bestKph: bestKph };
+            var out = { refLap: cs.refLap, corners: cs.corners, units: units, link: link,
+                        cells: cells, best: best, lapAvg: lapAvg, bestKph: bestKph };
             gp.driftBoardKey = key; gp.driftBoard = out;
             return out;
         }
@@ -17566,8 +17673,8 @@
         window.gpDriftCornerPick = function (ci) {
             ci = parseInt(ci, 10);
             var b = gpDriftBoard();
-            if (!b || !b.corners[ci]) return;
-            gp.driftCorner = ci;
+            if (!b || !b.units[ci]) return;
+            gp.driftUnit = ci;
             var cell = (b.cells[gp.selLap] || [])[ci];
             if (cell) gp.playIdx = cell.apex;
             gpDrawTrace(); gpRenderDrift(); gpRenderDock();
@@ -17653,10 +17760,10 @@
                     "these laps looks like one &mdash; too short, or too little change of speed.</div>";
                 return;
             }
-            if (gp.driftCorner >= b.corners.length) gp.driftCorner = 0;
+            if (gp.driftUnit >= b.units.length) gp.driftUnit = 0;
             if (gp.cmpLap < 0 || gp.cmpLap >= laps.length) gp.cmpLap = gpDriftBest();
 
-            var sel = gp.selLap, ci = gp.driftCorner;
+            var sel = gp.selLap, ci = gp.driftUnit;
             var h = "";
 
             /* ---- toolbar: what the map is coloured by --------------------- */
@@ -17705,7 +17812,10 @@
 
             /* ---- the corners of the selected lap --------------------------- */
             h += "<div class='gpb-dsect'><h4>Lap " + (sel + 1) + ", corner by corner" +
-                 "<span class='sp'></span><span class='gpb-dnorm'>best lap for each on the right</span></h4>";
+                 "<span class='sp'></span><span class='gpb-dnorm'>" +
+                 (b.units.some(function (u) { return u.linked; })
+                    ? "linked corners are rated as one drift"
+                    : "best lap for each on the right") + "</span></h4>";
             if (!d) {
                 h += "<div class='gpb-dsay'>" + gpDriftAngleWhy() + "</div>";
                 h += gpDriftSourceLine(d);
@@ -17716,11 +17826,11 @@
             }
             h += "<table class='gpb-table gpb-dcorn'><thead><tr><th>Turn</th>" +
                  "<th class='n' title='the average angle held while the car was sideways'>Angle</th>" +
-                 "<th class='n' title='how much of the corner was spent above " + GP_DRIFT_ON + " degrees'>Comm</th>" +
+                 "<th class='n' title='how much of it was spent above " + GP_DRIFT_ON + " degrees — for a linked run of corners this is the number that says whether the link was held'>Comm</th>" +
                  "<th class='n' title='how little the angle wandered — smaller is steadier'>Wob</th>" +
-                 "<th class='n'>Stars</th><th class='n' title='the best any lap did at this corner'>Best</th>" +
+                 "<th class='n'>Stars</th><th class='n' title='the best any lap did here'>Best</th>" +
                  "</tr></thead><tbody>";
-            b.corners.forEach(function (c, k) {
+            b.units.forEach(function (u, k) {
                 var r = (b.cells[sel] || [])[k];
                 var bi = b.best[k];
                 var bestCell = bi >= 0 ? b.cells[bi][k] : null;
@@ -17732,7 +17842,7 @@
                     mine = "<span class='gpb-dpm' title='" +
                            (r.angle && r.angle.soft
                               ? "Nothing here was provably straight, so there is no zero to measure from"
-                              : "The angle over this corner did not come back to straight where it must") +
+                              : "The angle over this stretch did not come back to straight where it must") +
                            "'>rough</span>";
                     comm = wob = stars = "<span class='gpb-dpm'>&mdash;</span>";
                 } else {
@@ -17742,8 +17852,13 @@
                     wob = Math.round(r.wobble) + "&deg;";
                     stars = r.rating ? gpStarsHtml(r.rating.stars) : "<span class='gpb-dpm'>&mdash;</span>";
                 }
+                /* The chain mark says this row is several corners driven as
+                   one drift — without it a reader would think the tool had
+                   simply lost two turns. */
                 h += "<tr class='" + (hot ? "hot" : "") + "' data-gp-dcorn='" + k + "'>" +
-                     "<td style='white-space:nowrap'>Turn " + c.n + "</td>" +
+                     "<td style='white-space:nowrap'>" +
+                     (u.linked ? "<i class='gpb-dlink-mark' title='driven as one drift'></i>" : "") +
+                     u.name + "</td>" +
                      "<td class='n'>" + mine + "</td>" +
                      "<td class='n mut'>" + comm + "</td>" +
                      "<td class='n mut'>" + wob + "</td>" +
@@ -17759,16 +17874,18 @@
 
             /* ---- the corner being read ------------------------------------- */
             var cur = (b.cells[sel] || [])[ci];
-            var cn = b.corners[ci];
-            h += "<div class='gpb-dsect'><h4>Turn " + (cn ? cn.n : "?") + " on lap " + (sel + 1) + "</h4>";
+            var un = b.units[ci];
+            h += "<div class='gpb-dsect'><h4>" + (un ? un.name : "?") + " on lap " + (sel + 1) +
+                 (un && un.linked ? "<span class='sp'></span><span class='gpb-dnorm'>" +
+                                    un.members.length + " corners, one drift</span>" : "") + "</h4>";
             if (!cur) {
-                h += "<div class='gpb-dsay'>This lap did not drive that corner &mdash; it went more than " +
+                h += "<div class='gpb-dsay'>This lap did not drive that &mdash; it went more than " +
                      "40 m from where the corner is, so there is nothing here to read.</div>";
             } else {
                 h += "<div class='gpb-dtiles'>" +
                      gpDriftTile("Came in at", gpDriftKph(cur.entryKph), gpSpdU()) +
                      gpDriftTile("Slowest", gpDriftKph(cur.lowKph), gpSpdU(),
-                                 false, "Where a drift dies mid-corner, this is the number that shows it") +
+                                 false, "Where a drift dies partway through, this is the number that shows it") +
                      gpDriftTile("Came out at", gpDriftKph(cur.exitKph), gpSpdU()) +
                      "</div>";
                 if (cur.angle && !cur.angle.rough) {
@@ -17784,20 +17901,44 @@
                              "<span class='gpb-dnum'>" + cur.rating.stars.toFixed(1) +
                              "<small> of 5</small></span></div>";
                         h += gpDriftPartsHtml(cur.rating);
+                        /* Inside a link, where the angle actually was. The unit
+                           says whether the link held; this says which corner of
+                           it was the weak one, which is the thing a driver can
+                           go and do something about. */
+                        if (un.linked && cur.members) {
+                            h += "<div class='gpb-dsect' style='margin-top:12px'><h4>Through the link" +
+                                 "<span class='sp'></span><span class='gpb-dnorm'>each corner on its own</span></h4>" +
+                                 "<table class='gpb-table gpb-dcorn'><thead><tr><th>Turn</th>" +
+                                 "<th class='n'>Angle</th><th class='n'>Widest</th>" +
+                                 "<th class='n'>Sideways</th></tr></thead><tbody>";
+                            cur.members.forEach(function (m) {
+                                if (!m) return;
+                                var okm = m.angle && !m.angle.rough;
+                                h += "<tr data-gp-dgo='" + m.apex + "' style='cursor:pointer'>" +
+                                     "<td style='white-space:nowrap'>Turn " + m.n + "</td>" +
+                                     "<td class='n'>" + (okm ? Math.round(m.angle.held) + "&deg;"
+                                                             : "<span class='gpb-dpm'>&mdash;</span>") + "</td>" +
+                                     "<td class='n mut'>" + (okm ? Math.round(m.angle.peak) + "&deg;"
+                                                                 : "<span class='gpb-dpm'>&mdash;</span>") + "</td>" +
+                                     "<td class='n mut'>" + (okm ? m.angle.secs.toFixed(1) + " s"
+                                                                 : "<span class='gpb-dpm'>&mdash;</span>") + "</td></tr>";
+                            });
+                            h += "</tbody></table></div>";
+                        }
                         /* Against the best anyone did here — which is the whole
                            reason the view exists. Never against another driver
                            (ADR-0025): the reference is always your own. */
                         var bi2 = b.best[ci];
                         if (bi2 >= 0 && bi2 !== sel) {
                             var bc = b.cells[bi2][ci];
-                            h += "<div class='gpb-dsay'>Your best at this corner was <b>lap " + (bi2 + 1) +
+                            h += "<div class='gpb-dsay'>Your best here was <b>lap " + (bi2 + 1) +
                                  "</b> at " + bc.rating.stars.toFixed(1) + " stars &mdash; " +
                                  Math.round(bc.angle.held) + "&deg; held over " +
-                                 Math.round(bc.commit * 100) + "% of the corner, against " +
+                                 Math.round(bc.commit * 100) + "% of it, against " +
                                  Math.round(cur.angle.held) + "&deg; over " +
                                  Math.round(cur.commit * 100) + "% here.</div>";
                         } else if (bi2 === sel) {
-                            h += "<div class='gpb-dsay'>This is your best lap at this corner.</div>";
+                            h += "<div class='gpb-dsay'>This is your best lap here.</div>";
                         }
                     }
                 } else {
@@ -17813,6 +17954,13 @@
                             ? "The angle over this corner did not close: it should come back to straight where the car provably is, and it does not. Rather than print a number wrong by an unknown amount, it is left out."
                             : "The car never went far enough sideways here to call it a drift.") + "</div>";
                 }
+            }
+            if (b.units.some(function (u) { return u.linked; })) {
+                h += "<div class='gpb-dsay'>Corners the car went through <b>without ever straightening</b> " +
+                     "are rated as one drift, because that is what they are &mdash; scoring them separately " +
+                     "would mark the transitions as if you kept losing it and getting it back. A run of " +
+                     "corners counts as linked when at least half the laps that drove it did it in one " +
+                     "go.</div>";
             }
             h += "<div class='gpb-dsay'>A corner is rated out of five on four measured things: how much " +
                  "<b>angle</b> was held (" + GP_DRIFT_STAR_DEG + "&deg; is full marks), how much of the corner " +
@@ -17893,6 +18041,11 @@
                 tr.style.cursor = "pointer";
                 tr.addEventListener("click", function () {
                     window.gpDriftCornerPick(tr.getAttribute("data-gp-dcorn"));
+                });
+            });
+            Array.prototype.forEach.call(el.querySelectorAll("[data-gp-dgo]"), function (tr) {
+                tr.addEventListener("click", function () {
+                    window.gpDriftGoto(tr.getAttribute("data-gp-dgo"));
                 });
             });
             Array.prototype.forEach.call(el.querySelectorAll("[data-gp-dsw]"), function (tr) {
@@ -19029,19 +19182,22 @@
             var b = gpDriftBoard();
             if (b && gp.selLap >= 0) {
                 var cells = b.cells[gp.selLap] || [];
-                b.corners.forEach(function (c, ci) {
+                b.units.forEach(function (u, ci) {
                     var cell = cells[ci];
-                    /* A corner this lap never drove gets no badge: there is
+                    /* A unit this lap never drove gets no badge: there is
                        nothing on this line to point at. */
                     if (!cell) return;
                     var at = gpDrawnAt(cell.apex);
                     if (!at) return;
                     var st = cell.rating ? cell.rating.stars : null;
-                    var cls = ci === gp.driftCorner ? "gpb-corner-badge hot" : "gpb-corner-badge";
+                    var hot = ci === gp.driftUnit;
+                    var cls = "gpb-corner-badge" + (hot ? " hot" : "") + (u.linked ? " linked" : "");
                     var m = L.marker(at, { keyboard: false, icon: L.divIcon({ className: "",
-                        iconSize: ci === gp.driftCorner ? [30, 30] : [24, 24],
-                        html: "<div class='" + cls + "'>" + c.n + "</div>" }) });
-                    m.bindTooltip("Turn " + c.n + (st === null ? "" : " · " + st.toFixed(1) + "★"),
+                        iconSize: hot ? [34, 30] : [28, 24],
+                        html: "<div class='" + cls + "'>" +
+                              (u.linked ? u.n0 + "–" + u.n1 : u.n0) + "</div>" }) });
+                    m.bindTooltip(u.name + (u.linked ? " · one drift" : "") +
+                                  (st === null ? "" : " · " + st.toFixed(1) + "★"),
                                   { direction: "top" });
                     m.on("click", function () { window.gpDriftCornerPick(ci); });
                     gp.driftLayer.addLayer(m);

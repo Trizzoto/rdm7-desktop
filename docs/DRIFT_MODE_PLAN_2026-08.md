@@ -20,6 +20,9 @@ What replaced them:
   40 m rule `gpCompareLaps` uses. Finding them per lap would renumber the
   whole track whenever one lap missed one, and silently compare turn 4 against
   turn 3.
+- **Linked corners are one unit.** Corners the car goes through without ever
+  straightening are rated as a single drift, because that is what a good
+  drifter does with them — with each corner still readable underneath.
 - **A rating out of five**, from four measured parts — angle held, how much of
   the corner it was held for, how steady it was, and speed. Three are graded
   against a fixed standard printed on screen; only speed is graded against your
@@ -28,7 +31,7 @@ What replaced them:
   corners, which is the entire point.
 
 Verified by `node tools/check_drift.js` (80 checks: the angle engine and the
-star arithmetic) and `node tools/check_mallala.js` (35 checks: the whole chain,
+star arithmetic) and `node tools/check_mallala.js` (41 checks: the whole chain,
 against six laps of synthetic Mallala drifting whose planted angle is known
 corner by corner and lap by lap). Driven end to end in the app through the VBO
 import path.
@@ -130,6 +133,37 @@ of rewriting them. Only the corner selection (`gp.driftCorner`) is Drift's own.
   lap. `gpCompareLaps`'s own `n` is NOT stable — it counts only corners that
   survived matching, so a lap that dropped turn 3 renumbers everything after
   it. That trap is why the corner set is built here rather than borrowed.
+
+### Links: corners a good driver never separates
+
+At most circuits some corners are never driven as separate corners. The car
+goes sideways at the entry to the first and stays sideways through all of
+them, flicking from one side to the other without ever straightening. That is
+the thing being judged, and reading it as three corners is actively wrong in
+two ways: it scores each transition as though the driver kept losing it and
+getting it back, and it hides the one number that says whether the link was
+held at all — how much of the WHOLE stretch the car spent sideways.
+
+So consecutive corners driven as one drift are grouped into a **unit** and
+rated as one.
+
+- **Detection** is `gpDriftSegments` doing what it already did: it treats a
+  flick through neutral as one drift with a switch in it, not two drifts. If a
+  single segment spans two corners' apexes, that lap linked them.
+- **Linkage is decided once for the session, not per lap.** It has to be, or
+  the table changes shape from lap to lap and there is nothing left to compare.
+  A pair counts as linked when **at least half** the laps that drove both did
+  it in one unbroken drift.
+- **The lap that broke the link is measured on the link anyway**, and scores
+  badly on commitment for it. That is not a bug in the grouping, it IS the
+  coaching signal — "you straightened here, and everyone else including you
+  didn't".
+- **Each corner inside a link is still read on its own**, shown under "Through
+  the link". The unit says whether the link held; the members say which corner
+  of it was the weak one, and a driver who cannot see that cannot fix it.
+
+A linked unit reads `Turns 6–7` with a chain mark, on the table and on the map.
+
 
 ### The rating: five stars, four measured parts
 
@@ -239,8 +273,12 @@ From the corner redesign:
    made a session that is ±1° almost everywhere announce itself as "±40°",
    which reads as "this tool cannot measure angle" when it means "this tool
    knows which corner it could not measure". Both numbers are now shown.
-9. **Fixture realism is load-bearing, again.** Three separate "app bugs" found
+9. **Fixture realism is load-bearing, again.** FOUR separate "app bugs" found
    during this work were all bugs in the synthetic drive:
+   - a heading grid that was not exactly periodic in the lap put a **step** in
+     the heading at the start/finish seam, which is an infinite turn rate —
+     see "The flick that could not close" below, and note that it masqueraded
+     as a limitation of the angle engine for a whole write-up;
    - a lateral offset keyed on lap index **teleported the car sideways** at
      every start/finish crossing — an impossible turn rate the engine
      correctly read as a 90° misclosure;
@@ -256,16 +294,29 @@ From the corner redesign:
     one character and half of the next — and the corner-to-corner comparison
     then compares nothing.
 
-### Known limit: a flick the angle cannot close
+### The flick that "could not close" — it could, all along
 
-At Mallala's final complex — a right–left–right where the planted drifts
-overlap and the angle swings through ±80° in a couple of seconds — the angle
-engine's closure fails and the corner reads **rough** on every lap. That is the
-honest answer (there is no straight inside the flick to close against), the
-view greys it out and says why, and it is never rated. But it is a real
-limitation of closure-on-grip rather than a property of that corner, and a
-transition-aware anchor is the obvious next thing to try. Deliberately NOT
-papered over: the harness asserts that a rough corner is never rated.
+The first write-up of this feature recorded a known limit: at Mallala's final
+complex the angle engine failed to close and the corner read **rough** on every
+lap. That was wrong, and the way it was wrong is the most useful thing in this
+document.
+
+The generator's heading table was sampled on a grid whose last point sat a
+little past the finish line, then smoothed with a wrap that assumed it sat
+exactly on it. That left a step in the heading at the seam — and a step in
+heading is an infinite turn rate. It surfaced as the fixture's OWN course rate
+jumping to **+235 °/s for four samples** in the middle of a −55 °/s corner,
+once per lap. The engine integrated it faithfully into an 80° misclosure and
+correctly reported that it could not vouch for the result.
+
+Writing the heading as a periodic part plus a ramp of exactly one turn per lap
+dropped the worst error bar in the session from **±40° to ±5°**, and the
+complex now reads to within 0.6° of the planted angle. Nothing in the app
+changed.
+
+The lesson is the one from ADR-0012, again: **when the tool says it cannot
+measure something, check the thing being measured before changing the tool.**
+Three of the four "app bugs" found across this feature were impossible drives.
 
 
 ## 4. Build phases
@@ -290,12 +341,22 @@ rules.
 The current design. Corner set from one reference lap mapped onto all of them;
 four-part rating; best lap per corner; the map showing every ticked lap with
 numbered corner badges. Verified by `check_drift.js` (80) and
-`check_mallala.js` (35, whole chain against a known-angle six-lap fixture).
+`check_mallala.js` (41, whole chain against a known-angle six-lap fixture,
+including a lap that deliberately breaks a link).
 
 Not built: a trend strip across sessions (best stars per corner over the year).
 It wants more than one session's worth of laps to mean anything, and the
 per-session board is the thing that had to be right first.
 
+
+### Cut 2c — linked corners — **DONE 2026-08-11**
+
+Consecutive corners driven as one drift are grouped into a unit and rated as
+one, with each member still readable underneath. Detection reuses
+`gpDriftSegments`'s existing "a flick through neutral is one drift" rule;
+linkage is fixed for the session so the table keeps its shape lap to lap.
+The fixture now contains a lap that deliberately straightens mid-link, and the
+harness asserts it scores worse on commitment there and loses ownership of it.
 
 ### Cut 3 — car CAN yaw/steering — **Studio side DONE; needs the bus proved**
 
@@ -364,9 +425,11 @@ lead-vs-chase *replay* before RTK gives measured *proximity*.
 2. Trace v2 CAN sniffing is compile-only — bench verification is a prerequisite
    for cut 3, not part of it.
 3. Any target car with a steering signal wider than 16 bits? (v2 slots are u16.)
-4. **The flick that will not close** (see the known limit above). Worth trying:
-   an anchor that accepts "the angle passed through zero on its way to the
-   other side" as a closure point, which is what a transition physically IS.
+4. **Should the link threshold be half the laps?** It is the obvious choice and
+   it is stable, but a driver who is learning to link a complex will cross it
+   mid-session, and the table will change shape between two openings of the
+   same recording. A hysteresis, or linking on the BEST laps rather than most
+   of them, may read better.
 5. **Is 40° the right bar for five stars?** It is defensible and it is printed
    on screen, but it is one number chosen from the D1/FD literature rather than
    from this user's own driving. Revisit once there is a season of real
@@ -374,3 +437,9 @@ lead-vs-chase *replay* before RTK gives measured *proximity*.
 6. Should the corner set be pickable rather than the modal-count lap? Automatic
    and deterministic is right for now; a session where the driver goes off on
    the reference lap would want an override.
+7. **Commitment is diluted by the approach.** A unit's span runs from the
+   corner detector's entry to its exit, and those reach out to the speed peaks
+   either side — so even a perfectly linked complex reads ~50% committed
+   because half the stretch is the run in and the run out. It is consistent
+   across laps so the comparison holds, but the number would mean more
+   measured from the first initiation to the last straightening.

@@ -63,6 +63,7 @@ const FNS = [
     'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle',
     'gpDriftSeek', 'gpDriftSwitches', 'gpDriftSegments', 'gpDriftStats',
     'gpDriftRefLap', 'gpDriftCorners', 'gpDriftCornerRead', 'gpDriftStars',
+    'gpDriftLinkMap', 'gpDriftUnits',
     'gpDriftBoard', 'gpDriftBest', 'gpDriftForget',
     'gpVboClockMs', 'gpVboSpeedScale', 'gpVboParse', 'gpHaversineM'
 ];
@@ -108,7 +109,7 @@ gp.traceChanIds = parsed.meta.chanIds;
 gp.traceChanDefs = defs;
 API.gpComputeG(gp.trace);
 gp.ghostFence = null; gp.chan = null; gp.chanKey = '';
-gp.driftSrcPref = null; gp.driftCorner = 0;
+gp.driftSrcPref = null; gp.driftUnit = 0;
 API.gpDriftForget();
 gp.traceLaps = API.gpSplitRows(gp.trace);
 gp.selLap = 0; gp.cmpLap = -1;
@@ -224,168 +225,190 @@ head('Corners: found once, and the same corner on every lap');
     }
 }
 
-head('What the app read, against what was planted');
+head('Corners driven as one drift are linked, and rated as one');
 {
     const b = API.gpDriftBoard();
     ok('the board builds', !!b);
+    ok('some corners were linked', b && b.units.some(u => u.linked),
+       b ? b.units.map(u => u.name).join(' | ') : '');
     if (b) {
-        /* Match each app corner to the planted corner nearest it, then compare
-           the angle the app says was held against the angle that was put
-           there. The tolerance is the engine's OWN error bar plus the fact
-           that the two corner definitions do not start and stop in exactly the
-           same place — so this is checking honesty, not identity. */
-        let worstErr = 0, checked = 0, inBar = 0, rated = 0, roughRated = 0, total = 0;
-        b.corners.forEach((c, ci) => {
-            let t = null, bd = 1e9;
-            truth.corners.forEach(tc => {
-                const d = distToPlanted({ lat: c.lat, lon: c.lon }, tc);
-                if (d < bd) { bd = d; t = tc; }
-            });
-            b.cells.forEach((lapCells, li) => {
-                const cell = lapCells[ci];
-                if (!cell) return;
-                total++;
-                if (cell.rating) rated++;
-                /* The gate must be absolute: a corner whose angle did not
-                   close is never rated, no matter how good the driving looked. */
-                if (cell.angle && cell.angle.rough && cell.rating) roughRated++;
-                /* Compare only where the app's corner and the planted one are
-                   plainly the same piece of track. A detector working from
-                   SPEED sometimes wraps two planted corners into one sweep;
-                   its mean angle is then the mean of two different drifts, and
-                   holding that against either one's number is a comparison
-                   between two things that were never the same thing. */
-                if (!t || bd > 40) return;
-                /* Only where the app says there WAS a drift. A long sweeper's
-                   two ends are corners in their own right to a speed-based
-                   detector, and nothing was drifted there — holding the app's
-                   honest "no drift here" against the sweeper's planted angle
-                   would be marking it wrong for being right. */
-                if (!cell.angle || cell.angle.rough || !cell.rating) return;
-                /* app lap k was driven with character k + firstBoardLapCharacter
-                   — the generator writes that mapping down so this never has
-                   to guess it. */
-                const ch = t.per[li + (truth.firstBoardLapCharacter || 0)];
-                const planted = ch && ch.held;
-                if (!planted) return;
-                checked++;
-                const err = Math.abs(cell.angle.held - planted);
-                if (err > worstErr) worstErr = err;
-                if (err <= cell.angle.conf + 8) inBar++;
+        /* A link must be a RUN of consecutive corners, and every corner must
+           belong to exactly one unit — a corner that fell out of the grouping
+           would silently stop being assessed. */
+        let seen = [], consecutive = true;
+        b.units.forEach(u => {
+            u.members.forEach((m, k) => {
+                seen.push(m);
+                if (k && m !== u.members[k - 1] + 1) consecutive = false;
             });
         });
-        ok('a good number of corner-laps were rated', rated > 30,
-           rated + ' of ' + total + ' corner-laps rated');
-        ok('a corner whose angle did not close is NEVER rated', roughRated === 0);
-        ok('the angle read is the angle planted, within the error bar',
-           checked > 25 && inBar / checked > 0.9,
-           checked + ' checked, ' + (100 * inBar / Math.max(1, checked)).toFixed(0) +
-           '% inside, worst gap ' + worstErr.toFixed(1) + ' deg');
+        seen.sort((x, y) => x - y);
+        ok('every corner belongs to exactly one unit',
+           seen.length === b.corners.length && seen.every((v, i) => v === i),
+           seen.length + ' of ' + b.corners.length);
+        ok('and a link is always consecutive corners', consecutive);
 
-        /* The whole point of the view: every corner that anyone drifted must
-           name the lap that did it best. */
-        let namable = 0, named = 0;
-        b.corners.forEach((c, ci) => {
-            const any = b.cells.some(lc => lc[ci] && lc[ci].rating);
-            if (!any) return;
-            namable++;
-            if (b.best[ci] >= 0) named++;
-        });
-        ok('every rated corner names a best lap', named === namable, named + '/' + namable);
-        /* ...and the named lap really is the best one there. */
-        let bestRight = true;
-        b.corners.forEach((c, ci) => {
-            if (b.best[ci] < 0) return;
-            const mine = b.cells[b.best[ci]][ci].rating.score;
-            b.cells.forEach(lc => {
-                if (lc[ci] && lc[ci].rating && lc[ci].rating.score > mine + 1e-9) bestRight = false;
-            });
-        });
-        ok('and it really is the best lap at that corner', bestRight);
-        /* The bests must be SPREAD. If one lap owned every corner the view
-           would have nothing to say that a single lap time does not. */
-        const owners = {};
-        b.best.forEach(x => { if (x >= 0) owners[x] = 1; });
-        ok('different laps own different corners', Object.keys(owners).length >= 2,
-           Object.keys(owners).length + ' laps own at least one corner');
+        /* The fixture links the final complex on most laps. The app must have
+           noticed at least one multi-corner unit there. */
+        const linked = b.units.filter(u => u.linked);
+        ok('a linked unit spans more than one corner',
+           linked.length > 0 && linked.every(u => u.members.length >= 2),
+           linked.map(u => u.name + ' (' + u.members.length + ')').join(', '));
 
-        const avg = b.lapAvg.map(a => a ? a.stars : null);
-        ok('every lap gets an average', avg.every(a => a !== null),
-           avg.map(a => a === null ? '-' : a.toFixed(2)).join(', '));
-        if (avg.every(a => a !== null)) {
-            const worstLap = avg.indexOf(Math.min.apply(null, avg));
-            const bestLap = avg.indexOf(Math.max.apply(null, avg));
-            ok('the worst lap rates below the best lap', avg[worstLap] < avg[bestLap],
-               'lap ' + (worstLap + 1) + ' at ' + avg[worstLap].toFixed(2) +
-               ' against lap ' + (bestLap + 1) + ' at ' + avg[bestLap].toFixed(2));
-            ok('and the spread is big enough to be worth reading',
-               avg[bestLap] - avg[worstLap] > 0.25,
-               (avg[bestLap] - avg[worstLap]).toFixed(2) + ' stars between them');
-            ok('gpDriftBest names the top-rated lap',
-               API.gpDriftBest() === avg.indexOf(Math.max.apply(null, avg)));
-        }
-
-        let sane = true;
-        b.cells.forEach(lc => lc.forEach(r => {
-            if (!r || !r.rating) return;
-            const rt = r.rating;
-            if (rt.stars < 0 || rt.stars > 5) sane = false;
-            if ((rt.stars * 10) % 5 !== 0) sane = false;
-            if (rt.ver !== K.GP_DRIFT_SCORE_VER) sane = false;
-            ['angle', 'commit', 'steady', 'speed'].forEach(p => {
-                if (!(rt.parts[p] >= 0 && rt.parts[p] <= 1)) sane = false;
-            });
+        /* Inside a link every member is still read on its own, or the driver
+           cannot tell WHICH corner of it was the weak one. */
+        let members = 0, withAngle = 0;
+        b.cells.forEach(lr => lr.forEach((r, ui) => {
+            if (!r || !b.units[ui].linked || !r.members) return;
+            r.members.forEach(m => { if (m) { members++; if (m.angle) withAngle++; } });
         }));
-        ok('every rating is on the scale it claims to be on', sane);
+        ok('each corner inside a link is still read on its own',
+           members > 0 && withAngle > 0, withAngle + ' of ' + members + ' member reads carry an angle');
     }
 }
 
-head('The corner the generator sabotaged');
+head('What the app read, against what was planted');
 {
-    /* One character drops the drift at one corner (amp x0.42). It must come
-       back visibly worse THERE than the same lap's other corners, or the
-       per-corner reading is not per-corner at all. */
     const b = API.gpDriftBoard();
     const FIRST = truth.firstBoardLapCharacter || 0;
-    /* Which (corner, character) pair did the generator deliberately drop?
-       Measured against that character's OWN other corners — comparing across
-       characters just finds the out lap, which is uniformly gentle rather
-       than specifically sabotaged. */
-    let sabCorner = null, sabChar = -1, sabRatio = 1;
-    const nChar = truth.corners[0].per.length;
-    for (let ch = 0; ch < nChar; ch++) {
-        const held = truth.corners.map(c => c.per[ch].held);
-        const mean = held.reduce((a, x) => a + x, 0) / held.length;
-        truth.corners.forEach((c, k) => {
-            const r = held[k] / mean;
-            if (r < 0.7 && r < sabRatio) { sabRatio = r; sabCorner = c; sabChar = ch; }
+    /* Match a single-corner unit to the planted corner it sits on, tightly. A
+       linked unit spans several planted corners and its mean angle is the mean
+       of several drifts, so it is checked through its MEMBERS instead. */
+    const plantedFor = (lat, lon) => {
+        let t = null, bd = 1e9;
+        truth.corners.forEach(tc => {
+            const d = distToPlanted({ lat, lon }, tc);
+            if (d < bd) { bd = d; t = tc; }
         });
+        return { t, d: bd };
+    };
+
+    let checked = 0, inBar = 0, worst = 0, rated = 0, total = 0, roughRated = 0;
+    b.units.forEach((u, ui) => {
+        b.cells.forEach((lr, li) => {
+            const cell = lr[ui];
+            if (!cell) return;
+            total++;
+            if (cell.rating) rated++;
+            if (cell.angle && cell.angle.rough && cell.rating) roughRated++;
+            if (!cell.angle || cell.angle.rough || !cell.rating) return;
+            /* single corners: the unit itself. linked: each member. */
+            const probes = u.linked && cell.members
+                ? cell.members.filter(Boolean).map(m => ({ lat: gp.trace[m.apex].lat,
+                                                           lon: gp.trace[m.apex].lon, a: m.angle }))
+                : [{ lat: b.corners[u.members[0]].lat, lon: b.corners[u.members[0]].lon, a: cell.angle }];
+            probes.forEach(pr => {
+                if (!pr.a || pr.a.rough) return;
+                const { t, d } = plantedFor(pr.lat, pr.lon);
+                if (!t || d > 40) return;
+                const ch = t.per[li + FIRST];
+                if (!ch || !ch.held) return;
+                checked++;
+                const err = Math.abs(pr.a.held - ch.held);
+                if (err > worst) worst = err;
+                if (err <= pr.a.conf + 8) inBar++;
+            });
+        });
+    });
+    ok('a good number of unit-laps were rated', rated > 25, rated + ' of ' + total);
+    ok('a stretch whose angle did not close is NEVER rated', roughRated === 0);
+    ok('the angle read is the angle planted, within the error bar',
+       checked > 25 && inBar / checked > 0.9,
+       checked + ' checked, ' + (100 * inBar / Math.max(1, checked)).toFixed(0) +
+       '% inside, worst gap ' + worst.toFixed(1) + ' deg');
+
+    let namable = 0, named = 0, bestRight = true;
+    b.units.forEach((u, ui) => {
+        const any = b.cells.some(lr => lr[ui] && lr[ui].rating);
+        if (!any) return;
+        namable++;
+        if (b.best[ui] >= 0) named++;
+        if (b.best[ui] < 0) return;
+        const mine = b.cells[b.best[ui]][ui].rating.score;
+        b.cells.forEach(lr => {
+            if (lr[ui] && lr[ui].rating && lr[ui].rating.score > mine + 1e-9) bestRight = false;
+        });
+    });
+    ok('every rated unit names a best lap', named === namable, named + '/' + namable);
+    ok('and it really is the best lap there', bestRight);
+
+    const owners = {};
+    b.best.forEach(x => { if (x >= 0) owners[x] = 1; });
+    ok('different laps own different corners', Object.keys(owners).length >= 2,
+       Object.keys(owners).length + ' laps own at least one');
+
+    const avg = b.lapAvg.map(a => a ? a.stars : null);
+    ok('every lap gets an average', avg.every(a => a !== null),
+       avg.map(a => a === null ? '-' : a.toFixed(2)).join(', '));
+    if (avg.every(a => a !== null)) {
+        const lo = avg.indexOf(Math.min.apply(null, avg));
+        const hi = avg.indexOf(Math.max.apply(null, avg));
+        ok('the worst lap rates below the best lap', avg[lo] < avg[hi],
+           'lap ' + (lo + 1) + ' at ' + avg[lo].toFixed(2) + ' against lap ' + (hi + 1) +
+           ' at ' + avg[hi].toFixed(2));
+        ok('and the spread is big enough to be worth reading', avg[hi] - avg[lo] > 0.25,
+           (avg[hi] - avg[lo]).toFixed(2) + ' stars between them');
+        ok('gpDriftBest names the top-rated lap', API.gpDriftBest() === hi);
     }
-    ok('the fixture really does sabotage one corner', !!sabCorner,
-       sabCorner ? 'planted T' + sabCorner.corner + ' on character ' + (sabChar + 1) +
-                   ' at ' + (100 * sabRatio).toFixed(0) + '% of that lap own average' : 'none');
-    if (b && sabCorner) {
-        let ci = -1, bd = 1e9;
-        b.corners.forEach((c, k) => {
-            const d = distToPlanted({ lat: c.lat, lon: c.lon }, sabCorner);
-            if (d < bd) { bd = d; ci = k; }
+
+    let sane = true;
+    b.cells.forEach(lr => lr.forEach(r => {
+        if (!r || !r.rating) return;
+        const rt = r.rating;
+        if (rt.stars < 0 || rt.stars > 5) sane = false;
+        if ((rt.stars * 10) % 5 !== 0) sane = false;
+        if (rt.ver !== K.GP_DRIFT_SCORE_VER) sane = false;
+        ['angle', 'commit', 'steady', 'speed'].forEach(p => {
+            if (!(rt.parts[p] >= 0 && rt.parts[p] <= 1)) sane = false;
         });
-        const li = sabChar - FIRST;                 /* character -> app lap */
-        const cell = li >= 0 && b.cells[li] ? b.cells[li][ci] : null;
-        const others = (b.cells[li] || []).filter((r, k) => k !== ci && r && r.rating)
-                                          .map(r => r.rating.stars);
-        if (cell && cell.rating && others.length) {
-            const mean = others.reduce((a, x) => a + x, 0) / others.length;
-            ok('and the app rates that corner below the rest of the same lap',
-               cell.rating.stars < mean,
-               'T' + b.corners[ci].n + ' on lap ' + (li + 1) + ' at ' + cell.rating.stars.toFixed(1) +
-               ' against ' + mean.toFixed(1) + ' elsewhere');
-            /* ...and the best lap for that corner must NOT be the sabotaged one. */
-            ok('and does not call it the best lap for that corner', b.best[ci] !== li,
-               'best is lap ' + (b.best[ci] + 1));
+    }));
+    ok('every rating is on the scale it claims to be on', sane);
+}
+
+head('The lap that broke the link');
+{
+    /* One character straightens between two corners of the complex instead of
+       linking them. Everything else about that lap is unchanged, so if the
+       link means anything at all, that lap must score worse on COMMITMENT for
+       the unit containing those corners — and only for that unit. */
+    const b = API.gpDriftBoard();
+    const FIRST = truth.firstBoardLapCharacter || 0;
+    const bl = truth.brokeLink;
+    ok('the fixture really does break a link', !!bl,
+       bl ? 'character ' + (bl.character + 1) + ' between planted T' +
+            bl.betweenCorners[0] + ' and T' + bl.betweenCorners[1] : 'none');
+    if (b && bl) {
+        const li = bl.character - FIRST;
+        /* which planted corners are either side of the break */
+        const t0 = truth.corners[bl.betweenCorners[0] - 1];
+        const t1 = truth.corners[bl.betweenCorners[1] - 1];
+        /* the unit covering them */
+        let ui = -1;
+        b.units.forEach((u, k) => {
+            const hits = u.members.filter(m => {
+                const c = b.corners[m];
+                return distToPlanted({ lat: c.lat, lon: c.lon }, t0) < 60 ||
+                       distToPlanted({ lat: c.lat, lon: c.lon }, t1) < 60;
+            });
+            if (hits.length >= 2) ui = k;
+        });
+        ok('both corners of the break sit in one linked unit', ui >= 0 && b.units[ui].linked,
+           ui >= 0 ? b.units[ui].name : 'not found');
+        if (ui >= 0 && li >= 0 && b.cells[li] && b.cells[li][ui]) {
+            const mine = b.cells[li][ui];
+            const others = b.cells.map((lr, k) => k === li ? null : lr[ui])
+                                  .filter(r => r && r.rating);
+            const meanCommit = others.reduce((a, r) => a + r.commit, 0) / Math.max(1, others.length);
+            ok('the lap that straightened is less committed through the link',
+               mine.commit < meanCommit,
+               (100 * mine.commit).toFixed(0) + '% against ' + (100 * meanCommit).toFixed(0) +
+               '% on the laps that linked it');
+            /* ...and it must NOT be the best lap there, however much angle it
+               carried elsewhere. */
+            ok('and is not named the best lap through it', b.best[ui] !== li,
+               'best is lap ' + (b.best[ui] + 1));
         } else {
-            ok('and the app rates that corner below the rest of the same lap', false,
-               'no rating for the sabotaged corner (matched ' + bd.toFixed(0) + ' m away)');
+            ok('the lap that straightened is less committed through the link', false, 'no cell');
         }
     }
 }
