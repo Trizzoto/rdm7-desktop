@@ -2586,6 +2586,71 @@
         #gpWorkspace .gpb-corner-badge.l1 { background: var(--gpb-red-300); color: var(--gpb-red-900); }
         #gpWorkspace .gpb-corner-badge.l2 { background: var(--gpb-red); color: #fff; border-color: var(--gpb-red-700); }
 
+        /* drift view — the map is the subject here (you are reading lines
+           against each other), so it takes the room and the numbers sit in a
+           fixed column beside it. The reverse of Corners, where the ranked
+           table is the subject. */
+        #gpWorkspace .gpb-driftwrap { display: flex; flex: 1; min-height: 0; }
+        #gpWorkspace .gpb-driftmap { flex: 1; min-width: 320px; display: flex; flex-direction: column; padding: 12px; gap: 8px; }
+        #gpWorkspace .gpb-driftmap .gp-viewer { flex: 1; min-height: 0; margin: 0; }
+        #gpWorkspace .gpb-drift {
+            width: 460px; flex-shrink: 0; overflow: auto; padding: 12px 16px 16px;
+            border-left: 1px solid var(--gpb-div);
+        }
+        @media (min-width: 1700px) { #gpWorkspace .gpb-drift { width: 540px; } }
+        #gpWorkspace .gpb-dsect { margin-top: 14px; }
+        #gpWorkspace .gpb-dsect:first-child { margin-top: 0; }
+        #gpWorkspace .gpb-dsect > h4 {
+            margin: 0 0 6px; font-family: var(--gpb-head); font-size: 10.5px; font-weight: 700;
+            letter-spacing: 0.1em; text-transform: uppercase; color: var(--gpb-muted);
+            display: flex; align-items: center; gap: 8px;
+        }
+        #gpWorkspace .gpb-dsect > h4 .sp { flex: 1; }
+        /* the run tiles: one fact each, labelled, never a sentence */
+        #gpWorkspace .gpb-dtiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--gpb-div-lt); border: 1px solid var(--gpb-div-lt); }
+        #gpWorkspace .gpb-dtile { background: var(--gpb-bg); padding: 7px 9px; }
+        #gpWorkspace .gpb-dtile .k { font-size: 9.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--gpb-muted); font-family: var(--gpb-head); font-weight: 600; }
+        #gpWorkspace .gpb-dtile .v { font-family: var(--gpb-head); font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--gpb-ink); line-height: 1.25; }
+        #gpWorkspace .gpb-dtile .v small { font-size: 10.5px; font-weight: 500; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-dtile.empty .v { color: var(--gpb-n300); }
+        #gpWorkspace .gpb-dtile .u { font-size: 10px; color: var(--gpb-muted); }
+        /* a swatch in the run list, so the row and the line on the map are
+           obviously the same run */
+        #gpWorkspace .gpb-dsw { display: inline-block; width: 9px; height: 9px; border: 1px solid rgba(0,0,0,0.3); vertical-align: -1px; }
+        #gpWorkspace .gpb-table tr.hot td { background: var(--gpb-n100); }
+        #gpWorkspace .gpb-table tr[data-gp-drun] { cursor: pointer; }
+        #gpWorkspace .gpb-dsay {
+            font-size: 11.5px; color: var(--gpb-muted); line-height: 1.5;
+            border-left: 3px solid var(--gpb-n300); padding: 5px 0 5px 9px; margin-top: 6px;
+        }
+        /* an estimate always carries its error bar; a measurement never
+           needs one (ADR-0011) */
+        #gpWorkspace .gpb-dpm { color: var(--gpb-muted); font-size: 10.5px; font-weight: 500; }
+        #gpWorkspace .gpb-dsoft td { opacity: 0.45; }
+        #gpWorkspace .gpb-delrow { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid var(--gpb-div-lt); font-size: 12px; }
+        #gpWorkspace .gpb-delrow .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #gpWorkspace .gpb-delrow input[type=number] {
+            width: 52px; background: transparent; border: 1px solid var(--gpb-div); color: var(--gpb-ink);
+            font: inherit; font-variant-numeric: tabular-nums; padding: 1px 4px;
+        }
+        /* the strip above the runs table: colour mode on the left, what the
+           numbers are in on the right */
+        #gpWorkspace .gpb-dbar { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--gpb-div); }
+        #gpWorkspace .gpb-dbar .sp { flex: 1; }
+        /* a section-heading aside that is a phrase, not a label — the h4's own
+           uppercase letter-spacing would shout it */
+        #gpWorkspace .gpb-dnorm { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 11px; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-dlink { color: var(--gpb-red); text-decoration: none; border-bottom: 1px solid rgba(210,35,42,0.35); white-space: nowrap; }
+        #gpWorkspace .gpb-dlink:hover { border-bottom-color: var(--gpb-red); }
+        /* nine columns in 460 px: let the numbers breathe by taking the
+           padding back off the cells rather than shrinking the type */
+        #gpWorkspace .gpb-druns th, #gpWorkspace .gpb-druns td { padding-left: 3px; padding-right: 3px; }
+        #gpWorkspace .gpb-druns th:first-child, #gpWorkspace .gpb-druns td:first-child { padding-left: 0; width: 14px; }
+        #gpWorkspace .gpb-drawhint {
+            background: var(--gpb-red-100); color: var(--gpb-red-800); border: 1px solid var(--gpb-red-300);
+            padding: 6px 9px; font-size: 11.5px; margin-top: 6px; line-height: 1.45;
+        }
+
         /* ================================================================
            Analyse: the panel grid (ADR-0025)
            ================================================================ */
@@ -3180,6 +3245,7 @@
                 <button id="gpBtnMonitor" class="on" onclick="gpSetView('monitor')">Live</button>
                 <button id="gpBtnSession" onclick="gpSetView('session')">Analyse</button>
                 <button id="gpBtnCorners" onclick="gpSetView('corners')">Corners</button>
+                <button id="gpBtnDrift" onclick="gpSetView('drift')">Drift</button>
                 <button id="gpBtnTracks" onclick="gpSetView('tracks')">Tracks</button>
                 <button id="gpBtnSetup" onclick="gpSetView('setup')">Setup</button>
             </div>
@@ -3295,6 +3361,13 @@
                 <div class="gpb-cornerswrap" id="gpCornersWrap" style="display:none">
                     <div class="gpb-cornersmap" id="gpCornersMapCell"></div>
                     <div class="gpb-corners" id="gpCorners"></div>
+                </div>
+                <!-- Drifting (docs/DRIFT_MODE_PLAN_2026-08.md). Runs, not
+                     laps; the map takes the room because reading one line
+                     against another IS the analysis. -->
+                <div class="gpb-driftwrap" id="gpDriftWrap" style="display:none">
+                    <div class="gpb-driftmap" id="gpDriftMapCell"></div>
+                    <div class="gpb-drift" id="gpDrift"></div>
                 </div>
             </div>
             <div class="ws-insp" id="gpInspector"></div>
@@ -7370,6 +7443,22 @@
             viewFocus: null,            /* null = side by side; 'map' | 'video' = that tile solo */
             cam: null,                  /* camera defaults, this PC (gpCamLoad) */
             ghostSrc: null,             /* { sesId, rows, laps, meta, cur } for the ghost's session */
+            /* ---- Drifting (DRIFT_MODE_PLAN_2026-08) ----------------------
+               Runs are spans like laps, but they are found rather than timed,
+               so they get their own selection and their own caches. driftSel
+               indexes gpDriftRuns(), NOT gp.traceLaps. */
+            driftRuns: null, driftRunKey: "",
+            drift: null, driftKey: "",       /* memoised angle engine result */
+            driftSegs: null, driftSegKey: "",
+            driftSw: null, driftSwKey: "",
+            driftSel: 0, driftCmp: -1,       /* the run being read, and the shadow */
+            driftShown: null,                /* run index -> drawn on the map */
+            driftSrcPref: null,              /* which channel the angle comes from */
+            driftSrcOpen: false,             /* ...and whether the picker for it is showing */
+            courseId: null,                  /* which drawn course is live */
+            driftDraw: null,                 /* "clip" | "zone" | "entry" | "finish" while placing */
+            driftDrawPts: null,              /* the zone being drawn, so far */
+            driftLayer: null,                /* clips, zones and switch marks */
             selGate: "sf",   /* "sf" | a sector index */
             editLayer: null, _gateViews: {},
             info: null,        /* device.info result */
@@ -8644,6 +8733,16 @@
                    just doesn't appear" with no way to find out why. This is
                    the one per-load hook, so it is where the shape is proved
                    rather than assumed. */
+                /* Drift courses ride on the track record beside the outline,
+                   and arrive from an export or a hand edit the same way it
+                   does — so they are proved here rather than assumed. A
+                   malformed shape would otherwise present as "the zone just
+                   doesn't score", with nothing saying why. */
+                if (t.courses !== undefined) {
+                    t.courses = (Array.isArray(t.courses) ? t.courses : [])
+                        .map(gpCourseClean).filter(Boolean).slice(0, 40);
+                    if (!t.courses.length) delete t.courses;
+                }
                 if (t.outline) {
                     var p = t.outline.pts;
                     p = Array.isArray(p) ? p.filter(function (q) {
@@ -8673,8 +8772,13 @@
             Object.keys(byPlace).forEach(function (k) {
                 var group = byPlace[k];
                 if (group.length < 2) return;
+                /* A drawn drift course is work somebody did, exactly like a
+                   placed gate or a traced shape — without it here, a duplicate
+                   whose ONLY content was a course got binned as untouched, and
+                   an evening of clips and zones went with it. */
                 var touched = function (t) {
                     return !!(t.start_finish || (t.sectors || []).length ||
+                              (t.courses || []).length ||
                               (t.outline && t.outline.src && t.outline.src !== "osm"));
                 };
                 var keep = group.filter(touched);
@@ -9113,6 +9217,17 @@
             var nch = 0, k;
             for (k = 0; k < n; k++) if (rows[k].can && rows[k].can.length) { nch = rows[k].can.length; break; }
             if (nch) { pk.nch = nch; pk.can = new Uint16Array(n * nch); }
+            /* The puck's own yaw rate, when the recording has it. Same
+               key-presence idiom as `can`: a recording made before the node
+               logged its gyro simply has no `gyro` array, and absence is the
+               ONLY honest way to say "no reading" — zero deg/s is a perfectly
+               ordinary value meaning the car was going straight.
+               Int16Array, emphatically not Uint16Array: `can` is unsigned and
+               reserves 0xFFFF for stale, so a mild left-hand yaw of -1 would
+               round-trip as "this channel said nothing". */
+            var haveGyro = false;
+            for (k = 0; k < n; k++) if (rows[k].gyroz !== undefined) { haveGyro = true; break; }
+            if (haveGyro) pk.gyro = new Int16Array(n);
             for (var i = 0; i < n; i++) {
                 var r = rows[i];
                 pk.lat[i] = Math.round(r.lat * 1e7);
@@ -9120,6 +9235,11 @@
                 pk.kph[i] = Math.round(r.kph * 100);
                 pk.hdg[i] = Math.round(r.hdg * 100);
                 pk.t[i] = r.t === undefined ? GP_NO_T : r.t;
+                /* Back to the wire's own 0.02 deg/s quantum, so the stored
+                   value is bit-exact with what the node wrote. -32768 carries
+                   "the IMU had nothing" through unchanged. */
+                if (haveGyro)
+                    pk.gyro[i] = r.gyroz === undefined ? -32768 : Math.round(r.gyroz * 50);
                 if (!nch) continue;
                 for (var c = 0; c < nch; c++) {
                     var v = (r.can && r.can[c] !== undefined && r.can[c] !== null) ? r.can[c] : null;
@@ -9135,6 +9255,7 @@
             /* A recording saved before channels existed has no `can` at all,
                and must still open — hence the guard rather than a format bump. */
             var nch = (pk.can && pk.nch) ? pk.nch : 0;
+            var gy = pk.gyro || null;          /* same guard, same reason */
             for (var i = 0; i < n; i++) {
                 var can = null;
                 if (nch) {
@@ -9146,7 +9267,8 @@
                 }
                 rows[i] = { lat: pk.lat[i] / 1e7, lon: pk.lon[i] / 1e7,
                             kph: pk.kph[i] / 100, hdg: pk.hdg[i] / 100,
-                            t: pk.t[i] === GP_NO_T ? undefined : pk.t[i], g: 0, can: can };
+                            t: pk.t[i] === GP_NO_T ? undefined : pk.t[i], g: 0, can: can,
+                            gyroz: (gy && gy[i] !== -32768) ? gy[i] / 50 : undefined };
             }
             return rows;
         }
@@ -9199,7 +9321,13 @@
             });
             var head = word + ",t_s,utc,lat_deg,lon_deg," +
                        "speed_" + (gpSpdU() === "km/h" ? "kph" : "mph") +
-                       ",heading_deg,long_g,lat_g,yaw_dps";
+                       ",heading_deg,long_g,lat_g,path_yaw_dps" +
+                       /* The measured turn rate, when the recording has it.
+                          Named apart from the derived one on purpose: one is
+                          how fast the PATH turns, the other how fast the CAR
+                          does, and averaging the two a year from now would be
+                          averaging two different quantities. */
+                       (gpHaveGyro() ? ",car_yaw_dps" : "");
             canLanes.forEach(function (l) {
                 var nm = String(l.label).replace(/[^\w]+/g, "_").replace(/^_|_$/g, "");
                 head += "," + nm + (l.unit ? "_" + String(l.unit).replace(/[^\w]+/g, "") : "");
@@ -9215,6 +9343,8 @@
                           (r.g || 0).toFixed(3),
                           (ch.glat ? ch.glat[i] : 0).toFixed(3),
                           (ch.yaw ? ch.yaw[i] : 0).toFixed(1)];
+                if (gpHaveGyro())
+                    line.push(rows[i].gyroz === undefined ? "" : rows[i].gyroz.toFixed(1));
                 canLanes.forEach(function (l) {
                     var v = l.get(i);
                     line.push(v === null || v === undefined ? "" : v.toFixed(l.dp === undefined ? 1 : l.dp));
@@ -9244,6 +9374,7 @@
                 data.nch = pk.nch;
                 data.can = gpB64(new Uint8Array(pk.can.buffer));
             }
+            if (pk.gyro) data.gyro = gpB64(new Uint8Array(pk.gyro.buffer));
             return JSON.stringify({
                 format: GP_SESFILE_FMT, version: 1, meta: m, data: data
             });
@@ -9274,6 +9405,7 @@
                 pk.nch = d.nch;
                 pk.can = new Uint16Array(u8.buffer);
             }
+            if (d.gyro) pk.gyro = arr(d.gyro, Int16Array, 2);
             var meta = j.meta;
             /* A file carrying columns but no names for them is not a failure —
                the data is real. gpLaneRowsAll falls back to generic ids, the
@@ -9380,8 +9512,16 @@
             var extra = [
                 { name: "LongAcc", unit: "g", dp: 3, get: function (i) { return rows[i].g || 0; } },
                 { name: "LatAcc",  unit: "g", dp: 3, get: function (i) { return ch.glat ? ch.glat[i] : 0; } },
-                { name: "YawRate", unit: "deg/s", dp: 1, get: function (i) { return ch.yaw ? ch.yaw[i] : 0; } }
+                { name: "YawRatePath", unit: "deg/s", dp: 1, get: function (i) { return ch.yaw ? ch.yaw[i] : 0; } }
             ];
+            /* The MEASURED turn rate, when the puck recorded it. Kept apart
+               from the derived one by name for the same reason the CSV does:
+               the path's rate and the car's rate are the same number only
+               while the car is gripping. Returning null for a sample without
+               a reading is already handled by the gap machinery below. */
+            if (gpHaveGyro()) extra.push(
+                { name: "YawRateCar", unit: "deg/s", dp: 1,
+                  get: function (i) { var v = rows[i].gyroz; return v === undefined ? null : v; } });
             lanes.forEach(function (l) {
                 extra.push({
                     name: String(l.label).replace(/[^\w]+/g, "_").replace(/^_|_$/g, "") || "channel",
@@ -12149,9 +12289,14 @@
                here is why the playbar could retire. */
             if (p.type === "map") {
                 var mm = gpEffectiveMapMode();
+                /* Angle is offered here only when this recording measured it —
+                   an offer that falls back to Pace when clicked would be a
+                   button that lies about what it does. */
+                var mlist = [["lap", "Lap"], ["pace", "Pace"], ["speed", "Speed"],
+                             ["ref", "vs Ref"], ["line", "Line"]];
+                if (gpDriftAngle()) mlist.push(["angle", "Angle"]);
                 h += "<div class='gpb-pseg'>" +
-                     [["lap", "Lap"], ["pace", "Pace"], ["speed", "Speed"],
-                      ["ref", "vs Ref"], ["line", "Line"]].map(function (m) {
+                     mlist.map(function (m) {
                         return "<button data-gp-mapmode='" + m[0] + "' class='" + (mm === m[0] ? "on" : "") +
                                "' onclick=\"gpMapModeSet('" + m[0] + "')\">" + m[1] + "</button>";
                      }).join("") + "</div>";
@@ -12547,14 +12692,21 @@
         /* ---- the dock ---- */
         function gpRenderDock() {
             var el = document.getElementById("gpDock");
-            if (!el || gp.view !== "session") return;
+            if (!el || (gp.view !== "session" && gp.view !== "drift")) return;
             var d = gpDock();
+            var drifting = gp.view === "drift";
             var have = gp.trace && gp.trace.length;
             var i = have ? Math.max(0, Math.min(gp.playIdx, gp.trace.length - 1)) : 0;
             var s = have ? gp.trace[i] : null;
             var r = have ? gpLapRange() : { from: 0, to: 0 };
             var h = "";
-            if (d.lap) {
+            if (d.lap && drifting) {
+                /* Runs, not laps — and no "vs", because a run is read against
+                   your own best rather than measured against a reference the
+                   way a lap is. */
+                h += "<div><div class='k'>Run</div><div class='v'>" +
+                     (gpDriftRuns().length ? (gp.driftSel + 1) : "&mdash;") + "</div></div>";
+            } else if (d.lap) {
                 h += "<div><div class='k'>" + gpRunWord(true) + "</div><div class='v'>" +
                      (gp.selLap >= 0 ? (gp.selLap + 1) : "&mdash;") +
                      (gp.cmpLap >= 0 && gp.cmpLap !== gp.selLap
@@ -12581,7 +12733,14 @@
             h += "<input type='range' id='gpDockScrub' min='0' max='" + Math.max(0, r.to - r.from) +
                  "' value='" + Math.max(0, i - r.from) + "' step='1' oninput='gpScrubTo(this.value)'" +
                  (have ? "" : " disabled") + ">";
-            if (d.delta) {
+            /* Delta is a lap against a reference lap. Runs have no such thing —
+               and showing the last session's delta beside a drift run would be
+               a number about something else entirely. */
+            if (d.delta && drifting) {
+                var da = gpDriftAngle();
+                if (da) h += "<div style='min-width:84px'><div class='k'>Angle</div>" +
+                             "<div class='v' data-dv='dangle'></div></div>";
+            } else if (d.delta) {
                 h += "<div style='min-width:84px'><div class='k'>&Delta; vs " +
                      (gp.cmpLap >= 0 ? gpEsc(gpRefName()) : "ref") + "</div>" +
                      "<div class='v' data-dv='delta'></div></div>";
@@ -12653,7 +12812,7 @@
 
         function gpUpdateDock() {
             var el = document.getElementById("gpDock");
-            if (!el || gp.view !== "session") return;
+            if (!el || (gp.view !== "session" && gp.view !== "drift")) return;
             var have = gp.trace && gp.trace.length;
             var i = have ? Math.max(0, Math.min(gp.playIdx, gp.trace.length - 1)) : 0;
             var s = have ? gp.trace[i] : null;
@@ -12662,6 +12821,21 @@
                 var n = el.querySelector("[data-dv='" + k + "']");
                 if (n) n.innerHTML = html;
             };
+            var dang = el.querySelector("[data-dv='dangle']");
+            if (dang) {
+                var da2 = gpDriftAngle();
+                /* An em-dash under 25 km/h is the truth: the angle is not
+                   knowable there, and a zero would say the car was straight.
+                   The readout carries the same error bar and the same rough
+                   gate as every other angle surface — a number that is plain
+                   here and greyed out in the table beside it would be the
+                   tool disagreeing with itself. */
+                var dcf = (da2 && have && da2.ok[i]) ? da2.conf[i] : null;
+                dang.innerHTML = dcf === null ? "&mdash;"
+                    : dcf > GP_DRIFT_ROUGH ? "<small>rough</small>"
+                    : Math.round(Math.abs(da2.beta[i])) + "<small>°" +
+                      (da2.direct ? "" : " &plusmn;" + Math.round(dcf)) + "</small>";
+            }
             put("pos", have ? gpTcFmt(gpSecs(gp.trace, r.from, i)) +
                               " <small>/ " + gpTcFmt(gpSecs(gp.trace, r.from, r.to)) + "</small>" : "&mdash;");
             var dn = el.querySelector("[data-dv='delta']");
@@ -13810,7 +13984,8 @@
         };
 
         window.gpMapModeSet = function (m) {
-            gp.mapMode = (m === "speed" || m === "ref" || m === "line" || m === "lap") ? m : "pace";
+            gp.mapMode = (m === "speed" || m === "ref" || m === "line" || m === "lap" ||
+                          m === "angle") ? m : "pace";
             try { window.localStorage.setItem("rdm7_gp_mapmode", gp.mapMode); } catch (e) {}
             gpDrawTrace();
             gpRenderInspector();
@@ -13914,14 +14089,21 @@
 
         if (document.addEventListener) {
             document.addEventListener("keydown", function (e) {
-                if (gp.view !== "session" || !gp.trace || !gp.trace.length) return;
+                /* Drift plays back exactly like Analyse — same transport, same
+                   keys. A view where Space did nothing would be a view where
+                   playback looked broken. */
+                if ((gp.view !== "session" && gp.view !== "drift") || !gp.trace || !gp.trace.length) return;
                 var tg = e.target;
                 if (tg && (tg.tagName === "INPUT" || tg.tagName === "TEXTAREA" ||
                            tg.tagName === "SELECT")) return;
                 /* Only when the GPS workspace is actually on screen — gp.view
-                   is workspace-local state and survives switching away. */
-                var strip = document.getElementById("gpStrip");
-                if (!strip || strip.offsetParent === null) return;
+                   is workspace-local state and survives switching away.
+                   Ask the element that this view actually shows: the rack is
+                   Analyse's, and it is display:none everywhere else, so using
+                   it as the proxy meant every transport key was swallowed in
+                   Drift — Space did nothing and playback looked broken. */
+                var host = document.getElementById(gp.view === "drift" ? "gpDriftWrap" : "gpStrip");
+                if (!host || host.offsetParent === null) return;
                 if (gpSessionKey(e.key, e.shiftKey)) e.preventDefault();
             });
         }
@@ -13999,6 +14181,13 @@
               get: function (i) { var c = gpChannels(); return c ? c.glat[i] : 0; }, zero: true },
             { id: "yaw", label: "Yaw rate", unit: "\u00b0/s", dp: 0, colour: "#2e7d43",
               get: function (i) { var c = gpChannels(); return c ? c.yaw[i] : 0; }, zero: true },
+            /* The MEASURED turn rate, beside the derived one above. On a
+               gripping car they are the same number twice; the moment the car
+               goes sideways they separate, and the gap between them IS the
+               drift angle. Swapped for a live lane by gpLaneRowsAll when the
+               recording carries it. */
+            { id: "bodyyaw", label: "Turning (car)", unit: "°/s", pending: "the puck's gyro",
+              why: "The puck measures how fast the CAR is turning, and the lane above works out how fast its PATH is turning. This recording predates the node storing the first one — a newer recording has it, and the difference between the two is the drift angle." },
             { id: "delta", label: "Delta", unit: "s", dp: 2, colour: "#9c1a1f", zero: true,
               get: function (i) {
                   var d = gpDeltaSeries(); if (!d) return null;
@@ -14007,6 +14196,15 @@
               },
               absent: function () { return !gpDeltaSeries(); },
               absentSay: "Pick a lap and a comparison lap." },
+            /* Swapped for a live lane by gpLaneRowsAll the moment something in
+               the recording measures which way the car is pointing. Left as a
+               frame otherwise — a zero line here would draw a car that never
+               went sideways, which is a different claim from "nothing
+               measured this". */
+            /* The badge reads "needs " + this, so it is a phrase, not a
+               shouted category. */
+            { id: "slip", label: "Angle", unit: "°", pending: "a yaw sensor",
+              why: "Nothing in this recording measured which way the car was POINTING — only which way it was travelling, which is what GPS gives you. Any of these fills it in: a yaw-rate channel off the car's bus, the puck's own gyro (any recording made since the node grew to 14 bytes a sample has it), or an imported log that already carries an angle." },
             { id: "throttle", label: "Throttle", unit: "%", pending: "CAN",
               why: "Waiting on a throttle channel from the car's bus. The puck records position and speed; pedal data has to come from the ECU over CAN." },
             { id: "brake", label: "Brake", unit: "%", pending: "CAN",
@@ -14017,7 +14215,7 @@
                canvas, which would print "&amp;" literally, and the channel list
                escapes it on the way into HTML. */
             { id: "roll", label: "Roll & pitch", unit: "\u00b0", pending: "IMU",
-              why: "The puck HAS an IMU and reports it live, but the recorder stores only position, speed and heading \u2014 12 bytes a sample. Logging attitude is a firmware change on the node, not a Studio one." }
+              why: "The recorder stores the puck's YAW rate now \u2014 the axis a drift turns about. Roll and pitch are still live-only; logging those two is a firmware change on the node, not a Studio one." }
         ];
 
         /* The three generic "needs CAN" lanes are a promise about a category.
@@ -14075,21 +14273,77 @@
            gpTraceDownload snapshots it into gp.traceChanIds for exactly this
            reason — read that, never gpDeviceChanIds(), when deciding what a
            LOADED sample's can[] array means. */
+        /* The Angle lane, in whichever of its two states this recording earns:
+           a live trace when a sensor backed it, or the frame with the plain
+           statement of what has to happen first. Gaps are null, not zero —
+           below 25 km/h the angle is not knowable and the line breaks there
+           instead of dropping to the axis and claiming the car straightened. */
+        function gpSlipLane() {
+            var d = gpDriftAngle();
+            var frame = GP_LANES.filter(function (l) { return l.id === "slip"; })[0];
+            if (!d) return frame;
+            var src = d.src;
+            return { id: "slip", unit: "°", dp: 0, colour: "#0b6f8f", zero: true,
+                     derived: true,
+                     label: "Angle" + (d.direct ? "" : " (worked out)"),
+                     get: function (i) { return d.ok[i] ? d.beta[i] : null; },
+                     note: d.direct
+                        ? "Measured by " + src.name + " and passed through."
+                        : "Worked out from " + src.name + ", to about ±" +
+                          Math.round(d.worst) + "°." };
+        }
+
+        /* What every channel id in a recording MEANS — name, unit and decode —
+           resolved once, the same way for every reader.
+           Two sources, in this order: the channel library (what was picked off
+           the dash or typed in, which is where a puck download's ids are
+           described), then the recording's own definitions, which win for
+           their own ids because an imported VBO is the only thing that can
+           describe its columns.
+           Shared rather than open-coded: the Drift view resolved the second
+           source only, so every puck-recorded channel reached it unnamed,
+           unitless and undecoded — a GT86's yaw rate arrived as raw CAN counts
+           while the graph rack one panel away drew it correctly scaled. Two
+           resolvers cannot be kept in step by hoping. */
+        function gpChanDefsById() {
+            var byId = {};
+            gpAllChans().forEach(function (c) { byId[c.id] = c; });
+            (gp.traceChanDefs || []).forEach(function (d) {
+                if (!d || !d.id) return;
+                byId[d.id] = { id: d.id, name: d.name, unit: d.unit, decimals: d.decimals,
+                               decode: { scale: d.scale, offset: d.offset } };
+            });
+            return byId;
+        }
+
         function gpLaneRowsAll() {
             var haveData = gp.trace && gp.trace.length && gp.traceChanIds && gp.traceChanIds.length &&
                           gp.trace[0].can && gp.trace[0].can.length === gp.traceChanIds.length;
             var ids = haveData ? gp.traceChanIds : gpLogChans();
-            var base = GP_LANES;
+            /* Two lanes change shape with the recording. Angle fills in when
+               something measured it. And "Yaw rate" has always been the rate
+               the PATH turns at, which is the same thing as the car's own
+               yaw right up until the moment the car goes sideways — where
+               the difference between them IS the drift. Once a body-yaw
+               channel is present, both get names that say which is which,
+               because letting one keep the bare word would be letting it
+               impersonate the other. */
+            var base = GP_LANES.map(function (l) {
+                if (l.id === "slip") return gpSlipLane();
+                if (l.id === "bodyyaw" && gpHaveGyro())
+                    return { id: l.id, label: "Turning (car)", unit: "°/s", dp: 0,
+                             colour: "#a8347d", zero: true, derived: false,
+                             get: function (i) {
+                                 var v = gp.trace[i].gyroz;
+                                 return v === undefined ? null : v;
+                             } };
+                if (l.id === "yaw" && gpDriftAngle())
+                    return { id: l.id, label: "Turning (path)", unit: l.unit, dp: l.dp,
+                             colour: l.colour, get: l.get, zero: l.zero };
+                return l;
+            });
             if (ids.length) {
-                var byId = {};
-                gpAllChans().forEach(function (c) { byId[c.id] = c; });
-                /* A recording can bring its own definitions — an imported VBO
-                   does. They win for their own ids, and they are the only
-                   thing that can describe them. */
-                (gp.traceChanDefs || []).forEach(function (d) {
-                    byId[d.id] = { id: d.id, name: d.name, unit: d.unit, decimals: d.decimals,
-                                   decode: { scale: d.scale, offset: d.offset } };
-                });
+                var byId = gpChanDefsById();
                 var chosen = ids.map(function (id, idx) {
                     var c = byId[id];
                     var scale = (c && c.decode && gpN(c.decode.scale)) || 1;
@@ -14113,8 +14367,13 @@
                     return lane;
                 });
                 /* Keep the GPS lanes and the delta; replace only the generic
-                   CAN placeholders, which these supersede. */
-                base = GP_LANES.filter(function (l) { return l.pending !== "CAN"; }).concat(chosen);
+                   CAN placeholders, which these supersede.
+                   Filter `base`, NOT GP_LANES — base is the list with the
+                   Angle lane resolved and Yaw renamed, and rebuilding from the
+                   raw declarations threw both away precisely when a recording
+                   HAS channels, which is the only time either has anything to
+                   say. The live Angle lane was unreachable. */
+                base = base.filter(function (l) { return l.pending !== "CAN"; }).concat(chosen);
             }
             return base;
         }
@@ -15794,9 +16053,47 @@
            chosen; anything else falls back to pace rather than drawing a lie. */
         function gpEffectiveMapMode() {
             var m = gp.mapMode;
+            /* Angle only exists when a sensor backed it. Asking for it on a
+               recording that never measured it falls back rather than
+               colouring the line by a number nobody has. */
+            if (m === "angle" && !gpDriftAngle()) return gp.view === "drift" ? "speed" : "pace";
+            if (gp.view === "drift") {
+                /* vs Ref and Line are built on lap indices and a delta series
+                   that runs do not have. */
+                if (m === "ref" || m === "line") return gpDriftAngle() ? "angle" : "speed";
+                return (m === "speed" || m === "lap" || m === "angle" || m === "pace") ? m : "speed";
+            }
             if ((m === "ref" || m === "line") &&
                 !(gp.selLap >= 0 && gp.cmpLap >= 0 && gp.cmpLap !== gp.selLap)) return "pace";
-            return (m === "speed" || m === "ref" || m === "line" || m === "lap") ? m : "pace";
+            return (m === "speed" || m === "ref" || m === "line" || m === "lap" || m === "angle") ? m : "pace";
+        }
+
+        /* Angle gets its own scale and its own colours. Not the g ramp: that
+           one is built to say "braking" at one end and "accelerating" at the
+           other, and angle is not signed that way — 40 degrees is 40 degrees
+           whichever side of the car it is on. Left and right are told apart
+           by hue, and how far by how deep it goes. */
+        function gpAngleScale() {
+            var d = gpDriftAngle();
+            if (!d) return 30;
+            var r = gpLapRange(), a = [], i;
+            for (i = r.from; i <= r.to && i < d.beta.length; i += 3)
+                if (d.ok[i]) a.push(Math.abs(d.beta[i]));
+            if (!a.length) return 30;
+            a.sort(function (x, y) { return x - y; });
+            return Math.max(12, Math.min(90, a[Math.floor(a.length * 0.95)] || 30));
+        }
+        function gpAngleColour(v) {
+            /* v is -1..1: signed fraction of the scale. Straight is a neutral
+               grey so that the eye reads the sideways parts as the event. */
+            var k = Math.min(1, Math.abs(v));
+            if (k < 0.001) return "rgb(150,150,150)";
+            if (v > 0) return "rgb(" + Math.round(150 + 75 * k) + "," +
+                                       Math.round(150 - 40 * k) + "," +
+                                       Math.round(150 - 130 * k) + ")";   /* amber, one way */
+            return "rgb(" + Math.round(150 - 130 * k) + "," +
+                            Math.round(150 - 10 * k) + "," +
+                            Math.round(150 + 75 * k) + ")";               /* blue, the other */
         }
 
         /* Where time is being gained or lost, as a rate: the slope of the
@@ -15881,6 +16178,30 @@
                         var dv = new DataView(new ArrayBuffer(bin.length));
                         for (var b = 0; b < bin.length; b++) dv.setUint8(b, bin.charCodeAt(b));
 
+                        /* How wide is one fix on the wire? ASK, never assume.
+                           The node grew the fix from 12 bytes to 14 when it
+                           started recording its own yaw rate, and a decoder
+                           that hard-codes either number reads one generation
+                           of puck as plausible-looking nonsense rather than
+                           as an error.
+                           `fix_bytes` is the node saying it outright. Failing
+                           that, derive it: trace.info's record_bytes counts
+                           the CAN tail, and the tail arrives in a SEPARATE
+                           blob, so the fix block's stride is record_bytes
+                           minus the channel slots — never record_bytes
+                           itself. Failing both, it is an old node: 12. */
+                        var fixB = gpN(pg && pg.fix_bytes);
+                        if (fixB === null) {
+                            var recB = gpN(gp.traceInfo && gp.traceInfo.record_bytes);
+                            fixB = recB === null ? 12 : recB - nchan * 2;
+                        }
+                        if (!(fixB >= 12 && fixB <= 64)) fixB = 12;
+                        if (bin.length !== cnt * fixB) {
+                            throw new Error("This recording came off a different version of the puck's " +
+                                "firmware than Studio expects — " + (bin.length / cnt).toFixed(1) +
+                                " bytes a sample, not " + fixB + ". Update the puck, or update Studio.");
+                        }
+
                         /* Channel columns: sample-major uint16, nchan per row.
                            TRACE_CHAN_STALE (0xFFFF) means that channel had
                            gone quiet at that sample — decoded to null, same
@@ -15904,7 +16225,7 @@
                         var mi = 0, tcur = null;
                         for (var i = 0; i < cnt; i++) {
                             while (mi < mk.length && mk[mi][0] === i) { tcur = mk[mi][1]; mi++; }
-                            var o = i * 12;
+                            var o = i * fixB;
                             var can = null;
                             if (cdv) {
                                 can = new Array(nchan);
@@ -15913,13 +16234,26 @@
                                     can[c] = v === 0xFFFF ? null : v;
                                 }
                             }
+                            /* getInt16, SIGNED — a right-hand yaw read as
+                               unsigned comes back as +1300 deg/s. And the
+                               little-endian flag is not optional: DataView
+                               defaults to BIG-endian, and a byte-swapped
+                               reading still plots as a perfectly smooth line.
+                               -32768 is TRACE_GYRO_NONE, the node saying the
+                               IMU had nothing — undefined, never zero, which
+                               would claim the car was going straight. */
+                            var gz;
+                            if (fixB >= 14) {
+                                var graw = dv.getInt16(o + 12, true);
+                                gz = graw === -32768 ? undefined : graw * 0.02;
+                            }
                             rows.push({
                                 lat: dv.getInt32(o, true) / 1e7,
                                 lon: dv.getInt32(o + 4, true) / 1e7,
                                 kph: dv.getUint16(o + 8, true) / 100,
                                 hdg: dv.getUint16(o + 10, true) / 100,
                                 t: tcur === null ? undefined : tcur,
-                                g: 0, can: can
+                                g: 0, can: can, gyroz: gz
                             });
                             if (tcur !== null) tcur += 40;
                         }
@@ -16080,6 +16414,11 @@
                every other index-keyed cache; gpShownLaps() re-seeds lazily
                from the new selLap / cmpLap. */
             gp.shownLaps = null;
+            /* Runs are found in the same samples, so everything about them is
+               stale for the same reasons — and driftSel is an index into a
+               list that is about to be rebuilt. */
+            gpDriftForget();
+            gp.driftSel = 0; gp.driftCmp = -1; gp.driftShown = null;
             gp.traceLaps = gpSplitRows(gp.trace || []);
             /* Circuit Tools auto-selects the fastest lap as the reference and
                nobody has ever complained: it is what you compare against nearly
@@ -16185,10 +16524,1596 @@
         }
 
         function gpLapRange() {
+            /* In Drift the unit is the run, and everything downstream of this
+               function — playback, the scrubber, the playhead, framing — then
+               works on runs without knowing they are not laps. */
+            if (gp.view === "drift") {
+                var dr = gpDriftRuns();
+                if (dr.length) return dr[Math.max(0, Math.min(gp.driftSel, dr.length - 1))];
+            }
             if (gp.selLap >= 0 && gp.traceLaps[gp.selLap])
                 return gp.traceLaps[gp.selLap];
             var end = gp.ghostFence !== null ? gp.ghostFence : (gp.trace ? gp.trace.length : 1);
             return { from: 0, to: end - 1 };
+        }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * Drifting
+         *
+         * A lap timer answers "how fast round". A drifter wants a different
+         * question answered: how fast did I come in, did I hold it or did it
+         * die, where did I switch, and was that the same line as last time.
+         * The unit is the RUN, not the lap.
+         *
+         * The hard part is angle. Drift angle is where the car POINTS minus
+         * where it TRAVELS, and a single GPS antenna measures only the
+         * second one — a car circling at 40 degrees of slip lays down the
+         * same trace as one gripping round the same arc. Nothing recovers
+         * what was never observed, so an angle worked out from position
+         * alone would be a fabrication (ADR-0011), and this file will not
+         * draw one. Angle appears when, and only when, a channel in the
+         * recording measured which way the car was pointing:
+         *
+         *   - a yaw-rate channel (deg/s) — from the car's bus, from the
+         *     puck's own recorded gyro, or out of an imported
+         *     log that carries one. Integrated here, calibrated against the
+         *     session's own grip driving, closed on the straights, and shown
+         *     with the error bar that closure measures.
+         *   - a slip-angle channel (deg) — a drift box measured it; pass it
+         *     through and say whose number it is.
+         *
+         * Everything else in this view — line, speed, where the car swapped
+         * from turning one way to the other — is measured path geometry and
+         * works on the plain 12-byte trace with no extra sensor at all.
+         *
+         * See docs/DRIFT_MODE_PLAN_2026-08.md.
+         * ═══════════════════════════════════════════════════════════════ */
+
+        /* Below this, course over ground is receiver noise rather than a
+           direction: the error goes as 1/v, and a drift box calls 25 km/h
+           the bottom of a run for the same reason. */
+        var GP_DRIFT_MIN_KPH = 25;
+        var GP_DRIFT_GAP_S = 10;      /* a hole this long in the recording ends a run */
+        var GP_DRIFT_MIN_S = 5;       /* shorter than this was not a run */
+        /* 10 deg, not the drift box's 5: a gripping car on limit tyres
+           genuinely reaches 5-7 degrees of slip, so 5 would call every fast
+           corner a drift. Intentional drift lives at 20+ either way. */
+        var GP_DRIFT_ON = 10;
+        var GP_DRIFT_OFF = 5;
+        var GP_DRIFT_HOLD_S = 0.5;    /* how long past ON before it counts */
+        var GP_DRIFT_SETTLE_S = 0.4;  /* how long back under OFF before it ends */
+        var GP_DRIFT_SWITCH_G = 0.25; /* lateral load that counts as committed to a side */
+        /* Past this many degrees of doubt the numbers are not worth reading and
+           the view greys them out. One constant, because three bare 8s in three
+           files drift apart and then the table, the tiles and the scorecard
+           disagree about whether the same run is trustworthy. */
+        var GP_DRIFT_ROUGH = 8;
+        var GP_DRIFT_CLIP_FADE_M = 5; /* clip points fall to nothing this far past the radius */
+        /* The M9N is metre-class without corrections. An editor that let you
+           draw a 30 cm clip would be promising a precision the receiver
+           cannot deliver, and every score after it would inherit the lie. */
+        var GP_DRIFT_MIN_SHAPE_M = 2;
+        var GP_DRIFT_SCORE_VER = 1;   /* stamped on every card; tuning the
+                                         formula must never silently restate
+                                         a score a run already earned */
+
+        /* ---- runs ---------------------------------------------------------
+           gpSecs caps a single sample's contribution (gpStep) so a pause does
+           not accumulate into a lap time — which is right for timing and
+           useless for finding the pauses. This reads the stamps raw. */
+        function gpGapS(rows, i) {
+            var a = rows[i - 1], b = rows[i];
+            if (!a || !b) return 0;
+            var ta = gpN(a.t), tb = gpN(b.t);
+            if (ta === null || tb === null) return GP_DT;
+            var d = (tb - ta) / 1000;
+            /* Backwards or absurd means the stamp wrapped (GPS time of week
+               rolls at the week boundary), not that time went that way. */
+            return (d > 0 && d < 86400) ? d : GP_DT;
+        }
+
+        /* A run is entry line to end line when a course has been drawn, and a
+           burst of movement when one has not. The second case matters more
+           than it sounds: the node records nothing under 8 km/h, so practice
+           runs arrive already bracketed by the queue between them, and the
+           view is useful the first time it is opened with nothing set up. */
+        function gpDriftRuns() {
+            var rows = gp.trace;
+            if (!rows || rows.length < 2) return [];
+            var c = gpCourseActive();
+            var end = gp.ghostFence !== null ? gp.ghostFence : rows.length;
+            if (end < 2) return [];
+            var key = rows.length + ":" + end + ":" + (c ? c.id + ":" + gpCourseStamp(c) : "-");
+            if (gp.driftRunKey === key && gp.driftRuns) return gp.driftRuns;
+            var out = [], i;
+            if (c && c.entry && c.finish) {
+                var S = gpGateHits(rows, c.entry, 0, end - 1);
+                var F = gpGateHits(rows, c.finish, 0, end - 1);
+                var sh = S.hits.filter(function (h) { return h.dir === gpMainDir(S.hits); });
+                var fh = F.hits.filter(function (h) { return h.dir === gpMainDir(F.hits); });
+                var fi = 0;
+                sh.forEach(function (h) {
+                    while (fi < fh.length && fh[fi].i <= h.i) fi++;
+                    if (fi < fh.length) { out.push({ from: h.i, to: fh[fi].i, gated: true }); fi++; }
+                });
+            }
+            if (!out.length) {
+                var from = 0;
+                for (i = 1; i < end; i++) {
+                    if (gpGapS(rows, i) > GP_DRIFT_GAP_S) { out.push({ from: from, to: i - 1 }); from = i; }
+                }
+                out.push({ from: from, to: end - 1 });
+                out = out.filter(function (r) {
+                    return r.to - r.from > 4 && gpSecs(rows, r.from, r.to) >= GP_DRIFT_MIN_S;
+                });
+            }
+            gp.driftRunKey = key; gp.driftRuns = out;
+            return out;
+        }
+
+        function gpDriftRun(i) {
+            var rs = gpDriftRuns();
+            return rs[i] || null;
+        }
+
+        /* Which runs are drawn. Same idea as gpShownLaps: an explicit map, and
+           a fresh session opens with everything on, because seeing all your
+           lines at once IS the feature. */
+        function gpDriftShown() {
+            var rs = gpDriftRuns();
+            if (!gp.driftShown || gp.driftShown.length !== rs.length) {
+                gp.driftShown = rs.map(function () { return true; });
+            }
+            return gp.driftShown;
+        }
+        window.gpDriftShowToggle = function (i) {
+            var sh = gpDriftShown();
+            i = parseInt(i, 10);
+            sh[i] = !sh[i];
+            gpDrawTrace(); gpRenderDrift();
+        };
+
+        /* ---- where the angle comes from ----------------------------------- */
+        /* Does this recording carry the puck's own yaw rate? A first-class
+           field in the record since the node grew to 14 bytes a sample. */
+        function gpHaveGyro() {
+            var rows = gp.trace;
+            return !!(rows && rows.length && rows[0] && rows[0].gyroz !== undefined);
+        }
+
+        function gpDriftChans() {
+            var rows = gp.trace;
+            var ids = gp.traceChanIds || [];
+            if (!rows || !rows.length) return [];
+            var out = [];
+            if (ids.length && rows[0].can && rows[0].can.length === ids.length)
+                out = gpDriftCanChans(ids);
+            /* The puck's own gyro joins the candidates LAST. Appending rather
+               than prepending means a recording that already had a yaw-rate
+               channel off the car's bus keeps choosing exactly what it chose
+               before — the puck's is the fallback that makes this work on a
+               car with nothing on its bus, not a silent change of source for
+               anyone. It is a virtual entry with its own getter rather than a
+               column index: the CAN columns have an invariant that their
+               count matches traceChanIds, and this is not one of them. */
+            if (gpHaveGyro()) {
+                out.push({ idx: -1, id: "puck:gyroz", name: "the puck's own gyro",
+                           unit: "deg/s", scale: 1, offset: 0,
+                           get: function (i) {
+                               var r = rows[i];
+                               return (r && r.gyroz !== undefined) ? r.gyroz : null;
+                           } });
+            }
+            return out;
+        }
+
+        function gpDriftCanChans(ids) {
+            var rows = gp.trace;
+            /* The SAME resolver the rack uses. Reading only the recording's own
+               definitions meant a puck download — where the ids are described
+               by the channel library instead — arrived with no name, no unit
+               and no decode, so the guess below could never fire and a
+               hand-picked channel fed the engine raw CAN counts. */
+            var defs = gpChanDefsById();
+            return ids.map(function (id, idx) {
+                var d = defs[id] || {};
+                var sc = gpN(d.decode && d.decode.scale), of = gpN(d.decode && d.decode.offset);
+                return { idx: idx, id: id, name: d.name || d.label || id,
+                         unit: String(d.unit || d.units || "").trim(),
+                         scale: sc === null ? 1 : sc, offset: of === null ? 0 : of };
+            });
+        }
+
+        /* The UNIT decides, never the name. A channel called "Angle" logged in
+           radians would be read as degrees and every number after it would be
+           wrong by a factor of 57 — with nothing on screen looking odd. */
+        function gpDriftGuess(c) {
+            /* The degree sign becomes the WORD, it is not deleted. Stripping it
+               made "°" and "" the same string, so the test for degrees had to
+               accept the empty one — and a channel with no unit at all was
+               then auto-read as degrees, which is precisely the failure the
+               rule above exists to prevent. A radian channel called "Slip"
+               would have been off by a factor of 57 with nothing on screen
+               looking wrong. No unit means no guess. */
+            var u = String(c.unit || "").toLowerCase().replace(/\s+/g, "")
+                        .replace(/°|º/g, "deg").replace("degrees", "deg")
+                        .replace("degree", "deg").replace("sec", "s");
+            var n = String(c.name).toLowerCase();
+            if (u === "" ) return null;
+            var perSec = (u === "deg/s" || u === "dps");
+            if (perSec) {
+                /* a steering-wheel rate turns at the driver's hands, not the
+                   car's yaw axis */
+                if (/steer|wheel|shaft|engine|prop/.test(n)) return null;
+                return "yawrate";
+            }
+            if (u !== "deg") return null;
+            if (/slip|drift|sideslip|beta/.test(n)) return "angle";
+            if (/\bangle\b/.test(n) && !/steer|wheel|lean|pitch|roll|head|bank|camber/.test(n)) return "angle";
+            return null;
+        }
+
+        var GP_DRIFT_SRC_LS = "rdm7_gp_driftsrc";
+        function gpDriftSrcPrefs() {
+            if (gp.driftSrcPref) return gp.driftSrcPref;
+            try { gp.driftSrcPref = JSON.parse(window.localStorage.getItem(GP_DRIFT_SRC_LS) || "{}") || {}; }
+            catch (e) { gp.driftSrcPref = {}; }
+            return gp.driftSrcPref;
+        }
+        function gpDriftSrcKey() { return String(gp.sessionId || "current"); }
+        window.gpDriftSrcSet = function (v) {
+            var p = gpDriftSrcPrefs();
+            if (!v) delete p[gpDriftSrcKey()]; else p[gpDriftSrcKey()] = v;
+            try { window.localStorage.setItem(GP_DRIFT_SRC_LS, JSON.stringify(p)); } catch (e) {}
+            gpDriftForget();
+            gpDrawTrace(); gpRenderDrift();
+        };
+
+        function gpDriftForget() {
+            gp.drift = null; gp.driftKey = "";
+            gp.driftSegs = null; gp.driftSegKey = "";
+            gp.driftSw = null; gp.driftSwKey = "";
+            gp.driftRuns = null; gp.driftRunKey = "";
+        }
+
+        /* The one channel the angle is worked out from: what the user said if
+           they have said, a guess from the units if they have not, and
+           honestly nothing if this recording never measured which way the car
+           was pointing. */
+        function gpDriftSource() {
+            var chans = gpDriftChans();
+            if (!chans.length) return null;
+            var pref = gpDriftSrcPrefs()[gpDriftSrcKey()];
+            if (pref === "none") return null;
+            var pick = null, kind = null;
+            if (pref) {
+                var bits = String(pref).split("|");
+                pick = chans.filter(function (c) { return c.id === bits[1]; })[0] || null;
+                if (pick) kind = bits[0] === "angle" ? "angle" : "yawrate";
+            }
+            if (!pick) {
+                for (var i = 0; i < chans.length && !pick; i++) {
+                    var g = gpDriftGuess(chans[i]);
+                    if (g) { pick = chans[i]; kind = g; }
+                }
+            }
+            if (!pick) return null;
+            var rows = gp.trace, ix = pick.idx, sc = pick.scale, of = pick.offset;
+            var own = pick.get;                /* the puck's own gyro brings its own reader */
+            return {
+                kind: kind, id: pick.id, name: pick.name, unit: pick.unit, guessed: !pref,
+                get: own ? own : function (i) {
+                    var r = rows[i];
+                    var v = (r && r.can) ? r.can[ix] : null;
+                    return (v === null || v === undefined) ? null : v * sc + of;
+                }
+            };
+        }
+
+        /* ---- the angle engine ---------------------------------------------
+           beta = body heading - course over ground. Its derivative is exactly
+           (body yaw rate - course rate), with no approximation in it, so the
+           angle is an integral — and an integral needs three things to be
+           worth showing: a calibrated rate, somewhere to start from, and a
+           way to measure how far it drifted by the time it got back. */
+        function gpDriftAngle() {
+            var rows = gp.trace;
+            if (!rows || rows.length < 8) return null;
+            var src = gpDriftSource();
+            if (!src) return null;
+            var end = gp.ghostFence !== null ? gp.ghostFence : rows.length;
+            var key = rows.length + ":" + end + ":" + src.kind + ":" + src.id;
+            if (gp.driftKey === key && gp.drift) return gp.drift;
+
+            var n = rows.length, i, j;
+            var beta = new Float32Array(n), ok = new Uint8Array(n), conf = new Float32Array(n);
+            var out;
+
+            /* An instrument measured it. Pass it through and name whose it is
+               — the only honest thing to do with someone else's measurement. */
+            if (src.kind === "angle") {
+                for (i = 0; i < n; i++) {
+                    var v = src.get(i);
+                    if (v === null || !isFinite(v) || i >= end || rows[i].kph < GP_DRIFT_MIN_KPH) { beta[i] = 0; ok[i] = 0; conf[i] = 0; }
+                    else { beta[i] = Math.max(-180, Math.min(180, v)); ok[i] = 1; conf[i] = 1; }
+                }
+                out = { beta: beta, ok: ok, conf: conf, src: src, direct: true,
+                        scale: 1, bias: 0, anchors: 0, worst: 1, weak: false };
+                gp.driftKey = key; gp.drift = out;
+                return out;
+            }
+
+            var ch = gpChannels();
+            if (!ch) return null;
+            var rp = ch.yaw;              /* course rate, deg/s, central over +/-3 */
+
+            /* Match the course rate's own smoothing exactly. rp is a central
+               difference over a 0.24 s window; the body rate arrives already
+               differentiated, so the matching operation is the mean over the
+               same window. Comparing a raw 25 Hz gyro against a smoothed
+               course rate would dump the whole difference between the two
+               filters into rho at every transient — and rho is the signal. */
+            var raw = new Float32Array(n), have = new Uint8Array(n);
+            for (i = 0; i < n; i++) {
+                var rv = i < end ? src.get(i) : null;
+                if (rv === null || !isFinite(rv)) { raw[i] = 0; have[i] = 0; }
+                else { raw[i] = rv; have[i] = 1; }
+            }
+            var rb = new Float32Array(n), bok = new Uint8Array(n), W = 3;
+            for (i = 0; i < n; i++) {
+                var a = i - W < 0 ? 0 : i - W, b = i + W >= n ? n - 1 : i + W, s = 0, c = 0;
+                for (j = a; j <= b; j++) if (have[j]) { s += raw[j]; c++; }
+                rb[i] = c ? s / c : 0;
+                bok[i] = c ? 1 : 0;
+            }
+
+            /* ---- calibration: grip driving is the laboratory --------------
+               A gyro's sensitivity is good to about a percent, and a percent
+               of 50 deg/s held for ten seconds is five degrees of angle —
+               more error than every other source put together. But whenever
+               the car is gripping, the body MUST be turning at the course
+               rate, and a session holds minutes of that. Fit scale and bias
+               against those samples and the residual is a fifth of a percent.
+               This also self-calibrates an ECU sensor whose spec nobody
+               published. */
+            /* ---- the slope, regressed the right way round ------------------
+               The obvious fit is least squares of rb on rp, and it is wrong in
+               a direction that matters. Least squares assumes the REGRESSOR is
+               exact, and rp is by far the noisiest thing here: course over
+               ground differentiated over a quarter of a second turns a few
+               tenths of a degree of heading noise into a couple of deg/s,
+               while rb is a rate sensor already averaged over the same window
+               — cleaner by more than a factor of ten. Noise in the regressor
+               pulls the slope toward zero, and on a drive with an ordinary
+               0.3 deg of heading noise it returned 0.964 for a gyro that was
+               truly 1.008: a 4.5% error, five times the effect the fit exists
+               to remove, which put a 38 degree corner on screen as 41.
+
+               The fix is not a cleverer estimator, it is regressing the noisy
+               channel ON the clean one and inverting. Noise in the RESPONSE
+               costs precision but no bias; noise in the regressor costs bias.
+               So fit rp against rb and take the reciprocal. (A lagged
+               instrument also works in principle and was tried; it needs the
+               driving to still correlate with itself past the smoothing
+               window, which fast circuit corners do not, and it quietly fell
+               back to the biased estimate exactly where it was needed.) */
+            function fit(mask) {
+                var sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, m = 0, q;
+                for (q = 0; q < n; q++) {
+                    if (!mask[q]) continue;
+                    sx += rp[q]; sy += rb[q];
+                    sxx += rp[q] * rp[q]; syy += rb[q] * rb[q]; sxy += rp[q] * rb[q];
+                    m++;
+                }
+                if (m < 200) return null;
+                var mx = sx / m, my = sy / m;
+                var vx = sxx / m - mx * mx, vy = syy / m - my * my;
+                /* A fit needs corners in it. Straight-line running is a cloud
+                   at the origin where every scale fits equally well, and the
+                   answer would be noise with a decimal point on it. */
+                if (vx < 9 || vy < 9) return { scale: 1, bias: (sy - sx) / m, n: m, weak: true };
+                var den = m * syy - sy * sy;                /* regress rp ON rb */
+                var inv = den > 0 ? (m * sxy - sx * sy) / den : 0;
+                var sc2 = inv > 1e-6 ? 1 / inv : NaN;
+                /* Past a quarter off, the channel is not what we think it is —
+                   wrong units, wrong signal, mirrored mounting. Refuse to
+                   "correct" by a factor that large; fall back to trusting the
+                   channel and say the fit was weak. */
+                if (!isFinite(sc2) || sc2 < 0.8 || sc2 > 1.25) return { scale: 1, bias: (sy - sx) / m, n: m, weak: true };
+                return { scale: sc2, bias: (sy - sc2 * sx) / m, n: m, weak: false };
+            }
+
+            var mask = new Uint8Array(n);
+            for (i = 0; i < n; i++)
+                mask[i] = (bok[i] && i < end && rows[i].kph >= GP_DRIFT_MIN_KPH &&
+                           Math.abs(rb[i] - rp[i]) < 8) ? 1 : 0;
+            var cal = fit(mask) || { scale: 1, bias: 0, n: 0, weak: true };
+
+            /* ---- second pass: a STEADY angle is not a gripping car ---------
+               "The two rates agree" is not the same claim as "the car is
+               straight", and on a drift recording the difference is the whole
+               problem. A car HOLDING 40° has a beta-dot of zero, so it passes
+               the first mask carrying the largest turn rates in the session —
+               and those samples then supply nearly all the fit's leverage.
+               Their beta-dot is small but not zero and it correlates with the
+               corner, so the slope comes back biased. Measured on a real
+               drift course at Mallala: 0.936 for a gyro that was truly 1.008,
+               a 7% "correction" in the wrong direction, on a recording with
+               no grip cornering anywhere in it to catch it.
+
+               So carry a running estimate of the angle itself and throw out
+               anything sideways. A leaky integrator is enough for a mask: it
+               needs no anchors, and it FORGETS slow bias rather than
+               accumulating it — the wrong behaviour for a measurement and
+               exactly the right one for "is the car sideways right now". */
+            var TAU = 6, bh = new Float32Array(n), acc = 0;
+            for (i = 1; i < n; i++) {
+                var dtb = gpStep(rows, i - 1);
+                acc = (acc + ((rb[i] - cal.bias) / cal.scale - rp[i]) * dtb) * Math.exp(-dtb / TAU);
+                bh[i] = acc;
+            }
+            for (i = 0; i < n; i++) {
+                var d1 = (rb[i] - cal.bias) / cal.scale - rp[i];
+                mask[i] = (bok[i] && i < end && rows[i].kph >= GP_DRIFT_MIN_KPH &&
+                           Math.abs(d1) < 5 && Math.abs(bh[i]) < 6) ? 1 : 0;
+            }
+            var cal2 = fit(mask);
+            /* Nothing usable left means this recording cannot check the
+               channel's scale. Take it at face value and say so — a fit made
+               of whatever survived is worse than no fit at all. */
+            cal = cal2 || { scale: 1, bias: cal.bias, n: cal.n, weak: true };
+
+            var rho = new Float32Array(n);
+            for (i = 0; i < n; i++) rho[i] = bok[i] ? ((rb[i] - cal.bias) / cal.scale - rp[i]) : 0;
+
+            /* ---- anchors: moments the car is provably straight -------------
+               Not "rho is zero" — that is the trap. A car HOLDING 40 degrees
+               through a long corner has a perfectly steady angle, so rho is
+               zero there too, and anchoring on it would zero the angle in the
+               middle of the very drift being measured. (It did: the harness
+               read a 38 degree corner as 29 and split one drift into three.)
+
+               The honest anchor is a car going STRAIGHT: the path is not
+               turning, the body is not turning, and there is no lateral load.
+               A car cannot hold a big slip angle along a straight path on
+               tarmac — that would need a sideways force with nothing to make
+               it — so those three together are as close to "beta is zero" as
+               anything measurable gets. The load test earns its place
+               separately: a car at the limit in a GRIP corner is already
+               carrying a few degrees of tyre slip, and anchoring there would
+               bake that into every angle after it. */
+            var anch = new Uint8Array(n);
+            for (i = 0; i < n; i++)
+                anch[i] = (bok[i] && i < end && rows[i].kph >= GP_DRIFT_MIN_KPH &&
+                           Math.abs(rho[i]) < 3 && Math.abs(rp[i]) < 4 &&
+                           Math.abs(ch.glat[i]) < 0.3) ? 1 : 0;
+            /* One sample is a coincidence; a fifth of a second is a fact. */
+            var HOLD = Math.max(2, Math.round(0.2 / GP_DT));
+            var isl = [], run0 = -1;
+            for (i = 0; i <= n; i++) {
+                if (i < n && anch[i]) { if (run0 < 0) run0 = i; }
+                else {
+                    if (run0 >= 0 && i - run0 >= HOLD) isl.push(Math.floor((run0 + i - 1) / 2));
+                    run0 = -1;
+                }
+            }
+            /* A HOLE in the recording is a hard break. The node writes nothing
+               under 8 km/h, so a gap means the car was stopped or queuing —
+               whatever angle it held before is not carried across, and
+               integrating over the seam only imports its own nonsense into the
+               run on the far side. (It did: a run either side of a 95 s gap
+               came back claiming ±11°, and then ±16° and 32° of real error,
+               when its own driving was worth ±2.)
+
+               The seam poisons more than the one sample. The course rate is a
+               central difference over ±W, so a car that was heading south
+               before the gap and north after it reads as an enormous turn for
+               W samples EITHER SIDE — none of which happened. Blank the rate
+               across that window rather than integrate it, and anchor just
+               outside it, so neither run inherits the other's nonsense. */
+            var lim2 = Math.min(n, end), brk = [];
+            for (i = 1; i < lim2; i++) {
+                if (gpGapS(rows, i) <= 2) continue;
+                var blo = Math.max(0, i - 1 - (W + 1)), bhi = Math.min(n - 1, i + (W + 1));
+                for (j = blo; j <= bhi; j++) rho[j] = 0;
+                brk.push(blo); brk.push(bhi);
+            }
+            if (brk.length) {
+                isl = isl.concat(brk).sort(function (a, b) { return a - b; })
+                         .filter(function (v, k, all) { return !k || v !== all[k - 1]; });
+            }
+
+            var cum = new Float64Array(n), el = new Float64Array(n);
+            for (i = 1; i < n; i++) {
+                /* gpStep(rows, k) is the interval AFTER sample k, so the
+                   trapezoid spanning i-1 to i is charged gpStep(i - 1). Using
+                   gpStep(i) shifted every interval onto its neighbour — free
+                   on a steady 25 Hz recording, wrong on anything with variable
+                   spacing, which is every VBO import and every puck download
+                   that skipped idle. It also asked for gpStep at n-1, where
+                   there is no next sample to measure to. */
+                var dt = gpStep(rows, i - 1);
+                cum[i] = cum[i - 1] + (rho[i - 1] + rho[i]) / 2 * dt;
+                el[i] = el[i - 1] + dt;
+            }
+
+            function mark(a2, b2, c2) {
+                for (var q = a2; q <= b2 && q < n; q++) {
+                    ok[q] = (q < end && rows[q].kph >= GP_DRIFT_MIN_KPH) ? 1 : 0;
+                    conf[q] = c2;
+                }
+            }
+            var worst = 1;
+            if (!isl.length) {
+                /* Nothing in this recording is provably straight. Integrate
+                   with the whole thing's own mean taken out and say plainly
+                   that the number is soft — six degrees is not a figure to
+                   score anything by, and the view greys it out. */
+                var mn = 0, mc = 0;
+                for (i = 0; i < n; i++) if (bok[i]) { mn += rho[i]; mc++; }
+                mn = mc ? mn / mc : 0;
+                for (i = 1; i < n; i++) cum[i] -= mn * el[i];
+                for (i = 0; i < n; i++) beta[i] = cum[i];
+                /* Above the rough threshold, not below it. At ±6 the comment
+                   here claimed the view greys these out while the greying gate
+                   was 8, so an angle with nothing anchoring it anywhere was
+                   printed as an ordinary number and SCORED — measured 30° of
+                   error wearing a confident ±6 label. */
+                mark(0, n - 1, GP_DRIFT_ROUGH + 1);
+                worst = GP_DRIFT_ROUGH + 1;
+            } else {
+                var A0 = isl[0], AK = isl[isl.length - 1];
+                /* Before the first anchor and after the last there is one end
+                   to hold on to and nothing to close against, so the error
+                   grows with distance from the anchor instead of being
+                   checked. A flat figure was wrong in both directions: it
+                   called two seconds of run-in as doubtful as a minute of it,
+                   and every recording's first run inherited the worst case. */
+                for (i = 0; i <= A0; i++) beta[i] = cum[i] - cum[A0];
+                for (i = 0; i <= A0; i++) {
+                    ok[i] = (i < end && rows[i].kph >= GP_DRIFT_MIN_KPH) ? 1 : 0;
+                    conf[i] = Math.max(1, Math.min(GP_DRIFT_ROUGH, 1 + 0.4 * (el[A0] - el[i])));
+                    if (conf[i] > worst) worst = conf[i];
+                }
+                for (var k = 1; k < isl.length; k++) {
+                    var aa = isl[k - 1], bb = isl[k];
+                    var mis = cum[bb] - cum[aa], span = el[bb] - el[aa];
+                    /* The leg ends back in grip, where beta must be zero
+                       again. Whatever it is instead IS this leg's accumulated
+                       error, directly observed — spread it back over the leg
+                       (a surveyor closing a traverse) and put half of it on
+                       screen as the error bar. It is the most honest number
+                       in the feature: a measurement of THIS leg, not a claim
+                       off a datasheet. */
+                    for (i = aa; i <= bb; i++)
+                        beta[i] = cum[i] - cum[aa] - (span > 0 ? mis * (el[i] - el[aa]) / span : 0);
+                    var cf = Math.max(Math.abs(mis) / 2, 1);
+                    mark(aa, bb, cf);
+                    if (cf > worst) worst = cf;
+                }
+                for (i = AK; i < n; i++) beta[i] = cum[i] - cum[AK];
+                for (i = AK; i < n; i++) {
+                    ok[i] = (i < end && rows[i].kph >= GP_DRIFT_MIN_KPH) ? 1 : 0;
+                    conf[i] = Math.max(1, Math.min(GP_DRIFT_ROUGH, 1 + 0.4 * (el[i] - el[AK])));
+                    if (conf[i] > worst) worst = conf[i];
+                }
+            }
+            for (i = 0; i < n; i++) beta[i] = Math.max(-180, Math.min(180, beta[i]));
+
+            out = { beta: beta, ok: ok, conf: conf, src: src, direct: false,
+                    scale: cal.scale, bias: cal.bias, fitN: cal.n, weak: !!cal.weak,
+                    anchors: isl.length, worst: worst };
+            gp.driftKey = key; gp.drift = out;
+            return out;
+        }
+
+        /* Step forward or back by seconds, honestly — through gpStep, so a
+           recording with holes in it does not walk off the end of one. */
+        function gpDriftSeek(i, secs) {
+            /* Charge the interval actually crossed: gpStep(k) spans k to k+1,
+               so stepping forward off j costs gpStep(j) and stepping back onto
+               j costs gpStep(j) too — read after the decrement. */
+            var rows = gp.trace, n = rows.length, s = 0, j = i;
+            if (secs >= 0) { while (j + 1 < n && s < secs) { s += gpStep(rows, j); j++; } }
+            else { while (j > 0 && s < -secs) { j--; s += gpStep(rows, j); } }
+            return Math.max(0, Math.min(n - 1, j));
+        }
+
+        /* ---- switches -----------------------------------------------------
+           The car committing to the other side. With an angle source that is
+           a sign change of the angle itself; without one it is the LATERAL
+           LOAD swapping over — which is measured path geometry, not a guess
+           about which way the car was pointing, so the plain words hold
+           either way: the moment the car swapped from turning one way to the
+           other. */
+        function gpDriftSwitches() {
+            var rows = gp.trace;
+            if (!rows || rows.length < 8) return [];
+            var ch = gpChannels();
+            if (!ch) return [];
+            var d = gpDriftAngle();
+            var end = gp.ghostFence !== null ? gp.ghostFence : rows.length;
+            var key = rows.length + ":" + end + ":" + (d ? d.src.id + d.src.kind : "-");
+            if (gp.driftSwKey === key && gp.driftSw) return gp.driftSw;
+
+            var n = Math.min(rows.length, end), i, out = [];
+            var val = d ? function (q) { return d.ok[q] ? d.beta[q] : 0; }
+                        : function (q) { return ch.glat[q]; };
+            var floorV = d ? GP_DRIFT_ON : GP_DRIFT_SWITCH_G;
+            var sgn = 0, zc = -1, prev = null;
+            for (i = 0; i < n; i++) {
+                if (rows[i].kph < GP_DRIFT_MIN_KPH) { prev = null; continue; }
+                var v = val(i);
+                if (prev !== null && ((prev < 0 && v >= 0) || (prev > 0 && v <= 0))) zc = i;
+                prev = v;
+                var s = v > floorV ? 1 : (v < -floorV ? -1 : 0);
+                if (s && sgn && s !== sgn && zc > 0) { out.push({ i: zc, dir: s }); zc = -1; }
+                if (s) sgn = s;
+            }
+            /* Two switches a tenth of a second apart is one switch and some
+               noise near the floor. */
+            out = out.filter(function (o, k, all) {
+                return k === 0 || gpSecs(rows, all[k - 1].i, o.i) >= 0.4;
+            });
+            out.forEach(function (o, k) {
+                o.n = k + 1;
+                o.inKph = rows[gpDriftSeek(o.i, -0.6)].kph;
+                o.outKph = rows[gpDriftSeek(o.i, 0.6)].kph;
+            });
+            gp.driftSwKey = key; gp.driftSw = out;
+            return out;
+        }
+
+        /* ---- the state machine --------------------------------------------
+           Grip -> Entering -> Drifting -> Straightening, from the angle and
+           nothing else. Only runs when an angle source exists; without one
+           there are no drift segments, and the view says so rather than
+           inventing them from the shape of the road. */
+        function gpDriftSegments() {
+            var d = gpDriftAngle();
+            if (!d) return [];
+            var rows = gp.trace, n = rows.length;
+            var end = gp.ghostFence !== null ? gp.ghostFence : n;
+            var key = n + ":" + end + ":" + d.src.id + d.src.kind;
+            if (gp.driftSegKey === key && gp.driftSegs) return gp.driftSegs;
+            var lim = Math.min(n, end), segs = [], i = 0, p;
+
+            while (i < lim) {
+                if (!(d.ok[i] && Math.abs(d.beta[i]) >= GP_DRIFT_ON)) { i++; continue; }
+                var j = i, held = 0;
+                while (j < lim && d.ok[j] && Math.abs(d.beta[j]) >= GP_DRIFT_ON) { held += gpStep(rows, j); j++; }
+                if (held < GP_DRIFT_HOLD_S) { i = j + 1; continue; }
+                /* Back up to where the angle left OFF on its way up — that is
+                   where the drift began, not where it passed the threshold. */
+                var a = i;
+                while (a > 0 && Math.abs(d.beta[a - 1]) >= GP_DRIFT_OFF) a--;
+                /* Forward to where it settles under OFF and STAYS there; the
+                   segment ends where the settling started. */
+                var b = lim - 1, qs = -1, q = 0;
+                for (p = j; p < lim; p++) {
+                    if (Math.abs(d.beta[p]) < GP_DRIFT_OFF) {
+                        if (qs < 0) { qs = p; q = 0; }
+                        q += gpStep(rows, p);
+                        if (q >= GP_DRIFT_SETTLE_S) { b = qs; break; }
+                    } else { qs = -1; q = 0; }
+                }
+                if (b < a) b = a;
+                var last = segs[segs.length - 1];
+                /* A flick through neutral is one drift with a switch in it,
+                   not two drifts. */
+                if (last && gpSecs(rows, last.to, a) < 0.5) last.to = b;
+                else segs.push({ from: a, to: b });
+                i = b + 1;
+            }
+
+            segs.forEach(function (s) {
+                var peak = 0, sum = 0, cnt = 0, low = Infinity, cf = 0, pp;
+                for (pp = s.from; pp <= s.to; pp++) {
+                    var ab = Math.abs(d.beta[pp]);
+                    if (d.ok[pp]) {
+                        if (ab > peak) peak = ab;
+                        if (ab >= GP_DRIFT_ON) { sum += ab; cnt++; }
+                        if (d.conf[pp] > cf) cf = d.conf[pp];
+                    }
+                    if (rows[pp].kph < low) low = rows[pp].kph;
+                }
+                s.peak = peak;
+                s.held = cnt ? sum / cnt : 0;
+                var vs = 0;
+                for (pp = s.from; pp <= s.to; pp++) {
+                    var a2 = Math.abs(d.beta[pp]);
+                    if (d.ok[pp] && a2 >= GP_DRIFT_ON) vs += (a2 - s.held) * (a2 - s.held);
+                }
+                /* Wobble: how much the angle wandered while it was up. Judges
+                   reward angle held SMOOTHLY; this is that, as a number. */
+                s.wobble = cnt ? Math.sqrt(vs / cnt) : 0;
+                s.secs = gpSecs(rows, s.from, s.to);
+                s.entryKph = rows[s.from].kph;
+                s.lowKph = low === Infinity ? null : low;
+                s.conf = cf || 1;
+                /* Past the rough threshold the leg did not come back to where
+                   the physics says it must, so its numbers are not worth
+                   reading. Shown greyed rather than hidden: "we tried and it
+                   did not close" is information. */
+                s.rough = cf > GP_DRIFT_ROUGH;
+                s.switches = gpDriftSwitches().filter(function (w) {
+                    return w.i >= s.from && w.i <= s.to;
+                }).length;
+            });
+            gp.driftSegKey = key; gp.driftSegs = segs;
+            return segs;
+        }
+
+        /* ---- per-run facts ------------------------------------------------ */
+        function gpDriftStats(r) {
+            var rows = gp.trace, i;
+            if (!r || !rows) return null;
+            var d = gpDriftAngle(), ch = gpChannels();
+            var low = Infinity, peakG = 0, peakA = 0, hs = 0, hn = 0, ds = 0, cf = 0, any = 0;
+            var dsi = 0;                     /* degree-seconds; see below */
+            for (i = r.from; i <= r.to && i < rows.length; i++) {
+                if (rows[i].kph < low) low = rows[i].kph;
+                if (ch) { var g = Math.abs(ch.glat[i]); if (g > peakG) peakG = g; }
+                if (d && d.ok[i]) {
+                    any = 1;
+                    var ab = Math.abs(d.beta[i]);
+                    if (ab > peakA) peakA = ab;
+                    if (ab >= GP_DRIFT_ON) { hs += ab; hn++; ds += gpStep(rows, i); }
+                    /* Degree-seconds: the area under the angle trace. BMW
+                       defines exactly this for their M cars and calls it the
+                       Schwimmwinkelbetragsintegral — the one number in that
+                       system with a published definition rather than, in
+                       their own words, "some magic dust". It is worth
+                       borrowing precisely because it has no weights in it:
+                       holding more angle and holding it for longer both raise
+                       it, and nobody had to decide how to trade the two off.
+                       Summed from the drift threshold up, so ordinary
+                       cornering does not quietly accumulate a score. */
+                    if (ab >= GP_DRIFT_ON) dsi += ab * gpStep(rows, i);
+                    if (d.conf[i] > cf) cf = d.conf[i];
+                }
+            }
+            var sw = gpDriftSwitches().filter(function (s) { return s.i >= r.from && s.i <= r.to; });
+            var segs = gpDriftSegments().filter(function (s) { return s.to >= r.from && s.from <= r.to; });
+            return {
+                entryKph: rows[r.from].kph,
+                exitKph: rows[Math.min(r.to, rows.length - 1)].kph,
+                lowKph: low === Infinity ? null : low,
+                secs: gpSecs(rows, r.from, r.to),
+                switches: sw.length, sw: sw, segs: segs,
+                peakG: peakG,
+                /* `direct` and `soft` travel with the numbers so every surface
+                   that prints them can say the right thing: a measured angle
+                   needs no error bar, and "nothing was provably straight" is a
+                   different fault from "it did not close". */
+                angle: (d && any) ? { peak: peakA, held: hn ? hs / hn : 0, secs: ds, area: dsi,
+                                      conf: cf || 1, rough: cf > GP_DRIFT_ROUGH,
+                                      direct: !!d.direct, soft: d.anchors === 0 && !d.direct } : null
+            };
+        }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * Courses: the scored shapes, beside the gates
+         *
+         * A clip is a point the car should get to; a zone is a stretch it
+         * should ride the length of. Both are provable from a single moving
+         * point, which is the whole reason there is no third shape and no
+         * polygon: an outside zone in real judging IS a wall-side line the
+         * car rides, and a line-plus-band says exactly that.
+         *
+         * Studio-side only. The node holds gates and nothing else, and
+         * gpTrackSend sends it start_finish and sectors — never this.
+         * ═══════════════════════════════════════════════════════════════ */
+        function gpCourses() {
+            var t = gpActiveTrack();
+            if (!t) return [];
+            if (!Array.isArray(t.courses)) t.courses = [];
+            return t.courses;
+        }
+        function gpCourseActive() {
+            var cs = gpCourses();
+            if (!cs.length) return null;
+            return cs.filter(function (c) { return c.id === gp.courseId; })[0] || cs[0];
+        }
+        /* Anything that changes what a run IS or what it scores. Runs and
+           cards are memoised against this, so editing a shape re-scores
+           without a reload and moving the entry line re-splits the runs. */
+        function gpCourseStamp(c) {
+            if (!c) return "-";
+            var s = (c.entry ? c.entry.lat.toFixed(6) + c.entry.lon.toFixed(6) + (c.entry.half_width_m || 0) : "") +
+                    (c.finish ? c.finish.lat.toFixed(6) + c.finish.lon.toFixed(6) + (c.finish.half_width_m || 0) : "") +
+                    ":" + (c.target_kph || 0) + ":" + (c.target_deg || 0) + ":";
+            (c.elements || []).forEach(function (e) {
+                s += e.k + (e.k === "clip" ? e.lat.toFixed(6) + e.lon.toFixed(6) + e.r
+                                           : (e.pts || []).length + ":" + e.band) + ":" + e.max + ";";
+            });
+            return s;
+        }
+
+        /* A course is JSON that arrives from an export or a hand edit as well
+           as from this app, so it is proved here rather than assumed — the
+           same reason gpTracksNormalise checks outlines. */
+        function gpCourseClean(c) {
+            if (!c || typeof c !== "object") return null;
+            var ll = function (o) {
+                return o && isFinite(o.lat) && isFinite(o.lon) &&
+                       Math.abs(o.lat) <= 90 && Math.abs(o.lon) <= 180;
+            };
+            var out = { id: String(c.id || ("c" + Date.now())), name: String(c.name || "Course"),
+                        target_kph: gpN(c.target_kph), target_deg: gpN(c.target_deg), elements: [] };
+            if (ll(c.entry)) out.entry = { lat: +c.entry.lat, lon: +c.entry.lon,
+                                           heading: gpN(c.entry.heading) || 0,
+                                           half_width_m: Math.max(3, gpN(c.entry.half_width_m) || 15) };
+            if (ll(c.finish)) out.finish = { lat: +c.finish.lat, lon: +c.finish.lon,
+                                             heading: gpN(c.finish.heading) || 0,
+                                             half_width_m: Math.max(3, gpN(c.finish.half_width_m) || 15) };
+            (Array.isArray(c.elements) ? c.elements : []).forEach(function (e) {
+                if (!e) return;
+                var max = Math.max(1, Math.min(100, gpN(e.max) || 10));
+                if (e.k === "clip" && ll(e)) {
+                    out.elements.push({ k: "clip", name: String(e.name || "Clip"),
+                                        lat: +e.lat, lon: +e.lon,
+                                        r: Math.max(GP_DRIFT_MIN_SHAPE_M, Math.min(60, gpN(e.r) || 3)),
+                                        max: max });
+                } else if (e.k === "zone") {
+                    var pts = (Array.isArray(e.pts) ? e.pts : []).filter(function (p) {
+                        return Array.isArray(p) && p.length === 2 && isFinite(p[0]) && isFinite(p[1]) &&
+                               Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180;
+                    }).slice(0, 200);
+                    if (pts.length >= 2)
+                        out.elements.push({ k: "zone", name: String(e.name || "Zone"), pts: pts,
+                                            band: Math.max(GP_DRIFT_MIN_SHAPE_M, Math.min(60, gpN(e.band) || 4)),
+                                            max: max });
+                }
+            });
+            return out;
+        }
+
+        /* Local metres about the zone's own first point: a zone is tens of
+           metres long, so a flat projection is exact to well under the
+           receiver's own noise, and it makes the nearest-point maths ordinary
+           geometry instead of spherical trigonometry per sample. */
+        /* Off to the side in a WeakMap rather than on the element. The track
+           record is JSON.stringify'd straight into localStorage, so a derived
+           field hung on a zone would be persisted with it — hundreds of
+           projected coordinates saved into the user's track library, reloaded
+           for ever, and stale the moment the zone moved. */
+        var GP_ZONE_GEO = (typeof WeakMap === "function") ? new WeakMap() : null;
+        function gpZoneGeom(e) {
+            var got = GP_ZONE_GEO && GP_ZONE_GEO.get(e);
+            if (got && got.n === e.pts.length && got.band === e.band) return got;
+            var m = gpMetresPerDeg(e.pts[0][0]);
+            var xy = e.pts.map(function (p) {
+                return [(p[1] - e.pts[0][1]) * m.lo, (p[0] - e.pts[0][0]) * m.la];
+            });
+            var cum = [0], i;
+            for (i = 1; i < xy.length; i++)
+                cum.push(cum[i - 1] + Math.hypot(xy[i][0] - xy[i - 1][0], xy[i][1] - xy[i - 1][1]));
+            var geo = { n: e.pts.length, band: e.band, xy: xy, cum: cum,
+                        total: cum[cum.length - 1], lat0: e.pts[0][0], lon0: e.pts[0][1], m: m };
+            if (GP_ZONE_GEO) GP_ZONE_GEO.set(e, geo);
+            return geo;
+        }
+        /* Nearest point on the zone line: how far off it the car was, and how
+           far along it that was. */
+        function gpZoneNear(g, lat, lon) {
+            var x = (lon - g.lon0) * g.m.lo, y = (lat - g.lat0) * g.m.la;
+            var best = null, i;
+            for (i = 1; i < g.xy.length; i++) {
+                var ax = g.xy[i - 1][0], ay = g.xy[i - 1][1];
+                var bx = g.xy[i][0], by = g.xy[i][1];
+                var dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+                var t = L2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / L2 : 0;
+                t = t < 0 ? 0 : t > 1 ? 1 : t;
+                var px = ax + dx * t, py = ay + dy * t;
+                var dd = Math.hypot(x - px, y - py);
+                if (!best || dd < best.d) best = { d: dd, s: g.cum[i - 1] + Math.sqrt(L2) * t };
+            }
+            return best;
+        }
+
+        /* What the run scored, element by element. Every point is pointable
+           at on the map — a score you can argue with is a score that survives
+           an argument. */
+        function gpDriftCard(r, c) {
+            if (!r || !c) return null;
+            var rows = gp.trace, d = gpDriftAngle(), i;
+            var els = [], got = 0, max = 0;
+            (c.elements || []).forEach(function (e) {
+                if (e.k === "clip") {
+                    var best = Infinity, at = -1;
+                    for (i = r.from; i <= r.to && i < rows.length; i++) {
+                        var mm = gpMetres({ lat: e.lat, lon: e.lon }, rows[i]);
+                        if (mm < best) { best = mm; at = i; }
+                    }
+                    var p = best <= e.r ? e.max
+                          : Math.max(0, e.max * (1 - (best - e.r) / GP_DRIFT_CLIP_FADE_M));
+                    els.push({ k: "clip", name: e.name, dist: best, at: at,
+                               pts: p, max: e.max });
+                    got += p; max += e.max;
+                } else {
+                    var g = gpZoneGeom(e);
+                    var bins = new Uint8Array(Math.max(1, Math.ceil(g.total)));
+                    var prevS = null, q;
+                    for (i = r.from; i <= r.to && i < rows.length; i++) {
+                        var near = gpZoneNear(g, rows[i].lat, rows[i].lon);
+                        if (near && near.d <= e.band) {
+                            /* Fill BETWEEN consecutive in-band samples: at
+                               100 km/h the car moves more than a metre a
+                               sample, and counting only the bins it landed in
+                               would score a fast pass lower than a slow one
+                               for driving the same line.
+                               Bounded by the ground the car actually covered,
+                               though. Where a zone doubles back on itself the
+                               nearest point can jump tens of metres along the
+                               line between one sample and the next, and filling
+                               that span would credit a stretch nobody rode. */
+                            var trav = i > r.from ? gpMetres(rows[i - 1], rows[i]) : 0;
+                            if (prevS !== null && Math.abs(near.s - prevS) <= trav * 2 + 2) {
+                                var lo2 = Math.floor(Math.min(prevS, near.s));
+                                var hi2 = Math.floor(Math.max(prevS, near.s));
+                                for (q = Math.max(0, lo2); q <= hi2 && q < bins.length; q++) bins[q] = 1;
+                            } else {
+                                q = Math.max(0, Math.min(bins.length - 1, Math.floor(near.s)));
+                                bins[q] = 1;
+                            }
+                            prevS = near.s;
+                        } else prevS = null;
+                    }
+                    var hit = 0;
+                    for (q = 0; q < bins.length; q++) if (bins[q]) hit++;
+                    var frac = bins.length ? hit / bins.length : 0;
+                    els.push({ k: "zone", name: e.name, cover: frac,
+                               pts: e.max * frac, max: e.max });
+                    got += e.max * frac; max += e.max;
+                }
+            });
+
+            var st = gpDriftStats(r);
+            /* Speed: the target is the course author's, defaulting to the best
+               entry ever recorded here — so the number means something the
+               first time it is looked at. */
+            var tgt = gpN(c.target_kph);
+            if (tgt === null) {
+                tgt = 0;
+                gpDriftRuns().forEach(function (rr) { if (rows[rr.from].kph > tgt) tgt = rows[rr.from].kph; });
+            }
+            var spd = null;
+            if (tgt > 0) {
+                var f = st.entryKph >= tgt ? 1 : Math.max(0, (st.entryKph - tgt * 0.6) / (tgt * 0.4));
+                spd = { name: "Entry speed", pts: 10 * f, max: 10, kph: st.entryKph, target: tgt };
+                got += spd.pts; max += 10;
+            }
+            /* Angle scores only when a sensor backed it. When nothing did, the
+               denominator SHRINKS — it is never renormalised, so a run with
+               no angle source cannot quietly inflate every other number to
+               look like a full card. */
+            var ang = null;
+            if (st.angle && !st.angle.rough) {
+                var tdeg = gpN(c.target_deg) || 30;
+                /* Angle scores on the AREA UNDER THE TRACE — degree-seconds —
+                   not on a weighted blend of how much and how long. Those are
+                   the same two facts, and the integral combines them without
+                   anyone choosing an exchange rate between them; the version
+                   before this had three invented constants in it, which is
+                   three more than the measurement supports.
+                   The target is what a full-marks run looks like here: the
+                   course's target angle held for the course's target time.
+                   Wandering is still deducted, because judges reward angle
+                   held SMOOTHLY and an integral alone cannot tell a
+                   commitment from a save. */
+                var wob = st.segs.length
+                    ? st.segs.reduce(function (a2, s) { return a2 + s.wobble; }, 0) / st.segs.length : 0;
+                var pen = Math.max(0, Math.min(0.4, wob / 25));
+                var tsec = gpN(c.target_drift_s) || 8;
+                var af = Math.max(0, Math.min(1, st.angle.area / (tdeg * tsec)));
+                ang = { name: "Angle", pts: 20 * af * (1 - pen), max: 20,
+                        held: st.angle.held, area: st.angle.area, wobble: wob,
+                        target: tdeg, targetSecs: tsec, conf: st.angle.conf };
+                got += ang.pts; max += 20;
+            }
+            return { els: els, speed: spd, angle: ang, got: got, max: max,
+                     ver: GP_DRIFT_SCORE_VER, stats: st,
+                     noAngle: !st.angle || st.angle.rough };
+        }
+
+        /* Your best run here, which is the only reference a practice tool
+           should have. Never another driver: they were in another car. */
+        function gpDriftBest() {
+            var c = gpCourseActive();
+            var rs = gpDriftRuns();
+            if (!rs.length) return -1;
+            var bi = -1, bv = -Infinity;
+            rs.forEach(function (r, i) {
+                var v;
+                if (c && (c.elements || []).length) {
+                    var card = gpDriftCard(r, c);
+                    v = card ? card.got : -Infinity;
+                } else {
+                    /* With no course drawn, "best" is the run that held the
+                       most angle — or, with no angle at all, the one that
+                       kept the most speed through it. Both are facts. */
+                    var st = gpDriftStats(r);
+                    v = st.angle ? st.angle.secs * 10 + st.angle.held : (st.lowKph || 0);
+                }
+                if (v > bv) { bv = v; bi = i; }
+            });
+            return bi;
+        }
+
+        /* ---- the view ----------------------------------------------------- */
+        /* Under a minute reads as seconds, because that is how a drifter says
+           it; over a minute takes the colon, because "83.4 s" is a number you
+           have to convert before it means anything. */
+        function gpDriftClock(s) {
+            var n = gpN(s);
+            if (n === null || n < 0) return "—";
+            if (n < 60) return n.toFixed(1);
+            var m = Math.floor(n / 60), r = n - m * 60;
+            return m + ":" + (r < 10 ? "0" : "") + r.toFixed(1);
+        }
+        function gpDriftKph(v) {
+            var n = gpSpdN(v);
+            return n === null ? "—" : String(Math.round(n));
+        }
+
+        window.gpDriftPick = function (i) {
+            var rs = gpDriftRuns();
+            i = parseInt(i, 10);
+            if (!rs[i]) return;
+            var was = gp.driftSel, wasIdx = gp.playIdx;
+            gp.driftSel = i;
+            /* Same law as switching laps (ADR-0027): hold your place. You
+               clicked another run to see how IT took this corner — being sent
+               back to the entry line, and the map panned off the corner with
+               you, is the opposite of the thing you asked for. */
+            var here = (was !== i && rs[was] && wasIdx >= rs[was].from && wasIdx <= rs[was].to)
+                ? gpSameSpotIn(wasIdx, rs[was], rs[i]) : null;
+            gp.playIdx = here === null ? rs[i].from : here;
+            gpPlayStop();
+            gpSyncScrub(); gpDrawTrace(); gpRenderDrift();
+            /* The dock prints WHICH run is being read, and that is built into
+               its markup — without a rebuild it kept naming the one before. */
+            gpRenderDock();
+        };
+
+        window.gpDriftGoto = function (idx) {
+            idx = parseInt(idx, 10);
+            var rs = gpDriftRuns();
+            if (!rs.length) return;
+            var cur = rs[gp.driftSel];
+            if (!cur || idx < cur.from || idx > cur.to) {
+                for (var i = 0; i < rs.length; i++)
+                    if (idx >= rs[i].from && idx <= rs[i].to) { gp.driftSel = i; break; }
+            }
+            gp.playIdx = idx;
+            gpPlayStop();
+            gpSyncScrub(); gpDrawTrace(); gpRenderDrift();
+        };
+
+        function gpDriftTile(k, v, u, empty, tip) {
+            return "<div class='gpb-dtile" + (empty ? " empty" : "") + "'" +
+                   (tip ? " title='" + gpEsc(tip) + "'" : "") + "><div class='k'>" + k + "</div>" +
+                   "<div class='v'>" + v + (u ? " <small>" + u + "</small>" : "") + "</div></div>";
+        }
+
+        /* Why there is no angle, said in the words that apply to THIS
+           recording — "nothing measured it" and "it is measured but it did
+           not close" need opposite fixes. */
+        function gpDriftAngleWhy() {
+            var chans = gpDriftChans();
+            if (gpDriftSrcPrefs()[gpDriftSrcKey()] === "none")
+                return "Angle is switched off for this recording. Pick a channel above to turn it back on.";
+            if (!chans.length)
+                return "This recording carries position, speed and heading and nothing else — heading is which way the car was TRAVELLING, and the angle is the gap between that and which way it was POINTING. Nothing here measured the second one. A yaw-rate channel off the car's bus, a recording made since the puck started logging its own gyro, or a log imported from a drift box would all fill it in.";
+            return "None of the " + chans.length + " channel" + (chans.length === 1 ? "" : "s") +
+                   " in this recording looks like a yaw rate or an angle. If one of them is, pick it above — the units are what this goes on, and a channel with none cannot be guessed at safely.";
+        }
+
+        function gpRenderDrift() {
+            var el = document.getElementById("gpDrift");
+            if (!el || gp.view !== "drift") return;
+            var rows = gp.trace;
+            if (!rows || !rows.length) {
+                el.innerHTML = "<div class='ws-none' style='padding:40px 20px'>Nothing loaded.<br>" +
+                    "Open a session first &mdash; this view breaks it into runs and reads each one.</div>";
+                return;
+            }
+            var runs = gpDriftRuns();
+            if (!runs.length) {
+                el.innerHTML = "<div class='ws-none' style='padding:24px 4px'>No runs found in this recording.<br>" +
+                    "A run is a burst of driving with a gap either side of it, or the stretch between an " +
+                    "entry line and an end line. This recording is one unbroken stretch shorter than " +
+                    GP_DRIFT_MIN_S + " seconds &mdash; draw a course below and the two lines will cut it " +
+                    "into runs instead.</div>" + gpDriftCourseHtml(gpCourseActive());
+                gpDriftBind(el);
+                return;
+            }
+            if (gp.driftSel >= runs.length) gp.driftSel = runs.length - 1;
+            if (gp.driftCmp < 0 || gp.driftCmp >= runs.length) gp.driftCmp = gpDriftBest();
+            var sel = gp.driftSel, r = runs[sel];
+            var d = gpDriftAngle(), st = gpDriftStats(r);
+            var course = gpCourseActive();
+            var shown = gpDriftShown();
+            var h = "";
+
+            /* ---- the toolbar: what the map is coloured by -----------------
+               Braking is a circuit mode and does not belong here. On a
+               drifting car the longitudinal trace is dominated by the drift
+               itself and says nothing that Angle does not say better. */
+            var modes = [["lap", "Run"], ["speed", "Speed"]];
+            if (d) modes.push(["angle", "Angle"]);
+            var mm = gpEffectiveMapMode();
+            h += "<div class='gpb-dbar'><div class='gpb-pseg'>" +
+                 modes.map(function (m) {
+                     return "<button data-gp-mapmode='" + m[0] + "' class='" + (mm === m[0] ? "on" : "") +
+                            "' onclick=\"gpMapModeSet('" + m[0] + "')\">" + m[1] + "</button>";
+                 }).join("") + "</div><span class='sp'></span>" +
+                 "<span class='gpb-dpm'>" + runs.length + " run" + (runs.length === 1 ? "" : "s") +
+                 " &middot; speeds in " + gpSpdU() + "</span></div>";
+
+            /* ---- runs: the thirty-second glance --------------------------- */
+            h += "<div class='gpb-dsect'><h4>Runs<span class='sp'></span>" +
+                 "<span class='gpb-dnorm'>newest first</span></h4>";
+            h += "<table class='gpb-table gpb-druns'><thead><tr><th></th><th>Run</th>" +
+                 "<th class='n' title='speed as the run started'>In</th>" +
+                 "<th class='n' title='the slowest the car got — where a drift dies, this is where you see it'>Low</th>" +
+                 "<th class='n' title='speed as the run ended'>Out</th>" +
+                 "<th class='n'>Time</th>" +
+                 "<th class='n' title='times the car swapped from turning one way to the other'>Sw</th>" +
+                 "<th class='n' title='the widest angle held during the run'>Angle</th>" +
+                 "<th class='n' title='degree-seconds: the area under the angle trace, so more angle and more time both raise it'>&deg;&middot;s</th>" +
+                 "</tr></thead><tbody>";
+            for (var q = runs.length - 1; q >= 0; q--) {
+                var rr = runs[q], s2 = gpDriftStats(rr), hot = q === sel;
+                var ang, area;
+                if (!s2.angle) { ang = "<span class='gpb-dpm'>&mdash;</span>"; area = ang; }
+                else if (s2.angle.rough) {
+                    ang = "<span class='gpb-dpm' title='" +
+                          (s2.angle.soft ? "Nothing here was provably straight, so there is no zero to measure from"
+                                         : "This stretch did not come back to straight where it must — the numbers on it are not worth reading") +
+                          "'>rough</span>";
+                    area = "<span class='gpb-dpm'>&mdash;</span>";
+                } else {
+                    ang = Math.round(s2.angle.peak) + "&deg;" +
+                          (s2.angle.direct ? "" : "<span class='gpb-dpm'>&plusmn;" + Math.round(s2.angle.conf) + "</span>");
+                    area = Math.round(s2.angle.area);
+                }
+                h += "<tr class='" + (hot ? "hot" : "") + "' data-gp-drun='" + q + "'>" +
+                     "<td><i class='gpb-dsw' " + (hot ? "" : "data-gp-dshow='" + q + "' ") +
+                     "title='" + (hot ? "The run you are reading is always drawn" : "Draw this run on the map") + "' " +
+                     "style='background:" + gpLapColour(q) + ";opacity:" +
+                     ((hot || shown[q]) ? 1 : 0.18) + (hot ? ";cursor:default" : "") + "'></i></td>" +
+                     "<td style='white-space:nowrap'>" + (q + 1) +
+                     (q === gp.driftCmp ? " <span class='gpb-dpm'>best</span>" : "") + "</td>" +
+                     "<td class='n'>" + gpDriftKph(s2.entryKph) + "</td>" +
+                     "<td class='n " + (s2.lowKph !== null && s2.lowKph < 30 ? "red" : "mut") + "'>" + gpDriftKph(s2.lowKph) + "</td>" +
+                     "<td class='n mut'>" + gpDriftKph(s2.exitKph) + "</td>" +
+                     "<td class='n mut'>" + gpDriftClock(s2.secs) + "</td>" +
+                     "<td class='n'>" + s2.switches + "</td>" +
+                     "<td class='n'>" + ang + "</td>" +
+                     "<td class='n mut'>" + area + "</td></tr>";
+            }
+            h += "</tbody></table></div>";
+
+            /* ---- the run being read --------------------------------------- */
+            h += "<div class='gpb-dsect'><h4>Run " + (sel + 1) +
+                 (sel === gp.driftCmp ? " <span class='gpb-dpm'>your best here</span>" : "") + "</h4>";
+            h += "<div class='gpb-dtiles'>" +
+                 gpDriftTile("Came in at", gpDriftKph(st.entryKph), gpSpdU()) +
+                 gpDriftTile("Slowest", gpDriftKph(st.lowKph), gpSpdU(),
+                             false, "Where a drift dies mid-course, this is the number that shows it") +
+                 gpDriftTile("Came out at", gpDriftKph(st.exitKph), gpSpdU()) +
+                 "</div>";
+            if (st.angle && !st.angle.rough) {
+                h += "<div class='gpb-dtiles' style='margin-top:1px'>" +
+                     gpDriftTile("Widest angle", Math.round(st.angle.peak) + "&deg;",
+                                 st.angle.direct ? "measured"
+                                   : "<span class='gpb-dpm'>&plusmn;" + Math.round(st.angle.conf) + "&deg;</span>") +
+                     gpDriftTile("Angle &times; time", Math.round(st.angle.area), "&deg;&middot;s",
+                                 false, "The area under the angle trace — more angle and more time " +
+                                 "both raise it, with nothing deciding which matters more") +
+                     /* No "of the run" denominator: a run includes getting
+                        there, and 13 s of 52 reads like a poor ratio when 39
+                        of those seconds were the drive to the section. */
+                     gpDriftTile("Sideways for", st.angle.secs.toFixed(1), "s") +
+                     "</div>";
+            } else {
+                h += "<div class='gpb-dtiles' style='margin-top:1px'>" +
+                     gpDriftTile("Widest angle", "&mdash;", "", true) +
+                     gpDriftTile("Angle &times; time", "&mdash;", "", true) +
+                     gpDriftTile("Sideways for", "&mdash;", "", true) +
+                     "</div>";
+                h += "<div class='gpb-dsay'>" +
+                     (st.angle && st.angle.soft
+                        ? "Nothing in this run is provably straight — no stretch where the car is not turning, not loaded up and above " + GP_DRIFT_MIN_KPH + " km/h. Without one there is no zero to measure the angle from, so it is left out rather than printed as a number nothing pins down."
+                      : st.angle && st.angle.rough
+                        ? "The angle for this run did not close: it should come back to straight where the car provably is, and it does not. Rather than print a number wrong by an unknown amount, it is left out."
+                        : gpDriftAngleWhy()) + "</div>";
+            }
+            h += gpDriftSourceLine(d);
+            h += "</div>";
+
+            /* ---- switches -------------------------------------------------- */
+            if (st.sw.length) {
+                h += "<div class='gpb-dsect'><h4>Switches<span class='sp'></span>" +
+                     "<span class='gpb-dnorm' title='" +
+                     (d ? "the angle crossing through straight from one side to the other"
+                        : "the car swapping from turning one way to the other — measured from the path it took, no angle sensor needed") +
+                     "'>what each one cost</span></h4>" +
+                     "<table class='gpb-table'><thead><tr>" +
+                     "<th></th><th class='n'>Where</th><th class='n'>In</th>" +
+                     "<th class='n'>Out</th><th class='n'>Change</th></tr></thead><tbody>";
+                st.sw.forEach(function (s, i) {
+                    var chgN = gpSpdN(s.outKph - s.inKph);
+                    h += "<tr data-gp-dsw='" + s.i + "' style='cursor:pointer'>" +
+                         "<td>T" + (i + 1) + "</td>" +
+                         "<td class='n mut'>" + gpDriftClock(gpSecs(rows, r.from, s.i)) + "</td>" +
+                         "<td class='n'>" + gpDriftKph(s.inKph) + "</td>" +
+                         "<td class='n'>" + gpDriftKph(s.outKph) + "</td>" +
+                         "<td class='n " + (chgN < -12 ? "red" : "mut") + "'>" +
+                         (chgN > 0 ? "+" : chgN < 0 ? "−" : "") + Math.abs(Math.round(chgN)) + "</td></tr>";
+                });
+                h += "</tbody></table></div>";
+            }
+
+            h += gpDriftCardHtml(r, course, runs);
+            h += gpDriftCourseHtml(course);
+            el.innerHTML = h;
+            gpDriftBind(el);
+        }
+
+        /* Where the angle came from, in one line, with the control to change it
+           folded away behind it. Provenance is not optional (ADR-0011) — a
+           worked-out number has to say it is worked out — but WHICH channel it
+           came from is a once-per-recording decision, not something you read
+           every run, and a dropdown sitting in the middle of the analysis was
+           answering a question nobody had asked. Now that the puck logs its
+           own gyro there is usually nothing to choose at all. */
+        function gpDriftSourceLine(d) {
+            var chans = gpDriftChans();
+            var many = chans.length > 1;
+            var open = !!gp.driftSrcOpen;
+            var say;
+            if (!d) say = "";
+            else if (d.direct) say = "Angle measured by " + gpEsc(d.src.name) + ", passed through unchanged.";
+            else say = "Angle worked out from " + gpEsc(d.src.name) + ". The &plusmn; is measured, not " +
+                       "quoted: every stretch has to come back to straight, and how far off it lands is " +
+                       "how far the working drifted.";
+            var link = (chans.length ? " <a href='#' data-gp-dsrc class='gpb-dlink'>" +
+                        (open ? "hide" : many ? "use a different channel" : "change") + "</a>" : "");
+            var h = (say || link) ? "<div class='gpb-dsay'>" + say + link + "</div>" : "";
+            if (!open) return h;
+            var cur = gpDriftSrcPrefs()[gpDriftSrcKey()] || (d ? d.src.kind + "|" + d.src.id : "");
+            var opts = "<option value='none'" + (cur === "none" ? " selected" : "") +
+                       ">Nothing &mdash; leave the angle out</option>";
+            chans.forEach(function (c) {
+                var g = gpDriftGuess(c) || (c.id === "puck:gyroz" ? "yawrate" : null);
+                (g ? [g] : ["yawrate", "angle"]).forEach(function (k) {
+                    var v = k + "|" + c.id;
+                    opts += "<option value='" + gpEsc(v) + "'" + (cur === v ? " selected" : "") + ">" +
+                            gpEsc(c.name) + (c.unit ? " (" + gpEsc(c.unit) + ")" : "") + " &mdash; " +
+                            (k === "yawrate" ? "how fast the car is turning" : "the angle itself") +
+                            "</option>";
+                });
+            });
+            h += "<select data-gp-driftsrc style='width:100%;margin-top:4px'>" + opts + "</select>";
+            if (d && d.src.guessed)
+                h += "<div class='gpb-dsay'>Picked from the units on the channel.</div>";
+            if (d && !d.direct && d.weak)
+                h += "<div class='gpb-dsay'>Not enough cornering in this session to check the channel's " +
+                     "scale against the driving, so it is taken at face value. A session with more " +
+                     "corners in it would tighten the &plusmn;.</div>";
+            return h;
+        }
+
+        /* The scorecard, when a course has been drawn on this track. */
+        function gpDriftCardHtml(r, course, runs) {
+            if (!course || !(course.elements || []).length) return "";
+            var card = gpDriftCard(r, course);
+            if (!card) return "";
+            var h = "<div class='gpb-dsect'><h4>Scorecard <span class='gpb-dnorm'>" + gpEsc(course.name) + "</span></h4>" +
+                    "<table class='gpb-table'><thead><tr><th>Element</th><th class='n'>How it went</th>" +
+                    "<th class='n'>Points</th><th class='n'>Of</th></tr></thead><tbody>";
+            card.els.forEach(function (e, i) {
+                var how = e.k === "clip"
+                    ? (isFinite(e.dist) ? Math.round(e.dist) + " m away" : "never got near")
+                    : Math.round(e.cover * 100) + "% covered";
+                h += "<tr" + (e.k === "clip" && e.at >= 0 ? " data-gp-dsw='" + e.at + "' style='cursor:pointer'" : "") + ">" +
+                     "<td>" + (i + 1) + " &middot; " + gpEsc(e.name) + "</td>" +
+                     "<td class='n mut'>" + how + "</td>" +
+                     "<td class='n'>" + e.pts.toFixed(1) + "</td>" +
+                     "<td class='n mut'>" + e.max + "</td></tr>";
+            });
+            if (card.speed)
+                h += "<tr><td>Entry speed</td><td class='n mut'>" + gpDriftKph(card.speed.kph) +
+                     " of " + gpDriftKph(card.speed.target) + "</td><td class='n'>" +
+                     card.speed.pts.toFixed(1) + "</td><td class='n mut'>" + card.speed.max + "</td></tr>";
+            if (card.angle)
+                h += "<tr><td>Angle</td><td class='n mut'>" + Math.round(card.angle.area) + " of " +
+                     Math.round(card.angle.target * card.angle.targetSecs) + " &deg;&middot;s</td><td class='n'>" +
+                     card.angle.pts.toFixed(1) + "</td><td class='n mut'>" + card.angle.max + "</td></tr>";
+            else
+                h += "<tr class='gpb-dsoft'><td>Angle</td><td class='n' colspan='3'>" +
+                     "not measured &mdash; not counted either way</td></tr>";
+            h += "<tr style='font-weight:700'><td>Measured score</td><td></td><td class='n'>" +
+                 card.got.toFixed(1) + "</td><td class='n'>" + card.max.toFixed(0) + "</td></tr>";
+            h += "<tr class='gpb-dsoft'><td>Style</td><td class='n' colspan='3'>a person scores this</td></tr>";
+            h += "</tbody></table>";
+            h += "<div class='gpb-dsay'>Scoring version " + card.ver + ". " +
+                 (card.noAngle
+                    ? "With nothing measuring the angle, the total it is out of SHRINKS rather than the " +
+                      "other numbers growing to fill the gap."
+                    : "Every point is somewhere on the map you can point at.") + "</div>";
+            if (gp.driftCmp >= 0 && gp.driftCmp !== gp.driftSel && runs[gp.driftCmp]) {
+                var bcard = gpDriftCard(runs[gp.driftCmp], course);
+                if (bcard) {
+                    h += "<table class='gpb-table' style='margin-top:8px'><thead><tr>" +
+                         "<th>Against your best</th><th class='n'>This</th>" +
+                         "<th class='n'>Run " + (gp.driftCmp + 1) + "</th><th class='n'>Difference</th>" +
+                         "</tr></thead><tbody>";
+                    card.els.forEach(function (e, i) {
+                        var b = bcard.els[i];
+                        if (!b) return;
+                        var mine = e.k === "clip" ? e.dist : e.cover * 100;
+                        var theirs = b.k === "clip" ? b.dist : b.cover * 100;
+                        if (!isFinite(mine) || !isFinite(theirs)) return;
+                        var u = e.k === "clip" ? " m" : "%", diff = mine - theirs;
+                        var good = e.k === "clip" ? diff < 0 : diff > 0;
+                        h += "<tr><td>" + gpEsc(e.name) + "</td>" +
+                             "<td class='n'>" + mine.toFixed(0) + u + "</td>" +
+                             "<td class='n mut'>" + theirs.toFixed(0) + u + "</td>" +
+                             "<td class='n'" + (Math.abs(diff) < 0.5 ? " style='color:var(--gpb-muted)'"
+                                : good ? " style='color:var(--gpb-ok)'" : "") + ">" +
+                             (diff > 0 ? "+" : "") + diff.toFixed(0) + u + "</td></tr>";
+                    });
+                    h += "</tbody></table>";
+                }
+            }
+            return h + "</div>";
+        }
+
+        /* ---- the course editor -------------------------------------------- */
+        function gpDriftCourseHtml(c) {
+            var t = gpActiveTrack();
+            if (!t) return "<div class='gpb-dsect'><h4>Course</h4>" +
+                "<div class='ws-none'>Pick a track in the Tracks view first &mdash; a course is drawn on one.</div></div>";
+            var cs = gpCourses();
+            var h = "<div class='gpb-dsect'><h4>Course<span class='sp'></span>" +
+                    "<button class='ws-btn' data-gp-cnew style='font-size:10px;padding:1px 7px'>New</button></h4>";
+            if (!cs.length) {
+                h += "<div class='gpb-dsay'>No course drawn on " + gpEsc(t.name) + " yet. " +
+                     "Runs are being found from the gaps between them, which works. Draw a course and you " +
+                     "also get clips and zones scored, and runs cut at the same two lines every time.</div></div>";
+                return h;
+            }
+            h += "<select data-gp-cpick style='width:100%;margin-bottom:6px'>" +
+                 cs.map(function (x) {
+                     return "<option value='" + gpEsc(x.id) + "'" + (c && x.id === c.id ? " selected" : "") +
+                            ">" + gpEsc(x.name) + "</option>";
+                 }).join("") + "</select>";
+            var arm = function (k, label, tip) {
+                return "<button class='ws-btn" + (gp.driftDraw === k ? " on" : "") +
+                       "' data-gp-cdraw='" + k + "' title='" + gpEsc(tip) + "' " +
+                       "style='font-size:10.5px;padding:2px 8px'>" + label + "</button>";
+            };
+            h += "<div style='display:flex;gap:5px;flex-wrap:wrap'>" +
+                 arm("entry", c.entry ? "Move entry line" : "Entry line", "Click the map where runs start") +
+                 arm("finish", c.finish ? "Move end line" : "End line", "Click the map where runs end") +
+                 arm("clip", "Add clip", "Click the map at a point the car should get to") +
+                 arm("zone", "Add zone", "Click along the edge the car should ride; click Done when finished") +
+                 (gp.driftDraw === "zone"
+                    ? "<button class='ws-btn on' data-gp-cdone style='font-size:10.5px;padding:2px 8px'>Done</button>"
+                    : "") +
+                 "<span style='flex:1'></span>" +
+                 "<button class='ws-btn' data-gp-cdel style='font-size:10.5px;padding:2px 8px'>Delete course</button>" +
+                 "</div>";
+            if (gp.driftDraw)
+                h += "<div class='gpb-drawhint'>" +
+                     (gp.driftDraw === "zone"
+                        ? "Click along the wall or edge the car should ride. Two points is enough; more follows a curve. Click <b>Done</b> to finish."
+                        : gp.driftDraw === "clip"
+                        ? "Click the point on the map the car should get to."
+                        : "Click the map where the " + (gp.driftDraw === "entry" ? "run starts" : "run ends") +
+                          ". The line is laid across the direction you were driving.") +
+                     "</div>";
+            (c.elements || []).forEach(function (e, i) {
+                h += "<div class='gpb-delrow'>" +
+                     "<span class='nm'>" + (i + 1) + " &middot; " + gpEsc(e.name) + "</span>" +
+                     "<label class='gpb-dpm'>" + (e.k === "clip" ? "within" : "band") +
+                     " <input type='number' min='" + GP_DRIFT_MIN_SHAPE_M + "' max='60' step='0.5' value='" +
+                     (e.k === "clip" ? e.r : e.band) + "' data-gp-cnum='" + i + "' data-gp-cfield='size'> m</label>" +
+                     "<label class='gpb-dpm'>worth <input type='number' min='1' max='100' step='1' value='" +
+                     e.max + "' data-gp-cnum='" + i + "' data-gp-cfield='max'></label>" +
+                     "<button class='ws-btn' data-gp-celdel='" + i + "' title='Remove this' " +
+                     "style='font-size:10px;padding:0 6px'>&times;</button></div>";
+            });
+            h += "<div class='gpb-delrow' style='border:0'>" +
+                 "<span class='nm gpb-dpm'>Entry speed worth full marks</span>" +
+                 "<input type='number' min='0' max='400' step='1' data-gp-ctgt='kph' value='" +
+                 (c.target_kph === null || c.target_kph === undefined ? "" : c.target_kph) +
+                 "' placeholder='best'> <span class='gpb-dpm'>km/h</span></div>";
+            h += "<div class='gpb-delrow' style='border:0'>" +
+                 "<span class='nm gpb-dpm'>Angle worth full marks</span>" +
+                 "<input type='number' min='5' max='90' step='1' data-gp-ctgt='deg' value='" +
+                 (c.target_deg === null || c.target_deg === undefined ? "" : c.target_deg) +
+                 "' placeholder='30'> <span class='gpb-dpm'>°</span></div>";
+            h += "<div class='gpb-dsay'>Shapes cannot be drawn tighter than " + GP_DRIFT_MIN_SHAPE_M +
+                 " m. Without corrections the receiver is good to about a metre, and an editor that " +
+                 "accepted a 30 cm clip would be promising a precision it has not got.</div>";
+            h += "</div>";
+            return h;
+        }
+
+        /* Course edits live on the track record, beside the gates and the
+           outline — Studio-side only; the node is never sent any of it. */
+        /* By id, re-resolved after the dialog: gpConfirm is a promise, and the
+           list can have been edited while it was open. */
+        function gpCourseDrop(id) {
+            var cs = gpCourses(), i = -1;
+            cs.forEach(function (x, n) { if (x.id === id) i = n; });
+            if (i < 0) return;
+            cs.splice(i, 1);
+            gp.courseId = cs.length ? cs[0].id : null;
+            gp.driftDraw = null; gp.driftDrawPts = [];
+            gpDriftClickBind();
+            gpCourseSave();
+        }
+
+        function gpCourseSave() {
+            gpTracksSave();
+            gp.driftRunKey = "";
+            gpDrawTrace(); gpRenderDrift();
+        }
+
+        function gpDriftBind(el) {
+            var q = function (sel, ev, fn) {
+                Array.prototype.forEach.call(el.querySelectorAll(sel), function (n) { n.addEventListener(ev, fn); });
+            };
+            q("[data-gp-drun]", "click", function (e) {
+                if (e.target.hasAttribute && e.target.hasAttribute("data-gp-dshow")) return;
+                window.gpDriftPick(this.getAttribute("data-gp-drun"));
+            });
+            q("[data-gp-dshow]", "click", function (e) {
+                e.stopPropagation();
+                window.gpDriftShowToggle(this.getAttribute("data-gp-dshow"));
+            });
+            q("[data-gp-dsw]", "click", function () { window.gpDriftGoto(this.getAttribute("data-gp-dsw")); });
+            q("[data-gp-driftsrc]", "change", function () { window.gpDriftSrcSet(this.value); });
+            q("[data-gp-dsrc]", "click", function (e) {
+                e.preventDefault();
+                gp.driftSrcOpen = !gp.driftSrcOpen;
+                gpRenderDrift();
+            });
+            q("[data-gp-cpick]", "change", function () {
+                gp.courseId = this.value; gp.driftDraw = null; gp.driftRunKey = "";
+                gpDrawTrace(); gpRenderDrift();
+            });
+            q("[data-gp-cnew]", "click", function () {
+                var cs = gpCourses();
+                var c = gpCourseClean({ id: "c" + Date.now(), name: "Course " + (cs.length + 1) });
+                cs.push(c); gp.courseId = c.id; gp.driftDraw = null;
+                gpCourseSave();
+            });
+            q("[data-gp-cdel]", "click", function () {
+                var c = gpCourseActive();
+                if (!c) return;
+                /* An empty course is a New you did not want; asking about it
+                   would be a dialog for nothing. Anything with work on it gets
+                   the same question every other destructive button here asks —
+                   an evening of clips and zones was one unguarded click from
+                   gone, with no undo behind it. */
+                if (!c.entry && !c.finish && !(c.elements || []).length) { gpCourseDrop(c.id); return; }
+                gpConfirm("Delete “" + c.name + "”?\n\nThe entry line, the end line and " +
+                          "every clip and zone on it go with it. The track, its gates and your " +
+                          "recordings are untouched.")
+                    .then(function (yes) { if (yes) gpCourseDrop(c.id); });
+            });
+            q("[data-gp-cdraw]", "click", function () {
+                var k = this.getAttribute("data-gp-cdraw");
+                gp.driftDraw = gp.driftDraw === k ? null : k;
+                gp.driftDrawPts = [];
+                gpDriftClickBind();
+                gpDrawDriftShapes(); gpRenderDrift();
+            });
+            q("[data-gp-cdone]", "click", function () { gpDriftZoneFinish(); });
+            q("[data-gp-celdel]", "click", function () {
+                var c = gpCourseActive();
+                if (!c) return;
+                c.elements.splice(parseInt(this.getAttribute("data-gp-celdel"), 10), 1);
+                gpCourseSave();
+            });
+            q("[data-gp-cnum]", "change", function () {
+                var c = gpCourseActive();
+                if (!c) return;
+                var e = c.elements[parseInt(this.getAttribute("data-gp-cnum"), 10)];
+                if (!e) return;
+                var v = gpN(this.value);
+                if (v === null) return;
+                if (this.getAttribute("data-gp-cfield") === "max") e.max = Math.max(1, Math.min(100, v));
+                else {
+                    v = Math.max(GP_DRIFT_MIN_SHAPE_M, Math.min(60, v));
+                    /* gpZoneGeom keys its cache on the band, so widening one
+                       re-projects on the next read without a hint from here. */
+                    if (e.k === "clip") e.r = v; else e.band = v;
+                }
+                gpCourseSave();
+            });
+            q("[data-gp-ctgt]", "change", function () {
+                var c = gpCourseActive();
+                if (!c) return;
+                var v = gpN(this.value);
+                if (this.getAttribute("data-gp-ctgt") === "kph") c.target_kph = v;
+                else c.target_deg = v;
+                gpCourseSave();
+            });
+        }
+
+        /* ---- drawing on the map ------------------------------------------- */
+        function gpDriftClickBind() {
+            if (!gp.map) return;
+            if (!gp._driftClick) {
+                gp._driftClick = function (e) {
+                    if (!gp.driftDraw || gp.view !== "drift") return;
+                    var c = gpCourseActive();
+                    if (!c) return;
+                    var lat = e.latlng.lat, lon = e.latlng.lng;
+                    if (gp.driftDraw === "clip") {
+                        c.elements.push({ k: "clip", name: "Clip " + (c.elements.length + 1),
+                                          lat: lat, lon: lon, r: 3, max: 10 });
+                        gp.driftDraw = null;
+                        gpDriftClickBind();
+                        gpCourseSave();
+                    } else if (gp.driftDraw === "zone") {
+                        gp.driftDrawPts.push([lat, lon]);
+                        gpDrawDriftShapes(); gpRenderDrift();
+                    } else {
+                        /* The line goes ACROSS the way the car was going, so it
+                           is aimed from the driving rather than from a compass
+                           the user has to reason about — the same thing
+                           gpSnapGate does for a lap gate. */
+                        c[gp.driftDraw === "entry" ? "entry" : "finish"] = {
+                            lat: lat, lon: lon, heading: gpDriftHeadingAt(lat, lon),
+                            half_width_m: 15
+                        };
+                        gp.driftDraw = null;
+                        gpDriftClickBind();
+                        gpCourseSave();
+                    }
+                };
+            }
+            gp.map.off("click", gp._driftClick);
+            if (gp.driftDraw && gp.view === "drift") {
+                gp.map.on("click", gp._driftClick);
+                if (gp.map.getContainer) gp.map.getContainer().style.cursor = "crosshair";
+            } else if (gp.map.getContainer && !gp.tracing) {
+                gp.map.getContainer().style.cursor = "";
+            }
+        }
+
+        /* Which way the car was going when it passed nearest here. A line
+           aimed at nothing never fires; aiming it from the driving is why
+           nobody has to think about compass bearings. */
+        function gpDriftHeadingAt(lat, lon) {
+            var rows = gp.trace;
+            if (!rows || !rows.length) return 0;
+            var best = Infinity, bi = -1, i;
+            for (i = 0; i < rows.length; i++) {
+                var m = gpMetres({ lat: lat, lon: lon }, rows[i]);
+                if (m < best) { best = m; bi = i; }
+            }
+            return bi >= 0 && best < 200 ? (rows[bi].hdg || 0) : 0;
+        }
+
+        function gpDriftZoneFinish() {
+            var c = gpCourseActive();
+            if (c && gp.driftDrawPts && gp.driftDrawPts.length >= 2) {
+                c.elements.push({ k: "zone", name: "Zone " + (c.elements.length + 1),
+                                  pts: gp.driftDrawPts.slice(), band: 4, max: 15 });
+            }
+            gp.driftDraw = null; gp.driftDrawPts = [];
+            gpDriftClickBind();
+            gpCourseSave();
         }
 
         /* ══════════════════════════════════════════════════════════════════
@@ -17243,6 +19168,32 @@
         function gpDrawLegend() {
             var el = document.getElementById("gpMapLegend");
             if (!el) return;
+            if (gp.view === "drift") {
+                var dr = gpDriftRuns(), dsh = gpDriftShown();
+                if (dr.length < 2) { el.innerHTML = ""; return; }
+                /* A practice day is thirty runs, and thirty rows of legend
+                   would cover the map it is labelling. Name the ones being
+                   compared and count the rest. */
+                var drawn = [], LEGMAX = 8;
+                dr.forEach(function (r, i) { if (dsh[i] || i === gp.driftSel) drawn.push(i); });
+                var extra = drawn.length - LEGMAX;
+                if (extra > 0) {
+                    drawn = drawn.filter(function (i) {
+                        return i === gp.driftSel || i === gp.driftCmp;
+                    }).concat(drawn.filter(function (i) {
+                        return i !== gp.driftSel && i !== gp.driftCmp;
+                    }).slice(0, LEGMAX - 2)).sort(function (a, b) { return a - b; });
+                }
+                el.innerHTML = drawn.map(function (i) {
+                    var me = i === gp.driftSel;
+                    var col = (me && gpEffectiveMapMode() !== "lap") ? "#9aa0a6" : gpLapColour(i);
+                    return "<span class='" + (me ? "me" : "") + "'><i style='border-top-width:" +
+                           (me ? 4 : 2.5) + "px;border-top-color:" + col + ";border-top-style:" +
+                           (i === gp.driftCmp && !me ? "dashed" : "solid") + "'></i>Run " + (i + 1) +
+                           (me ? "" : i === gp.driftCmp ? " · best" : "") + "</span>";
+                }).join("");
+                return;
+            }
             if (gp.view !== "session" || !gp.trace || !gp.trace.length) { el.innerHTML = ""; return; }
             var shown = gpShownList();
             if (gp.selLap >= 0 && shown.indexOf(gp.selLap) < 0) shown = [gp.selLap].concat(shown);
@@ -17268,9 +19219,110 @@
             gp.ghostMarks = null;
         }
 
+        /* The course, and where the car swapped sides. Its own layer, so it
+           can be cleared without disturbing the playhead or the gate editor. */
+        function gpDrawDriftShapes() {
+            if (!gp.map) return;
+            if (!gp.driftLayer) gp.driftLayer = L.layerGroup().addTo(gp.map);
+            gp.driftLayer.clearLayers();
+            if (gp.view !== "drift") return;
+            var c = gpCourseActive();
+
+            if (c) {
+                [["entry", c.entry, "#2e7d43", "Entry"], ["finish", c.finish, "#c02026", "End"]]
+                    .forEach(function (g) {
+                        if (!g[1]) return;
+                        var ends = gpGateEnds(g[1]);
+                        if (!ends) return;
+                        L.polyline(ends, { color: "#0A0C0E", weight: 9, opacity: 0.5 }).addTo(gp.driftLayer);
+                        L.polyline(ends, { color: g[2], weight: 4, opacity: 1 }).addTo(gp.driftLayer);
+                    });
+                (c.elements || []).forEach(function (e, i) {
+                    if (e.k === "clip") {
+                        /* The ring is the radius that scores full marks and the
+                           faded one is where the points run out — both drawn,
+                           because a score you cannot see the shape of is a
+                           score you cannot argue with. */
+                        L.circle([e.lat, e.lon], { radius: e.r + GP_DRIFT_CLIP_FADE_M,
+                            color: "#ffc533", weight: 1, opacity: 0.5, fill: false,
+                            dashArray: "4 4", interactive: false }).addTo(gp.driftLayer);
+                        L.circle([e.lat, e.lon], { radius: e.r, color: "#ffc533", weight: 2,
+                            opacity: 0.95, fillColor: "#ffc533", fillOpacity: 0.18,
+                            interactive: false }).addTo(gp.driftLayer);
+                    } else {
+                        L.polyline(e.pts, { color: "#0A0C0E", weight: 3, opacity: 0.45,
+                            interactive: false }).addTo(gp.driftLayer);
+                        L.polyline(e.pts, { color: "#20c8c0", weight: 2, opacity: 0.95,
+                            interactive: false }).addTo(gp.driftLayer);
+                        /* the band, as the two edges it really is */
+                        gpZoneEdges(e).forEach(function (side) {
+                            L.polyline(side, { color: "#20c8c0", weight: 1, opacity: 0.5,
+                                dashArray: "5 5", interactive: false }).addTo(gp.driftLayer);
+                        });
+                    }
+                    var lbl = L.divIcon({ className: "", iconSize: [18, 18],
+                        html: "<div class='gpb-corner-badge' style='font-size:10px'>" +
+                              (i + 1) + "</div>" });
+                    var at = e.k === "clip" ? [e.lat, e.lon] : e.pts[0];
+                    L.marker(at, { icon: lbl, keyboard: false, interactive: false }).addTo(gp.driftLayer);
+                });
+            }
+
+            /* Being drawn right now. */
+            if (gp.driftDraw === "zone" && gp.driftDrawPts && gp.driftDrawPts.length) {
+                if (gp.driftDrawPts.length > 1)
+                    L.polyline(gp.driftDrawPts, { color: "#20c8c0", weight: 3, dashArray: "6 4" }).addTo(gp.driftLayer);
+                gp.driftDrawPts.forEach(function (p) {
+                    L.circleMarker(p, { radius: 4, color: "#20c8c0", weight: 2,
+                        fillColor: "#fff", fillOpacity: 1 }).addTo(gp.driftLayer);
+                });
+            }
+
+            /* Where the car swapped from turning one way to the other, on the
+               run being read. Numbered so the map and the table below name the
+               same moment. */
+            /* Filter FIRST, then number. Numbering the whole session's switches
+               and drawing a subset made the map's T4 and the table's T4 two
+               different corners — the map counted from the start of the
+               recording, the table from the start of the run. */
+            var r = gpLapRange();
+            gpDriftSwitches().filter(function (s) {
+                return s.i >= r.from && s.i <= r.to;
+            }).forEach(function (s, i) {
+                var at = gpDrawnAt(s.i);
+                if (!at) return;
+                var m = L.marker(at, { keyboard: false, icon: L.divIcon({ className: "",
+                    iconSize: [16, 16],
+                    html: "<div class='gpb-corner-badge' style='font-size:9px;border-radius:50%'>T" +
+                          (i + 1) + "</div>" }) });
+                m.on("click", function () { gpDriftGoto(s.i); });
+                gp.driftLayer.addLayer(m);
+            });
+        }
+
+        /* Both edges of a zone's band, offset along each segment's normal. */
+        function gpZoneEdges(e) {
+            var g = gpZoneGeom(e), a = [], b = [], i;
+            for (i = 0; i < g.xy.length; i++) {
+                var p = g.xy[i];
+                var q = g.xy[i === 0 ? 1 : i] , o = g.xy[i === 0 ? 0 : i - 1];
+                var dx = q[0] - o[0], dy = q[1] - o[1], L2 = Math.hypot(dx, dy) || 1;
+                var nx = -dy / L2 * e.band, ny = dx / L2 * e.band;
+                a.push([g.lat0 + (p[1] + ny) / g.m.la, g.lon0 + (p[0] + nx) / g.m.lo]);
+                b.push([g.lat0 + (p[1] - ny) / g.m.la, g.lon0 + (p[0] - nx) / g.m.lo]);
+            }
+            return [a, b];
+        }
+
         function gpDrawTrace() {
             if (!gp.map) return;
             if (!gp.traceLayer) gp.traceLayer = L.layerGroup().addTo(gp.map);
+            /* Leaving Drift takes its course with it. Ahead of every guard and
+               early return below, because those return paths are exactly the
+               ones that left clips, zones and entry lines painted over the
+               Tracks editor and the Analyse map — gpDrawDriftShapes clears and
+               then self-guards on the view, the same shape as gpDrawEditor. */
+            if (gp.view !== "drift") gpDrawDriftShapes();
             var cv = gpTraceCv();
             if (!cv) return;
             if (!gp.trace || !gp.trace.length) { cv.setStrands([]); gpClearMarks(); gpDrawLegend(); return; }
@@ -17294,6 +19346,64 @@
                 gpDrawLegend();
                 return;
             }
+            /* ---- Drift: every ticked run, at the position the car held ----
+               Overlaying the runs IS the line-repeatability tool. Nothing is
+               displaced to make the difference easier to see (ADR-0027) —
+               "somewhere your car never went" is still never an acceptable
+               answer, and eight real lines a metre apart tell you more than
+               one invented spread number. */
+            if (gp.view === "drift") {
+                var runs = gpDriftRuns();
+                if (!runs.length) { cv.setStrands([]); gpClearMarks(); gpDrawDriftShapes(); gpDrawLegend(); return; }
+                var sel = Math.max(0, Math.min(gp.driftSel, runs.length - 1));
+                var shown = gpDriftShown();
+                runs.forEach(function (rr, i) {
+                    if (i === sel || !shown[i]) return;
+                    strands.push({ from: rr.from, to: rr.to, width: 2.4,
+                                   casing: GP_LAP_CASE, caseAlpha: 0.45,
+                                   col: gpLapColour(i), alpha: 0.95,
+                                   dash: i === gp.driftCmp ? [9, 5] : undefined });
+                });
+                var dr = runs[sel], dmode = gpEffectiveMapMode(), dval, dcol;
+                if (dmode === "angle") {
+                    var da = gpDriftAngle(), ascale = gpAngleScale();
+                    dval = function (idx) {
+                        return (da && da.ok[idx]) ? Math.max(-1, Math.min(1, da.beta[idx] / ascale)) : 0;
+                    };
+                    dcol = gpAngleColour;
+                } else if (dmode === "speed") {
+                    var dlo = Infinity, dhi = -Infinity, dq;
+                    for (dq = dr.from; dq <= dr.to; dq++) {
+                        if (rows[dq].kph < dlo) dlo = rows[dq].kph;
+                        if (rows[dq].kph > dhi) dhi = rows[dq].kph;
+                    }
+                    if (dhi - dlo < 5) dhi = dlo + 5;
+                    dval = function (idx) { return Math.max(0, Math.min(1, (rows[idx].kph - dlo) / (dhi - dlo))); };
+                    dcol = gpSpeedColour;
+                } else if (dmode === "lap") {
+                    var down = gpLapColour(sel);
+                    dval = function () { return 0; };
+                    dcol = function () { return down; };
+                } else {
+                    var dspan = gpGScale();
+                    dval = function (idx) { return Math.max(-1, Math.min(1, rows[idx].g / dspan)); };
+                    dcol = function (v) { return gpGColour(v * dspan, dspan); };
+                }
+                var dsub = dmode === "lap";
+                strands.push({ from: dr.from, to: dr.to,
+                               width: dsub ? 2.8 : 4.2,
+                               casing: dsub ? GP_LAP_CASE : 3.4,
+                               caseAlpha: dsub ? 0.45 : 0.52,
+                               col: function (i) { return dcol((dval(i - 1) + dval(i)) / 2); } });
+                cv.setStrands(strands);
+                gpDrawDriftShapes();
+                gpDrawLegend();
+                gpSyncModeButtons();
+                gpSyncScrub();
+                gpDrawPlayhead();
+                return;
+            }
+
             if (gp.view !== "session" && gp.view !== "corners") {
                 cv.setStrands([]); gpClearMarks(); gpDrawLegend(); return;
             }
@@ -17363,6 +19473,14 @@
                 var ospan = gpLineScale(off);
                 value = function (idx) { return Math.max(-1, Math.min(1, (off[idx - r.from] || 0) / ospan)); };
                 colour = function (v) { return gpLineColour(v); };
+            } else if (mode === "angle") {
+                /* The same colouring Drift uses, available on a lap: where a
+                   circuit car is carrying slip is worth seeing too. */
+                var ang = gpDriftAngle(), aspan = gpAngleScale();
+                value = function (idx) {
+                    return (ang && ang.ok[idx]) ? Math.max(-1, Math.min(1, ang.beta[idx] / aspan)) : 0;
+                };
+                colour = gpAngleColour;
             } else {
                 value = function (idx) { return Math.max(-1, Math.min(1, rows[idx].g / span)); };
                 colour = function (v) { return gpGColour(v * span, span); };
@@ -17478,7 +19596,7 @@
         }
 
         function gpFollowCar(ll) {
-            if (!gp.map || gp.view !== "session" || !ll) return;
+            if (!gp.map || (gp.view !== "session" && gp.view !== "drift") || !ll) return;
             var mode = gpPlayCamera();
             if (mode === "free") return;
             if (mode === "lock") { gp.map.panTo(ll, { animate: false }); return; }
@@ -17546,8 +19664,12 @@
            search is LOCAL for the usual reason: a hairpin would otherwise
            match the far side of the track. */
         function gpSameSpot(idx, fromLap, toLap) {
+            return gpSameSpotIn(idx, gp.traceLaps[fromLap], gp.traceLaps[toLap]);
+        }
+        /* The same logic over two spans rather than two lap indices, because
+           Drift asks exactly the same question about two RUNS. */
+        function gpSameSpotIn(idx, a, b) {
             var rows = gp.trace;
-            var a = gp.traceLaps[fromLap], b = gp.traceLaps[toLap];
             if (!rows || !a || !b) return null;
             if (idx < a.from) idx = a.from;
             if (idx > a.to) idx = a.to;
@@ -17580,9 +19702,18 @@
 
         function gpDrawGhosts() {
             if (!gp.map || !gp.traceLayer) return;
-            if (gp.view !== "session" || gp.selLap < 0 || !gp.trace || !gp.trace.length) {
+            var drifting = gp.view === "drift";
+            if ((!drifting && (gp.view !== "session" || gp.selLap < 0)) || !gp.trace || !gp.trace.length) {
                 gpDropGhosts(); return;
             }
+            /* In Drift the ghosts are the OTHER RUNS at the same moment into
+               their own run — which is the whole point of the view: where was
+               I at three seconds in, last time? Runs all start at the entry,
+               so "the same moment" lines them up without any extra syncing. */
+            var spans = drifting ? gpDriftRuns() : gp.traceLaps;
+            var selIx = drifting ? gp.driftSel : gp.selLap;
+            var cmpIx = drifting ? gp.driftCmp : gp.cmpLap;
+            if (drifting && !spans.length) { gpDropGhosts(); return; }
             var r = gpLapRange();
             var t = gpSecs(gp.trace, r.from, gp.playIdx);
             /* Everything drawn on the map except the lap the playhead is on:
@@ -17590,8 +19721,12 @@
                not — it is on the map either way, so it gets a dot either
                way. */
             var want = {};
-            gpShownList().forEach(function (li) { if (li !== gp.selLap) want[li] = 1; });
-            if (gp.cmpLap >= 0 && gp.cmpLap !== gp.selLap) want[gp.cmpLap] = 1;
+            if (drifting) {
+                gpDriftShown().forEach(function (on, i) { if (on && i !== selIx) want[i] = 1; });
+            } else {
+                gpShownList().forEach(function (li) { if (li !== selIx) want[li] = 1; });
+            }
+            if (cmpIx >= 0 && cmpIx !== selIx) want[cmpIx] = 1;
 
             if (!gp.ghostMarks) gp.ghostMarks = {};
             var k;
@@ -17604,7 +19739,7 @@
             }
             for (k in want) {
                 var li = parseInt(k, 10);
-                var lap = gp.traceLaps[li];
+                var lap = spans[li];
                 if (!lap) continue;
                 var gl = gpDrawnAt(gpLapIdxAtSecs(lap, t));
                 if (!gl) continue;
@@ -17617,7 +19752,7 @@
                     m = L.circleMarker(gl, {
                         radius: 5, weight: 1.4,
                         color: "#f4f5f6", opacity: 0.5,
-                        fillColor: li === gp.cmpLap ? "#e9ebed" : gpLapColour(li),
+                        fillColor: (li === cmpIx && !drifting) ? "#e9ebed" : gpLapColour(li),
                         fillOpacity: 0.42, interactive: false
                     });
                     gp.ghostMarks[k] = m;
@@ -18763,8 +20898,12 @@
                    camera. Without this, drawing a shape silently turns
                    follow-me off. */
                 if (gp.tracing) return;
+                /* Same exemption while placing a clip or a zone: panning to
+                   reach the next one is part of the job. */
+                if (gp.driftDraw) return;
                 if (gp.follow) window.gpToggleFollow();
-                if (gp.view === "session" && gpPlayCamera() !== "free") window.gpCameraSet("free");
+                if ((gp.view === "session" || gp.view === "drift") && gpPlayCamera() !== "free")
+                    window.gpCameraSet("free");
             });
             /* No zoomend rebuild any more: the line is the same geometry at
                every scale, and GpTraceLayer redraws its own canvas. The old
@@ -18864,13 +21003,26 @@
                times a second, which beat the playhead's own follow every
                time. While STREAMING it is right again, because then the live
                car is the subject. */
+            /* Drift joins Tracks and Corners: it is reading a recording, and a
+               puck sitting on the bench still sending fixes would drag the map
+               off the runs several times a second. The Sessions LIST has no
+               map panel at all — letting it count as "may move" just spends
+               the poll silently panning a map nobody can see, so whichever
+               recording view is opened next inherits that pan already done. */
             var mayMoveMap = gp.view !== "tracks" && gp.view !== "corners" &&
+                             gp.view !== "drift" && gp.view !== "sessions" &&
                              (gp.view !== "session" || gp.liveMode);
+            /* A pan that happens here is the live car moving the shared map,
+               never the user. gpFitTrace's "once per recording" memory
+               (gp.framed) means "the user has already seen their fitted
+               view" — which stops being true the moment something else drags
+               that view away, so any actual live pan below has to clear it,
+               or the recording view it hijacked never re-frames on return. */
             if (!gp.carMarker) {
                 gp.carMarker = L.marker(ll, { icon: gpCarIcon(headDeg), interactive: false, zIndexOffset: 900 })
                     .addTo(gp.carLayer);
                 /* First real fix: this is where the car is, so go there. */
-                if (mayMoveMap) gp.map.setView(ll, Math.max(gp.map.getZoom(), 17));
+                if (mayMoveMap) { gp.map.setView(ll, Math.max(gp.map.getZoom(), 17)); gp.framed = false; }
             } else {
                 gp.carMarker.setLatLng(ll);
                 gp.carMarker.setIcon(gpCarIcon(headDeg));
@@ -18884,7 +21036,7 @@
                 gp.trail.setLatLngs(pts);
                 gp._lastLL = ll;
             }
-            if (gp.follow && mayMoveMap) gp.map.panTo(ll, { animate: false });
+            if (gp.follow && mayMoveMap) { gp.map.panTo(ll, { animate: false }); gp.framed = false; }
 
             if (chip) {
                 chip.innerHTML =
@@ -19497,18 +21649,20 @@
             if (!v) return;
             var rail = document.getElementById("gpRail");
             var cornerCell = document.getElementById("gpCornersMapCell");
+            var driftCell = document.getElementById("gpDriftMapCell");
             if (!gp._viewerHome) {
                 gp._viewerHome = { parent: v.parentNode, next: v.nextSibling };
             }
             var want = (where === "rail" && rail) ? rail
                      : (where === "corners" && cornerCell) ? cornerCell
+                     : (where === "drift" && driftCell) ? driftCell
                      : gp._viewerHome.parent;
             if (v.parentNode === want && (want !== rail || rail.firstChild === v)) {
                 v.classList.toggle("docked", want === rail);
                 return;
             }
             if (want === rail) rail.insertBefore(v, rail.firstChild);
-            else if (want === cornerCell) cornerCell.appendChild(v);
+            else if (want === cornerCell || want === driftCell) want.appendChild(v);
             else want.insertBefore(v, gp._viewerHome.next || null);
             v.classList.toggle("docked", want === rail);
             /* The container just changed size and Leaflet has no way to know.
@@ -19530,20 +21684,21 @@
                        map on every render — so without the guard, clicking
                        a different lap threw away the corner you had just
                        zoomed into and put you back over the start line. */
-                    if ((gp.view === "session" || gp.view === "corners") &&
+                    if ((gp.view === "session" || gp.view === "corners" || gp.view === "drift") &&
                         gp.trace && gp.trace.length && !gp.stripZoom && !gp.framed) gpFitTrace();
                 }, d);
             });
         }
 
         window.gpSetView = function (v) {
-            var KNOWN = ["sessions", "monitor", "session", "corners", "tracks", "setup"];
+            var KNOWN = ["sessions", "monitor", "session", "corners", "drift", "tracks", "setup"];
             gp.view = KNOWN.indexOf(v) >= 0 ? v : "monitor";
             var view = gp.view;
             var big = (view === "tracks");                 /* full-height map view */
             var mapless = (view === "setup" || view === "sessions");
             [["gpBtnSessions", "sessions"], ["gpBtnMonitor", "monitor"],
              ["gpBtnSession", "session"], ["gpBtnCorners", "corners"],
+             ["gpBtnDrift", "drift"],
              ["gpBtnTracks", "tracks"], ["gpBtnSetup", "setup"]]
                 .forEach(function (b) {
                     var el = document.getElementById(b[0]);
@@ -19556,7 +21711,10 @@
             var pb = document.getElementById("gpPlaybar");
             /* Follow is for the live car; the analysis views have a playhead. */
             if (fb) fb.style.display = view === "monitor" ? "" : "none";
-            if (cb) { cb.style.display = view === "session" ? "" : "none"; gpSyncCamButtons(); }
+            /* Drift plays back too, so it needs the same way to say "stop
+               moving the map" — without the button, the camera followed the
+               playhead in Drift with nothing on screen offering to stop it. */
+            if (cb) { cb.style.display = (view === "session" || view === "drift") ? "" : "none"; gpSyncCamButtons(); }
             /* Map-collapse belonged to the old rail-docked layout. In the
                brand layout the map is structural — the button stays retired. */
             var mc = document.getElementById("gpBtnMapCollapse");
@@ -19567,13 +21725,14 @@
                 viewer.classList.toggle("tall", big);
                 viewer.classList.remove("gp-map-collapsed");
                 viewer.classList.toggle("analyse", view === "session");
-                viewer.classList.toggle("incorners", view === "corners");
+                viewer.classList.toggle("incorners", view === "corners" || view === "drift");
                 viewer.style.display = mapless ? "none" : "";
             }
             var railEl = document.getElementById("gpRail");
-            /* Corners is map + table + detail (design 4a), and Analyse is a
-               grid of panels (ADR-0025) — neither wants a fixed rail. */
-            var noRail = (view === "corners" || view === "session");
+            /* Corners is map + table + detail (design 4a), Analyse is a grid
+               of panels (ADR-0025), Drift is map + runs — none wants a fixed
+               rail. */
+            var noRail = (view === "corners" || view === "session" || view === "drift");
             if (railEl) {
                 railEl.classList.remove("gp-onecol");
                 railEl.style.display = noRail ? "none" : "";
@@ -19584,10 +21743,13 @@
             /* BEFORE gpBuildRail below: rail rebuilds by innerHTML would take
                a docked map's DOM with it. In Analyse the grid claims the map
                itself, so the docker is told to leave it alone. */
-            if (view !== "session") gpDockViewer(view === "corners" ? "corners" : "stage");
-            /* The report column: hidden only on the Sessions library. */
+            if (view !== "session")
+                gpDockViewer(view === "corners" ? "corners" : view === "drift" ? "drift" : "stage");
+            /* The report column: hidden on the Sessions library, on Analyse
+               (the grid owns it) and on Drift (the runs column IS it). */
             var insp = document.getElementById("gpInspector");
-            if (insp) insp.style.display = (view === "sessions" || view === "session") ? "none" : "";
+            if (insp) insp.style.display =
+                (view === "sessions" || view === "session" || view === "drift") ? "none" : "";
             gpViewerSync();
             var su = document.getElementById("gpSetupWrap");
             if (su) su.style.display = view === "setup" ? "flex" : "none";
@@ -19595,16 +21757,30 @@
             if (sw) sw.style.display = view === "sessions" ? "block" : "none";
             var cw = document.getElementById("gpCornersWrap");
             if (cw) cw.style.display = view === "corners" ? "flex" : "none";
+            var drw = document.getElementById("gpDriftWrap");
+            if (drw) drw.style.display = view === "drift" ? "flex" : "none";
             var gw = document.getElementById("gpGrid");
             if (gw) gw.style.display = view === "session" ? "flex" : "none";
+            /* The transport is shared: runs are played exactly like laps, and
+               a second set of buttons that did the same thing would be two
+               things to keep in step. */
             var dw = document.getElementById("gpDock");
-            if (dw) dw.style.display = view === "session" ? "flex" : "none";
+            if (dw) dw.style.display = (view === "session" || view === "drift") ? "flex" : "none";
             if (grid) grid.style.display = view === "monitor" ? "" : "none";
             /* The old playbar is retired: the transport lives in the dock
                along the bottom of the grid now (ADR-0025). */
             if (pb) pb.style.display = "none";
-            if (view !== "session") gpPlayStop();
+            if (view !== "session" && view !== "drift") gpPlayStop();
+            /* Ghost dots are keyed by index and cached across renders, but a
+               lap index and a run index are different things — carrying them
+               over the Analyse/Drift boundary reused a marker for whatever
+               happened to sit at the same number, keeping its old colour. */
+            gpDropGhosts();
             if (view !== "session" && gp.chanPop) { gp.chanPop = false; gpChanPopRender(); }
+            /* Leaving Drift disarms whatever was half-drawn: a map click in
+               Tracks must never land a clip on a course nobody is looking at. */
+            if (view !== "drift" && gp.driftDraw) { gp.driftDraw = null; gp.driftDrawPts = []; }
+            gpDriftClickBind();
             /* Corners may re-point gp.selLap (analyse the challenger, not the
                reference) — settle that BEFORE the map draws the lap's line. */
             if (view === "corners") gpCornerOps();
@@ -19628,9 +21804,21 @@
             /* Gates are drawn in ONE place: the Tracks editor. */
             gpDrawEditor();
             gpDrawCornerBadges();
+            /* The live car marker has no business on a map that is reviewing
+               a specific recording — same set of views gpMapUpdate already
+               refuses to let the live fix pan (mayMoveMap), mirrored here so
+               the marker itself is never left sitting wherever the live car
+               really is once that map is showing Mallala instead. */
+            if (gp.map && gp.carLayer) {
+                var showCar = view !== "tracks" && view !== "corners" && view !== "drift" &&
+                              view !== "sessions" && (view !== "session" || gp.liveMode);
+                if (showCar) { if (!gp.map.hasLayer(gp.carLayer)) gp.carLayer.addTo(gp.map); }
+                else if (gp.map.hasLayer(gp.carLayer)) gp.map.removeLayer(gp.carLayer);
+            }
             if (view === "sessions") gpRenderSessions();
             if (view === "corners") gpRenderCorners();
             if (view === "session") gpRenderGrid();
+            if (view === "drift") { gpRenderDrift(); gpRenderDock(); }
             gpRenderInspector();
             gpSyncExportBtn();
             if (gp.map) setTimeout(function () { if (gp.map) gp.map.invalidateSize(); }, 60);
@@ -19643,7 +21831,7 @@
                 if (t.start_finish) gp.map.setView([t.start_finish.lat, t.start_finish.lon], Math.max(gp.map.getZoom(), 18));
                 else if (t.center) gp.map.setView(t.center, t.zoom || 16);
             }
-            if ((view === "session" || view === "corners") && gp.map && gp.trace && gp.trace.length) {
+            if ((view === "session" || view === "corners" || view === "drift") && gp.map && gp.trace && gp.trace.length) {
                 /* …unless something already framed a corner (a coach jump, a
                    corner pick): a whole-lap fit would throw that framing away. */
                 setTimeout(function () {
@@ -20149,6 +22337,9 @@
             var rail = document.getElementById("gpRail");
             if (!rail) return;
             if (gp.view === "tracks") { gpBuildTrackRail(rail); return; }
+            /* Drift hides the rail (its runs column does that job) — building
+               a lap list into it would be work behind a display:none. */
+            if (gp.view === "drift") { rail.innerHTML = ""; return; }
             if (gp.view === "session" || gp.view === "corners") { gpBuildSessionRail(rail); return; }
             if (gp.view === "sessions") { gpBuildSessionsRail(rail); return; }
             if (gp.view === "setup") {
@@ -20413,6 +22604,10 @@
                it rebuilt the splits table, re-bound the video controls and
                re-ran the readiness card where nothing could see any of it. */
             if (gp.view === "session") { box.innerHTML = ""; return; }
+            /* Same reason as Analyse: Drift's own column IS the report, so
+               rendering the device panel into a hidden box would be work
+               nobody can see. */
+            if (gp.view === "drift") { box.innerHTML = ""; return; }
             if (gp.view === "corners") { gpRenderCornerInspector(box); return; }
             if (gp.view === "sessions") {
                 box.innerHTML = "";
@@ -20486,6 +22681,9 @@
         var GP_CHAN_LS = "rdm7_gp_logchans";
         var GP_DEVCHAN_LS = "rdm7_gp_devchans";
         var GP_CHAN_BYTES = 2;      /* one 16-bit slot per channel per sample */
+        /* The puck's own fixed record: lat, lon, speed, heading, yaw rate.
+           Was 12 until the node started logging its gyro (trace_log.h). */
+        var GP_REC_BASE_BYTES = 14;
         var GP_CHAN_MAX = 12;       /* beyond this the ring is the limit, not the bus */
 
         function gpLogChans() {
@@ -20533,7 +22731,7 @@
                 cap = gpN(gp.traceInfo.capacity_samples) * rec;   /* bytes on the partition */
             }
             if (!cap) cap = 0x660000;                            /* the partition, when no node is attached */
-            return cap / (12 + extraBytes) / 25 / 60;
+            return cap / (GP_REC_BASE_BYTES + extraBytes) / 25 / 60;
         }
 
         /* The dash's active channels, fetched once per Setup visit. */
@@ -20827,10 +23025,17 @@
                     out.push({ id: l.id, lane: l, group: GP_GRP_HERE, name: l.label, unit: unit,
                                log: null, canLog: false,
                                logWhy: "Not recorded — Studio works it out from the lap you picked and the one you are comparing it against." });
+                } else if (l.derived) {
+                    /* A lane that only exists because something else in the
+                       recording made it possible. Filing it with the puck's
+                       fixed 14-byte record would claim it is always there,
+                       which is the opposite of what it is waiting on. */
+                    out.push({ id: l.id, lane: l, group: GP_GRP_HERE, name: l.label, unit: unit,
+                               log: null, canLog: false, logWhy: l.note || null });
                 } else {
                     out.push({ id: l.id, lane: l, group: GP_GRP_PUCK, name: l.label, unit: unit,
                                log: "always", canLog: false,
-                               logWhy: "Always recorded. Position, speed and heading are the puck's fixed 12-byte record." });
+                               logWhy: "Always recorded. Position, speed, heading and yaw rate are the puck's fixed 14-byte record." });
                 }
             });
 
@@ -20874,7 +23079,7 @@
                             sel.length * GP_CHAN_BYTES + " bytes a sample") +
                  gpReadyRow("Recording time", Math.round(mins) + " min",
                             mins < 60 ? "warn" : null,
-                            sel.length ? "was " + Math.round(mins0) + " min" : "at the 12-byte record") +
+                            sel.length ? "was " + Math.round(mins0) + " min" : "at the 14-byte record") +
                  gpReadyRow("On the puck", onDev.length ? onDev.length + " channel" + (onDev.length === 1 ? "" : "s") : "none",
                             synced ? "ok" : "warn",
                             synced ? "matches what's ticked" : "different from what's ticked") +
@@ -23410,7 +25615,12 @@
                    view — the sample is as fresh as the link made it — and the
                    axis only ever shows the last minute of it. */
                 t: Date.now(),
-                g: 0
+                g: 0,
+                /* The same field a downloaded recording carries, so the live
+                   rack and the live Drift view read one thing rather than two.
+                   gps.status reports the vehicle frame already — bias removed,
+                   mounting rotation applied — in centi-deg/s. */
+                gyroz: (s.imu && gpN(s.imu.gz_cdps) !== null) ? s.imu.gz_cdps / 100 : undefined
             });
             /* Trim by CLOCK, not by a sample count derived from the poll
                rate: the rate changes with the view, so a count computed at
