@@ -493,7 +493,18 @@ head('Steadiness measures raggedness, not size');
     /* The generator gives each character a `wob`: how much the driver was
        catching the car. The app never sees it. Steadiness must rank the laps
        the same way that hidden parameter does. */
-    const wob = [1.5, 1.1, 0.8, 0.5, 2.3, 0.6];   // LAPS[].wob, in order
+    /* Read from the fixture, never typed in here: a hard-coded copy passes
+       happily against a fixture whose wobble has changed, or vanished. */
+    const chars = truth.characters || [];
+    ok('the fixture publishes what it planted', chars.length > 0 &&
+       chars.every(c => typeof c.wob === 'number'),
+       chars.length + ' characters with a wobble');
+    const wob = chars.map(c => c.wob);
+    /* ...and the planted values must actually differ, or every ranking below
+       passes for free. */
+    ok('and the characters really do differ in it',
+       wob.length > 1 && Math.max.apply(null, wob) > 2 * Math.min.apply(null, wob),
+       wob.join(', '));
     const perLap = b.cells.map(lr => {
         const v = lr.filter(r => r && r.settle !== null && !r.settleFromPath)
                     .map(r => r.settle);
@@ -536,11 +547,31 @@ head('Steadiness measures raggedness, not size');
            'most angle: lap ' + (biggest + 1) + '; least steady: lap ' + (worstLap + 1));
     }
 
-    /* A corner nobody drifted still gets a steadiness, off path geometry. */
-    let fromPath = 0;
-    b.cells.forEach(lr => lr.forEach(r => { if (r && r.settleFromPath) fromPath++; }));
-    ok('a corner with no angle still reports steadiness, off the cornering',
-       fromPath > 0, fromPath + ' readings fell back to path geometry');
+    /* A corner nobody drifted reports NO steadiness. There used to be a
+       fallback that measured the rate over the gripping corner instead, and it
+       printed about 1.9 deg/s — of which essentially all is receiver noise —
+       which made the corner nobody drifted the steadiest on the board by a
+       factor of five. That is the exact failure this metric replaced, so the
+       silence is the feature. */
+    let undrifted = 0, undriftedWithNumber = 0;
+    b.cells.forEach(lr => lr.forEach(r => {
+        if (!r || !r.angle || r.angle.rough) return;
+        if (r.angle.secs > 0) return;
+        undrifted++;
+        if (r.settle !== null && r.settle !== undefined) undriftedWithNumber++;
+    }));
+    ok('the fixture has a corner nobody drifted', undrifted > 0, undrifted + ' of them');
+    ok('and it reports no steadiness at all, rather than the receiver',
+       undriftedWithNumber === 0);
+    /* ...while a corner that WAS drifted always has one. */
+    let drifted = 0, missing = 0;
+    b.cells.forEach(lr => lr.forEach(r => {
+        if (!r || !r.angle || r.angle.rough || r.angle.secs <= 0) return;
+        drifted++;
+        if (r.settle === null || r.settle === undefined) missing++;
+    }));
+    ok('every corner that was drifted has one', drifted > 20 && missing === 0,
+       drifted + ' drifted, ' + missing + ' without a reading');
 }
 
 head('A spin is not a very good drift');
@@ -574,6 +605,37 @@ head('A spin is not a very good drift');
     const r2 = API.gpDriftStars(asDrift, 100);
     ok('and without the gate it would have scored highly', r2 && r2.stars >= 4,
        r2 ? r2.stars.toFixed(1) + ' stars' : 'null');
+
+    /* A leg the engine could not close must NEVER be announced as a spin: a
+       reconstruction wrong by an unknown amount crossing 100 degrees is not
+       evidence the car went round, and replacing "we could not measure this"
+       with an accusation is the honesty rule exactly inverted. */
+    const d = API.gpDriftAngle();
+    const conf0 = d.conf.slice();
+    for (let i = 0; i < d.conf.length; i++) d.conf[i] = K.GP_DRIFT_ROUGH + 5;
+    let spunOnRough = 0;
+    b.corners.forEach((c, ci) => {
+        const sp = API.gpDriftSpun({ from: c.entry, to: c.exit });
+        if (sp) spunOnRough++;
+    });
+    ok('a leg the engine cannot vouch for is never called a spin', spunOnRough === 0);
+    for (let i = 0; i < d.conf.length; i++) d.conf[i] = conf0[i];
+
+    /* And an angle that comes BACK is a drift, whatever it did in the middle.
+       Before this the scan returned on the first sample below the speed floor
+       and never looked further, so a drift that dipped under 25 km/h still at
+       50 degrees and then carried on was called a spin. */
+    const okArr = d.ok, betaArr = d.beta, kph0 = gp.trace.map(r => r.kph);
+    let probe = -1;
+    for (let i = 200; i < okArr.length - 400; i++)
+        if (okArr[i] && Math.abs(betaArr[i]) > 40) { probe = i; break; }
+    if (probe > 0) {
+        for (let i = probe; i < probe + 30; i++) { gp.trace[i].kph = 20; okArr[i] = 0; }
+        const sp = API.gpDriftSpun({ from: probe - 150, to: probe + 400 });
+        ok('a drift that dips below the floor and comes back is not a spin', sp === null,
+           sp ? sp.why + ' ' + sp.deg.toFixed(0) : 'not flagged');
+        for (let i = probe; i < probe + 30; i++) { gp.trace[i].kph = kph0[i]; okArr[i] = 1; }
+    }
     gp.trace = saved;
 }
 

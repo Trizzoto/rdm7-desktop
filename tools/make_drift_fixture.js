@@ -520,6 +520,13 @@ fs.writeFileSync(base + '.truth.json', JSON.stringify({
        the second, and that whole lap is driven with character 1 — character 0
        is the out lap before timing starts. So: app lap k <-> per[k + 1]. */
     firstBoardLapCharacter: 1,
+    /* Each character's hidden `wob`: how much the driver was catching the car.
+       The app never sees it; the harness reads it from HERE rather than from a
+       copy typed into the test, because a copy cannot notice this changing —
+       or going away. */
+    characters: LAPS.map(function (L, i) {
+        return { character: i, name: L.name, wob: L.wob, commit: L.commit };
+    }),
     /* The character that straightens between two corners instead of linking
        them, and which pair — so the harness can check the app noticed. */
     brokeLink: (function () {

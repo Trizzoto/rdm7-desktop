@@ -17533,26 +17533,26 @@
                    and a half seconds, which puts the envelope on one side of
                    the line and the corrections on the other. */
                 var RW = Math.max(2, Math.round(1.2 / GP_DT));
+                /* At angle, and only at angle. There is deliberately NO
+                   fallback to "the car was cornering hard" for a corner nobody
+                   drifted: the rate over a gripping corner is almost entirely
+                   receiver noise — measured on the fixture it is 1.9 deg/s, of
+                   which 1.9 is the receiver — and printing that beside real
+                   drifts made the corner nobody drifted the steadiest on the
+                   board by a factor of five. Which is precisely the failure
+                   this metric replaced.
+
+                   Nor is one needed for the case it was meant to rescue. The
+                   rate needs no anchor and no closure, so on a leg that came
+                   back ROUGH the angle is still there to gate on and the rate
+                   is still sound — steadiness already survives that. Silence
+                   here means the car did not go sideways, which is a fact
+                   about the driving and not a gap in the measurement. */
                 var atAngle = function (i) {
                     return d.ok[i] && Math.abs(d.beta[i]) >= GP_DRIFT_ON;
                 };
-                /* When the angle was refused, fall back to PATH GEOMETRY: a
-                   car above the speed floor pulling real cornering load is
-                   doing something worth measuring the steadiness of, closed
-                   leg or not. Without this the number vanishes on exactly the
-                   sessions where the angle is rough — which is where a driver
-                   most needs it. */
-                var ch2 = gpChannels();
-                var anyAngle = false;
-                for (i = span.from; i <= span.to && i < rows.length; i++)
-                    if (atAngle(i)) { anyAngle = true; break; }
-                var inWindow = anyAngle ? atAngle : function (i) {
-                    return ch2 && rows[i].kph >= GP_DRIFT_MIN_KPH &&
-                           Math.abs(ch2.glat[i]) >= 0.3;
-                };
-                if (!anyAngle && ch2) out.settleFromPath = true;
                 for (i = span.from; i <= span.to && i < rows.length; i++) {
-                    if (!d.rhoOk[i] || !inWindow(i)) continue;
+                    if (!d.rhoOk[i] || !atAngle(i)) continue;
                     var ls = 0, ln = 0;
                     for (var w = i - RW; w <= i + RW; w++) {
                         if (w < 0 || w >= rows.length || !d.rhoOk[w]) continue;
@@ -17583,20 +17583,35 @@
         function gpDriftSpun(span) {
             var rows = gp.trace, d = gpDriftAngle();
             if (!span || !rows || !d) return null;
-            var last = null, i;
+            var over = null, dropped = null, recovered = false, last = null, i;
             for (i = span.from; i <= span.to && i < rows.length; i++) {
-                if (d.ok[i]) {
+                /* Only samples the engine can vouch for. Reading a leg it has
+                   already refused and announcing a SPIN off it would be the
+                   honesty rule exactly inverted: a reconstruction wrong by an
+                   unknown amount crossing 100 degrees is not evidence the car
+                   went round, and "we could not measure this" must never be
+                   replaced by a confident accusation. */
+                if (d.ok[i] && d.conf[i] <= GP_DRIFT_ROUGH) {
                     var ab = Math.abs(d.beta[i]);
-                    if (ab > GP_DRIFT_SPIN)
-                        return { why: "over", deg: ab, at: i, conf: d.conf[i] };
+                    if (ab > GP_DRIFT_SPIN && !over)
+                        over = { why: "over", deg: ab, at: i, conf: d.conf[i] };
+                    /* An angle that comes back is a drift, whatever it did in
+                       the middle. Only a drop the car never returns from is
+                       evidence of anything. */
+                    if (dropped) recovered = true;
                     last = { deg: ab, at: i, conf: d.conf[i] };
-                } else if (last && rows[i].kph < GP_DRIFT_MIN_KPH &&
+                } else if (!dropped && last && rows[i].kph < GP_DRIFT_MIN_KPH &&
                            last.deg > GP_DRIFT_SPIN_DROP) {
-                    /* The angle stopped being knowable while the car was still
-                       a long way round. That is a spin ending, not a drift. */
-                    return { why: "dropped", deg: last.deg, at: last.at, conf: last.conf };
+                    dropped = { why: "dropped", deg: last.deg, at: last.at, conf: last.conf };
                 }
             }
+            /* Past the over-rotation line is unambiguous and is reported as
+               such. A big angle still standing when the car fell below the
+               speed the angle can be read at is NOT: a spin and a deliberate
+               finish sideways look identical from here, and the view says so
+               rather than picking one. */
+            if (over) return over;
+            if (dropped && !recovered) return dropped;
             return null;
         }
 
@@ -18003,19 +18018,6 @@
             if (!cur) {
                 h += "<div class='gpb-dsay'>This lap did not drive that &mdash; it went more than " +
                      "40 m from where the corner is, so there is nothing here to read.</div>";
-            } else if (cur.spun) {
-                h += "<div class='gpb-dsay'><b>This was a spin, not a drift.</b> " +
-                     (cur.spun.why === "over"
-                        ? "The angle went past " + GP_DRIFT_SPIN + "&deg; &mdash; " +
-                          Math.round(cur.spun.deg) + "&deg; at its worst."
-                        : "The angle was still " + Math.round(cur.spun.deg) +
-                          "&deg; when the speed fell below " + GP_DRIFT_MIN_KPH +
-                          " km/h and it stopped being knowable, which is how a spin ends.") +
-                     " It is left unrated rather than scored: nought stars would read as " +
-                     "a badly driven corner, and this was not one." +
-                     (cur.spun.conf > 1 ? " <span class='gpb-dpm'>&plusmn;" +
-                        Math.round(cur.spun.conf) + "&deg; on that reading</span>" : "") +
-                     "</div>";
             } else if (!cur.angle || cur.angle.rough) {
                 h += "<div class='gpb-dsay'>" +
                      (cur.angle && cur.angle.soft
@@ -18023,6 +18025,19 @@
                       : cur.angle
                         ? "The angle over this stretch did not close: it should come back to straight where the car provably is, and it does not. Rather than print a number wrong by an unknown amount, it is left out."
                         : "The car never went far enough sideways here to call it a drift.") + "</div>";
+            } else if (cur.spun) {
+                h += cur.spun.why === "over"
+                   ? "<div class='gpb-dsay'><b>This was a spin, not a drift.</b> The angle went " +
+                     "past " + GP_DRIFT_SPIN + "&deg; &mdash; " + Math.round(cur.spun.deg) +
+                     "&deg; at its worst. It is left unrated rather than scored: nought stars " +
+                     "would read as a badly driven corner, and this was not one."
+                   : "<div class='gpb-dsay'><b>Unrated: the car was still " +
+                     Math.round(cur.spun.deg) + "&deg; sideways</b> when it dropped below " +
+                     GP_DRIFT_MIN_KPH + " km/h, where the angle stops being readable, and it " +
+                     "never came back. From here a spin and a deliberate finish sideways look " +
+                     "identical, so neither is claimed.";
+                h += (cur.spun.conf > 1 ? " <span class='gpb-dpm'>&plusmn;" +
+                        Math.round(cur.spun.conf) + "&deg; on that reading</span>" : "") + "</div>";
             } else {
                 /* The stars and the angle, together, at the top. */
                 h += "<div class='gpb-dhero'>";
@@ -18057,8 +18072,7 @@
                                  "&deg;/s", cur.settle === null,
                                  "How much of the turn rate was not asked for. A drift held still " +
                                  "sits near zero however big it is; catching it and re-catching it " +
-                                 "does not." + (cur.settleFromPath
-                                    ? " Measured over the hard cornering here, because the angle could not be." : "")) +
+                                 "does not. Measured only while the car was actually at angle.") +
                      gpDriftTile("Came in at", gpDriftKph(cur.entryKph), gpSpdU(),
                                  false, "Entry speed — the speed part of the rating is graded on this") +
                      "</div>";
@@ -18174,6 +18188,13 @@
                 var peak = 0, area = 0, cells = b.cells[li] || [];
                 cells.forEach(function (r) {
                     if (!r || !r.angle || r.angle.rough) return;
+                    /* A spin is not an angle HELD, and its degree-seconds are
+                       not drifting. Leaving it in put a half-spin at the top of
+                       a column headed "the widest angle held anywhere on the
+                       lap" while the stars column quietly left it out — the
+                       session's headline number would still have been the
+                       spin, which is the bug this was all meant to close. */
+                    if (r.spun) return;
                     if (r.angle.peak > peak) peak = r.angle.peak;
                     area += r.angle.area;
                 });
