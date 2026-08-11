@@ -2655,6 +2655,30 @@
             width: 13px; height: 7px; border: 1.5px solid var(--gpb-red); border-radius: 4px;
         }
         #gpWorkspace .gpb-corner-badge.linked { border-radius: 9px; padding: 0 4px; letter-spacing: -0.02em; }
+        /* ---- the car on the map ------------------------------------------
+           Drawn over satellite imagery and over the dark plot ground, so every
+           stroke carries its own contrast rather than relying on what is
+           underneath. */
+        .gpb-carwrap { background: none; border: 0; }
+        .gpb-car { overflow: visible; pointer-events: none; }
+        .gpb-car .wedge { stroke: none; opacity: 0.55; }
+        /* where it is GOING: thin, cool, and behind the car */
+        .gpb-car .travel line { stroke: #f2f4f6; stroke-width: 1.6; opacity: 0.75; stroke-dasharray: 3 3; }
+        .gpb-car .travel .tip { fill: #f2f4f6; opacity: 0.75; }
+        /* where it is POINTING: the solid object, always legible */
+        .gpb-car .body rect {
+            fill: #f7f8f9; stroke: #0a0c0e; stroke-width: 1.6;
+            paint-order: stroke; stroke-linejoin: round;
+        }
+        .gpb-car .body .screen { fill: #0a0c0e; opacity: 0.62; }
+        .gpb-car .body .axle { stroke: #0a0c0e; stroke-width: 1.4; opacity: 0.5; }
+        .gpb-car.sideways .body rect { fill: #fff; }
+        .gpb-car .deg {
+            fill: #fff; font-family: var(--gpb-head, sans-serif); font-size: 11px;
+            font-weight: 700; letter-spacing: 0.02em;
+            paint-order: stroke; stroke: #0a0c0e; stroke-width: 3.2; stroke-linejoin: round;
+        }
+
         /* the hero: the two things you opened this view to see, side by side
            and above everything that picks which corner you are looking at */
         #gpWorkspace .gpb-dhero {
@@ -19929,6 +19953,108 @@
             }
         }
 
+        /* ---- the car, pointed the way it was actually pointing -------------
+           The whole feature exists because where a car POINTS and where it
+           TRAVELS are two different things, and a dot on a line can only ever
+           show the second one. This draws both: the car at its measured body
+           heading, an arrow along its course over ground, and the wedge
+           between them — which IS the drift angle, at 1:1, no scaling and no
+           interpretation.
+
+           It is drawn ONLY where the angle was measured and the engine can
+           vouch for it. Pointing a car glyph on a recording with no attitude
+           source would be the fabrication ADR-0011 forbids, drawn at forty
+           times the size of the number it is faking; and on a leg that failed
+           to close it would be a confident picture of a reading worth nothing.
+           Both fall back to the plain dot, which claims only position. */
+        function gpCarPt(deg, r) {
+            var a = deg * Math.PI / 180;
+            return (r * Math.sin(a)).toFixed(2) + "," + (-r * Math.cos(a)).toFixed(2);
+        }
+
+        function gpDrawCar(ll) {
+            var rows = gp.trace, i = gp.playIdx, d = gpDriftAngle();
+            var show = !!(d && rows && rows[i] && d.ok[i] && d.conf[i] <= GP_DRIFT_ROUGH &&
+                          (gp.view === "drift" || gp.view === "session"));
+            if (!show) {
+                if (gp.carMarker && gp.traceLayer && gp.traceLayer.hasLayer(gp.carMarker))
+                    gp.traceLayer.removeLayer(gp.carMarker);
+                return false;
+            }
+            var course = rows[i].hdg, beta = d.beta[i], body = course + beta;
+            var R = 30;                                   /* wedge radius, px */
+
+            if (!gp.carMarker) {
+                /* Built once and then mutated in place. A fresh divIcon every
+                   frame re-creates the element twenty-five times a second and
+                   the car visibly stutters against a smooth line. */
+                var html =
+                    "<svg class='gpb-car' viewBox='-48 -48 96 96' width='96' height='96'>" +
+                      "<path class='wedge' d=''></path>" +
+                      "<g class='travel'>" +
+                        "<line x1='0' y1='0' x2='0' y2='-40'></line>" +
+                        "<path class='tip' d='M0,-44 L-3.4,-36 L3.4,-36 Z'></path>" +
+                      "</g>" +
+                      "<g class='body'>" +
+                        "<rect x='-6.5' y='-11' width='13' height='22' rx='3'></rect>" +
+                        "<path class='screen' d='M-4.6,-5.4 L4.6,-5.4 L3.1,-9.2 L-3.1,-9.2 Z'></path>" +
+                        "<line class='axle' x1='-6.5' y1='6.5' x2='6.5' y2='6.5'></line>" +
+                      "</g>" +
+                      "<text class='deg' x='0' y='44' text-anchor='middle'></text>" +
+                    "</svg>";
+                gp.carMarker = L.marker(ll, {
+                    interactive: false, keyboard: false, zIndexOffset: 1200,
+                    icon: L.divIcon({ className: "gpb-carwrap", html: html,
+                                      iconSize: [96, 96], iconAnchor: [48, 48] })
+                });
+                gp.carMarker.addTo(gp.traceLayer);
+                gp._carEls = null;
+            } else {
+                gp.carMarker.setLatLng(ll);
+                if (!gp.traceLayer.hasLayer(gp.carMarker)) gp.carMarker.addTo(gp.traceLayer);
+            }
+
+            var el = gp.carMarker.getElement();
+            if (!el) return true;
+            if (!gp._carEls || gp._carEls.root !== el) {
+                gp._carEls = {
+                    root: el,
+                    wedge: el.querySelector(".wedge"),
+                    travel: el.querySelector(".travel"),
+                    body: el.querySelector(".body"),
+                    deg: el.querySelector(".deg")
+                };
+            }
+            var E = gp._carEls;
+            if (!E.body) return true;
+
+            E.travel.setAttribute("transform", "rotate(" + course.toFixed(2) + ")");
+            E.body.setAttribute("transform", "rotate(" + body.toFixed(2) + ")");
+
+            /* The wedge, swept from where it is going to where it is pointing.
+               Under ten degrees it is not worth drawing — at that size it is a
+               sliver the eye reads as a rendering artefact, and a gripping car
+               would wear one permanently. */
+            var ab = Math.abs(beta);
+            if (ab < GP_DRIFT_ON) {
+                E.wedge.setAttribute("d", "");
+            } else {
+                var sweep = beta > 0 ? 1 : 0;
+                E.wedge.setAttribute("d",
+                    "M0,0 L" + gpCarPt(course, R) +
+                    " A " + R + " " + R + " 0 0 " + sweep + " " + gpCarPt(body, R) + " Z");
+                E.wedge.setAttribute("fill", gpAngleColour(Math.max(-1, Math.min(1,
+                    beta / Math.max(12, gpAngleScale())))));
+            }
+            /* The number, so the picture and the table cannot disagree. The
+               error bar rides with it wherever the angle was worked out rather
+               than measured — the same rule every other angle surface follows. */
+            E.deg.textContent = ab < GP_DRIFT_ON ? ""
+                : Math.round(ab) + "°" + (d.direct ? "" : " ±" + Math.round(d.conf[i]));
+            E.root.classList.toggle("sideways", ab >= GP_DRIFT_ON);
+            return true;
+        }
+
         function gpDrawPlayhead() {
             gpVideoFollowSeek();
             gpVideoDrawOverlay();
@@ -19949,11 +20075,17 @@
                 gp.playMarker.setLatLng(ll);
                 if (!gp.traceLayer.hasLayer(gp.playMarker)) gp.playMarker.addTo(gp.traceLayer);
             }
+            /* The car replaces the dot wherever the angle is known: two
+               markers on one position is just clutter, and the dot cannot say
+               anything the car does not say better. */
+            var drewCar = gpDrawCar(ll);
+            gp.playMarker.setStyle({ opacity: drewCar ? 0 : 1, fillOpacity: drewCar ? 0 : 1 });
             gpDrawGhosts();
             /* The ghosts are added after the playhead the first time round,
                which would leave a faded dot sitting on top of the solid one
                wherever two laps coincide. */
             gp.playMarker.bringToFront();
+            if (drewCar && gp.carMarker) gp.carMarker.setZIndexOffset(1200);
             gpFollowCar(ll);
             gpTcUpdate();
         }
