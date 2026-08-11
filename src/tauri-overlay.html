@@ -16631,11 +16631,32 @@
            30-60 band, and 40 sustained through a corner is unambiguously a
            committed drift rather than a fast car running wide. */
         var GP_DRIFT_STAR_DEG = 40;
-        /* Wobble is the standard deviation of the angle while it is up. Ten
-           degrees of wander is the difference between "held" and "caught and
-           re-caught", which is the thing judges reward and the thing a driver
-           can feel. Past this, steadiness scores nothing. */
-        var GP_DRIFT_STAR_WOB = 10;
+        /* Steadiness is the RMS of the SIDESLIP RATE while the car is at
+           angle, in degrees per second — how hard the driver was working to
+           hold what they had. Past this figure it scores nothing.
+
+           It replaced a spread-of-the-angle measure, and the reason is worth
+           keeping: the spread of an angle over a corner is dominated by the
+           drift's own rise and fall, so a perfectly smooth thirty-degree drift
+           scored the same as a ragged one. The RATE has no such shape — a held
+           drift has a rate near zero however big the angle is. It is also the
+           one skill number here that needs no anchors and no leg closure. */
+        var GP_DRIFT_STAR_SETTLE = 14;
+        /* Below this the path's own turn rate is forced to zero (gpChannels
+           gates at walking pace), so the sideslip rate would degenerate into
+           the raw gyro reading and claim the angle was changing when nothing
+           knows whether it was. */
+        var GP_DRIFT_RHO_MIN_KPH = 8;
+        /* Over-rotated. Past this the car is not drifting, it is spinning, and
+           every judging system in the survey treats that as a failure rather
+           than the session's best angle. Without this the biggest number in a
+           session is a half-spin, and it scored full marks. */
+        var GP_DRIFT_SPIN = 100;
+        /* The other way a spin ends: the car never passes 100 degrees on the
+           way round because the angle lane goes dark below 25 km/h — it just
+           stops. So a big angle still standing at the moment the speed fell
+           through the floor is a spin too. */
+        var GP_DRIFT_SPIN_DROP = 45;
         /* Speed is the one part with no fixed bar: what is fast through a
            corner depends entirely on the corner, so it is graded against your
            own best there — which is also the comparison the view is FOR.
@@ -16652,7 +16673,7 @@
            judging system in section 1 agrees: angle first, then how long it
            was held, then how tidily. Speed is a tiebreak, not the point. */
         var GP_DRIFT_STAR_W = { angle: 0.45, commit: 0.25, steady: 0.20, speed: 0.10 };
-        var GP_DRIFT_SCORE_VER = 3;   /* stamped on every rating; tuning the
+        var GP_DRIFT_SCORE_VER = 4;   /* stamped on every rating; tuning the
                                          formula must never silently restate
                                          a score a corner already earned */
 
@@ -16836,7 +16857,20 @@
                     if (v === null || !isFinite(v) || i >= end || rows[i].kph < GP_DRIFT_MIN_KPH) { beta[i] = 0; ok[i] = 0; conf[i] = 0; }
                     else { beta[i] = Math.max(-180, Math.min(180, v)); ok[i] = 1; conf[i] = 1; }
                 }
+                /* The rate, for a channel that measured the angle outright:
+                   difference the angle over the SAME +/-3 samples the derived
+                   path's course rate uses, so the two have the same bandwidth
+                   and a number quoted off one is comparable with the other. */
+                var drho = new Float32Array(n), drhoOk = new Uint8Array(n);
+                for (i = 0; i < n; i++) {
+                    var a3 = i - 3 < 0 ? 0 : i - 3, b3 = i + 3 >= n ? n - 1 : i + 3;
+                    var dt3 = gpSecs(rows, a3, b3);
+                    if (b3 <= a3 || dt3 <= 0 || !ok[a3] || !ok[b3]) continue;
+                    drho[i] = (beta[b3] - beta[a3]) / dt3;
+                    drhoOk[i] = 1;
+                }
                 out = { beta: beta, ok: ok, conf: conf, src: src, direct: true,
+                        rho: drho, rhoOk: drhoOk, legs: [],
                         scale: 1, bias: 0, anchors: 0, worst: 1, weak: false };
                 gp.driftKey = key; gp.drift = out;
                 return out;
@@ -17043,6 +17077,12 @@
                 }
             }
             var worst = 1;
+            /* The provenance ledger: every closed leg, where it ran, and by how
+               much it missed. Kept because the error bar alone cannot say
+               WHY — a wide bar on a track with no straights is a fact about
+               the layout, not about the driving, and only the anchor count and
+               the closure errors can tell those apart. */
+            var legs = [];
             if (!isl.length) {
                 /* Nothing in this recording is provably straight. Integrate
                    with the whole thing's own mean taken out and say plainly
@@ -17088,6 +17128,7 @@
                         beta[i] = cum[i] - cum[aa] - (span > 0 ? mis * (el[i] - el[aa]) / span : 0);
                     var cf = Math.max(Math.abs(mis) / 2, 1);
                     mark(aa, bb, cf);
+                    legs.push({ from: aa, to: bb, mis: mis, secs: span, conf: cf });
                     if (cf > worst) worst = cf;
                 }
                 for (i = AK; i < n; i++) beta[i] = cum[i] - cum[AK];
@@ -17099,7 +17140,42 @@
             }
             for (i = 0; i < n; i++) beta[i] = Math.max(-180, Math.min(180, beta[i]));
 
+            /* ---- the sideslip rate, kept -----------------------------------
+               How fast the angle is CHANGING: the body's yaw rate minus the
+               path's. It was computed here and thrown away, which was a waste
+               of the most useful signal in the engine — because unlike the
+               angle it needs no anchor and no leg closure. It is therefore
+               still honest on a stretch where the angle itself came back
+               rough, which is exactly where a driver most wants to know
+               whether they were holding it or fighting it.
+
+               It is the RAW measured rate, and deliberately so: it is NOT the
+               derivative of the angle this function reports. The angle has
+               each leg's misclosure redistributed through it, so its slope is
+               this rate minus that leg's correction — which on a short leg is
+               tens of degrees per second. Correcting the rate to match would
+               hand back the one property worth having, because the correction
+               is exactly what needs an anchor. Anything reading both must know
+               they differ by a constant per leg; anything measuring WANDER
+               (settledness) high-passes that constant away and is unaffected.
+
+               Two more things travel with it, and both matter:
+               - It is NOT bias-free. It consumes the fitted scale and zero, so
+                 anything printed from it inherits `weak`.
+               - It is NOT 25 Hz. The body rate is a seven-sample mean and the
+                 path rate a central difference over the same span, so the
+                 honest bandwidth is about a quarter of a second. Do not try to
+                 resolve a correction faster than that with it. */
+            var rhoOk = new Uint8Array(n);
+            for (i = 0; i < n; i++) {
+                /* Below walking pace gpChannels forces the path rate to zero,
+                   and rho would quietly become the raw gyro reading — an angle
+                   changing fast according to a number that has nothing to
+                   subtract. Refuse rather than mislead. */
+                rhoOk[i] = (bok[i] && i < end && rows[i].kph >= GP_DRIFT_RHO_MIN_KPH) ? 1 : 0;
+            }
             out = { beta: beta, ok: ok, conf: conf, src: src, direct: false,
+                    rho: rho, rhoOk: rhoOk, legs: legs,
                     scale: cal.scale, bias: cal.bias, fitN: cal.n, weak: !!cal.weak,
                     anchors: isl.length, worst: worst };
             gp.driftKey = key; gp.drift = out;
@@ -17223,9 +17299,14 @@
                     var a2 = Math.abs(d.beta[pp]);
                     if (d.ok[pp] && a2 >= GP_DRIFT_ON) vs += (a2 - s.held) * (a2 - s.held);
                 }
-                /* Wobble: how much the angle wandered while it was up. Judges
-                   reward angle held SMOOTHLY; this is that, as a number. */
-                s.wobble = cnt ? Math.sqrt(vs / cnt) : 0;
+                /* The spread of the angle about its own mean over the whole
+                   segment. Kept as a segment shape descriptor ONLY — it is NOT
+                   a steadiness measure and nothing may rate on it. A drift has
+                   to rise and fall, so this is dominated by the envelope, and
+                   measuring smoothness with it made a barely-drifted corner
+                   the steadiest on the lap. Steadiness is gpDriftCornerRead's
+                   `settle`, off the sideslip rate. */
+                s.spread = cnt ? Math.sqrt(vs / cnt) : 0;
                 s.secs = gpSecs(rows, s.from, s.to);
                 s.entryKph = rows[s.from].kph;
                 s.lowKph = low === Infinity ? null : low;
@@ -17408,7 +17489,7 @@
                 from: span.from, to: span.to, apex: span.apex,
                 secs: st.secs, kph: kN ? kSum / kN : 0,
                 entryKph: st.entryKph, exitKph: st.exitKph, lowKph: st.lowKph,
-                switches: st.switches, angle: st.angle, wobble: 0, commit: 0, metres: 0
+                switches: st.switches, angle: st.angle, settle: null, commit: 0, metres: 0
             };
             if (!st.angle) return out;
             /* How FAR the car travelled sideways. BMW's drift analyser leads on
@@ -17427,35 +17508,96 @@
                is a stretch of driving, and the fraction of it spent above the
                drift threshold is what "committed" means to a driver. */
             out.commit = st.secs > 0 ? Math.min(1, st.angle.secs / st.secs) : 0;
-            /* Wander — the part of the angle the driver did not mean.
-               NOT the spread around the corner's own mean, which is what
-               gpDriftSegments measures over a whole segment: a drift RISES to
-               its angle and comes back down, and over one corner that rise and
-               fall dominates everything else. Measured that way a perfectly
-               smooth thirty-degree drift scored the same as a ragged one, and
-               a corner barely drifted at all came out the steadiest on the lap
-               purely because it had less shape to it.
-               So: compare each sample against a short rolling mean of its own
-               neighbours. The envelope survives that; the wobble does not. */
+            /* Settledness — how hard the driver was working to hold what they
+               had, in degrees per second.
+
+               NOT the RMS of the sideslip rate itself. That was tried and it
+               is wrong for the same reason the old angle-spread measure was
+               wrong, one derivative up: every drift has to be BUILT and let
+               go, so the rate swings hard at both ends whatever the driver
+               does, and the RMS then measures how big the drift was rather
+               than how well it was held. Measured that way the fixture's best
+               lap came out the least settled corner on the board, because it
+               carried the most angle.
+
+               So take the rate against a short rolling mean of ITSELF. The
+               build and the release are slow and survive that subtraction; a
+               driver catching the car and re-catching it is not and does not.
+               What is left is the part of the rate nobody asked for. */
             var vs = 0, vn = 0;
-            if (d) {
-                var W = Math.max(2, Math.round(0.6 / GP_DT));
+            if (d && d.rho) {
+                /* Where to cut. A driver catching the car and gathering it up
+                   is a half-second to two-second event; the drift's own build
+                   and release is three to five. Subtracting a rolling mean
+                   1.2 s either side removes everything slower than about two
+                   and a half seconds, which puts the envelope on one side of
+                   the line and the corrections on the other. */
+                var RW = Math.max(2, Math.round(1.2 / GP_DT));
+                var atAngle = function (i) {
+                    return d.ok[i] && Math.abs(d.beta[i]) >= GP_DRIFT_ON;
+                };
+                /* When the angle was refused, fall back to PATH GEOMETRY: a
+                   car above the speed floor pulling real cornering load is
+                   doing something worth measuring the steadiness of, closed
+                   leg or not. Without this the number vanishes on exactly the
+                   sessions where the angle is rough — which is where a driver
+                   most needs it. */
+                var ch2 = gpChannels();
+                var anyAngle = false;
+                for (i = span.from; i <= span.to && i < rows.length; i++)
+                    if (atAngle(i)) { anyAngle = true; break; }
+                var inWindow = anyAngle ? atAngle : function (i) {
+                    return ch2 && rows[i].kph >= GP_DRIFT_MIN_KPH &&
+                           Math.abs(ch2.glat[i]) >= 0.3;
+                };
+                if (!anyAngle && ch2) out.settleFromPath = true;
                 for (i = span.from; i <= span.to && i < rows.length; i++) {
-                    if (!d.ok[i]) continue;
-                    var ab = Math.abs(d.beta[i]);
-                    if (ab < GP_DRIFT_ON) continue;
+                    if (!d.rhoOk[i] || !inWindow(i)) continue;
                     var ls = 0, ln = 0;
-                    for (var w = i - W; w <= i + W; w++) {
-                        if (w < 0 || w >= rows.length || !d.ok[w]) continue;
-                        ls += Math.abs(d.beta[w]); ln++;
+                    for (var w = i - RW; w <= i + RW; w++) {
+                        if (w < 0 || w >= rows.length || !d.rhoOk[w]) continue;
+                        ls += d.rho[w]; ln++;
                     }
                     if (!ln) continue;
-                    var res = ab - ls / ln;
+                    var res = d.rho[i] - ls / ln;
                     vs += res * res; vn++;
                 }
             }
-            out.wobble = vn ? Math.sqrt(vs / vn) : 0;
+            out.settle = vn ? Math.sqrt(vs / vn) : null;
             return out;
+        }
+
+        /* Did the car SPIN here rather than drift?
+
+           Two ways it shows, and the second is the one a naive rule misses.
+           Straightforwardly, the angle goes past the point where the car is no
+           longer going anywhere it was pointed. But a spin often never records
+           an angle that big at all: the angle lane goes dark below 25 km/h
+           because course over ground stops being a direction down there, so a
+           car that spins to a stop simply STOPS producing angle. The last one
+           it produced, still enormous, is the evidence.
+
+           This is a correctness gate, not a flourish. Without it the largest
+           angle in a session is a half-spin, and it collected full marks on
+           the part of the rating that carries the most weight. */
+        function gpDriftSpun(span) {
+            var rows = gp.trace, d = gpDriftAngle();
+            if (!span || !rows || !d) return null;
+            var last = null, i;
+            for (i = span.from; i <= span.to && i < rows.length; i++) {
+                if (d.ok[i]) {
+                    var ab = Math.abs(d.beta[i]);
+                    if (ab > GP_DRIFT_SPIN)
+                        return { why: "over", deg: ab, at: i, conf: d.conf[i] };
+                    last = { deg: ab, at: i, conf: d.conf[i] };
+                } else if (last && rows[i].kph < GP_DRIFT_MIN_KPH &&
+                           last.deg > GP_DRIFT_SPIN_DROP) {
+                    /* The angle stopped being knowable while the car was still
+                       a long way round. That is a spin ending, not a drift. */
+                    return { why: "dropped", deg: last.deg, at: last.at, conf: last.conf };
+                }
+            }
+            return null;
         }
 
         /* ---- the rating ----------------------------------------------------
@@ -17471,6 +17613,13 @@
         function gpDriftStars(read, bestKph) {
             if (!read || !read.angle || read.angle.rough) return null;
             var a = read.angle;
+            /* A spin is not a very good drift. Before this gate the biggest
+               angle in a session was a half-spin and it took full marks on the
+               heaviest part of the rating — the single worst thing a number
+               that headlines the product can do. Unrated rather than
+               nought-star, and the view says which corner and why: nought
+               would read as "you drifted it badly". */
+            if (read.spun) return null;
             /* A corner the car drove round on the grip is not a nought-star
                drift, it is not a drift. Rating it anyway handed a gripping car
                full marks for steadiness and for speed — the two things it is
@@ -17480,7 +17629,14 @@
             var parts = {
                 angle: Math.max(0, Math.min(1, a.held / GP_DRIFT_STAR_DEG)),
                 commit: Math.max(0, Math.min(1, read.commit)),
-                steady: Math.max(0, Math.min(1, 1 - read.wobble / GP_DRIFT_STAR_WOB)),
+                /* Steadiness from the sideslip RATE, not the spread of the
+                   angle. A drift held perfectly still scores full marks here
+                   however big it is; one being caught and re-caught does not.
+                   No rate at all (nothing at angle, no cornering to fall back
+                   on) scores nothing rather than full marks — silence is not
+                   evidence of smoothness. */
+                steady: read.settle === null || read.settle === undefined ? 0
+                        : Math.max(0, Math.min(1, 1 - read.settle / GP_DRIFT_STAR_SETTLE)),
                 speed: bestKph > 0 ? Math.max(0, Math.min(1, read.entryKph / bestKph)) : 0
             };
             var s = parts.angle * GP_DRIFT_STAR_W.angle +
@@ -17604,6 +17760,7 @@
             var cells = reads.map(function (lr, li) {
                 return lr.map(function (r, ui) {
                     if (!r) return null;
+                    r.spun = gpDriftSpun({ from: r.from, to: r.to });
                     r.rating = gpDriftStars(r, bestKph[ui]);
                     /* Inside a link every corner is still read on its own: the
                        unit says whether the link was held, the members say
@@ -17769,7 +17926,7 @@
             var P = [
                 ["Angle", rt.parts.angle, "held " + Math.round(GP_DRIFT_STAR_DEG) + "&deg; is full marks"],
                 ["Committed", rt.parts.commit, "how much of the corner was spent sideways"],
-                ["Steady", rt.parts.steady, "how little the angle wandered while it was up"],
+                ["Steady", rt.parts.steady, "how much of the turn rate was not asked for — " + GP_DRIFT_STAR_SETTLE + " deg/s of it scores nothing"],
                 ["Speed", rt.parts.speed, "against your own best through this corner"]
             ];
             return "<div class='gpb-dparts'>" + P.map(function (p) {
@@ -17846,6 +18003,19 @@
             if (!cur) {
                 h += "<div class='gpb-dsay'>This lap did not drive that &mdash; it went more than " +
                      "40 m from where the corner is, so there is nothing here to read.</div>";
+            } else if (cur.spun) {
+                h += "<div class='gpb-dsay'><b>This was a spin, not a drift.</b> " +
+                     (cur.spun.why === "over"
+                        ? "The angle went past " + GP_DRIFT_SPIN + "&deg; &mdash; " +
+                          Math.round(cur.spun.deg) + "&deg; at its worst."
+                        : "The angle was still " + Math.round(cur.spun.deg) +
+                          "&deg; when the speed fell below " + GP_DRIFT_MIN_KPH +
+                          " km/h and it stopped being knowable, which is how a spin ends.") +
+                     " It is left unrated rather than scored: nought stars would read as " +
+                     "a badly driven corner, and this was not one." +
+                     (cur.spun.conf > 1 ? " <span class='gpb-dpm'>&plusmn;" +
+                        Math.round(cur.spun.conf) + "&deg; on that reading</span>" : "") +
+                     "</div>";
             } else if (!cur.angle || cur.angle.rough) {
                 h += "<div class='gpb-dsay'>" +
                      (cur.angle && cur.angle.soft
@@ -17883,8 +18053,12 @@
                                  "for their M cars — it is the one number here with no weights " +
                                  "in it at all: more angle and more time both raise it, and " +
                                  "nobody had to decide how to trade the two off") +
-                     gpDriftTile("Switches", cur.switches, "",
-                                 false, "Times the car swapped from turning one way to the other") +
+                     gpDriftTile("Steadiness", cur.settle === null ? "&mdash;" : Math.round(cur.settle),
+                                 "&deg;/s", cur.settle === null,
+                                 "How much of the turn rate was not asked for. A drift held still " +
+                                 "sits near zero however big it is; catching it and re-catching it " +
+                                 "does not." + (cur.settleFromPath
+                                    ? " Measured over the hard cornering here, because the angle could not be." : "")) +
                      gpDriftTile("Came in at", gpDriftKph(cur.entryKph), gpSpdU(),
                                  false, "Entry speed — the speed part of the rating is graded on this") +
                      "</div>";
@@ -18028,10 +18202,12 @@
                      "go.</div>";
             }
             h += "<div class='gpb-dsay'>Five stars is " + GP_DRIFT_STAR_DEG + "&deg; held, held for all " +
-                 "of the corner, held steadily, at your best entry speed for it. Angle is the biggest " +
-                 "part of that by some way and speed the smallest &mdash; which is where every judging " +
-                 "system worth copying puts them. Nothing is guessed, and style is not scored: a person " +
-                 "does that. <span class='gpb-dpm'>Rating v" + GP_DRIFT_SCORE_VER + "</span></div>";
+                 "of the corner, held <b>steadily</b> (nothing in the turn rate you did not ask for), " +
+                 "at your best entry speed for it. Angle is the biggest part of that by some way and " +
+                 "speed the smallest &mdash; which is where every judging system worth copying puts " +
+                 "them. A <b>spin</b> is not rated at all. Nothing is guessed, and style is not " +
+                 "scored: a person does that. " +
+                 "<span class='gpb-dpm'>Rating v" + GP_DRIFT_SCORE_VER + "</span></div>";
             h += gpDriftSourceLine(d);
             h += "</div>";
 

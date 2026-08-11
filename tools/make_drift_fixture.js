@@ -370,7 +370,14 @@ function betaShape(S, forceChar) {
         const u = (x - a0) / (a1 - a0);
         const env = 0.5 - 0.5 * Math.cos(2 * Math.PI * u);      /* 0 -> 1 -> 0 */
         const amp = 44 * ampFor(li, ci);
-        const wob = LAPS[li].wob * 2.2 * Math.sin(u * 15.5 + ci) * Math.sin(u * 5.7);
+        /* Catching the car and gathering it up again — a fast event, not a
+           slow wander. Keyed to DISTANCE so the frequency does not stretch
+           with the corner: 13 m of travel is about 0.8 s at drift speed, which
+           is what a correction actually takes. The first cut oscillated once
+           per few seconds, which is a driver drifting untidily rather than one
+           fighting the car, and no steadiness measure should call that the
+           same thing. */
+        const wob = LAPS[li].wob * 1.6 * Math.sin(S / 2.1 + ci * 2.7);
         b += (amp + wob) * env * c.sign;
     }
     return b * breakFactor(S, li);
@@ -475,9 +482,22 @@ const cornerTruth = CORNERS.map((c, ci) => {
 
 /* ---- write the VBO ----------------------------------------------------- */
 function clockStr(sec) {
-    const s = 9 * 3600 + 40 * 60 + sec;               /* session starts just before 09:40 */
-    const hh = Math.floor(s / 3600), mm = Math.floor(s / 60) % 60, ssec = s - hh * 3600 - mm * 60;
-    return (hh * 10000 + mm * 100 + Math.floor(ssec)) + (ssec - Math.floor(ssec)).toFixed(2).slice(1);
+    /* Round to centiseconds FIRST, then decompose. Splitting the seconds from
+       the fraction and rounding the fraction on its own is wrong once every
+       twenty-five samples: a fraction of .996 rounds to "1.00", the ".00" is
+       written, and the carry into the seconds is lost — so the sample is
+       stamped a full second early.
+       It hid for a long time because gpStep caps an implausible interval, so
+       every duration still looked right; it only surfaced as a 1.24 s gap
+       where six 40 ms samples should be 0.24 s. A fixture's clock has to be
+       exact or every test that reads a timestamp is quietly measuring the
+       generator's arithmetic. */
+    const cs = Math.round((9 * 3600 + 40 * 60 + sec) * 100);   /* centiseconds */
+    const hh = Math.floor(cs / 360000);
+    const mm = Math.floor(cs / 6000) % 60;
+    const ss = Math.floor(cs / 100) % 60;
+    const fr = cs % 100;
+    return String(hh * 10000 + mm * 100 + ss) + '.' + (fr < 10 ? '0' : '') + fr;
 }
 let vbo = 'File created on 10/08/2026 @ 09:40:00\n\n' +
     '[header]\nsats\ntime\nlat\nlong\nvelocity kmh\nheading\nheight\nYaw rate\n\n' +

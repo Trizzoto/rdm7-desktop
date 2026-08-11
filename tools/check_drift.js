@@ -51,13 +51,14 @@ const WANT = [
     'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess',
     'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle',
     'gpDriftSeek', 'gpDriftSwitches', 'gpDriftSegments', 'gpDriftStats',
-    'gpDriftStars', 'gpDriftForget',
+    'gpDriftStars', 'gpDriftSpun', 'gpDriftForget',
     'gpRowsPack', 'gpRowsUnpack'
 ];
 const K = {};
 ['GP_DRIFT_MIN_KPH', 'GP_DRIFT_ON', 'GP_DRIFT_OFF',
  'GP_DRIFT_HOLD_S', 'GP_DRIFT_SETTLE_S', 'GP_DRIFT_SWITCH_G',
- 'GP_DRIFT_STAR_DEG', 'GP_DRIFT_STAR_WOB',
+ 'GP_DRIFT_STAR_DEG', 'GP_DRIFT_STAR_SETTLE', 'GP_DRIFT_RHO_MIN_KPH',
+ 'GP_DRIFT_SPIN', 'GP_DRIFT_SPIN_DROP',
  'GP_DRIFT_SCORE_VER', 'GP_DRIFT_ROUGH', 'GP_MAX_STEP_S',
  'GP_NO_T', 'GP_CHAN_STALE'].forEach(n => K[n] = constOf(n));
 /* an object literal, so constOf's number regex cannot read it */
@@ -432,8 +433,12 @@ head('The state machine');
            'peak ' + segs[0].peak.toFixed(1) + ' deg');
         ok('it knows how long it was held', segs[0].secs > 6 && segs[0].secs < 12,
            segs[0].secs.toFixed(1) + ' s');
-        ok('a steady angle reads as steady', segs[0].wobble < 12,
-           'wobble ' + segs[0].wobble.toFixed(1) + ' deg');
+        /* `spread` is the angle's spread about its own mean over the whole
+           segment — a SHAPE descriptor, deliberately not a steadiness one.
+           Steadiness is `settle`, off the sideslip rate, and is asserted
+           against real driving in check_mallala.js. */
+        ok('the segment reports its shape', segs[0].spread > 0 && segs[0].spread < 20,
+           'spread ' + segs[0].spread.toFixed(1) + ' deg');
         ok('none of them is flagged rough', segs.every(s => !s.rough));
     }
     const st = API.gpDriftStats({ from: 0, to: rows.length - 1 });
@@ -494,16 +499,16 @@ head('The rating: five stars, and what earns them');
        directly rather than through a drive. Every one of these is a claim the
        UI makes in words beside the stars, and a formula change that breaks one
        of them is a formula change that makes the screen lie. */
-    const R = (held, commit, wobble, kph) =>
+    const R = (held, commit, settle, kph) =>
         API.gpDriftStars({ angle: { held, rough: false, conf: 1, direct: true, secs: 4 },
-                           commit, wobble, entryKph: kph }, 100);
+                           commit, settle, entryKph: kph }, 100);
 
     const perfect = R(K.GP_DRIFT_STAR_DEG, 1, 0, 100);
     ok('the stated standard is exactly five stars', perfect.stars === 5,
        K.GP_DRIFT_STAR_DEG + ' deg held, all corner, no wander, best speed');
     ok('...and nothing beyond it scores more than five', R(90, 1, 0, 200).stars === 5);
 
-    const none = R(0, 0, K.GP_DRIFT_STAR_WOB * 2, 0);
+    const none = R(0, 0, K.GP_DRIFT_STAR_SETTLE * 2, 0);
     ok('nothing measured on any part is zero stars', none.stars === 0);
 
     /* Each part must MOVE the score on its own, or it is decoration. */
@@ -533,8 +538,13 @@ head('The rating: five stars, and what earns them');
     /* Wobble past the stated bar scores nothing, and never goes negative —
        a corner cannot be worse than unrated on one part and claw it back on
        another. */
-    ok('wander past the bar scores nothing, not less than nothing',
-       R(40, 1, K.GP_DRIFT_STAR_WOB * 3, 100).parts.steady === 0);
+    ok('rate you did not ask for, past the bar, scores nothing but never less',
+       R(40, 1, K.GP_DRIFT_STAR_SETTLE * 3, 100).parts.steady === 0);
+    /* No rate at all is not evidence of smoothness. Before this it read as
+       undefined and quietly scored full marks on a fifth of the rating. */
+    ok('no steadiness reading scores nothing, not full marks',
+       API.gpDriftStars({ angle: { held: 40, rough: false, conf: 1, direct: true, secs: 4 },
+                          commit: 1, settle: null, entryKph: 100 }, 100).parts.steady === 0);
 
     /* Speed is the only part graded against you rather than a fixed bar. */
     ok('speed is measured against your own best ENTRY here', R(20, 0.5, 5, 100).parts.speed === 1);

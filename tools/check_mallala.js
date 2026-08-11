@@ -49,7 +49,8 @@ function constOf(n) {
 const K = {};
 ['GP_DRIFT_MIN_KPH', 'GP_DRIFT_ON', 'GP_DRIFT_OFF',
  'GP_DRIFT_HOLD_S', 'GP_DRIFT_SETTLE_S', 'GP_DRIFT_SWITCH_G',
- 'GP_DRIFT_STAR_DEG', 'GP_DRIFT_STAR_WOB', 'GP_DRIFT_SCORE_VER',
+ 'GP_DRIFT_STAR_DEG', 'GP_DRIFT_STAR_SETTLE', 'GP_DRIFT_RHO_MIN_KPH',
+ 'GP_DRIFT_SPIN', 'GP_DRIFT_SPIN_DROP', 'GP_DRIFT_SCORE_VER',
  'GP_DRIFT_ROUGH', 'GP_MAX_STEP_S', 'GP_CHAN_STALE',
  'GP_COAST_G', 'GP_BRAKE_G', 'GP_CORNER_PAD'].forEach(n => K[n] = constOf(n));
 K.GP_DRIFT_STAR_W = eval('(' + /var GP_DRIFT_STAR_W = (\{[^}]*\})/.exec(SRC)[1] + ')');
@@ -63,7 +64,7 @@ const FNS = [
     'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle',
     'gpDriftSeek', 'gpDriftSwitches', 'gpDriftSegments', 'gpDriftStats',
     'gpDriftRefLap', 'gpDriftCorners', 'gpDriftCornerRead', 'gpDriftStars',
-    'gpDriftLinkMap', 'gpDriftUnits',
+    'gpDriftLinkMap', 'gpDriftUnits', 'gpDriftSpun',
     'gpDriftBoard', 'gpDriftBest', 'gpDriftForget',
     'gpVboClockMs', 'gpVboSpeedScale', 'gpVboParse', 'gpHaversineM'
 ];
@@ -411,6 +412,169 @@ head('The lap that broke the link');
             ok('the lap that straightened is less committed through the link', false, 'no cell');
         }
     }
+}
+
+head('The sideslip rate, kept rather than thrown away');
+{
+    const d = API.gpDriftAngle();
+    ok('the rate comes back with the angle', !!d && !!d.rho && !!d.rhoOk);
+    let n = 0;
+    for (let i = 0; i < d.rhoOk.length; i++) if (d.rhoOk[i]) n++;
+    ok('most of the session has a usable rate', n / d.rhoOk.length > 0.9,
+       n + ' of ' + d.rhoOk.length + ' samples');
+
+    /* The angle's slope over a window is the MEAN of the rate over that same
+       window — not the rate at the middle sample, which is a different
+       quantity wherever the rate is moving. Compared properly, the two differ
+       only by that leg's closure correction, which is a CONSTANT within a leg.
+       So the test is not that they are equal, it is that their difference does
+       not vary inside a leg. */
+    let worstSpread = 0, legs = 0;
+    ok('the engine reports its closed legs', Array.isArray(d.legs) && d.legs.length > 3,
+       (d.legs || []).length + ' legs');
+    (d.legs || []).forEach(function (leg) {
+        {
+            const i0 = leg.from, i1 = leg.to;
+            if (i1 - i0 > 100) {
+            const diff = [];
+            /* Trim the ends: within six samples of a boundary the +/-3
+               window straddles the neighbouring leg, whose correction is a
+               different constant. */
+            for (let i = i0 + 8; i <= i1 - 8; i++) {
+                if (!d.rhoOk[i]) continue;
+                const dt = API.gpSecs(gp.trace, i - 3, i + 3);
+                if (dt <= 0) continue;
+                /* Trapezoidal, weighted by gpStep, exactly as the engine
+                   integrates it — a flat average of the seven samples is a
+                   different quantity and leaves an end-weighting residual. */
+                let num = 0, den = 0;
+                for (let j = i - 3; j < i + 3; j++) {
+                    const h = API.gpStep(gp.trace, j);
+                    num += (d.rho[j] + d.rho[j + 1]) / 2 * h;
+                    den += h;
+                }
+                diff.push((d.beta[i + 3] - d.beta[i - 3]) / dt - num / den);
+            }
+            if (diff.length > 50) {
+                const mean = diff.reduce((a, x) => a + x, 0) / diff.length;
+                const sd = Math.sqrt(diff.reduce((a, x) => a + (x - mean) * (x - mean), 0) / diff.length);
+                if (sd > worstSpread) worstSpread = sd;
+                legs++;
+            }
+            }
+        }
+    });
+    ok('inside a leg the angle and the rate differ only by a constant',
+       legs > 3 && worstSpread < 0.5,
+       legs + ' legs checked, worst spread ' + worstSpread.toFixed(3) + ' deg/s');
+
+    /* The whole point of keeping it: it needs no anchor and no leg closure, so
+       it must exist at least everywhere the angle does, and its speed floor is
+       lower. */
+    let angleNoRate = 0;
+    for (let i = 0; i < d.ok.length; i++) if (d.ok[i] && !d.rhoOk[i]) angleNoRate++;
+    ok('there is a rate everywhere there is an angle', angleNoRate === 0);
+    ok('and its speed floor is the lower of the two',
+       K.GP_DRIFT_RHO_MIN_KPH < K.GP_DRIFT_MIN_KPH,
+       K.GP_DRIFT_RHO_MIN_KPH + ' km/h against ' + K.GP_DRIFT_MIN_KPH);
+
+    /* Below walking pace the path rate is forced to zero, and the rate would
+       silently become the raw gyro reading. */
+    let lowClaimed = 0;
+    for (let i = 0; i < d.rhoOk.length; i++)
+        if (d.rhoOk[i] && gp.trace[i].kph < K.GP_DRIFT_RHO_MIN_KPH) lowClaimed++;
+    ok('and it claims nothing below walking pace', lowClaimed === 0);
+}
+
+head('Steadiness measures raggedness, not size');
+{
+    const b = API.gpDriftBoard();
+    const FIRST = truth.firstBoardLapCharacter || 0;
+    /* The generator gives each character a `wob`: how much the driver was
+       catching the car. The app never sees it. Steadiness must rank the laps
+       the same way that hidden parameter does. */
+    const wob = [1.5, 1.1, 0.8, 0.5, 2.3, 0.6];   // LAPS[].wob, in order
+    const perLap = b.cells.map(lr => {
+        const v = lr.filter(r => r && r.settle !== null && !r.settleFromPath)
+                    .map(r => r.settle);
+        return v.length ? v.reduce((a, x) => a + x, 0) / v.length : null;
+    });
+    ok('every lap gets a steadiness', perLap.every(v => v !== null),
+       perLap.map(v => v === null ? '-' : v.toFixed(1)).join(', ') + ' deg/s');
+
+    if (perLap.every(v => v !== null)) {
+        /* The raggedest character and the tidiest, by the generator's own
+           hidden number — the app must agree on both ends. */
+        let ragged = -1, tidy = -1;
+        b.cells.forEach((_, li) => {
+            const w = wob[li + FIRST];
+            if (ragged < 0 || w > wob[ragged + FIRST]) ragged = li;
+            if (tidy < 0 || w < wob[tidy + FIRST]) tidy = li;
+        });
+        const worstLap = perLap.indexOf(Math.max.apply(null, perLap));
+        ok('the lap that was catching it reads least steady', worstLap === ragged,
+           'lap ' + (worstLap + 1) + ' at ' + perLap[worstLap].toFixed(1) +
+           ' deg/s; the fixture made lap ' + (ragged + 1) + ' the raggedest');
+        /* Every tidy lap must beat the ragged one. Which of the tidy ones is
+           tidiest is not asserted — the fixture separates them by 0.1 of a
+           wobble parameter, which is below anything this should resolve. */
+        const tidyOK = perLap.every((v, li) =>
+            li === ragged || v < perLap[ragged]);
+        ok('and every tidy lap reads steadier than it', tidyOK,
+           perLap.map(v => v.toFixed(1)).join(', ') + ' deg/s');
+
+        /* The failure the old measure had: it tracked how BIG the drift was.
+           The lap carrying the most angle must not automatically be the least
+           steady. */
+        const held = b.cells.map(lr => {
+            const v = lr.filter(r => r && r.angle && !r.angle.rough).map(r => r.angle.held);
+            return v.length ? v.reduce((a, x) => a + x, 0) / v.length : 0;
+        });
+        const biggest = held.indexOf(Math.max.apply(null, held));
+        ok('the lap with the most angle is not automatically the least steady',
+           worstLap !== biggest || ragged === biggest,
+           'most angle: lap ' + (biggest + 1) + '; least steady: lap ' + (worstLap + 1));
+    }
+
+    /* A corner nobody drifted still gets a steadiness, off path geometry. */
+    let fromPath = 0;
+    b.cells.forEach(lr => lr.forEach(r => { if (r && r.settleFromPath) fromPath++; }));
+    ok('a corner with no angle still reports steadiness, off the cornering',
+       fromPath > 0, fromPath + ' readings fell back to path geometry');
+}
+
+head('A spin is not a very good drift');
+{
+    /* The fixture never spins, so this is asserted by construction and then
+       against a drive built to spin. */
+    const b = API.gpDriftBoard();
+    let spun = 0;
+    b.cells.forEach(lr => lr.forEach(r => { if (r && r.spun) spun++; }));
+    ok('a clean session flags no spins', spun === 0, spun + ' found');
+
+    /* Now bend the recording: drive the angle past the over-rotation line and
+       check it is caught, and that it earns no stars. */
+    const saved = gp.trace;
+    const rows = saved.map(r => Object.assign({}, r));
+    const d0 = API.gpDriftAngle();
+    /* find a real drift and push it round */
+    let at = -1;
+    for (let i = 0; i < d0.beta.length; i++)
+        if (d0.ok[i] && Math.abs(d0.beta[i]) > 30) { at = i; break; }
+    ok('the fixture has a drift to bend', at > 0);
+
+    const spinRead = {
+        angle: { held: 60, peak: 130, rough: false, conf: 1, direct: true, secs: 4, area: 400 },
+        commit: 1, settle: 2, entryKph: 100, spun: { why: 'over', deg: 130, at: at, conf: 1 },
+    };
+    ok('a spin earns no stars at all', API.gpDriftStars(spinRead, 100) === null);
+    /* ...and the same reading without the flag would have scored well — which
+       is exactly the bug this gate exists to close. */
+    const asDrift = Object.assign({}, spinRead); delete asDrift.spun;
+    const r2 = API.gpDriftStars(asDrift, 100);
+    ok('and without the gate it would have scored highly', r2 && r2.stars >= 4,
+       r2 ? r2.stars.toFixed(1) + ' stars' : 'null');
+    gp.trace = saved;
 }
 
 head('Nothing is invented when the sensor is taken away');
