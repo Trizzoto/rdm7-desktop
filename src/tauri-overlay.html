@@ -2665,19 +2665,138 @@
         /* where it is GOING: thin, cool, and behind the car */
         .gpb-car .travel line { stroke: #f2f4f6; stroke-width: 1.6; opacity: 0.75; stroke-dasharray: 3 3; }
         .gpb-car .travel .tip { fill: #f2f4f6; opacity: 0.75; }
-        /* where it is POINTING: the solid object, always legible */
-        .gpb-car .body rect {
-            fill: #f7f8f9; stroke: #0a0c0e; stroke-width: 1.6;
-            paint-order: stroke; stroke-linejoin: round;
+        /* where it is POINTING: the solid object, always legible.
+           Selected by CLASS, never by element. The rules used to say
+           `.body rect`, which quietly tied the whole visual identity of the car
+           to the one shape the first glyph happened to be drawn with — the
+           moment a car became a <path> it lost its fill, its outline and its
+           white "sideways" state all at once. Every glyph now declares what
+           each part IS and the stylesheet owns the colour, which is also what
+           lets one set of artwork serve the white playback car and the
+           lap-coloured ghosts from one fragment.
+
+           The parts, and why each exists — all of it came from looking at real
+           overhead photographs of these cars:
+             shell   the bodywork
+             roof    the roof panel, in BODY colour, sitting inside the glass.
+                     A real cabin from above is a dark ring around a painted
+                     roof; drawing screen and backlight as two separate bars is
+                     what made the first sets read as barcodes.
+             glass   the cabin, as one dark area
+             wheel   the tyres, drawn OVER the shell so the tread shows outside
+                     the arch. Buried under the bodywork they were invisible.
+             mirror  door mirrors — tiny, and the strongest "this is a car" cue
+                     there is
+             panel   a dark painted panel (the AE86's bonnet)
+             trim    lights, vents, stripes, grille, ducktail
+             lamp    the things that are LIGHTER than the body: a light bar, a
+                     tail lamp. Dark-on-dark loses them inside the glass. */
+        .gpb-car .body .wheel { fill: #0a0c0e; }
+        .gpb-car .body .shell {
+            fill: #f7f8f9; stroke: #0a0c0e; stroke-width: 1.15;
+            paint-order: stroke; stroke-linejoin: round; stroke-linecap: round;
         }
-        .gpb-car .body .screen { fill: #0a0c0e; opacity: 0.62; }
-        .gpb-car .body .axle { stroke: #0a0c0e; stroke-width: 1.4; opacity: 0.5; }
-        .gpb-car.sideways .body rect { fill: #fff; }
+        .gpb-car .body .roof { fill: #f7f8f9; }
+        .gpb-car .body .glass { fill: #0e1216; opacity: 0.82; }
+        .gpb-car .body .panel { fill: #0e1216; opacity: 0.72; }
+        .gpb-car .body .trim { fill: #0e1216; opacity: 0.6; }
+        .gpb-car .body .mirror { fill: #0a0c0e; }
+        .gpb-car .body .lamp { fill: #fff; opacity: 0.92; }
+        .gpb-car.sideways .body .shell, .gpb-car.sideways .body .roof { fill: #fff; }
+        /* the LIVE car wears the live colour, so "now" and "a lap you drove
+           earlier" are never the same object on the same map */
+        .gpb-car.live .body .shell, .gpb-car.live .body .roof { fill: #d2232a; }
+        /* A user's own PNG is placed, not painted: it carries its own colours,
+           so the shell rules do not apply to it and it never takes the white
+           sideways state. Rendering crisply matters more than smoothly at 26 px. */
+        .gpb-car .body image, .gpb-ghost .body image { image-rendering: auto; }
         .gpb-car .deg {
             fill: #fff; font-family: var(--gpb-head, sans-serif); font-size: 11px;
             font-weight: 700; letter-spacing: 0.02em;
             paint-order: stroke; stroke: #0a0c0e; stroke-width: 3.2; stroke-linejoin: round;
         }
+        /* ---- the car picker, in Setup ------------------------------------
+           The swatches draw the real glyph through the real stylesheet, at the
+           size it lands on the map plus a little, so the list cannot disagree
+           with the map. */
+        #gpWorkspace .gp-cars {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0 2px;
+        }
+        /* The swatch is a light card like every other surface in this panel.
+           The glyph inside it is the SAME artwork the map draws, through the
+           same stylesheet — so the tile sits on a dark plate, because a white
+           car on a white card is invisible and a car recoloured for the picker
+           would be a picker that lies about what you chose. */
+        #gpWorkspace .gp-carpick {
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            padding: 6px 3px 5px; cursor: pointer;
+            background: var(--gpb-surface); border: 1px solid var(--gpb-div);
+            border-radius: 8px; color: var(--gpb-muted);
+            font-family: var(--gpb-head); font-size: 8.5px; font-weight: 600;
+            letter-spacing: 0.03em; line-height: 1.15; text-align: center;
+        }
+        #gpWorkspace .gp-carpick:hover { border-color: var(--gpb-red); }
+        #gpWorkspace .gp-carpick.on {
+            border-color: var(--gpb-red); color: var(--gpb-ink);
+            box-shadow: inset 0 0 0 1px var(--gpb-red);
+        }
+        #gpWorkspace .gp-carpick .plate {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 42px; border-radius: 5px; background: #2b3037;
+        }
+        #gpWorkspace .gp-carpick svg, #gpWorkspace .gp-carpick img {
+            width: 36px; height: 36px; display: block; object-fit: contain;
+        }
+        #gpWorkspace .gp-carpick span { display: block; min-height: 20px; }
+        #gpWorkspace .gp-cartab {
+            width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px;
+            color: var(--gpb-muted); line-height: 1.35;
+        }
+        #gpWorkspace .gp-cartab th {
+            text-align: left; font-family: var(--gpb-head); font-size: 8.5px;
+            letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;
+            color: var(--gpb-n600); padding: 0 6px 4px 0;
+            border-bottom: 1px solid var(--gpb-div);
+        }
+        #gpWorkspace .gp-cartab td {
+            padding: 4px 6px 4px 0; vertical-align: top;
+            border-bottom: 1px solid var(--gpb-div-lt);
+        }
+        #gpWorkspace .gp-cartab td:first-child { color: var(--gpb-ink); }
+        #gpWorkspace .gp-cartab b { font-weight: 700; }
+
+        /* ---- the other laps, also pointed somewhere ----------------------
+           A ghost is where someone else was, so it is smaller and quieter
+           than the car — but a dot cannot say which way anybody faced, and
+           that is the whole subject of this view. Every ghost therefore
+           carries its TRAVEL arrow always (course over ground is measured, so
+           drawing it invents nothing) and its BODY only where the angle was
+           worked out and vouched for, by the same rule the car itself obeys.
+           `--gc` is the lap's own colour, so a ghost on the map and a line on
+           the map are still obviously the same lap. */
+        .gpb-ghostwrap { background: none; border: 0; }
+        .gpb-ghost { overflow: visible; pointer-events: none; opacity: 0.72; }
+        .gpb-ghost .travel line {
+            stroke: var(--gc, #e9ebed); stroke-width: 1.4; opacity: 0.75; stroke-dasharray: 2.5 2.5;
+        }
+        .gpb-ghost .travel .tip { fill: var(--gc, #e9ebed); opacity: 0.8; }
+        .gpb-ghost .body { display: none; }
+        .gpb-ghost.aimed .body { display: block; }
+        .gpb-ghost .body .wheel { fill: #0a0c0e; opacity: 0.8; }
+        /* Shell and roof are both BODYWORK, so both take the lap's colour —
+           the roof island is what stops the cabin reading as a solid slab. */
+        .gpb-ghost .body .shell, .gpb-ghost .body .roof {
+            fill: var(--gc, #e9ebed); fill-opacity: 0.92;
+        }
+        .gpb-ghost .body .shell {
+            stroke: #0a0c0e; stroke-width: 0.95;
+            paint-order: stroke; stroke-linejoin: round;
+        }
+        .gpb-ghost .body .glass { fill: #0e1216; opacity: 0.6; }
+        .gpb-ghost .body .panel { fill: #0e1216; opacity: 0.5; }
+        .gpb-ghost .body .trim { fill: #0e1216; opacity: 0.45; }
+        .gpb-ghost .body .mirror { fill: #0a0c0e; opacity: 0.85; }
+        .gpb-ghost .body .lamp { fill: #fff; opacity: 0.8; }
 
         /* the hero: the two things you opened this view to see, side by side
            and above everything that picks which corner you are looking at */
@@ -7463,7 +7582,8 @@
         var gp = {
             open: false, inFlight: false, timer: null, openedAt: 0,
             connecting: false, connectingAt: 0,   /* a USB connect attempt is in flight */
-            map: null, carLayer: null, carMarker: null,
+            map: null, carLayer: null, carMarker: null,   /* the LIVE car, at the puck's current fix */
+            driftCar: null, _carEls: null,                /* the PLAYBACK car — a separate slot on purpose */
             trail: null, follow: true, _lastLL: null,
             lap: null, lapErr: null, lapInFlight: false, can: null,
             history: null, _lapSeen: -1,
@@ -8679,8 +8799,13 @@
             return gpTracksMigrate();
         }
 
+        /* The track library is the most valuable thing this app keeps on this
+           PC: every gate placed by hand on a map, and every outline traced onto
+           one. It is also the largest thing in local storage, so it is the
+           first write that will fail if that store ever fills. */
         function gpTracksSave() {
-            try { localStorage.setItem(GP_TRACKS_LS, JSON.stringify(gp.tracks)); } catch (e) { }
+            return gpSaveOwned(GP_TRACKS_LS, JSON.stringify(gp.tracks),
+                               "your tracks");
         }
 
         /* Recover tracks placed in the previous (removed) lap-timer workspace.
@@ -10014,6 +10139,33 @@
         function gpImportSaid(text, tone) {
             if (typeof showToast === "function") { showToast(text, tone); return; }
             gpSetMsg("gpTraceMsg", text, tone === "error" ? "bad" : "ok");
+        }
+
+        /* ---- saving something the user MADE ---------------------------------
+           A view preference that fails to save costs a second to set again, and
+           swallowing that is fine. A TRACK LIBRARY that fails to save is gates
+           you placed by hand on a map, which look saved, are not, and are gone
+           at the next launch with nothing on screen having said so.
+
+           Every localStorage write in this file is `catch (e) {}`. That is the
+           same class of silence the import toast was built for — "a file that
+           silently does nothing is the worst of the possible outcomes" — so
+           the writes that carry authored work go through here instead and say
+           when they fail. It returns whether it stuck, so a caller that can do
+           something better than a message has the option. */
+        function gpSaveOwned(key, value, what) {
+            try {
+                window.localStorage.setItem(key, value);
+                return true;
+            } catch (e) {
+                /* Quota is the likely one, but the message deliberately does not
+                   claim to know: whatever the reason, the fact the user needs is
+                   that what is on screen is not what is on disk. */
+                gpImportSaid("Could not save " + what + " on this PC. What you are looking at is " +
+                             "correct, but it has NOT been written to disk and will be gone if Studio " +
+                             "restarts. Export it now to keep it.", "error");
+                return false;
+            }
         }
 
         /* A track built out of the gates the file carried. It goes in as one
@@ -19928,29 +20080,460 @@
                     delete gp.ghostMarks[k];
                 }
             }
+            /* The angle engine's reading, shared by every ghost — one call,
+               not one per lap: it is the same session and the same arrays,
+               only a different index into them. */
+            var gd = gpDriftAngle();
             for (k in want) {
                 var li = parseInt(k, 10);
                 var lap = spans[li];
                 if (!lap) continue;
-                var gl = gpDrawnAt(gpLapIdxAtSecs(lap, t));
+                var gi = gpLapIdxAtSecs(lap, t);
+                var gl = gpDrawnAt(gi);
                 if (!gl) continue;
+                var col = (li === cmpIx && !drifting) ? "#e9ebed" : gpLapColour(li);
                 var m = gp.ghostMarks[k];
                 if (!m) {
                     /* Faded on purpose: a ghost is where someone else was,
-                       not where you are. Same fill as the lap's own line, so
-                       a dot on the map and a line on the map are obviously
-                       the same lap. */
-                    m = L.circleMarker(gl, {
-                        radius: 5, weight: 1.4,
-                        color: "#f4f5f6", opacity: 0.5,
-                        fillColor: (li === cmpIx && !drifting) ? "#e9ebed" : gpLapColour(li),
-                        fillOpacity: 0.42, interactive: false
+                       not where you are. Same colour as the lap's own line, so
+                       a ghost on the map and a line on the map are obviously
+                       the same lap. Built once and rotated in place — a fresh
+                       divIcon per lap per frame stutters exactly the way the
+                       car did before it was built once. */
+                    m = L.marker(gl, {
+                        interactive: false, keyboard: false, zIndexOffset: 700,
+                        icon: L.divIcon({ className: "gpb-ghostwrap", iconSize: [48, 48],
+                            iconAnchor: [24, 24], html:
+                            "<svg class='gpb-ghost' viewBox='-24 -24 48 48' width='48' height='48'>" +
+                              "<g class='travel'>" +
+                                "<line x1='0' y1='0' x2='0' y2='-17'></line>" +
+                                "<path class='tip' d='M0,-20.5 L-2.5,-15 L2.5,-15 Z'></path>" +
+                              "</g>" +
+                              /* The same artwork as the car, two-thirds size. The
+                                 scale sits on an INNER group because the rotation
+                                 is set on `.body` every frame and would overwrite
+                                 a combined transform. */
+                              "<g class='body'><g transform='scale(0.64)'>" +
+                                gpCarGlyph(22) +
+                              "</g></g>" +
+                            "</svg>" })
                     });
                     gp.ghostMarks[k] = m;
                 }
                 m.setLatLng(gl);
                 if (!gp.traceLayer.hasLayer(m)) m.addTo(gp.traceLayer);
+                gpAimGhost(m, gi, col, gd);
             }
+        }
+
+        /* Point one ghost. Travel always, body only where the angle is real:
+           course over ground is measured at every sample, so an arrow along it
+           invents nothing, while a body heading on a lap the engine could not
+           vouch for would be the same fabrication the car refuses to draw —
+           just smaller and multiplied by however many laps are ticked. */
+        function gpAimGhost(m, gi, colour, d) {
+            var el = m.getElement();
+            if (!el) return;
+            var svg = el.firstChild;
+            if (!svg || !svg.querySelector) return;
+            if (el._gcol !== colour) { svg.style.setProperty("--gc", colour); el._gcol = colour; }
+            var rows = gp.trace;
+            var course = (rows && rows[gi]) ? rows[gi].hdg : null;
+            if (course === null) return;
+            var tr = svg.querySelector(".travel");
+            if (tr) tr.setAttribute("transform", "rotate(" + course.toFixed(2) + ")");
+            var aimed = !!(d && d.ok[gi] && d.conf[gi] <= GP_DRIFT_ROUGH);
+            svg.classList.toggle("aimed", aimed);
+            if (aimed) {
+                var bd = svg.querySelector(".body");
+                if (bd) bd.setAttribute("transform",
+                    "rotate(" + (course + d.beta[gi]).toFixed(2) + ")");
+            }
+        }
+
+        /* ---- which car is drawn ---------------------------------------------
+           One registry, one preference, three drawing sites. The playback car,
+           the comparison ghosts and the live map car all take their shape from
+           here, so choosing an icon changes the car everywhere it appears
+           rather than in whichever view happened to be open.
+
+           Every glyph is authored to ONE contract, and all of it is load-bearing:
+             - drawn around the origin, nose toward NEGATIVE y. The drawing code
+               rotates by compass bearing with no offset, so a glyph authored
+               facing any other way is wrong at every sample on screen.
+             - about 13 wide by 22 long, so one set of artwork sits correctly
+               inside the 96 px playback icon and the 48 px ghost.
+             - parts named by CLASS (wheel / shell / glass / trim) and carrying
+               NO colour of their own. The stylesheet paints them, which is what
+               lets the same fragment be a white car when it is sideways and a
+               lap-coloured car when it is a ghost.
+           Wheels are drawn first, so the shell covers their inner halves and
+           only the treads show — the cue that stops every glyph reading as a
+           rounded rectangle at map size. */
+        var GP_CARS = [
+            /* the plain marker: claims a position and a direction, nothing more */
+            { id: "wedge", label: "Default arrow",
+              svg: '<path class="shell" d="M 0 -11 C 1.1 -6.2 2.5 -1 3.05 4.4 C 3.45 7.5 4.55 9.5 6.3 10.9 L 0 7.9 L' +
+                ' -6.3 10.9 C -4.55 9.5 -3.45 7.5 -3.05 4.4 C -2.5 -1 -1.1 -6.2 0 -11 Z"/>' },
+            /* the slab: square shoulders, four round lamps, wing standing clear of the tail */
+            { id: "skyline", label: "Skyline",
+              svg: '<path class="shell" d="M -3.85,-10.6 L 3.85,-10.6 Q 4.8,-10.5 4.95,-9.6 L 5.1,-8.3 L 5.1,8.5 Q 5' +
+                '.0,9.25 4.3,9.3 L -4.3,9.3 Q -5.0,9.25 -5.1,8.5 L -5.1,-8.3 L -4.95,-9.6 Q -4.8,-10.5 -3.85,-10.' +
+                '6 Z"/><path class="shell" d="M -5.3,10.4 L 5.3,10.4 L 5.3,11.4 L -5.3,11.4 Z"/>' +
+                '<rect class="wheel" x="-6.52" y="-7.95" width="1.85" height="3.3" rx="0.28"/>' +
+                '<rect class="wheel" x="4.68" y="-7.95" width="1.85" height="3.3" rx="0.28"/>' +
+                '<rect class="wheel" x="-6.67" y="4.05" width="1.85" height="3.3" rx="0.28"/>' +
+                '<rect class="wheel" x="4.83" y="4.05" width="1.85" height="3.3" rx="0.28"/>' +
+                '<polygon class="glass" points="-4.05,-3.6 4.05,-3.6 3.95,5.8 -3.95,5.8"/>' +
+                '<polygon class="roof" points="-3.35,-0.6 3.35,-0.6 3.4,3.1 -3.4,3.1"/>' +
+                '<circle class="lamp" cx="-3.05" cy="8.4" r="0.58"/>' +
+                '<circle class="lamp" cx="-1.3" cy="8.4" r="0.58"/>' +
+                '<circle class="lamp" cx="1.3" cy="8.4" r="0.58"/>' +
+                '<circle class="lamp" cx="3.05" cy="8.4" r="0.58"/>' +
+                '<rect class="trim" x="-2.9" y="-8.3" width="1.45" height="0.7" rx="0.2"/>' +
+                '<rect class="trim" x="1.45" y="-8.3" width="1.45" height="0.7" rx="0.2"/>' +
+                '<rect class="trim" x="-2.6" y="-10.4" width="5.2" height="0.62" rx="0.22"/>' +
+                '<path class="mirror" d="M -4.9,-3.55 L -6.85,-4.1 L -6.85,-2.55 L -4.9,-2.8 Z"/>' +
+                '<path class="mirror" d="M 4.9,-3.55 L 6.85,-4.1 L 6.85,-2.55 L 4.9,-2.8 Z"/>' },
+            /* the slim one: bonnet nearly half the car, pop-ups, kamm tail and a ducktail */
+            { id: "silvia", label: "Silvia",
+              svg: '<path class="shell" d="M -3.1,-11.0 Q -4.0,-10.9 -4.35,-10.0 L -4.6,-8.4 C -4.72,-6.0 -4.72,-3.0' +
+                ' -4.7,-1.0 L -4.7,3.6 C -4.72,5.8 -4.75,7.8 -4.7,9.4 Q -4.65,10.3 -4.05,10.45 L 4.05,10.45 Q 4.6' +
+                '5,10.3 4.7,9.4 C 4.75,7.8 4.72,5.8 4.7,3.6 L 4.7,-1.0 C 4.72,-3.0 4.72,-6.0 4.6,-8.4 L 4.35,-10.' +
+                '0 Q 4.0,-10.9 3.1,-11.0 Z"/>' +
+                '<rect class="wheel" x="-6.07" y="-8" width="1.75" height="3.2" rx="0.28"/>' +
+                '<rect class="wheel" x="4.33" y="-8" width="1.75" height="3.2" rx="0.28"/>' +
+                '<rect class="wheel" x="-6.22" y="4" width="1.75" height="3.2" rx="0.28"/>' +
+                '<rect class="wheel" x="4.47" y="4" width="1.75" height="3.2" rx="0.28"/>' +
+                '<polygon class="glass" points="-3.75,-2.3 3.75,-2.3 3.7,6.6 -3.7,6.6"/>' +
+                '<polygon class="roof" points="-3.1,0.7 3.1,0.7 3.15,4.2 -3.15,4.2"/>' +
+                '<rect class="trim" x="-2.95" y="-10.7" width="2.1" height="0.9" rx="0.25"/>' +
+                '<rect class="trim" x="0.85" y="-10.7" width="2.1" height="0.9" rx="0.25"/>' +
+                '<rect class="trim" x="-3.85" y="9.45" width="7.7" height="0.68" rx="0.2"/>' +
+                '<rect class="trim" x="-4.25" y="8.45" width="8.5" height="0.42" rx="0.18"/>' +
+                '<path class="mirror" d="M -4.5,-2.25 L -6.45,-2.8 L -6.45,-1.25 L -4.5,-1.5 Z"/>' +
+                '<path class="mirror" d="M 4.5,-2.25 L 6.45,-2.8 L 6.45,-1.25 L 4.5,-1.5 Z"/>' },
+            /* the short two-box, straight lines only, panda bonnet, rear track wider than front */
+            { id: "ae86", label: "AE86",
+              svg: '<path class="shell" d="M -3.7,-9.8 L 3.7,-9.8 L 4.2,-9.1 L 4.2,-2.7 L 4.55,-2.3 L 4.55,9.4 L 4.1' +
+                ',9.85 L -4.1,9.85 L -4.55,9.4 L -4.55,-2.3 L -4.2,-2.7 L -4.2,-9.1 Z"/>' +
+                '<rect class="wheel" x="-5.55" y="-7.95" width="1.7" height="3.1" rx="0.28"/>' +
+                '<rect class="wheel" x="3.85" y="-7.95" width="1.7" height="3.1" rx="0.28"/>' +
+                '<rect class="wheel" x="-5.95" y="4.25" width="1.7" height="3.1" rx="0.28"/>' +
+                '<rect class="wheel" x="4.25" y="4.25" width="1.7" height="3.1" rx="0.28"/>' +
+                '<polygon class="panel" points="-3.8,-9.5 3.8,-9.5 3.95,-3.2 -3.95,-3.2"/>' +
+                '<polygon class="glass" points="-3.7,-3 3.7,-3 3.6,7.5 -3.6,7.5"/>' +
+                '<polygon class="roof" points="-3.05,0 3.05,0 3.05,3 -3.05,3"/>' +
+                '<rect class="trim" x="-3.2" y="-10.05" width="1.95" height="0.72" rx="0.18"/>' +
+                '<rect class="trim" x="1.25" y="-10.05" width="1.95" height="0.72" rx="0.18"/>' +
+                '<rect class="trim" x="-3.75" y="8.95" width="7.5" height="0.6" rx="0.15"/>' +
+                '<path class="mirror" d="M -4.35,-2.95 L -6.3,-3.5 L -6.3,-1.95 L -4.35,-2.2 Z"/>' +
+                '<path class="mirror" d="M 4.35,-2.95 L 6.3,-3.5 L 6.3,-1.95 L 4.35,-2.2 Z"/>' },
+            /* nothing on it is straight: pinched waist, flared hips, wing on a round tail */
+            { id: "rx7", label: "RX-7",
+              svg: '<path class="shell" d="M 0,-11.0 C 1.75,-10.95 2.95,-10.55 3.7,-9.75 C 4.6,-8.75 5.05,-7.6 5.15,' +
+                '-6.4 C 5.2,-5.5 5.05,-4.8 4.75,-4.1 C 4.4,-3.2 4.2,-2.3 4.2,-1.3 C 4.2,-0.2 4.25,0.85 4.45,1.8 C' +
+                ' 4.7,2.95 5.2,3.95 5.4,5.15 C 5.55,6.15 5.5,7.2 5.2,8.1 C 4.85,9.2 3.95,9.85 2.95,9.95 C 1.0,10.' +
+                '1 -1.0,10.1 -2.95,9.95 C -3.95,9.85 -4.85,9.2 -5.2,8.1 C -5.5,7.2 -5.55,6.15 -5.4,5.15 C -5.2,3.' +
+                '95 -4.7,2.95 -4.45,1.8 C -4.25,0.85 -4.2,-0.2 -4.2,-1.3 C -4.2,-2.3 -4.4,-3.2 -4.75,-4.1 C -5.05' +
+                ',-4.8 -5.2,-5.5 -5.15,-6.4 C -5.05,-7.6 -4.6,-8.75 -3.7,-9.75 C -2.95,-10.55 -1.75,-10.95 0,-11.' +
+                '0 Z"/><path class="shell" d="M -5.15,10.9 L 5.15,10.9 L 5.15,11.8 L -5.15,11.8 Z"/>' +
+                '<rect class="wheel" x="-6.3" y="-7.7" width="1.8" height="3.2" rx="0.28"/>' +
+                '<rect class="wheel" x="4.5" y="-7.7" width="1.8" height="3.2" rx="0.28"/>' +
+                '<rect class="wheel" x="-6.75" y="4.7" width="1.8" height="3.2" rx="0.28"/>' +
+                '<rect class="wheel" x="4.95" y="4.7" width="1.8" height="3.2" rx="0.28"/>' +
+                '<path class="glass" d="M -3.55,-3.5 Q 0,-4.15 3.55,-3.5 C 3.75,-1.0 3.7,3.0 3.3,5.6 Q 0,6.2 -3.3' +
+                ',5.6 C -3.7,3.0 -3.75,-1.0 -3.55,-3.5 Z"/>' +
+                '<path class="roof" d="M -2.95,-0.5 Q 0,-0.95 2.95,-0.5 C 3.0,1.0 2.95,2.1 2.8,3.2 Q 0,3.6 -2.8,3' +
+                '.2 C -2.95,2.1 -3.0,1.0 -2.95,-0.5 Z"/>' +
+                '<rect class="trim" x="-3.4" y="-9.7" width="2.1" height="0.85" rx="0.32"/>' +
+                '<rect class="trim" x="1.3" y="-9.7" width="2.1" height="0.85" rx="0.32"/>' +
+                '<path class="mirror" d="M -4.25,-3.35 L -6.2,-3.9 L -6.2,-2.35 L -4.25,-2.6 Z"/>' +
+                '<path class="mirror" d="M 4.25,-3.35 L 6.2,-3.9 L 6.2,-2.35 L 4.25,-2.6 Z"/>' },
+            /* almost all bonnet, twin stripes that stop where they meet something */
+            { id: "muscle", label: "Muscle car",
+              svg: '<path class="shell" d="M -4.05,-11.0 Q -4.95,-10.9 -5.15,-10.0 L -5.3,-8.6 L -5.3,8.8 Q -5.2,10.' +
+                '2 -4.5,10.65 L 4.5,10.65 Q 5.2,10.2 5.3,8.8 L 5.3,-8.6 L 5.15,-10.0 Q 4.95,-10.9 4.05,-11.0 Z"/>' +
+                '<rect class="wheel" x="-6.77" y="-8.35" width="1.95" height="3.4" rx="0.28"/>' +
+                '<rect class="wheel" x="4.83" y="-8.35" width="1.95" height="3.4" rx="0.28"/>' +
+                '<rect class="wheel" x="-6.82" y="3.9" width="1.95" height="3.4" rx="0.28"/>' +
+                '<rect class="wheel" x="4.88" y="3.9" width="1.95" height="3.4" rx="0.28"/>' +
+                '<polygon class="glass" points="-4.15,-1.5 4.15,-1.5 4.05,6.9 -4.05,6.9"/>' +
+                '<polygon class="roof" points="-3.45,1.5 3.45,1.5 3.5,4.5 -3.5,4.5"/>' +
+                '<rect class="trim" x="-1.6" y="-8.5" width="3.2" height="2.0" rx="0.3"/>' +
+                '<rect class="trim" x="0.6" y="-10.6" width="0.9" height="1.9"/>' +
+                '<rect class="trim" x="0.6" y="-6.2" width="0.9" height="4.5"/>' +
+                '<rect class="trim" x="0.6" y="1.7" width="0.9" height="2.6"/>' +
+                '<rect class="trim" x="0.6" y="7.1" width="0.9" height="2.8"/>' +
+                '<rect class="trim" x="-1.5" y="-10.6" width="0.9" height="1.9"/>' +
+                '<rect class="trim" x="-1.5" y="-6.2" width="0.9" height="4.5"/>' +
+                '<rect class="trim" x="-1.5" y="1.7" width="0.9" height="2.6"/>' +
+                '<rect class="trim" x="-1.5" y="7.1" width="0.9" height="2.8"/>' +
+                '<rect class="trim" x="-4.25" y="9.85" width="8.5" height="0.62" rx="0.2"/>' +
+                '<path class="mirror" d="M -5.1,-1.45 L -7.05,-2 L -7.05,-0.45 L -5.1,-0.7 Z"/>' +
+                '<path class="mirror" d="M 5.1,-1.45 L 7.05,-2 L 7.05,-0.45 L 5.1,-0.7 Z"/>' },
+            /* the big three-box: longest cabin, light bar first, push bar on the nose */
+            { id: "police", label: "Police car",
+              svg: '<path class="shell" d="M -3.9,-11.5 Q -4.85,-11.4 -5.1,-10.45 L -5.25,-9.0 L -5.25,9.6 Q -5.1,11' +
+                '.0 -4.3,11.5 L 4.3,11.5 Q 5.1,11.0 5.25,9.6 L 5.25,-9.0 L 5.1,-10.45 Q 4.85,-11.4 3.9,-11.5 Z"/>' +
+                '<rect class="wheel" x="-6.7" y="-8.7" width="1.9" height="3.4" rx="0.28"/>' +
+                '<rect class="wheel" x="4.8" y="-8.7" width="1.9" height="3.4" rx="0.28"/>' +
+                '<rect class="wheel" x="-6.75" y="4.7" width="1.9" height="3.4" rx="0.28"/>' +
+                '<rect class="wheel" x="4.85" y="4.7" width="1.9" height="3.4" rx="0.28"/>' +
+                '<polygon class="glass" points="-4.25,-3.7 4.25,-3.7 4.2,7.3 -4.2,7.3"/>' +
+                '<polygon class="roof" points="-3.6,-0.7 3.6,-0.7 3.65,4.6 -3.65,4.6"/>' +
+                '<rect class="lamp" x="-4.15" y="-0.5" width="8.3" height="1.55" rx="0.32"/>' +
+                '<rect class="trim" x="-3.5" y="-11.95" width="7.0" height="0.7" rx="0.2"/>' +
+                '<rect class="trim" x="-2.5" y="-11.25" width="5.0" height="0.55" rx="0.2"/>' +
+                '<rect class="trim" x="-4.0" y="10.6" width="8.0" height="0.62" rx="0.2"/>' +
+                '<path class="mirror" d="M -5.05,-3.65 L -7,-4.2 L -7,-2.65 L -5.05,-2.9 Z"/>' +
+                '<path class="mirror" d="M 5.05,-3.65 L 7,-4.2 L 7,-2.65 L 5.05,-2.9 Z"/>' }
+        ];
+
+        var GP_CARICON_LS = "rdm7_gp_caricon";       /* which one, by id */
+        var GP_CARPNG_LS = "rdm7_gp_carpng";         /* the user's own, as a PNG data URI */
+        var _gpCarIconId = null, _gpCarPng = null;
+
+        function gpCarIconId() {
+            if (_gpCarIconId !== null) return _gpCarIconId;
+            var v = null;
+            try { v = window.localStorage.getItem(GP_CARICON_LS); } catch (e) { }
+            /* Validate against the registry rather than trusting the store: an
+               id from a build that shipped a car this one does not have would
+               otherwise draw nothing at all. */
+            _gpCarIconId = (v === "custom" || gpCarById(v)) ? v : "wedge";
+            return _gpCarIconId;
+        }
+        function gpCarById(id) {
+            for (var i = 0; i < GP_CARS.length; i++) if (GP_CARS[i].id === id) return GP_CARS[i];
+            return null;
+        }
+        /* The user's own PNG. Re-encoded through a canvas before it was stored,
+           so what comes back is bytes this app produced — but it is still
+           checked here before it reaches innerHTML, because "we wrote it" is an
+           assumption about the past and this is a string going into markup. */
+        function gpCarPng() {
+            if (_gpCarPng !== null) return _gpCarPng;
+            var v = "";
+            try { v = window.localStorage.getItem(GP_CARPNG_LS) || ""; } catch (e) { }
+            _gpCarPng = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(v) ? v : "";
+            return _gpCarPng;
+        }
+
+        /* The fragment for whichever car is chosen, scaled to fit `len` units of
+           length. Custom PNGs are PLACED, not painted: they arrive normalised to
+           a square whose long side is the car, so the square is sized by length
+           and centred. */
+        function gpCarGlyph(len) {
+            var id = gpCarIconId();
+            if (id === "custom") {
+                var png = gpCarPng();
+                if (png) {
+                    var s = len || 22, h = s / 2;
+                    return "<image class='own' href='" + png + "' x='" + (-h) + "' y='" + (-h) +
+                           "' width='" + s + "' height='" + s + "'></image>";
+                }
+                /* Chosen "custom" but nothing stored — fall back rather than
+                   draw an empty marker that looks like a bug. */
+            }
+            var car = gpCarById(id) || gpCarById("wedge");
+            return car ? car.svg : "";
+        }
+        /* What the drawn glyph currently depends on. The playback car is built
+           once and mutated for speed, so it needs to know when the ARTWORK
+           changed as opposed to the position — without this, switching icon
+           does nothing until the marker happens to be destroyed and rebuilt. */
+        function gpCarGlyphKey() {
+            var id = gpCarIconId();
+            return id === "custom" ? "custom:" + gpCarPng().length : id;
+        }
+
+        window.gpCarIconSet = function (id) {
+            if (id !== "custom" && !gpCarById(id)) return;
+            if (id === "custom" && !gpCarPng()) return;      /* nothing to choose yet */
+            _gpCarIconId = id;
+            try { window.localStorage.setItem(GP_CARICON_LS, id); } catch (e) { }
+            gpCarIconRepaint();
+        };
+
+        /* Every surface that draws a car, repainted together. */
+        function gpCarIconRepaint() {
+            /* The playback car and the ghosts are rebuilt rather than mutated,
+               because their artwork just changed underneath them. */
+            if (gp.driftCar && gp.traceLayer && gp.traceLayer.hasLayer(gp.driftCar))
+                gp.traceLayer.removeLayer(gp.driftCar);
+            gp.driftCar = null; gp._carEls = null;
+            gpDropGhosts();
+            /* The live car is re-iconed on its next poll, but a car sitting
+               still would keep the old shape until it moved. */
+            if (gp.carMarker && gp.carLayer) { gp.carLayer.clearLayers(); gp.carMarker = null; }
+            if (gp.trace && gp.trace.length) gpDrawPlayhead();
+            if (typeof gpRenderSetup === "function") gpRenderSetup();
+        }
+
+        /* ---- your own car -----------------------------------------------------
+           Whatever the user exported, normalised to something this app can draw:
+           trimmed to its own ink, centred, and scaled into a fixed square. The
+           trim is what makes the sizing advice advice rather than a requirement
+           — a 90 px car floating in a 1024 px canvas is the usual export and it
+           comes out the same size as one that was cropped tight.
+
+           Re-encoding through the canvas is also the sanitiser. What gets stored
+           is bytes this app produced, not the file's own, so nothing from a
+           stranger's PNG reaches innerHTML. */
+        var GP_CARPNG_BOX = 128;        /* the normalised square, px */
+        var GP_CARPNG_FILL = 0.92;      /* how much of it the car fills */
+        var GP_CARPNG_MAXIN = 4096;     /* refuse absurd inputs rather than hang on them */
+
+        function gpCarPngNormalise(dataUrl, done) {
+            var img = new Image();
+            img.onerror = function () { done({ err: "That file could not be read as an image." }); };
+            img.onload = function () {
+                var w = img.naturalWidth, h = img.naturalHeight;
+                if (!w || !h) return done({ err: "That image has no size." });
+                if (w > GP_CARPNG_MAXIN || h > GP_CARPNG_MAXIN)
+                    return done({ err: "That image is " + w + "×" + h +
+                                       ". Please use one 4096 pixels or smaller on its long side." });
+                var c = document.createElement("canvas");
+                c.width = w; c.height = h;
+                var x = c.getContext("2d", { willReadFrequently: true });
+                x.drawImage(img, 0, 0);
+                var px;
+                try { px = x.getImageData(0, 0, w, h).data; }
+                catch (e) { return done({ err: "That image could not be inspected." }); }
+
+                /* The car's own ink. A THRESHOLD rather than any alpha at all,
+                   because an anti-aliased edge or a soft drop shadow would
+                   otherwise set the bounds and the car would come out tiny
+                   inside its own halo. */
+                var ALPHA = 24, minX = w, minY = h, maxX = -1, maxY = -1, opaque = 0, yy, xx;
+                for (yy = 0; yy < h; yy++) {
+                    for (xx = 0; xx < w; xx++) {
+                        if (px[(yy * w + xx) * 4 + 3] < ALPHA) continue;
+                        opaque++;
+                        if (xx < minX) minX = xx;
+                        if (xx > maxX) maxX = xx;
+                        if (yy < minY) minY = yy;
+                        if (yy > maxY) maxY = yy;
+                    }
+                }
+                if (maxX < 0) return done({ err: "That image is completely transparent — there is nothing to draw." });
+
+                var bw = maxX - minX + 1, bh = maxY - minY + 1;
+                var scale = (GP_CARPNG_BOX * GP_CARPNG_FILL) / Math.max(bw, bh);
+                var out = document.createElement("canvas");
+                out.width = GP_CARPNG_BOX; out.height = GP_CARPNG_BOX;
+                var o = out.getContext("2d");
+                o.imageSmoothingQuality = "high";
+                var dw = bw * scale, dh = bh * scale;
+                o.drawImage(img, minX, minY, bw, bh,
+                            (GP_CARPNG_BOX - dw) / 2, (GP_CARPNG_BOX - dh) / 2, dw, dh);
+                done({
+                    url: out.toDataURL("image/png"),
+                    /* Ink in every corner means no silhouette: the map gets a
+                       rectangle of whatever the background was. Worth saying,
+                       not worth refusing — it is their picture. */
+                    noAlpha: (bw >= w * 0.98 && bh >= h * 0.98 && opaque / (w * h) > 0.95),
+                    /* Wider than it is long is a car photographed from the side,
+                       or one drawn nose-left. Either way it will point wrong. */
+                    landscape: bw > bh
+                });
+            };
+            img.src = dataUrl;
+        }
+
+        window.gpCarPngPick = function (input) {
+            var f = input && input.files && input.files[0];
+            input.value = "";                       /* clear FIRST, so re-picking the same file works */
+            if (!f) return;
+            var rd = new FileReader();
+            rd.onerror = function () { gpSetMsg("gpCarMsg", "That file could not be read.", "bad"); };
+            rd.onload = function () {
+                gpCarPngNormalise(String(rd.result || ""), function (r) {
+                    if (r.err) { gpSetMsg("gpCarMsg", r.err, "bad"); gpRenderSetup(); return; }
+                    try { window.localStorage.setItem(GP_CARPNG_LS, r.url); }
+                    catch (e) {
+                        /* Reported, not swallowed. Every other localStorage write
+                           in here fails silently, which for a preference means it
+                           looks saved until the next launch. */
+                        gpSetMsg("gpCarMsg", "Could not save that icon — this PC's local storage for Studio is full.", "bad");
+                        gpRenderSetup(); return;
+                    }
+                    _gpCarPng = r.url; _gpCarIconId = "custom";
+                    try { window.localStorage.setItem(GP_CARICON_LS, "custom"); } catch (e) { }
+                    var warn = r.noAlpha
+                        ? "Saved, but it has no see-through background, so it draws as a square tile on the map."
+                        : (r.landscape
+                            ? "Saved, but it is wider than it is long — if that is a car seen from the side, or drawn nose-left, it will point the wrong way."
+                            : "");
+                    gpSetMsg("gpCarMsg", warn || "Saved — trimmed and centred for you.", warn ? "warn" : "ok");
+                    gpCarIconRepaint();
+                });
+            };
+            rd.readAsDataURL(f);
+        };
+
+        window.gpCarPngClear = function () {
+            _gpCarPng = "";
+            try { window.localStorage.removeItem(GP_CARPNG_LS); } catch (e) { }
+            if (gpCarIconId() === "custom") {
+                _gpCarIconId = "wedge";
+                try { window.localStorage.setItem(GP_CARICON_LS, "wedge"); } catch (e) { }
+            }
+            gpSetMsg("gpCarMsg", "Removed — back to the built-in cars.", "");
+            gpCarIconRepaint();
+        };
+
+        /* The picker. Each button draws the real glyph through the real
+           stylesheet, so what is in the list is literally what lands on the
+           map — a picker drawn from separate preview art is a picker that can
+           lie about what you chose. */
+        function gpCarIconHtml() {
+            var cur = gpCarIconId(), png = gpCarPng(), i, c;
+            var h = "<div class='ws-grp'><div class='ws-gt'>Car icon" +
+                gpTip("What the playhead is drawn as",
+                      "Applies everywhere a car appears — the one you play back, the faded " +
+                      "comparison laps, and the live car. It is a picture, not a measurement: " +
+                      "the ANGLE it is drawn at is always the angle that was worked out from " +
+                      "your recording, whichever shape you pick. Stored on this PC only.") +
+                "</div><div class='gp-cars'>";
+            for (i = 0; i < GP_CARS.length; i++) {
+                c = GP_CARS[i];
+                h += "<button class='gp-carpick" + (cur === c.id ? " on" : "") +
+                     "' onclick=\"gpCarIconSet('" + c.id + "')\" title='" + gpEsc(c.label) + "'>" +
+                     "<span class='plate'>" +
+                     "<svg class='gpb-car' viewBox='-13 -13 26 26' width='36' height='36'>" +
+                     "<g class='body'>" + c.svg + "</g></svg></span>" +
+                     "<span>" + gpEsc(c.label) + "</span></button>";
+            }
+            if (png) {
+                h += "<button class='gp-carpick" + (cur === "custom" ? " on" : "") +
+                     "' onclick=\"gpCarIconSet('custom')\" title='Your own'>" +
+                     "<span class='plate'><img src='" + png + "' alt=''></span>" +
+                     "<span>Yours</span></button>";
+            }
+            h += "</div>";
+            h += "<div class='gp-set' style='margin-top:8px'>" +
+                 "<span class='l'>" + (png ? "Replace your icon" : "Use your own car") + "</span>" +
+                 "<button class='ws-btn-line' style='width:144px' " +
+                 "onclick=\"document.getElementById('gpCarFile').click()\">Choose a PNG…</button></div>";
+            if (png) {
+                h += "<div class='gp-set'><span class='l'>Remove it</span>" +
+                     "<button class='ws-btn-line' style='width:144px' onclick='gpCarPngClear()'>Remove</button></div>";
+            }
+            /* The sizing advice, as facts rather than a paragraph. Most of it is
+               forgiving because the import trims and centres — the one thing it
+               genuinely cannot work out for itself is which end is the front. */
+            h += "<table class='gp-cartab'><tr><th>For a PNG that looks right</th><th>Why</th></tr>" +
+                 "<tr><td>Nose pointing <b>up</b></td><td>the app turns it to your heading from there — this is the one it cannot guess</td></tr>" +
+                 "<tr><td>See-through background</td><td>anything solid draws as a square tile on the map</td></tr>" +
+                 "<tr><td>Square, 256×256 is plenty</td><td>it is drawn about 26 pixels across</td></tr>" +
+                 "<tr><td>Seen from directly above</td><td>a photo taken from the side points the wrong way once it turns</td></tr>" +
+                 "<tr><td>Any margin you like</td><td>the empty edges are trimmed and the car centred for you</td></tr>" +
+                 "</table>" +
+                 "<input type='file' id='gpCarFile' accept='image/png,image/webp' style='display:none' onchange='gpCarPngPick(this)'>" +
+                 "<div class='gp-msg' id='gpCarMsg'></div></div>";
+            return h;
         }
 
         /* ---- the car, pointed the way it was actually pointing -------------
@@ -19972,22 +20555,42 @@
             return (r * Math.sin(a)).toFixed(2) + "," + (-r * Math.cos(a)).toFixed(2);
         }
 
+        /* `gp.driftCar`, emphatically NOT `gp.carMarker`. The live map poll owns
+           `gp.carMarker` — it is the car at the puck's CURRENT fix — and it
+           rebuilds or nulls that slot a couple of times a second for as long as
+           a node is attached. Sharing one slot meant whichever ran last won:
+           the poll would drop its own live icon into it, this function would
+           find a truthy marker, take the "already built" branch, and quietly
+           mutate an element that has no wedge and no body in it. Nothing was
+           drawn — and because it still returned true, the plain dot was hidden
+           as though something had been. A recording played back with a puck on
+           the bench therefore showed no playhead at all, which is exactly the
+           report: "the icon isn't following drift angle". */
         function gpDrawCar(ll) {
             var rows = gp.trace, i = gp.playIdx, d = gpDriftAngle();
             var show = !!(d && rows && rows[i] && d.ok[i] && d.conf[i] <= GP_DRIFT_ROUGH &&
                           (gp.view === "drift" || gp.view === "session"));
             if (!show) {
-                if (gp.carMarker && gp.traceLayer && gp.traceLayer.hasLayer(gp.carMarker))
-                    gp.traceLayer.removeLayer(gp.carMarker);
+                if (gp.driftCar && gp.traceLayer && gp.traceLayer.hasLayer(gp.driftCar))
+                    gp.traceLayer.removeLayer(gp.driftCar);
                 return false;
             }
             var course = rows[i].hdg, beta = d.beta[i], body = course + beta;
             var R = 30;                                   /* wedge radius, px */
 
-            if (!gp.carMarker) {
+            /* Rebuilt when the ARTWORK changes, mutated when only the position
+               does. Without the key the icon picker would appear to do nothing
+               until something else happened to destroy this marker. */
+            var glyphKey = gpCarGlyphKey();
+            if (gp.driftCar && gp._carGlyphKey !== glyphKey) {
+                if (gp.traceLayer.hasLayer(gp.driftCar)) gp.traceLayer.removeLayer(gp.driftCar);
+                gp.driftCar = null; gp._carEls = null;
+            }
+            if (!gp.driftCar) {
                 /* Built once and then mutated in place. A fresh divIcon every
                    frame re-creates the element twenty-five times a second and
                    the car visibly stutters against a smooth line. */
+                gp._carGlyphKey = glyphKey;
                 var html =
                     "<svg class='gpb-car' viewBox='-48 -48 96 96' width='96' height='96'>" +
                       "<path class='wedge' d=''></path>" +
@@ -19995,30 +20598,35 @@
                         "<line x1='0' y1='0' x2='0' y2='-40'></line>" +
                         "<path class='tip' d='M0,-44 L-3.4,-36 L3.4,-36 Z'></path>" +
                       "</g>" +
-                      "<g class='body'>" +
-                        "<rect x='-6.5' y='-11' width='13' height='22' rx='3'></rect>" +
-                        "<path class='screen' d='M-4.6,-5.4 L4.6,-5.4 L3.1,-9.2 L-3.1,-9.2 Z'></path>" +
-                        "<line class='axle' x1='-6.5' y1='6.5' x2='6.5' y2='6.5'></line>" +
-                      "</g>" +
+                      "<g class='body'>" + gpCarGlyph(22) + "</g>" +
                       "<text class='deg' x='0' y='44' text-anchor='middle'></text>" +
                     "</svg>";
-                gp.carMarker = L.marker(ll, {
+                gp.driftCar = L.marker(ll, {
                     interactive: false, keyboard: false, zIndexOffset: 1200,
                     icon: L.divIcon({ className: "gpb-carwrap", html: html,
                                       iconSize: [96, 96], iconAnchor: [48, 48] })
                 });
-                gp.carMarker.addTo(gp.traceLayer);
+                gp.driftCar.addTo(gp.traceLayer);
                 gp._carEls = null;
             } else {
-                gp.carMarker.setLatLng(ll);
-                if (!gp.traceLayer.hasLayer(gp.carMarker)) gp.carMarker.addTo(gp.traceLayer);
+                gp.driftCar.setLatLng(ll);
+                if (!gp.traceLayer.hasLayer(gp.driftCar)) gp.driftCar.addTo(gp.traceLayer);
             }
 
-            var el = gp.carMarker.getElement();
-            if (!el) return true;
+            /* Both of these mean "the car was NOT drawn", so both must say so.
+               Returning true here hid the plain dot in exchange for nothing and
+               left the playhead invisible. */
+            var el = gp.driftCar.getElement();
+            if (!el) return false;
             if (!gp._carEls || gp._carEls.root !== el) {
                 gp._carEls = {
                     root: el,
+                    /* The SVG, not the divIcon wrapper Leaflet hands back. The
+                       "sideways" rule is written `.gpb-car.sideways`, so
+                       toggling the class on the wrapper — which is what `el`
+                       is — never matched it and the car never went white at
+                       angle. */
+                    svg: el.querySelector(".gpb-car"),
                     wedge: el.querySelector(".wedge"),
                     travel: el.querySelector(".travel"),
                     body: el.querySelector(".body"),
@@ -20026,7 +20634,7 @@
                 };
             }
             var E = gp._carEls;
-            if (!E.body) return true;
+            if (!E.body) return false;
 
             E.travel.setAttribute("transform", "rotate(" + course.toFixed(2) + ")");
             E.body.setAttribute("transform", "rotate(" + body.toFixed(2) + ")");
@@ -20051,7 +20659,7 @@
                than measured — the same rule every other angle surface follows. */
             E.deg.textContent = ab < GP_DRIFT_ON ? ""
                 : Math.round(ab) + "°" + (d.direct ? "" : " ±" + Math.round(d.conf[i]));
-            E.root.classList.toggle("sideways", ab >= GP_DRIFT_ON);
+            (E.svg || E.root).classList.toggle("sideways", ab >= GP_DRIFT_ON);
             return true;
         }
 
@@ -20085,7 +20693,7 @@
                which would leave a faded dot sitting on top of the solid one
                wherever two laps coincide. */
             gp.playMarker.bringToFront();
-            if (drewCar && gp.carMarker) gp.carMarker.setZIndexOffset(1200);
+            if (drewCar && gp.driftCar) gp.driftCar.setZIndexOffset(1200);
             gpFollowCar(ll);
             gpTcUpdate();
         }
@@ -21162,12 +21770,20 @@
             return [la / 1e7, lo / 1e7];
         }
 
+        /* The LIVE car — where the puck says it is, right now. It draws the same
+           glyph the playback car does, so the shape you picked is the shape you
+           see whether you are watching a lap or watching the car.
+           It shows COURSE only. There is no drift angle on a live fix — that is
+           worked out over a whole recording — so this rotates by heading alone
+           and, unlike the playback car, is honest to draw for any recording:
+           heading over ground is measured, not inferred. */
         function gpCarIcon(headingDeg) {
             return L.divIcon({
-                className: "",
-                html: "<div class='gp-carwrap' style='transform:rotate(" + (headingDeg || 0) + "deg)'>" +
-                      "<div class='gp-car'></div></div>",
-                iconSize: [26, 26], iconAnchor: [13, 13]
+                className: "gpb-carwrap",
+                html: "<svg class='gpb-car live' viewBox='-16 -16 32 32' width='32' height='32'>" +
+                      "<g class='body' transform='rotate(" + (headingDeg || 0).toFixed(1) + ")'>" +
+                      "<g transform='scale(1.05)'>" + gpCarGlyph(22) + "</g></g></svg>",
+                iconSize: [32, 32], iconAnchor: [16, 16]
             });
         }
 
@@ -23232,8 +23848,12 @@
             catch (e) { gp.myChans = []; }
             return gp.myChans;
         }
+        /* Channels the user typed in themselves — id, decode, units. Nobody
+           re-derives a bus definition from memory, so a silent failure here
+           costs real work too. */
         function gpMyChansSave() {
-            try { window.localStorage.setItem(GP_MYCHAN_LS, JSON.stringify(gp.myChans || [])); } catch (e) {}
+            return gpSaveOwned(GP_MYCHAN_LS, JSON.stringify(gp.myChans || []),
+                               "your channels");
         }
 
         /* Every channel definition available, dash first because it needs no
@@ -23993,6 +24613,7 @@
             var box = document.getElementById("gpSetup");
             if (!box) return;
             var d = gp.info || {};
+            var cam = gp.cam || gpCamLoad();
             var revA = gpN(d.hw_rev) === 0;
             var h = "<h2>Setup</h2><div class='ws-sub'>" +
                     gpEsc(d.serial ? (d.name || "RDM GPS") + " \u00b7 " + d.serial : "this PC \u00b7 no node attached") +
@@ -24015,6 +24636,8 @@
                  gpTzHtml() +
                  "</div>";
 
+            h += gpCarIconHtml();
+
             h += "<div class='ws-grp'><div class='ws-gt'>Mounting" +
                  gpTip("How the puck is fitted",
                        "The IMU reads in the puck's own axes. Tell it which way the puck faces " +
@@ -24029,14 +24652,20 @@
                        "GPS time \u2014 no clapper, no manual offset. These are the defaults " +
                        "applied when a video is opened; the Session panel still has a nudge " +
                        "for a camera clock a second or two adrift.") + "</div>" +
+                 /* `gp.cam` is only filled when the workspace opens, so ANY
+                    render that runs before that threw here and took the whole
+                    Setup panel down with it — the camera group, and every group
+                    after it. Read through the loader instead: it is the same
+                    defaults, and a settings screen should never be the thing
+                    that cannot be drawn. */
                  gpSetRow("Sync source",
                      "<select onchange='gpCamSet(\"auto\", this.value)'>" +
-                     "<option value='1'" + (gp.cam.auto ? " selected" : "") + ">Camera clock</option>" +
-                     "<option value='0'" + (gp.cam.auto ? "" : " selected") + ">Session start</option></select>") +
+                     "<option value='1'" + (cam.auto ? " selected" : "") + ">Camera clock</option>" +
+                     "<option value='0'" + (cam.auto ? "" : " selected") + ">Session start</option></select>") +
                  gpSetRow("Follow timeline",
-                     gpToggleHtml("gpCamSet('follow', %V%)", gp.cam.follow)) +
+                     gpToggleHtml("gpCamSet('follow', %V%)", cam.follow)) +
                  gpSetRow("Data overlay",
-                     gpToggleHtml("gpCamSet('overlay', %V%)", gp.cam.overlay)) +
+                     gpToggleHtml("gpCamSet('overlay', %V%)", cam.overlay)) +
                  gpSetRow("<b>Wireless link</b>GoPro / DJI",
                      "<span class='gp-set-na'>no camera paired</span>") +
                  "</div>";

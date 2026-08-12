@@ -34,6 +34,17 @@
  *     the way a real MEMS part is — about a percent of scale error, a fixed
  *     zero offset, white noise — and heading gets receiver noise too, because
  *     an exact heading hides the regression bias in the scale fit entirely.
+ *   - The car channels (steering, throttle, brake, rpm) are DERIVED FROM THE
+ *     SAME DRIVE, never sprinkled on. Each one is a stated function of the
+ *     angle, the path or the speed the car actually has at that sample, so a
+ *     lane that disagrees with the driving is a bug rather than decoration.
+ *     They exist so the rest of the workspace has something real to draw; the
+ *     angle is still worked out from the yaw rate alone.
+ *   - There is deliberately NO slip-angle column. The app has no business
+ *     being handed the answer it is being tested on: a channel whose unit is
+ *     degrees and whose name says "angle" would be passed straight through by
+ *     gpDriftSource and the whole derivation would go untested. The answer
+ *     sheet goes in the .truth.json beside the VBO instead.
  *
  *   node tools/make_drift_fixture.js [out.vbo]
  */
@@ -383,6 +394,77 @@ function betaShape(S, forceChar) {
     return b * breakFactor(S, li);
 }
 
+/* ---- what the car was doing while it did that --------------------------
+   Four channels off the bus, each a stated function of the drive above. They
+   are here so the Angle lane is not the only thing with a trace in it, and
+   every one of them is checkable against the driving beside it.
+
+   None of them may look like an angle source. gpDriftGuess picks the channel
+   the drift angle is worked out from by UNIT first — anything in deg/s is a
+   yaw rate — so a steering channel in degrees per second would quietly become
+   the thing the angle is derived from. Steering is therefore written in
+   degrees (a position, which is what a steering sensor actually reports), and
+   its name carries "steer" so the guess skips it even if that ever changes. */
+
+const WHEELBASE = 2.475;        /* m, an S13-ish drift car */
+const STEER_RATIO = 12.5;       /* quick rack: road-wheel degrees -> wheel */
+const STEER_MAX_ROAD = 40;      /* deg of lock available at the road wheel */
+const TYRE_R = 0.315;           /* m, 225/45R17 */
+const GEARS = [3.321, 1.902, 1.308, 1.000, 0.793];
+const FINAL = 4.083;
+const RPM_IDLE = 950, RPM_SHIFT = 7000, RPM_MAX = 7600;
+
+/* Where the front wheels point.
+   Two terms, and the second is the whole reason a drift looks like a drift:
+     - the GEOMETRIC steer that makes the car follow this radius at all, from
+       the bicycle model, delta = L * yawrate / v (in degrees once the radians
+       cancel);
+     - the COUNTER-STEER, opposite to the slip. Beta is signed by the corner
+       (nose to the inside), so subtracting a multiple of it swings the wheels
+       the other way exactly when the car goes sideways — which is what
+       opposite lock IS. A car at 40 deg of angle is at full lock the other
+       way, and the clamp is what stops the arithmetic asking for more lock
+       than the rack has. */
+function steerRoadDeg(v, courseRateDps, betaDeg) {
+    if (v < 1) return 0;
+    const geo = WHEELBASE * courseRateDps / v;
+    const d = geo - 0.85 * betaDeg;
+    return Math.max(-STEER_MAX_ROAD, Math.min(STEER_MAX_ROAD, d));
+}
+
+/* Which gear, and therefore what the engine is doing. Chosen as a pure
+   function of speed — the lowest gear that keeps the engine under the shift
+   point — so the fixture stays deterministic and the shift always lands at
+   the same road speed. Real gearboxes have hysteresis; a fixture that needs
+   to be re-derivable does not. */
+function rpmAt(v) {
+    for (let g = 0; g < GEARS.length; g++) {
+        const r = v / (2 * Math.PI * TYRE_R) * GEARS[g] * FINAL * 60;
+        if (r <= RPM_SHIFT || g === GEARS.length - 1)
+            return Math.max(RPM_IDLE, Math.min(RPM_MAX, r));
+    }
+    return RPM_IDLE;
+}
+
+/* Throttle and brake, from the acceleration the speed profile is asking for
+   and from the angle being carried.
+   A drifting car is NOT coasting: holding the rear out takes power, and the
+   more angle it carries the more of it. So the pedal is the greater of what
+   the speed profile demands and what the angle demands — below the drift
+   threshold that second term is simply absent, and the trace falls back to
+   ordinary corner-exit throttle. Braking and drifting are exclusive here:
+   the profile's decelerations all sit on corner entry, before the angle
+   comes up. */
+function pedals(aLong, betaDeg) {
+    const ab = Math.abs(betaDeg);
+    let brake = 0, thr = 0;
+    if (aLong < -0.5) brake = Math.min(100, -aLong / ABRAKE * 100);
+    if (brake > 0) return { thr: 0, brake: brake };
+    thr = Math.max(0, Math.min(100, aLong / ADRIVE * 100));
+    if (ab > 8) thr = Math.max(thr, 55 + 45 * Math.min(1, ab / 40));
+    return { thr: thr, brake: 0 };
+}
+
 /* ---- integrate the whole session --------------------------------------- */
 /* The direction the car TRAVELS: the centreline's heading tilted by the slope
    of the car's own lateral offset. */
@@ -419,6 +501,12 @@ function drive() {
            can hold anything to account. */
         const dCourse = (courseAt(s + TSTEP) - courseAt(s - TSTEP)) / (2 * TSTEP) * 180 / Math.PI * v;
         const dBeta = (betaShape(s + TSTEP) - betaShape(s - TSTEP)) / (2 * TSTEP) * v;
+        /* The acceleration the profile is about to apply, measured over the
+           step the car is actually about to take rather than assumed — the
+           pedals have to agree with the speed trace beside them. */
+        const vNext = kphAt(s + v * DT) / 3.6;
+        const aLong = (vNext - v) / DT;
+        const ped = pedals(aLong, b);
         out.push({
             t: t,
             lat: LAT0 + (p.y + o * ny + gauss() * POS_NOISE) / MLA,
@@ -428,7 +516,11 @@ function drive() {
             yaw: (dCourse + dBeta) * GYRO_SCALE + GYRO_BIAS + gauss() * GYRO_NOISE,
             s: s, lap: li,
             beta: b,
-            trueCourseRate: dCourse
+            trueCourseRate: dCourse,
+            steer: steerRoadDeg(v, dCourse, b) * STEER_RATIO,
+            thr: ped.thr,
+            brk: ped.brake,
+            rpm: rpmAt(v)
         });
         s += v * DT;
         t += DT;
@@ -499,17 +591,27 @@ function clockStr(sec) {
     const fr = cs % 100;
     return String(hh * 10000 + mm * 100 + ss) + '.' + (fr < 10 ? '0' : '') + fr;
 }
+/* `[channel units]` aligns with the LAST N columns, not the first — that is
+   how real VBOX hardware writes it and how the app's importer reads it, and
+   getting it backwards labels the speed column "rpm". Five channels, so five
+   units, covering Yaw_rate through RPM. */
 let vbo = 'File created on 10/08/2026 @ 09:40:00\n\n' +
-    '[header]\nsats\ntime\nlat\nlong\nvelocity kmh\nheading\nheight\nYaw rate\n\n' +
-    '[channel units]\ndeg/s\n\n' +
+    '[header]\nsats\ntime\nlat\nlong\nvelocity kmh\nheading\nheight\n' +
+    'Yaw rate\nSteering angle\nThrottle\nBrake\nRPM\n\n' +
+    '[channel units]\ndeg/s\ndeg\n%\n%\nrpm\n\n' +
     '[comments]\n' +
     'Mallala Motor Sport Park — drift practice, ' + LAPS.length + ' laps of the full circuit.\n' +
     'Synthetic: centreline from the app\'s OSM survey, position integrated from speed at 25 Hz,\n' +
     'yaw rate = path turn rate + angle rate, with a 1.008 scale error, 0.42 deg/s zero offset and noise.\n' +
-    '[column names]\nsats time lat long velocity heading height Yaw_rate\n\n[data]\n';
+    'Steering is the wheel angle from the bicycle model plus opposite lock against the slip;\n' +
+    'throttle, brake and rpm follow the same speed profile the position was integrated from.\n' +
+    '[column names]\nsats time lat long velocity heading height ' +
+    'Yaw_rate Steering_angle Throttle Brake RPM\n\n[data]\n';
 vbo += rows.map(r =>
     '012 ' + clockStr(r.t) + ' ' + (r.lat * 60).toFixed(5) + ' ' + (-r.lon * 60).toFixed(5) +
-    ' ' + r.kph.toFixed(3) + ' ' + r.hdg.toFixed(2) + ' 68.00 ' + r.yaw.toFixed(2)).join('\n') + '\n';
+    ' ' + r.kph.toFixed(3) + ' ' + r.hdg.toFixed(2) + ' 68.00 ' + r.yaw.toFixed(2) +
+    ' ' + r.steer.toFixed(1) + ' ' + r.thr.toFixed(1) + ' ' + r.brk.toFixed(1) +
+    ' ' + r.rpm.toFixed(0)).join('\n') + '\n';
 
 fs.writeFileSync(OUT, vbo);
 const base = OUT.replace(/\.vbo$/, '');

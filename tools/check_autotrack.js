@@ -41,9 +41,9 @@ function grabVar(name) {
     return src.slice(m.index, j);
 }
 
-const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
+const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyCardHtml',
     'gpMetres', 'gpSecs', 'gpStep', 'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpSplitRows', 'gpNoLapsWhy',
-    'gpTrackById', 'gpActiveTrack', 'gpIsTrial', 'gpRunWord', 'gpTrackUid', 'gpTracksSave',
+    'gpTrackById', 'gpActiveTrack', 'gpIsTrial', 'gpRunWord', 'gpTrackUid', 'gpTracksSave', 'gpSaveOwned', 'gpImportSaid',
     'gpTraceHome', 'gpKmBetween', 'gpMatchTrack', 'gpHeadingAt', 'gpAngleDiff',
     'gpLoopClosure', 'gpProposeLine', 'gpAutoLine', 'gpAutoSetUp', 'gpStints',
     'gpLapRange', 'gpLaneScale', 'gpScaleFor',
@@ -59,13 +59,19 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyHtml',
     'gpRowsPack', 'gpRowsUnpack', 'gpSessionFileBuild', 'gpSessionFileParse', 'gpB64', 'gpB64Dec',
     'gpSesUid', 'gpChannels', 'gpCsvBuild', 'gpSpdN', 'gpSmoothPath',
     'gpSectorGates', 'gpSectorName', 'gpSectorNamed', 'gpSortSectors', 'gpSectorOfSample',
-    'gpBusSeenHtml'];
+    'gpBusSeenHtml', 'gpElsewhereSays',
+    'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess', 'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle', 'gpChanDefsById',
+    'gpSlipLane',
+    'gpReadyRows',
+    'gpReadyVerdict',
+    'gpSnapGateToOutline'];
 const NEEDED_VAR = ['GP_LANES', 'GP_CHAN_LS', 'GP_DEVCHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_CHAN_COLOURS',
     'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
     'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S',
     'GP_SHOW_LS', 'GP_GRP_PUCK', 'GP_GRP_HERE', 'GP_GRP_CAR', 'GP_GRP_NONE', 'GP_UNITS',
     'GP_MYCHAN_LS', 'GP_GRP_DASH', 'GP_GRP_DBC', 'GP_GRP_MINE', 'GP_BITRATES',
-    'GP_NO_T', 'GP_CHAN_STALE', 'GP_SESFILE_FMT'];
+    'GP_NO_T', 'GP_CHAN_STALE', 'GP_SESFILE_FMT', 'GP_TRACKS_LS', 'GP_REC_BASE_BYTES',
+    'GP_DRIFT_MIN_KPH', 'GP_DRIFT_ON', 'GP_DRIFT_ROUGH', 'GP_DRIFT_RHO_MIN_KPH', 'GP_DRIFT_SRC_LS'];
 
 let code = '';
 NEEDED_VAR.forEach(v => { code += grabVar(v) + '\n'; });
@@ -81,6 +87,12 @@ global.localStorage = env.localStorage;
    reach. The scale cache only uses it as a cache-key token, so a fixed
    stub is faithful for these checks. */
 global.gpUnits = () => 'metric';
+/* gpSaveOwned reports a failed write through the toast; in here there is no
+   DOM to report into, so give it somewhere to go. A save that fails is still
+   a real event, so it is recorded rather than dropped. */
+global.savedFailures = [];
+global.showToast = (t, tone) => { global.savedFailures.push(tone + ': ' + t); };
+global.gpSetMsg = () => {};
 const F = run(env);
 
 /* Every export has to be a real value. An assertion written against an
@@ -167,7 +179,7 @@ freshGp();
 console.log('  (' + rows.length + ' samples, ' + (rows.length / 25 / 60).toFixed(1) + ' min)');
 let said = F.gpAutoSetUp(rows);
 ok('a track was created', global.gp.tracks.tracks.length === 1);
-ok('it is Winton', F.gpActiveTrack() && F.gpActiveTrack().name === 'Winton',
+ok('it is Winton National', F.gpActiveTrack() && /^Winton/.test(F.gpActiveTrack().name),
     F.gpActiveTrack() ? F.gpActiveTrack().name : 'none');
 ok('it says what it did', /Winton/.test(said || ''), JSON.stringify(said));
 
@@ -347,17 +359,17 @@ global.gp.logChans = [];
 global.gp.laneShow = {};
 global.gp.traceInfo = null;
 const bare = F.gpRingMinutes(0);
-ok('the empty ring matches the node partition (6.375 MB, 12 B, 25 Hz)',
-    Math.round(bare) === 371, Math.round(bare) + ' min');
+ok('the empty ring matches the node partition (6.375 MB, 14 B, 25 Hz)',
+    Math.round(bare) === 318, Math.round(bare) + ' min');
 /* The estimate must not move because the node currently HOLDS channels: it
    reports capacity for its present record size, so the byte capacity is
    capacity × that size. Reading it as ×12 made two channels on the puck show
    206 minutes when the partition still held 278 — caught live after a Send. */
 global.gp.traceInfo = { capacity_samples: 417792, record_bytes: 16 };
 ok('the estimate is the same whatever record the node is on now',
-    Math.round(F.gpRingMinutes(0)) === 371, Math.round(F.gpRingMinutes(0)) + ' min');
+    Math.round(F.gpRingMinutes(0)) === 318, Math.round(F.gpRingMinutes(0)) + ' min');
 ok('and costing four extra bytes gives the same answer either way',
-    Math.round(F.gpRingMinutes(4)) === 279, Math.round(F.gpRingMinutes(4)) + ' min');
+    Math.round(F.gpRingMinutes(4)) === 248, Math.round(F.gpRingMinutes(4)) + ' min');
 global.gp.traceInfo = null;
 const with8 = F.gpRingMinutes(8 * 2);
 ok('eight channels cost what the plan said (~152 min)',
@@ -469,7 +481,10 @@ ok('the fallback lane is pending again, not pretending to have data',
 console.log('\nthe readiness panel says what is actually true');
 /* Nothing plugged in, nothing known. */
 freshGp();
-let html = F.gpReadyHtml();
+/* The card collapses by default now; these checks are about what it
+   says when you look at it, so look at it opened. */
+global.gp.readyOpen = true;
+let html = F.gpReadyCardHtml();
 ok('an unknown fix is not called good', /not reported/.test(html) && !/>3D</.test(html));
 ok('no track reads as none chosen', /none chosen/.test(html));
 
@@ -479,17 +494,23 @@ global.gp.status = { fix_type: 3, sats: 11, hacc_mm: 800 };
 global.gp.traceInfo = { capacity_samples: 25 * 60 * 370, used_samples: 25 * 60 * 12,
                         recording: false, dropped: 0, wrapped: false };
 F.gpAutoSetUp(drive(WINTON.center, 3, {}));
-html = F.gpReadyHtml();
+global.gp.readyOpen = true; html = F.gpReadyCardHtml();
 ok('the fix is reported with its satellites', /3D/.test(html) && /11 sats/.test(html), html.slice(0, 200));
 ok('accuracy is in metres', /0\.8 m/.test(html));
 ok('the track is named', /Winton/.test(html));
 ok('minutes free, not percent full', /min still free/.test(html) && !/%/.test(html));
-ok('an idle node says press Record', /press Record on before you drive/.test(html));
+/* The old wording ('press Record on before you drive') was removed on
+   purpose — see the comment at gpReadyRows: it told you to satisfy a
+   prerequisite that does not exist, and marked a puck that was already
+   logging as not ready. An idle node now reads ready and offers the
+   button rather than an instruction. */
+ok('an idle node reads ready and offers the button, not a chore',
+    /press REC/.test(html) && /Start recording/.test(html) && !/press Record on before/.test(html));
 
 /* A node that lost samples and wrapped its ring. */
 global.gp.traceInfo = { capacity_samples: 1000, used_samples: 1000,
                         recording: true, dropped: 42, wrapped: true };
-html = F.gpReadyHtml();
+global.gp.readyOpen = true; html = F.gpReadyCardHtml();
 ok('dropped samples are called out as bad', /Dropped[\s\S]*?bad[\s\S]*?42/.test(html), 'no bad-toned Dropped row');
 ok('a wrapped ring warns that laps are gone', /oldest laps overwritten/.test(html));
 ok('a recording node does not nag', !/press Record on before you drive/.test(html));
@@ -777,20 +798,21 @@ freshGp();
 F.gpAutoSetUp(drive(WINTON.center, 3, {}));
 global.gp.status = { fix_type: 3, sats: 11, hacc_mm: 800 };
 global.gp.lap = { has_track: false, timing: {} };
-let html5 = F.gpReadyHtml();
+global.gp.readyOpen = true;
+let html5 = F.gpReadyCardHtml();
 ok('the node with no track is a warning row', /On the node/.test(html5) && /no track/.test(html5));
-ok('and the fix is one click away, right there', /Send “Winton” to the node/.test(html5));
-global.gp.lap = { has_track: true, track_name: 'Winton', timing: { armed: true } };
+ok('and the fix is one click away, right there', /Send “Winton[^”]*” to the node/.test(html5));
+global.gp.lap = { has_track: true, track_name: F.gpActiveTrack().name, timing: { armed: true } };
 global.gp.nodeTrack = undefined;
-html5 = F.gpReadyHtml();
+global.gp.readyOpen = true; html5 = F.gpReadyCardHtml();
 ok('a matching armed node says the clock is ready', /armed, watching for the line/.test(html5));
-ok('no Send button when there is nothing to send', !/Send “Winton” to the node/.test(html5));
-global.gp.lap = { has_track: true, track_name: 'Winton', timing: { armed: true, lap_number: 3 } };
-html5 = F.gpReadyHtml();
+ok('no Send button when there is nothing to send', !/Send “Winton[^”]*” to the node/.test(html5));
+global.gp.lap = { has_track: true, track_name: F.gpActiveTrack().name, timing: { armed: true, lap_number: 3 } };
+global.gp.readyOpen = true; html5 = F.gpReadyCardHtml();
 ok('mid-session it names the lap being timed', /timing · lap 3/.test(html5));
 global.gp.lap = { has_track: true, track_name: 'Somewhere Else', timing: {} };
-html5 = F.gpReadyHtml();
-ok('a different track on the node is called out by name', /Somewhere Else/.test(html5) && /not “Winton”/.test(html5));
+global.gp.readyOpen = true; html5 = F.gpReadyCardHtml();
+ok('a different track on the node is called out by name', /Somewhere Else/.test(html5) && /not “Winton[^”]*”/.test(html5));
 
 console.log('\nwhich channels the rack draws, by default');
 freshGp();
@@ -847,7 +869,7 @@ ok('the dash\'s channels are grouped as the dash\'s',
     crow('can_rpm').group === F.GP_GRP_DASH && crow('can_oilt').group === F.GP_GRP_DASH);
 ok('a GPS channel is always logged and cannot be unticked',
     crow('speed').log === 'always' && crow('speed').canLog === false);
-ok('and it says why', /fixed 12-byte record/.test(crow('speed').logWhy));
+ok('and it says why', /fixed 14-byte record/.test(crow('speed').logWhy));
 ok('delta is not logged at all, and says so',
     crow('delta').log === null && /works it out/.test(crow('delta').logWhy));
 ok('a chosen channel reads as logged', crow('can_rpm').log === true);
@@ -1179,11 +1201,11 @@ ok('with nothing loaded it never invents a snap', F.gpSnapGate(near6) === false)
 console.log('\na quiet receiver is not a fix');
 freshGp();
 global.gp.status = { link: false, ubx: 242315, fix: true, fix_type: 3, sats: 16, hacc_mm: 390 };
-html5 = F.gpReadyHtml();
+global.gp.readyOpen = true; html5 = F.gpReadyCardHtml();
 ok('link=false outranks a stale cached fix', /receiver quiet/.test(html5) && !/3D/.test(html5));
 ok('and it says what to do about it', /power-cycle/.test(html5));
 global.gp.status = { link: true, fix: true, fix_type: 3, sats: 16, hacc_mm: 390 };
-ok('with the link up the fix reports normally', /3D/.test(F.gpReadyHtml()));
+ok('with the link up the fix reports normally', /3D/.test(F.gpReadyCardHtml()));
 
 console.log('\nan empty download explains itself');
 ok('recording on: says go drive', /go drive/.test(F.gpEmptyDownloadMsg(true)));

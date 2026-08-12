@@ -138,9 +138,24 @@ const head = s => console.log('\n' + s);
 head('The file survives the round trip');
 {
     ok('it parses at all', !!parsed && parsed.rows.length > 5000, parsed.rows.length + ' samples');
-    ok('the channel comes through named and united',
-       defs.length === 1 && /yaw/i.test(defs[0].name) && /deg\/s/i.test(defs[0].unit),
-       JSON.stringify({ n: defs[0] && defs[0].name, u: defs[0] && defs[0].unit }));
+    const yawDef = defs.filter(d => /yaw/i.test(d.name))[0];
+    ok('the yaw channel comes through named and united',
+       !!yawDef && /deg\/s/i.test(yawDef.unit),
+       JSON.stringify({ n: yawDef && yawDef.name, u: yawDef && yawDef.unit }));
+    /* The car channels ride along beside it. They are there so the rest of the
+       workspace has something to draw, and they are the reason the check below
+       exists: gpDriftGuess picks the angle's source by UNIT, so every channel
+       added here is a chance to silently steal the pick. */
+    ok('the car channels come through too',
+       defs.length >= 5,
+       defs.map(d => d.name + (d.unit ? ' (' + d.unit + ')' : '')).join(', '));
+    /* The one that matters. A steering channel logged in deg/s, or anything
+       else the guess mistakes for a rate, would become the thing the angle is
+       derived from — and the angle would still LOOK plausible on screen. */
+    const picked = API.gpDriftSource();
+    ok('and none of them steals the angle source from the yaw rate',
+       !!picked && picked.kind === 'yawrate' && /yaw/i.test(picked.name),
+       picked ? picked.name + ' as ' + picked.kind : 'nothing picked');
     /* Longitude positive-west and latitude-in-minutes are the two traps that
        silently put a session in the wrong hemisphere. */
     const lat = gp.trace[0].lat, lon = gp.trace[0].lon;
