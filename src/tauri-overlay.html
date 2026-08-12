@@ -26851,6 +26851,14 @@
 
         function _onConnectionModeChange(mode) {
             _connEpoch++;
+            /* A prime attempt is per-target. The inspector spends one attempt
+               at filling the channel caches and then never asks again (that
+               one-shot is what stops the updateInspector recursion); switching
+               target makes the previous attempt meaningless, so hand back the
+               one attempt rather than leaving the chip stuck on the answer the
+               PREVIOUS target gave. Safe against the loop it guards: a reset
+               buys exactly one more try, not an unbounded supply. */
+            if (typeof _chPrimeTried !== 'undefined') _chPrimeTried = false;
             _stopWifiRecovery();
             /* Stop the previous mode's health tick unconditionally: it probes
              * the OLD transport, and a success mid-switch would _onReconnected()

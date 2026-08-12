@@ -1519,7 +1519,20 @@
                         display: { width: 800, height: 480, shape: 'rect' } });
         }
         if (pathname === '/api/selftest') return ok({ ok: true, offline: true });
-        /* Device-only families (CAN, OTA, channels, dimmer, …): harmless no-op. */
+        /* Channels are a DASH registry — offline there are none, and the
+           truthful answer is an empty collection, not the catch-all's bare
+           {ok:true}. The difference is not cosmetic. {ok:true} is an HTTP 200
+           carrying no `channels` key, so the editor's _fetchChannelsActive
+           took the success branch and assigned _chCache = [] on every single
+           call; combined with updateInspector's re-render that made clicking
+           any widget offline spin the main thread forever. The editor-side
+           recursion is fixed upstream, but a collection endpoint answering
+           "sure, fine" instead of "none" is a lie either way, and the next
+           caller to trust it would be bitten the same. Same reasoning as the
+           _nonDashApiStub collections below: empty is the honest answer. */
+        if (pathname === '/api/channels' || pathname === '/api/channels/canonical')
+            return ok({ channels: [], capacity: 128 });
+        /* Device-only families (CAN, OTA, dimmer, …): harmless no-op. */
         return ok({ ok: true });
     }
 
