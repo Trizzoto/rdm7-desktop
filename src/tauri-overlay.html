@@ -10271,6 +10271,11 @@
            and a session dated by when it was downloaded says so rather than
            pretending to know. */
         var GP_WEEK_MS = 604800000;
+        /* How far AHEAD of the anchoring fix a sample is allowed to be before
+           it is read as last week's time-of-week. The anchor is taken once, at
+           the start of a download the node keeps recording through, so a few
+           samples legitimately land after it — minutes, never hours. */
+        var GP_FUTURE_TOL_MS = 600000;
 
         function gpTraceAnchor() {
             var s = gp.status;
@@ -10284,6 +10289,14 @@
             var d = itow - anchor.itow;
             if (d > GP_WEEK_MS / 2) d -= GP_WEEK_MS;         /* straddles a rollover */
             if (d < -GP_WEEK_MS / 2) d += GP_WEEK_MS;
+            /* A recording cannot come from the future. iTOW carries no week
+               number, so a block left in the ring from a PREVIOUS week reads as
+               this week's same-time-of-week — and lands ahead of now. Seen in
+               the car 2026-08-12: a stale run from the previous Friday dated
+               itself to the COMING Friday, three days out, and sorted above
+               every real session in the list. Anything past the tolerance is
+               last week's, by the only reading that is physically possible. */
+            if (d > GP_FUTURE_TOL_MS) d -= GP_WEEK_MS;
             return anchor.utc + d;
         }
 
@@ -10484,8 +10497,33 @@
             return h;
         }
 
+        /* A recording cannot have been made AFTER it was saved. Anything
+           downloaded before the week clamp landed in gpSampleDate carries an
+           iTOW dated into the CURRENT GPS week, so a block left in the ring
+           from a previous week came out days in the FUTURE and sorted above
+           every real session. The clamp fixes new downloads; it cannot reach
+           rows already written, so they are walked back whole weeks here, once,
+           and the correction is written through. The auto-generated name has
+           the wrong date baked into its text, so it moves too — otherwise the
+           name contradicts the date column beside it. */
+        function gpHealFutureDates(list) {
+            (list || []).forEach(function (m) {
+                var rec = gpN(m && m.recordedAt), sav = gpN(m && m.savedAt);
+                if (rec === null || sav === null || rec <= sav + GP_FUTURE_TOL_MS) return;
+                var weeks = Math.ceil((rec - sav - GP_FUTURE_TOL_MS) / GP_WEEK_MS);
+                var was = gpSesDate(rec).split(" ").slice(0, 3).join(" ");
+                m.recordedAt = rec - weeks * GP_WEEK_MS;
+                var now = gpSesDate(m.recordedAt).split(" ").slice(0, 3).join(" ");
+                if (typeof m.name === "string" && was && m.name.slice(-was.length) === was)
+                    m.name = m.name.slice(0, -was.length) + now;
+                gpStore.putMeta(m);
+            });
+            return list;
+        }
+
         function gpSessionsRefresh() {
             return gpStore.list().then(function (l) {
+                gpHealFutureDates(l);
                 l.sort(function (a, b) { return (b.recordedAt || 0) - (a.recordedAt || 0); });
                 gp.sessions = l;
                 return l;
@@ -10575,8 +10613,17 @@
                 var meta = r[0], rows = gpRowsUnpack(r[1]);
                 if (!meta || !rows.length) throw new Error("the samples for this recording are missing");
                 /* Load the track it was recorded against, or the laps come out
-                   of different geometry than the ones that were saved. */
-                if (meta.trackId && gp.tracks && gpTrackById(meta.trackId))
+                   of different geometry than the ones that were saved. An
+                   explicit "no track" (gpSessionTrack) outranks that: the
+                   whole recording is the unit, so no geometry at all. A null
+                   trackId WITHOUT the marker is older metadata that never
+                   said either way — those keep borrowing whatever track is
+                   active, as they always have. Every branch changes active in
+                   memory only: opening a recording is not editing the
+                   library. */
+                if (meta.noTrack && gp.tracks)
+                    gp.tracks.active = null;
+                else if (meta.trackId && gp.tracks && gpTrackById(meta.trackId))
                     gp.tracks.active = meta.trackId;
                 gp.trace = rows; gp.framed = false;
                 gp.traceInfo = { used_samples: rows.length };
@@ -10601,7 +10648,16 @@
                 }
                 gpComputeG(gp.trace);
                 gp.cmpLap = -1;
-                var said = gpSplitLapsAuto();
+                /* The auto set-up exists to rescue "no laps": it recognises
+                   the circuit from where the car drove and switches to it.
+                   Run it on a recording whose zero laps are a CHOICE and it
+                   un-chooses — the session's own circuit is always within
+                   match range, so it comes straight back, and the healing
+                   write below then restores the very laps the demount just
+                   cleared. Split plainly and let zero stand. */
+                var said = null;
+                if (meta.noTrack) gpSplitLaps();
+                else said = gpSplitLapsAuto();
                 /* The turn-4 default: analyse the closest challenger against
                    the session best (ADR-0024). The best lap is the reference
                    gpSplitLaps just picked; the lap with something to learn is
@@ -10625,15 +10681,29 @@
                    session saved before a start line existed splits
                    differently today — heal the stored copy whenever the
                    answer changed, so the list stops contradicting the rack. */
-                var times = gp.traceLaps.filter(function (l) { return !l.ghost; })
-                    .map(function (l) { return gpSecs(gp.trace, l.from, l.to); });
+                var laps = gp.traceLaps.filter(function (l) { return !l.ghost; });
+                var times = laps.map(function (l) { return gpSecs(gp.trace, l.from, l.to); });
                 var best = times.length ? Math.min.apply(null, times) : null;
                 if (meta.lapCount !== times.length || (gpN(meta.bestLapS) || 0) !== (best || 0)) {
                     meta.lapCount = times.length;
                     meta.bestLapS = best;
                     meta.lapTimesS = times.map(function (t) { return Math.round(t * 1000) / 1000; });
+                    /* The corner fingerprint was cut from the best lap of the
+                       OLD answer, so it went stale with the numbers — and the
+                       history trend would go on comparing this session by a
+                       lap that no longer exists. Rebuild it from the lap the
+                       numbers above now name (shape mirrors gpSessionMeta). */
+                    var bi = -1;
+                    times.forEach(function (t, i) { if (t > 0 && (bi < 0 || t < times[bi])) bi = i; });
+                    meta.corners = bi < 0 ? [] : gpFindCorners(gp.trace, laps[bi].from, laps[bi].to)
+                        .map(function (c) {
+                            var apex = gp.trace[c.apex];
+                            return { lat: apex.lat, lon: apex.lon,
+                                     kph: Math.round(apex.kph * 10) / 10,
+                                     s: Math.round(gpSecs(gp.trace, c.entry, c.exit) * 1000) / 1000 };
+                        });
                     var inList = (gp.sessions || []).filter(function (x) { return x.id === meta.id; })[0];
-                    if (inList) { inList.lapCount = meta.lapCount; inList.bestLapS = meta.bestLapS; inList.lapTimesS = meta.lapTimesS; }
+                    if (inList) { inList.lapCount = meta.lapCount; inList.bestLapS = meta.bestLapS; inList.lapTimesS = meta.lapTimesS; inList.corners = meta.corners; }
                     gpStore.putMeta(meta);
                 }
                 gpDrawTrace(); gpFitTrace();
@@ -10651,6 +10721,30 @@
                 gpRenderInspector();
             });
         };
+
+        /* The open recording's track menu. Lives in Tracks rather than in
+           Sessions because this is the screen you are already on when you move
+           a gate and want to know what it did to a drive you already have.
+           Built as a fragment because it has to render in BOTH inspector
+           states — with a track selected, and with none, which is exactly what
+           taking the track off a recording produces. */
+        function gpSesTrackPickerHtml() {
+            var s = (gp.sessions || []).filter(function (x) { return x.id === gp.sessionId; })[0];
+            if (!s) return "";
+            var o = "<option value=''" + ((s.noTrack || !s.trackId) ? " selected" : "") +
+                    ">No track — whole recording</option>";
+            ((gp.tracks && gp.tracks.tracks) || []).forEach(function (tk) {
+                o += "<option value='" + gpEsc(tk.id) + "'" +
+                     ((!s.noTrack && s.trackId === tk.id) ? " selected" : "") +
+                     ">" + gpEsc(tk.name) + "</option>";
+            });
+            return "<div class='ws-field' style='margin-top:10px'>" +
+                   "<label>The open recording is timed against</label>" +
+                   "<select onchange='gpSessionTrack(\"" + gpEsc(s.id) + "\", this.value)'>" + o +
+                   "</select></div>" +
+                   "<div class='ws-note'>“" + gpEsc(s.name) + "” — changing this re-cuts its " +
+                   gpRunWord() + "s from the raw samples. Nothing about the recording changes.</div>";
+        }
 
         window.gpSessionRename = function (id) {
             var cur = (gp.sessions || []).filter(function (s) { return s.id === id; })[0];
@@ -10673,6 +10767,53 @@
                     if (gp.sessionId === id) gp.sessionId = null;
                     return gpSessionsRefresh();
                 }).then(function () { gpBuildRail(); });
+            });
+        };
+
+        /* Re-point a recording at another track — or take it off its track
+           altogether — after the fact. Laps are derived, never recorded:
+           gpSplitRows re-cuts them from the raw fixes at every open, so the
+           binding is honestly a metadata edit. The numbers the OLD line
+           produced are cleared rather than recomputed here (this may not be
+           the open session, and deriving means loading it); the next
+           gpSessionLoad heals the true ones in. "No track" needs a marker of
+           its own because a null trackId could not carry it: older saves and
+           imports use null for "never said", and those keep borrowing the
+           active track. */
+        window.gpSessionTrack = function (id, trackId) {
+            if (gp.traceBusy) return;
+            var trk = trackId ? gpTrackById(trackId) : null;
+            if (trackId && !trk) return;   /* the library changed under the menu */
+            /* The store copy, not the gp.sessions row: the list is null until
+               its first refresh lands, and a lookup that found nothing here
+               would drop the edit without a sound. */
+            return gpStore.meta(id).then(function (meta) {
+                if (!meta) return;
+                if (trk) {
+                    delete meta.noTrack;
+                    meta.trackId = trk.id;
+                    meta.trackName = trk.name;
+                    meta.trial = gpIsTrial(trk);
+                } else {
+                    meta.noTrack = true;
+                    meta.trackId = null;
+                    meta.trackName = null;
+                    meta.trial = false;
+                }
+                meta.lapCount = 0;
+                meta.bestLapS = null;
+                meta.lapTimesS = [];
+                meta.corners = [];
+                return gpStore.putMeta(meta)
+                    .then(function () { return gpSessionsRefresh(); })
+                    .then(function () {
+                        gpBuildRail();
+                        /* The open recording is still showing laps the old
+                           line cut. Re-open it through the same door as any
+                           open: the load honours the new binding and heals
+                           the stored numbers. */
+                        if (gp.sessionId === id) return window.gpSessionLoad(id);
+                    });
             });
         };
 
@@ -11121,6 +11262,13 @@
             });
             /* personal best for the narrowed track */
             var pool = f.track ? list.filter(function (s) { return s.trackName === f.track; }) : list;
+            /* Not the mock. The synthetic fixture that ships for testing
+               compare/coach was winning this outright, so the one number on
+               the rail claiming to be your personal best was a lap nobody
+               drove. Only fall back to the fixtures when there is nothing
+               else at all, so a fresh install still shows the number working. */
+            var realPool = pool.filter(function (s) { return s.device !== "synthetic"; });
+            if (realPool.length) pool = realPool;
             var pb = null;
             pool.forEach(function (s) {
                 if (s.bestLapS && (!pb || s.bestLapS < pb.bestLapS)) pb = s;
@@ -11785,8 +11933,12 @@
             gpDrawTrace(); gpDrawStrip(); gpRenderGrid();
         };
         window.gpLapAnalyse = function (i) {
-            window.gpSelectLap(parseInt(i, 10));
-            gpShownLaps()[parseInt(i, 10)] = true;
+            i = parseInt(i, 10);
+            window.gpSelectLap(i);
+            /* -1 is the whole session and owns no lap index — ticking it would
+               put a -1 key in the shown set, which draws nothing and survives
+               into the next re-split. */
+            if (i >= 0) gpShownLaps()[i] = true;
             gpRenderGrid();
         };
         window.gpLapRef = function (i) {
@@ -12582,6 +12734,21 @@
             if (!real.length) return gpPanelEmpty(gpNoLapsWhy());
             var sh = gpShownLaps();
             var h = "<div class='gpb-pscroll'>";
+            /* The whole drive, above the runs cut out of it. gpLapRange already
+               spanned the recording whenever no run was selected, and the rail
+               had a button to ask for it — but no view renders that rail any
+               more, so the control was in the DOM and unreachable from every
+               screen, in a workspace that auto-selects a run the moment a
+               recording opens. The recording underneath was therefore
+               unplayable: verified on the bench at 1:17.40 of a 3:34.72 drive.
+               It belongs here, where a run is chosen. */
+            var wholeMin = gpSecs(gp.trace, 0, gp.trace.length - 1) / 60;
+            h += "<button class='gpb-lapline" + (gp.selLap < 0 ? " sel" : "") + "' data-gp-lapline='-1'" +
+                 " title='Play and analyse the entire recording, not one " + gpRunWord() + "'>" +
+                 "<i class='sw' style='background:var(--gpb-n400)'></i>" +
+                 "<span class='nm'>Whole session</span>" +
+                 "<span class='tm'>" + wholeMin.toFixed(1) + " min</span>" +
+                 "<span class='dl'></span><span class='sp' style='flex:1'></span></button>";
             real.forEach(function (r) {
                 h += "<button class='gpb-lapline" + (gp.selLap === r.i ? " sel" : "") + "' data-gp-lapline='" + r.i + "'>" +
                      "<input type='checkbox' data-gp-lapshow='" + r.i + "'" + (sh[r.i] ? " checked" : "") +
@@ -16386,10 +16553,58 @@
                 if (!total) { gp._dlEmpty = true; return null; }
                 gp.traceChanIds = chanIds;
                 var rows = [];
+                /* The ring is NOT necessarily contiguous. A power cycle leaves
+                   whole blocks unwritten between one session and the next, and
+                   trace.read answers those offsets with count 0. Reading the
+                   next offset straight off `rows.length` therefore stopped at
+                   the FIRST hole and called it the end of the recording —
+                   silently, with a success message, keeping only what came
+                   before it. Seen in the car on 2026-08-12: 5 802 samples of a
+                   79 000-sample ring, and the 5 802 were a stale run from the
+                   PREVIOUS week, so the drive that had just been done was
+                   invisible and the session was dated off the old block's iTOW.
+                   So the read offset is tracked apart from how many rows we
+                   hold, and a zero inside the ring is stepped over rather than
+                   believed. */
+                var nodeOff = 0, holes = 0;
+                var GAP_PROBE = 512;          /* holes run to thousands of samples */
+                /* First populated offset at or after `from`, or -1 if the rest
+                   of the ring is empty. Coarse scan to land inside the next
+                   written block, then narrow, so nothing is dropped at the far
+                   edge of the hole. */
+                var findNext = function (from) {
+                    var probe = from;
+                    var scan = function () {
+                        probe += GAP_PROBE;
+                        if (probe >= total) return Promise.resolve(-1);
+                        return dev.traceRead(probe).then(function (p) {
+                            if (!(gpN(p && p.count) || 0)) return scan();
+                            var lo = Math.max(from, probe - GAP_PROBE), hi = probe;
+                            var narrow = function () {
+                                if (lo + 1 >= hi) return hi;
+                                var mid = Math.floor((lo + hi) / 2);
+                                return dev.traceRead(mid).then(function (m) {
+                                    if (gpN(m && m.count) || 0) hi = mid; else lo = mid;
+                                    return narrow();
+                                });
+                            };
+                            return narrow();
+                        });
+                    };
+                    return scan();
+                };
                 var step = function () {
-                    return dev.traceRead(rows.length).then(function (pg) {
+                    return dev.traceRead(nodeOff).then(function (pg) {
                         var cnt = gpN(pg && pg.count) || 0;
-                        if (!cnt) return null;
+                        if (!cnt) {
+                            if (nodeOff >= total) return null;
+                            return findNext(nodeOff).then(function (nx) {
+                                if (nx < 0) return null;
+                                holes++;
+                                nodeOff = nx;
+                                return step();
+                            });
+                        }
                         var bin = atob(pg.data || "");
                         var dv = new DataView(new ArrayBuffer(bin.length));
                         for (var b = 0; b < bin.length; b++) dv.setUint8(b, bin.charCodeAt(b));
@@ -16473,11 +16688,14 @@
                             });
                             if (tcur !== null) tcur += 40;
                         }
-                        gp.tracePct = Math.min(100, Math.round(rows.length / total * 100));
+                        nodeOff += cnt;
+                        gp.tracePct = Math.min(100, Math.round(nodeOff / total * 100));
                         gpRenderInspector();
-                        /* Stop when the node stops giving us more, not when we
-                           hit `total` — it keeps recording while we read. */
-                        return rows.length < total ? step() : null;
+                        /* Stop when the read offset has covered the ring, not
+                           when a page comes back short — it keeps recording
+                           while we read, and a short page is a hole, not
+                           the end. */
+                        return nodeOff < total ? step() : null;
                     });
                 };
                 return step().then(function () { gp.trace = rows; });
@@ -22487,7 +22705,12 @@
                 return;
             }
             var slug = gpTrackSlug(t.name);
-            gpSetMsg("gpOutlineMsg", "Sending “" + gpEsc(slug) + "”···", "");
+            /* No gpEsc and no tags: gpSetMsg writes textContent, so markup
+               arrives as literal "<b>" and an escaped "&" as "&amp;" — a
+               track called "R&D" pushed as "R&amp;D". Escaping is the
+               caller's job only where the sink parses HTML, and this one
+               does not. */
+            gpSetMsg("gpOutlineMsg", "Sending “" + slug + "”···", "");
             Promise.resolve(RDM.setTrackData(slug, gpB64(bytes))).then(function () {
                 /* Remember what it was pushed as: the widget on the dash
                    references the SLUG, and a renamed track would otherwise
@@ -22496,8 +22719,8 @@
                 t.outline.pushedAt = Date.now();
                 gpTracksSave();
                 gpSetMsg("gpOutlineMsg",
-                    "Sent. On the dash, set a Track Map widget's <b>Track</b> to “" +
-                    gpEsc(slug) + "”.", "ok");
+                    "Sent. On the dash, set a Track Map widget's Track to “" +
+                    slug + "”.", "ok");
                 gpRenderInspector();
             }).catch(function (e) {
                 gpSetMsg("gpOutlineMsg", "Push failed: " + ((e && e.message) ? e.message : e), "bad");
@@ -23633,23 +23856,49 @@
            truth was 278, and the partition had not changed size. Seen live,
            immediately after a Send. */
         function gpRingMinutes(extraBytes) {
-            var cap = 0;
+            var cap = 0, base = GP_REC_BASE_BYTES;
             if (gp.traceInfo && gpN(gp.traceInfo.capacity_samples)) {
                 var rec = gpN(gp.traceInfo.record_bytes) || 12;
                 cap = gpN(gp.traceInfo.capacity_samples) * rec;   /* bytes on the partition */
+                /* And the FIX's own width the same way, for the same reason.
+                   record_bytes counts the channel tail, so the base is what
+                   is left once the tail comes off — ASK the node, exactly as
+                   the downloader does for fix_bytes. Hard-coding 14 read a
+                   12-byte node (fw 0.1.0, measured 2026-08-12) as ~17%
+                   shorter than its ring really is. */
+                var nch = gpN(gp.traceInfo.n_channels) || 0;
+                var b = rec - nch * GP_CHAN_BYTES;
+                if (b >= 12 && b <= 64) base = b;
             }
             if (!cap) cap = 0x660000;                            /* the partition, when no node is attached */
-            return cap / (GP_REC_BASE_BYTES + extraBytes) / 25 / 60;
+            return cap / (base + extraBytes) / 25 / 60;
         }
 
         /* The dash's active channels, fetched once per Setup visit. */
         function gpFetchDashChannels() {
             var dash = gpDash();
-            if (!dash || !dash.httpGet && !dash.fetch) return Promise.resolve(null);
-            var get = dash.httpGet ? dash.httpGet.bind(dash) : null;
+            /* The WiFi dash transport is a TYPED FACADE — listLayouts,
+               setTrackData, … — and carries neither httpGet nor fetch. Gating
+               the lookup on those two methods therefore answered null before a
+               single request went out, and every channel then came back
+               "cannot be logged — no CAN decode", with nothing anywhere saying
+               the dash had never been read. That is the whole feature dead in
+               the normal case: a dash on WiFi. Found in the car 2026-08-12.
+
+               fetch()'s interceptor already routes /api/* to the ACTIVE
+               transport, so it is the right call when the dash IS active.
+               dash.httpGet stays ahead of it for a dash attached ALONGSIDE a
+               puck, where the global route would reach the puck instead. */
+            var primaryIsDash = (typeof RDM !== "undefined" && RDM.isDash && RDM.isDash());
+            var get = (dash && dash.httpGet) ? dash.httpGet.bind(dash) : null;
+            if (!get && !primaryIsDash) return Promise.resolve(null);
             var p = get ? get("/api/channels")
                         : fetch("/api/channels").then(function (r) { return r.json(); });
             return p.then(function (j) {
+                /* The proxy reports a dead device as {error}. Passing that on
+                   as [] would read as "the dash has no channels" — which is a
+                   different thing from "the dash did not answer". */
+                if (j && j.error && !j.channels) return null;
                 var list = (j && (j.channels || j.active || j)) || [];
                 if (!Array.isArray(list)) list = [];
                 return list.filter(function (c) { return c && c.id; });
@@ -25567,6 +25816,11 @@
                     "You can also press <b>Read from device</b> to pull down whatever track is already loaded.</div>" +
                     "<button class='ws-btn-line' style='margin-top:9px' onclick='gpReadTrack()'" +
                     (gpLapUsable() ? "" : " disabled") + ">Read from " + gpEsc(gpLapWhere() || "device") + "</button>" +
+                    /* The picker belongs in THIS branch too. Taking the track
+                       off a recording clears the active track, which lands
+                       here — and without it, "No track" would remove the only
+                       control that puts one back. */
+                    gpSesTrackPickerHtml() +
                     "<div class='gp-msg' id='gpTrackMsg'></div>";
                 gpRestoreMsgs();
                 return;
@@ -25659,6 +25913,8 @@
 
             h += "<div class='ws-field'><label>Track name</label>" +
                  "<input type='text' maxlength='31' value='" + gpEsc(t.name) + "' onchange='gpTrackRename(this)'></div>";
+
+            h += gpSesTrackPickerHtml();
 
             /* Gates. The model has no course-type field — a track with one line
                is a circuit and a track with two is a time trial (ADR-0013), so
