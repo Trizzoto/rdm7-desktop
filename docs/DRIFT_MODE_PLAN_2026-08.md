@@ -37,22 +37,26 @@ corner by corner and lap by lap). Driven end to end in the app through the VBO
 import path.
 
 Companion docs: `LAP_ANALYSIS_REDESIGN_2026-07.md` (the lap-timing side this
-builds on), `../../rdm-gps-node/docs/TRACE_V2_CAN_CHANNELS.md` (the CAN
-ride-along path), RDM-7_Dash ADRs 0011/0012/0013/0024/0025/0027/0028.
+builds on), `RDL_TELEMETRY_TEARDOWN_2026-08.md` (what Race Data Labs actually
+record, read off their own API — the source for every RDL number below),
+`../../rdm-gps-node/docs/TRACE_V2_CAN_CHANNELS.md` (the CAN ride-along path),
+RDM-7_Dash ADRs 0011/0012/0013/0024/0025/0027/0028.
 
 ## 1. What the user pointed at
 
 "Wallee in Formula Drift" is **Wally**, Race Data Labs' roof-mounted "Robot Drift
 Judge". For the 2026 season Formula DRIFT adopted their Universal Drift Scoring
 Method: **~80% of a PRO qualifying score (line + angle) is machine-generated from
-telemetry; the remaining 20% (style) stays with the three human judges.** D1GP has
+telemetry; the remaining 20% (style) stays with the three human judges.** That
+split is now confirmed from their own data rather than inferred — every run
+their API serves carries `{line 50, angle 20, speed 10, style 20}`. D1GP has
 done the objective version for years with DOSS ("D1 Original Scoring System"):
 speed, angle, and angle stability scored per course section, originally off a
 Racelogic DriftBox. The precedents worth stealing:
 
 | System | How it gets angle | Accuracy claim | What it scores |
 |---|---|---|---|
-| Wally / UDSM (FD 2026) | unpublished (cm-class positioning) | unpublished | line + angle machine-scored; style human |
+| Wally / UDSM (FD 2026) | **measured** body heading, fused (their record carries `h` and course separately) | **publishes per-sample** heading and horizontal accuracy — median 2.0° and 0.1 m | line 50 / angle 20 / speed 10 machine-scored; style 20 human |
 | DOSS (D1GP) | DriftBox-class in-car telemetry | — | speed, angle, transition sharpness, angle stability, per section |
 | Racelogic DriftBox | 10 Hz GPS course-over-ground + internal yaw gyro | 1° | run = >5° drift at >25 km/h; speed/angle/g + a score |
 | VBOX 3i dual antenna | second antenna gives true body heading | 0.04–0.2° RMS | measured slip angle outright |
@@ -415,6 +419,15 @@ measured angle plus user-entered car length and puck position, rear-of-car
 projection becomes honest geometry — zones could finally say "the back of the
 car" like judges do.
 
+RDL's record names the parameter set that makes that work, and it is worth
+copying rather than re-deriving: length, width, wheelbase, wheelbase front
+offset, front and rear track widths, front and rear tyre widths, and the
+device's offset from the front and from the centreline. They emit one rotated
+footprint rectangle **per sample** and union them into the swept area that zone
+fill is measured against. Note the dependency order: without measured body
+heading that rectangle is a fabrication, so this is a tier-2-and-up feature, not
+something to draw on a course-over-ground recording.
+
 ### Cut 4 — puck gyro in the recording — **DONE 2026-08-10**
 
 Built, on the reasoning that nothing is released yet so there is no installed
@@ -458,10 +471,21 @@ stay live-only.
 ### Later, named but not promised
 
 Locked shared courses with hashes + steward replay (grassroots event scoring);
-per-run export in GPS time (broadcast overlay sync); tandem proximity — needs two
-cars on RTK-class hardware (ZED-F9P generation, what FD's own fan telemetry
-uses). GPS time-of-week is already a shared clock across cars, so two pucks give
-lead-vs-chase *replay* before RTK gives measured *proximity*.
+per-run export in GPS time (broadcast overlay sync); tandem proximity. GPS
+time-of-week is already a shared clock across cars, so two pucks give
+lead-vs-chase *replay* whatever else is true.
+
+**The "needs RTK" gate on proximity was probably wrong** (2026-08-12). It was
+written as "needs two cars on RTK-class hardware (ZED-F9P generation)", reasoning
+from absolute position accuracy. But proximity is a *relative* measurement over a
+baseline of metres, and two cars that close share almost all of their ionospheric
+and ephemeris error — common-mode cancellation makes car-to-car distance far
+better than either car's absolute figure suggests. RDL publish proximity as a
+plain per-sample `p` in metres and score it steeply (4.7 m average → 21/100), so
+the useful range is a few metres wide and that is exactly where the common-mode
+argument is strongest. This needs *testing* before it is promised — two pucks,
+two cars, a tape measure — but it should not stay parked behind a hardware
+generation it may not need.
 
 ## 5. Open questions
 
@@ -479,6 +503,12 @@ lead-vs-chase *replay* before RTK gives measured *proximity*.
    on screen, but it is one number chosen from the D1/FD literature rather than
    from this user's own driving. Revisit once there is a season of real
    sessions to look at — and bump `GP_DRIFT_SCORE_VER` when it moves.
+   One external data point now exists: RDL score a 34.7° run-average at 58/100
+   and a 37.5° at 62/100, implying roughly linear to about 60°. Treat it as
+   context, not as a target — theirs is a whole-run average including the
+   straights, ours is the mean held angle inside a corner, and the two are not
+   the same number. Swapping one bar for the other without reconciling the
+   definitions would silently restate every score.
 6. Should the corner set be pickable rather than the modal-count lap? Automatic
    and deterministic is right for now; a session where the driver goes off on
    the reference lap would want an override.
@@ -488,3 +518,12 @@ lead-vs-chase *replay* before RTK gives measured *proximity*.
    because half the stretch is the run in and the run out. It is consistent
    across laps so the comparison holds, but the number would mean more
    measured from the first initiation to the last straightening.
+8. **Should the trace record per-fix accuracy?** We record none: `trace_sample_t`
+   is lat, lon, speed, heading, gyro Z and nothing about how good any of it is.
+   RDL carry heading and horizontal accuracy on every sample, which is what lets
+   a refusal say "your accuracy degraded here" rather than "the leg would not
+   close", and would let the angle engine weight samples instead of trusting
+   every fix equally. The open part is the storage trade, not the value: 14 → 18
+   bytes is roughly −22% ring minutes at 25 Hz with no channels, so `h_acc`
+   alone may be the better buy than both fields. Re-run ADR-0012's arithmetic
+   before committing. Node change, magic bump RDMW → RDMX.
