@@ -9875,6 +9875,12 @@
         function gpVboParse(text, fileName) {
             var lines = String(text || "").split(/\r\n|\r|\n/);
             var sect = "", head = [], units = [], colLine = "", data = [], comments = [], timing = [], created = null;
+            /* Video VBOX states the driver, the car and the circuit outright,
+               but in `[session data]`/`[circuit details]` as bare `key value`
+               pairs — not as the `Key: value` comments this parser grew up
+               on. Reading only [comments] is why a Racelogic file that names
+               "Gareth Downing" and "Lotus Evora GTE" imported blank. */
+            var facts = {};
             for (var i = 0; i < lines.length; i++) {
                 var ln = lines[i].trim();
                 if (!ln) continue;
@@ -9890,6 +9896,10 @@
                 else if (sect === "laptiming") timing.push(ln);
                 else if (sect === "column names") { if (!colLine) colLine = ln; }
                 else if (sect === "comments") comments.push(ln);
+                else if (sect === "session data" || sect === "circuit details") {
+                    var kv = /^(\w[\w-]*)\s+(.+)$/.exec(ln);
+                    if (kv && !facts[kv[1].toLowerCase()]) facts[kv[1].toLowerCase()] = kv[2].trim();
+                }
                 else if (sect === "data") data.push(ln);
             }
             if (!data.length) throw new Error("no [data] rows — is this really a VBO file?");
@@ -9937,6 +9947,21 @@
                                 min: Infinity, max: -Infinity, vals: [] });
             }
 
+            /* avisynctime is the logger's own answer to "where in the footage
+               is this sample", written by the hardware that recorded BOTH
+               streams. It is worth more than the camera's file timestamp,
+               which is only when the file happened to be stamped: on the
+               Racelogic Donington sample the mvhd is 9.3 s adrift of the
+               first frame. Kept out of the channel list — it describes the
+               file, not the car — but no longer thrown away. */
+            var aviTimeCol = -1, aviFileCol = -1;
+            for (var av = 0; av < cols.length; av++) {
+                var avn = String(cols[av]).toLowerCase();
+                if (avn === "avisynctime" || avn === "avitime") aviTimeCol = av;
+                else if (avn === "avifileindex") aviFileCol = av;
+            }
+            var aviMs = [], aviFile = [];
+
             var rows = [], wrap = 0, prev = null, skipped = 0;
             for (var d = 0; d < data.length; d++) {
                 var tok = data[d].split(/\s+/);
@@ -9972,6 +9997,8 @@
                         if (raw > chanCols[q2].max) chanCols[q2].max = raw;
                     }
                 }
+                aviMs.push(aviTimeCol >= 0 ? parseFloat(tok[aviTimeCol]) : NaN);
+                aviFile.push(aviFileCol >= 0 ? parseFloat(tok[aviFileCol]) : NaN);
                 rows.push({ lat: lat, lon: lon, kph: kph, hdg: ((hdg % 360) + 360) % 360, ms: ms, cv: cv });
             }
             if (rows.length < 2)
@@ -10001,6 +10028,35 @@
             var n = rows.length;
             var haveT = rows[0].ms !== null && rows[0].ms !== undefined;
             var t0 = haveT ? rows[0].ms : 0;
+
+            /* One number is enough: the footage and the log run at the same
+               rate, so (avisynctime - elapsed) is a CONSTANT — the position in
+               the video of the session's first sample.
+               Taking the median of it rather than just reading row zero is
+               what makes it safe to trust. A writer that fills the column
+               with zeros, or restarts it per lap, gives a spread of hundreds
+               of seconds instead of a constant, and that is the tell: if the
+               difference is not near-constant the column is not a video
+               clock, and we say nothing rather than align to a fiction.
+               A session spanning several video files gets one anchor per
+               file and we hold only one video, so that case is skipped too. */
+            var videoAnchorMs = null;
+            if (aviTimeCol >= 0 && haveT) {
+                var oneFile = true;
+                for (var af = 1; af < aviFile.length; af++)
+                    if (isFinite(aviFile[af]) && isFinite(aviFile[0]) && aviFile[af] !== aviFile[0]) { oneFile = false; break; }
+                if (oneFile) {
+                    var dif = [];
+                    for (var ad = 0; ad < n; ad++)
+                        if (isFinite(aviMs[ad]) && rows[ad].ms !== null)
+                            dif.push(aviMs[ad] - (rows[ad].ms - t0));
+                    if (dif.length > 2) {
+                        dif.sort(function (x, y) { return x - y; });
+                        if (dif[dif.length - 1] - dif[0] <= 1000)
+                            videoAnchorMs = dif[dif.length >> 1];
+                    }
+                }
+            }
             /* Channels are stored as u16, so each one gets its own scale and
                offset fitted to the range it actually used. Fitting per channel
                rather than picking a fixed scale is what keeps 8,000 rpm and a
@@ -10067,7 +10123,16 @@
                 samples: n,
                 durationS: haveT ? (rows[n - 1].ms - t0) / 1000 : 0,
                 lapCount: 0, bestLapS: null, lapTimesS: [], corners: [],
-                car: pick("Vehicle"), driver: pick("Driver"),
+                car: pick("Vehicle") || facts.vehicle || "",
+                driver: pick("Driver") || facts.driver || "",
+                /* The circuit the logger named beats a filename every time —
+                   this is what the imported track gets called. */
+                circuit: facts.circuit || facts.name || "",
+                /* Where sample zero sits in the footage, when the file said so.
+                   Undefined on every session imported before this existed, and
+                   on every logger that does not write the column — both fall
+                   back to the camera clock exactly as before. */
+                videoAnchorMs: videoAnchorMs,
                 chanIds: defs.map(function (d) { return d.id; }),
                 /* The definitions ride WITH the recording rather than joining
                    the channel library. They describe someone else's car on
@@ -10102,6 +10167,9 @@
             if (defs.length)
                 note += "; " + defs.length + " channel" + (defs.length === 1 ? "" : "s") + " imported";
             if (gates.length) note += "; " + gates.length + " timing gate" + (gates.length === 1 ? "" : "s");
+            if (videoAnchorMs !== null)
+                note += "; it carries its own video sync (" + (videoAnchorMs / 1000).toFixed(2) +
+                        " s in), so footage will line up without nudging";
             return { meta: meta, pk: packed, note: note, gates: gates, rows: rows };
         }
 
@@ -10232,7 +10300,7 @@
                                 /^\s*\[(header|column names)\]\s*$/im.test(txt);
                     var r = isVbo ? gpVboParse(txt, f.name) : gpSessionFileParse(txt);
                     if (r.gates && r.gates.length) {
-                        var vt = gpTrackFromVbo(r.meta.name, r.gates, r.rows);
+                        var vt = gpTrackFromVbo(r.meta.circuit || r.meta.name, r.gates, r.rows);
                         if (vt) { r.meta.trackId = vt.id; r.meta.trackName = vt.name; }
                     }
                     gpStore.put(r.meta, r.pk).then(function () {
@@ -10626,6 +10694,16 @@
                 else if (meta.trackId && gp.tracks && gpTrackById(meta.trackId))
                     gp.tracks.active = meta.trackId;
                 gp.trace = rows; gp.framed = false;
+                /* The fence is an INDEX INTO THE PREVIOUS session's array —
+                   the length it had before a ghost lap was appended. The line
+                   above just replaced that array, so the number now describes
+                   nothing. Left standing, the re-split below runs
+                   `gp.trace.length = gp.ghostFence` against the recording that
+                   has only just been loaded: open a 38,000-sample session
+                   while a ghost is showing on a 6,000-sample one and 32,000
+                   samples are silently thrown away, with the rack, the map and
+                   every stat tile agreeing on the truncated version. */
+                gp.ghostFence = null; gp.ghostSrc = null;
                 gp.traceInfo = { used_samples: rows.length };
                 gp.sessionId = id;
                 /* The columns came back with the rows; this is what they mean.
@@ -10662,20 +10740,24 @@
                    the session best (ADR-0024). The best lap is the reference
                    gpSplitLaps just picked; the lap with something to learn is
                    the next one down. One lap only → look at that lap. */
+                /* A recording opens at its BEGINNING, showing the whole drive.
+                   Press play and it runs the session end to end, rolling
+                   through the laps as it crosses each line (gpPlayRollOver) —
+                   which is what a recording is: a session, not a lap.
+
+                   This replaces ADR-0024's opening move, which analysed the
+                   second-best lap against the best. That was the right default
+                   when reaching the end of a lap stopped the transport dead and
+                   the view was for reading a lap rather than watching a drive.
+                   The reference gpSplitLaps picked (the best lap) is still
+                   armed, so clicking any lap compares against it immediately.
+
+                   The playhead and the range must agree: a cursor parked
+                   outside the selected range reads the wrong speed and indexes
+                   the delta series out of bounds, which is why sample 0 is only
+                   correct BECAUSE the whole recording is what is selected. */
                 gp.selLap = -1;
-                if (gp.traceLaps.length) {
-                    var t2b = [];
-                    gp.traceLaps.forEach(function (l, i) {
-                        if (!l.ghost) t2b.push([gpSecs(gp.trace, l.from, l.to), i]);
-                    });
-                    t2b.sort(function (a, b) { return a[0] - b[0]; });
-                    gp.selLap = t2b.length > 1 ? t2b[1][1] : t2b[0][1];
-                }
-                /* The playhead belongs to the lap that was just selected, not
-                   to sample 0 — a cursor parked outside the selected range
-                   reads the wrong speed and indexes the delta series out of
-                   bounds, so the at-cursor card loses its Δ entirely. */
-                gp.playIdx = gpLapRange().from;
+                gp.playIdx = 0;
                 /* The card must agree with what just split. An imported file
                    carries whatever its exporter knew (often "0 laps"), and a
                    session saved before a start line existed splits
@@ -10716,6 +10798,11 @@
                 gpSyncExportBtn();
                 if (gp.view === "sessions") gpRenderSessions();
                 if (said) gpSetMsg("gpTraceMsg", said, "ok");
+                /* A recording that has been shown its footage once should not
+                   have to be shown it again. The link is a path on the meta,
+                   so re-opening the session brings the video back with the
+                   sync you left it on. */
+                gpVideoRelink(meta);
             }).catch(function (e) {
                 gpSetMsg("gpTraceMsg", "Could not open that recording: " + (e && e.message ? e.message : e), "bad");
                 gpRenderInspector();
@@ -12868,20 +12955,84 @@
                          "<span id='gpVideoOffLab'>" + (v.offsetMs / 1000).toFixed(2) + " s</span></label>";
                     h += "<button class='" + (v.follow ? "on" : "") + "' onclick='gpVideoFollowToggle()' " +
                          "title='Keep the picture on the playhead'>" + (v.follow ? "Following" : "Follow") + "</button>";
-                    if (v.autoT0 !== null && meta && meta.dated === "gps")
-                        h += "<button onclick='gpVideoAuto()' title=\"Re-align on the camera's own clock\">Auto</button>";
+                    /* No separate "Auto" button: the Sync chooser below offers
+                       the camera clock as one named option among the others,
+                       which is the same action with the reason attached. */
                 } else {
                     h += "<span class='nt'>Open a recording to line this up with it.</span>";
                 }
-                if (v.noOverlap)
-                    h += "<span class='nt' title='The camera clock put the whole recording outside the footage'>" +
-                         "camera clock not usable — lined up start to start</span>";
-                else if (v.tzHours)
-                    h += "<span class='nt' title='The camera writes its clock in local time; the recording is UTC'>" +
-                         "camera clock was " + (v.tzHours > 0 ? "+" : "") + v.tzHours + " h out — timezone, corrected</span>";
+                /* Which clock is aligning this, stated and overrulable. Only
+                   the sources that actually exist are offered — a session with
+                   no avisynctime and a camera with no clock has exactly one
+                   honest answer and should not be asked the question. */
+                if (tethered) {
+                    var srcs = gpVideoSources(), curSrc = v.src || "start";
+                    if (srcs.length > 1) {
+                        h += "<span class='nt'>Sync</span>";
+                        srcs.forEach(function (s) {
+                            h += "<button class='" + (s === curSrc ? "on" : "") + "' title='" +
+                                 GP_VSRC_TIP[s].replace(/<[^>]+>/g, " ").replace(/'/g, "&#39;").trim() +
+                                 "' onclick=\"gpVideoSyncSet('" + s + "')\">" + GP_VSRC_LBL[s] + "</button>";
+                        });
+                    } else {
+                        h += "<span class='nt' title='" +
+                             GP_VSRC_TIP[curSrc].replace(/<[^>]+>/g, " ").replace(/'/g, "&#39;").trim() + "'>" +
+                             (curSrc === "log" ? "lined up by the log" : "started together") + "</span>";
+                    }
+                    if (v.tzHours)
+                        h += "<span class='nt' title='The camera writes its clock in local time; the recording is UTC'>" +
+                             "camera was " + (v.tzHours > 0 ? "+" : "") + v.tzHours + " h out, corrected</span>";
+                    /* How much of what you are looking at the footage reaches.
+                       Silence here is what made a 150 s clip against an
+                       11-minute session look like a broken player: the picture
+                       simply stopped and nothing said why. */
+                    var cov = gpVideoCover();
+                    if (cov) {
+                        var mmss = function (s) {
+                            s = Math.max(0, Math.round(s));
+                            var m = Math.floor(s / 60), q = s - m * 60;
+                            return m + ":" + (q < 10 ? "0" : "") + q;
+                        };
+                        var span = mmss(cov.from) + "–" + mmss(cov.to);
+                        if (cov.frac >= 0.999) {
+                            h += "<span class='nt'>covers this " + gpRunWord() + "</span>";
+                        } else if (cov.frac <= 0) {
+                            h += "<span class='nt' style='color:#ff8b85'>footage is " + span +
+                                 " — outside this " + gpRunWord() + "</span>" +
+                                 "<button onclick='gpVideoGoto()' title='Move the playhead to where the footage actually is'>" +
+                                 "Go to footage</button>";
+                        } else {
+                            h += "<span class='nt' style='color:#ffc46b'>covers " + Math.round(cov.frac * 100) +
+                                 "% of this " + gpRunWord() + " (" + span + ")</span>" +
+                                 "<button onclick='gpVideoGoto()' title='Move the playhead to where the footage actually is'>" +
+                                 "Go to footage</button>";
+                        }
+                    }
+                }
+                /* A file that will not paint says so, rather than leaving a
+                   black rectangle next to working readouts. */
+                if (v.dead) {
+                    h += "<span class='nt' style='color:#ff8b85' title=\"The clock runs and the data follows it, " +
+                         "but the webview never paints a frame. Some loggers — the VBOX HD2 among them — write an " +
+                         "H.264 stream Chromium will not decode at a usable speed. The same footage re-encoded plays fine.\">" +
+                         "picture will not decode here</span>";
+                    if (v.path && gpHaveFfmpeg() && !v.converting)
+                        h += "<button onclick='gpVideoConvert()' title='Write a converted copy next to the original and load it. " +
+                             "Takes a minute or two for a long recording.'>Make a playable copy</button>";
+                    else if (v.converting)
+                        h += "<span class='nt'>converting&hellip; this takes a minute</span>";
+                }
+                /* Only offerable for a video opened by path — a blob handle
+                   cannot survive the page, so there would be nothing to come
+                   back to. */
+                if (v.path) {
+                    var linked = gpVideoLinked(meta);
+                    h += "<label title='Remember this file and its sync against this recording, and load it " +
+                         "automatically next time you open it'><input type='checkbox'" +
+                         (linked ? " checked" : "") + " onchange='gpVideoLink(this.checked)'>Link</label>";
+                }
                 h += "<span style='flex:1'></span>" +
-                     "<label class='pick' title='Load a different file'>Replace" +
-                     "<input type='file' accept='video/*' style='display:none' onchange='gpVideoOpen(this)'></label>" +
+                     "<button title='Load a different file' onclick='gpVideoPick()'>Replace</button>" +
                      "<button onclick='gpVideoClose()'>Close</button></div>";
                 return h;
             }
@@ -12892,8 +13043,9 @@
                    "<div style='font-family:var(--gpb-head);font-weight:600;font-size:15px;letter-spacing:0.1em;text-transform:uppercase'>No video loaded</div>" +
                    "<div style='font-size:11px;opacity:0.75'>The camera's own clock lines it up with the " +
                    gpRunWord() + " &mdash; nothing to sync by hand.</div>" +
-                   "<label class='ws-btn-line' style='width:auto;padding:5px 14px;cursor:pointer;border-color:var(--gpb-red-400);color:var(--gpb-red-200)'>" +
-                   "Load video&hellip;<input type='file' accept='video/*' style='display:none' onchange='gpVideoOpen(this)'></label></div>";
+                   "<button class='ws-btn-line' onclick='gpVideoPick()' style='width:auto;padding:5px 14px;cursor:pointer;" +
+                   "background:transparent;border-color:var(--gpb-red-400);color:var(--gpb-red-200)'>" +
+                   "Load video&hellip;</button></div>";
         }
 
         /* The key above the rack. It has to say what the swatches MEAN,
@@ -13011,6 +13163,15 @@
             });
 
             gpBindGrid(host);
+            /* The video's transport bindings used to be hung in
+               gpRenderSessionInspector, which ADR-0025 stopped calling when
+               Analyse became this grid — so the picture played on its own
+               native controls while the timeline, the map and the readouts
+               sat frozen, and pausing the video no longer paused the session.
+               The tile is placed HERE now, so it is bound here. gpVideoBind
+               is idempotent (_gpBound) and returns early when there is no
+               video element, so calling it on every render costs nothing. */
+            gpVideoBind();
             gpPopDismissInit();
             /* The markup above was built from the numbers as they stood; the
                measurement that turns them into the numbers this window can
@@ -13101,8 +13262,11 @@
                  "<button class='gp-tbtn' title='Step back' onclick=\"gpTransport('back')\">" +
                  "<svg viewBox='0 0 12 12'><path d='M9 1.5v9L3 6z'/></svg></button>" +
                  "<button class='gp-tbtn gp-tbtn-play' title='Play / pause (Space)' onclick='gpPlayToggle()'>" +
-                 (gp.playing ? "<svg viewBox='0 0 12 12'><path d='M2.5 1.5h3v9h-3zM6.5 1.5h3v9h-3z'/></svg>"
-                             : "<svg viewBox='0 0 12 12'><path d='M3 1.5 10.5 6 3 10.5z'/></svg>") +
+                 /* The same two constants gpPlayIcon swaps in, so the initial
+                    render and every later state change cannot disagree. These
+                    were hand-copied SVGs and had already drifted — the pause
+                    bars here were a different width from GP_SVG_PAUSE. */
+                 (gp.playing ? GP_SVG_PAUSE : GP_SVG_PLAY) +
                  "</button>" +
                  "<button class='gp-tbtn' title='Step forward' onclick=\"gpTransport('fwd')\">" +
                  "<svg viewBox='0 0 12 12'><path d='M3 1.5v9L9 6z'/></svg></button>" +
@@ -13243,7 +13407,14 @@
             if (thk && Lt) thk.textContent = Lt.label + (pct === null ? "" : " " + Math.round(pct) + "%");
             /* the scrub follows the playhead, but never while it is being dragged */
             var sc = document.getElementById("gpDockScrub");
-            if (sc && document.activeElement !== sc) {
+            /* "Is it being dragged", not "does it have focus". A range input
+               KEEPS focus after the click that moved it, so activeElement
+               stayed pointing at the scrub for the rest of the session and the
+               thumb never followed the playhead again — one click and the
+               transport's own position indicator was frozen for good. :active
+               is true only while the button is actually held down, which is
+               the case this guard was written for. */
+            if (sc && !sc.matches(":active")) {
                 sc.max = String(Math.max(0, r.to - r.from));
                 sc.value = String(Math.max(0, i - r.from));
             }
@@ -15652,10 +15823,43 @@
             g.setTransform(sx, 0, 0, sy, 0, 0);
             g.clearRect(0, 0, w, GP_NAV_H);
 
+            /* ---- the picture is static; only the cursor and window are not --
+               The envelope, the labels and the sector marks depend on WHICH
+               samples are on screen, never on where the playhead is. They were
+               being rebuilt from every sample in the recording on every frame
+               of playback — two full passes over 38,000 samples, twenty times
+               a second, so that a one-pixel line could move. Draw them once
+               into an offscreen canvas, blit that, and put the moving parts on
+               top. The key is everything the picture actually depends on, so a
+               new lap, a resize or an edited sector still rebuilds it. */
+            var trkN = gpActiveTrack();
+            var navKey = [gp.sessionId, lap.from, lap.to, wDev, hDev, gp.selLap,
+                          trkN ? trkN.id : "",
+                          trkN ? (trkN.sectors || []).map(function (s) {
+                              return s.lat + "," + s.lon + "," + s.heading; }).join(";") : ""
+                         ].join("|");
+            var navBg = gp._navBg || (gp._navBg = document.createElement("canvas"));
+            var navStale = gp._navBgKey !== navKey;
+            var gLive = g;
+            if (navStale) {
+                if (navBg.width !== wDev || navBg.height !== hDev) { navBg.width = wDev; navBg.height = hDev; }
+                g = navBg.getContext("2d");
+                g.setTransform(sx, 0, 0, sy, 0, 0);
+                g.clearRect(0, 0, w, GP_NAV_H);
+                gp._navBgKey = navKey;
+            }
             /* Same gutter as the rack, so the two strips share an x-axis by
                eye — a navigator that does not line up with what it navigates
-               is a second thing to mentally align rather than a control. */
+               is a second thing to mentally align rather than a control.
+               Deliberately OUTSIDE the cache branch: the window, the handles
+               and the playhead are drawn on every frame and need this even
+               when the picture behind them was reused. Left inside, they came
+               out undefined on a cached frame and every coordinate below went
+               NaN — which a canvas discards in silence, so the strip kept its
+               picture and quietly stopped showing where you were. */
             var plotX = GP_LANE_LBL, plotW = w - GP_LANE_LBL - 6;
+
+            if (navStale) {
             g.fillStyle = "rgba(255,255,255,0.60)";
             g.fillRect(plotX, 2, plotW, GP_NAV_H - 4);
 
@@ -15714,6 +15918,15 @@
                 });
                 g.stroke();
             }
+
+            }   /* end of the cached static picture */
+
+            /* Blit it, then draw what actually moves. */
+            g = gLive;
+            g.setTransform(1, 0, 0, 1, 0, 0);
+            g.clearRect(0, 0, wDev, hDev);
+            g.drawImage(navBg, 0, 0);
+            g.setTransform(sx, 0, 0, sy, 0, 0);
 
             /* Everything outside the window is dimmed rather than the window
                being highlighted: the eye reads the bright part as the subject,
@@ -16553,11 +16766,18 @@
                 if (!total) { gp._dlEmpty = true; return null; }
                 gp.traceChanIds = chanIds;
                 var rows = [];
-                /* The ring is NOT necessarily contiguous. A power cycle leaves
-                   whole blocks unwritten between one session and the next, and
-                   trace.read answers those offsets with count 0. Reading the
-                   next offset straight off `rows.length` therefore stopped at
-                   the FIRST hole and called it the end of the recording —
+                /* The ring is addressed in SECTORS, not samples, and most of
+                   them are only part full. trace_log.c fits
+                   (4096 - 64) / record_bytes records to a sector — 336 at the
+                   12-byte fix — and flushes the page whenever recording
+                   pauses, which every stop does, since the node only writes
+                   above 8 km/h. So the tail of each stint's last sector holds
+                   nothing, trace.read answers those indices with count 0, and
+                   `used_samples` counts them too: it is an upper bound on the
+                   read offset, never a row count. Nothing is lost — the gaps
+                   are the stops.
+                   Reading the next offset straight off `rows.length` stopped at
+                   the FIRST such gap and called it the end of the recording —
                    silently, with a success message, keeping only what came
                    before it. Seen in the car on 2026-08-12: 5 802 samples of a
                    79 000-sample ring, and the 5 802 were a stale run from the
@@ -16567,7 +16787,12 @@
                    hold, and a zero inside the ring is stepped over rather than
                    believed. */
                 var nodeOff = 0, holes = 0;
-                var GAP_PROBE = 512;          /* holes run to thousands of samples */
+                /* Coarser than one sector on purpose: a run of stints that each
+                   ended early leaves several part-full sectors in a row, and
+                   the gaps measured in the car ran to 3 000 indices. Scanning
+                   by exactly recs_per_sector would be the tighter fix now that
+                   the granularity is known, but the node does not report it. */
+                var GAP_PROBE = 512;
                 /* First populated offset at or after `from`, or -1 if the rest
                    of the ring is empty. Coarse scan to land inside the next
                    written block, then narrow, so nothing is dropped at the far
@@ -19589,7 +19814,7 @@
 
             getEvents: function () {
                 var ev = { viewreset: this._reset, zoom: this._onZoom,
-                           moveend: this._reset, resize: this._reset };
+                           moveend: this._onMoveEnd, resize: this._reset };
                 if (this._zoomAnimated) ev.zoomanim = this._onAnimZoom;
                 return ev;
             },
@@ -19599,6 +19824,32 @@
             setStrands: function (strands) { this._strands = strands || []; this.redraw(); },
 
             redraw: function () { if (this._map && this._ctx) this._draw(); },
+
+            /* ---- a pan is not an invalidation ------------------------------
+               The strands are drawn in ABSOLUTE map pixels for the current
+               zoom, and the canvas is positioned in layer coordinates, so
+               when the map pans the canvas travels with the pane and stays
+               registered to the ground. Nothing needs redrawing until either
+               the zoom changes or the window reaches the edge of the padded
+               region that was drawn.
+
+               Wiring `moveend` straight to _reset is what made follow-cam
+               ruinous: gpFollowCar pans on EVERY playback frame, a pan fires
+               moveend, and _reset resizes the canvas and redraws every sample
+               in the recording. Measured on a 38k-sample session that was 32%
+               of wall clock, twenty times a second, to produce a picture that
+               had not changed. With 0.25 padding the redraw now happens once
+               the car has travelled a quarter of the window instead. */
+            _onMoveEnd: function () {
+                if (!this._map || !this._cv || !this._bounds) { this._reset(); return; }
+                if (this._map.getZoom() !== this._zoom) { this._reset(); return; }
+                var size = this._map.getSize();
+                var tl = this._map.containerPointToLayerPoint([0, 0]);
+                var b = this._bounds;
+                if (tl.x >= b.min.x && tl.y >= b.min.y &&
+                    tl.x + size.x <= b.max.x && tl.y + size.y <= b.max.y) return;
+                this._reset();
+            },
 
             _onZoom: function () { this._transform(this._map.getCenter(), this._map.getZoom()); },
             _onAnimZoom: function (e) { this._transform(e.center, e.zoom); },
@@ -20931,6 +21182,24 @@
             if (gp.liveMode) return;
             var read = document.getElementById("gpPlayRead");
             var sc = document.getElementById("gpScrub");
+            /* Both of these live in the playbar ADR-0025 retired — the dock
+               owns the transport now and carries its own scrub (#gpDockScrub)
+               and readouts. The bar is display:none, so everything below —
+               a gpDeltaSeries() lookup and an innerHTML rebuild — has been
+               running twenty times a second to update pixels that are not on
+               the screen.
+
+               Asked ONCE and remembered: the obvious test, `offsetParent ===
+               null`, forces a synchronous layout, and twenty of those a second
+               inside a frame that is already painting canvases cost MORE than
+               the work it was meant to skip — measured at 150 ms per nine
+               seconds, worse than not checking at all. The bar is retired, so
+               its answer cannot change while the app is running. */
+            if (gp._pbRetired === undefined) {
+                var pbT = document.getElementById("gpPlaybar");
+                gp._pbRetired = !pbT || window.getComputedStyle(pbT).display === "none";
+            }
+            if (gp._pbRetired) return;
             if (!gp.trace || !gp.trace.length) {
                 if (read) read.innerHTML = "";
                 if (sc) sc.style.setProperty("--p", "0%");
@@ -20958,6 +21227,17 @@
         function gpPlayIcon(playing) {
             var b = document.getElementById("gpPlayBtn");
             if (b) b.innerHTML = playing ? GP_SVG_PAUSE : GP_SVG_PLAY;
+            /* #gpPlayBtn lives in the playbar ADR-0025 retired — it is
+               display:none, so every call above has been painting a glyph
+               nobody can see. The transport people actually press is the one
+               in the dock, and it took its icon once from gp.playing when the
+               dock was built and was never told again: press Play and the
+               button went on showing a triangle for the whole session, and
+               pausing from the video's own controls left it equally wrong.
+               Marked in place rather than re-rendered — rebuilding the dock
+               here would destroy the scrub mid-drag. */
+            var d = document.querySelector("#gpDock .gp-tbtn-play");
+            if (d) d.innerHTML = playing ? GP_SVG_PAUSE : GP_SVG_PLAY;
         }
 
         /* Step and jump — the four buttons around Play. Stepping pauses first,
@@ -21053,6 +21333,56 @@
             gp._playIdxSet = gp.playIdx;
         }
 
+        /* ---- crossing the line does not end the replay ---------------------
+         * A recording is a session, not a lap. Reaching the end of the lap you
+         * are analysing used to stop the transport dead, so watching ten
+         * minutes back meant pressing play once per lap and picking the next
+         * one by hand. Now the line is just a line: the playhead carries on
+         * into the next lap and the ANALYSIS follows it, so the lap list, the
+         * report, the delta and the rack are always describing the lap you are
+         * actually watching.
+         *
+         * Past the last lap the recording usually keeps going — the tour back
+         * to the pits — so it widens to the whole session rather than stopping
+         * mid-drive. Returns whether it found somewhere to go.
+         *
+         * gpSelectLap is deliberately NOT used: it calls gpPlayStop, which is
+         * exactly what this exists to avoid.
+         */
+        function gpPlayRollOver() {
+            if (!gp.trace || !gp.trace.length) return false;
+            var laps = gp.traceLaps || [];
+            if (gp.selLap < 0) return false;          /* already the whole thing */
+            for (var i = gp.selLap + 1; i < laps.length; i++) {
+                if (laps[i].ghost) continue;          /* a ghost is another drive */
+                gp.selLap = i;
+                gp.stripZoom = null;                  /* the zoom belonged to the old lap */
+                gp.insightCursor = -1;
+                gp.playIdx = laps[i].from;
+                gpPlayLapRolled();
+                return true;
+            }
+            var end = (gp.ghostFence !== null ? gp.ghostFence : gp.trace.length) - 1;
+            if (gp.playIdx < end - 1) {
+                gp.selLap = -1;
+                gp.stripZoom = null;
+                gp.insightCursor = -1;
+                gpPlayLapRolled();
+                return true;
+            }
+            return false;
+        }
+
+        /* Everything that has to catch up when the analysed lap changes under
+           playback. Once a lap, so the grid rebuild is affordable — and it is
+           what makes the lap times, the report and the corner table follow. */
+        function gpPlayLapRolled() {
+            gpSyncScrub();
+            gpDrawTrace();
+            gpRenderInspector();
+            if (gp.view === "session") gpRenderGrid();
+        }
+
         function gpPlayResumeTicker() {
             gp.playing = true;
             gpPlayIcon(true);
@@ -21083,6 +21413,12 @@
                 var want = gp._playAtS + (gpNow() - gp._playWallMs) / 1000 * gp.playRate;
                 if (want >= gpSecs(gp.trace, rr.from, rr.to)) {
                     gp.playIdx = rr.to;
+                    /* End of the lap, not end of the drive. */
+                    if (gpPlayRollOver()) {
+                        gpPlayAnchor();     /* the clock is measured from the NEW lap start */
+                        gpDrawPlayhead();
+                        return;
+                    }
                     gpSyncScrub();
                     gpDrawPlayhead();
                     gpPlayStop();
@@ -21201,20 +21537,51 @@
             return null;
         }
 
-        function gpVideoProbeT0(file) {
-            var HEAD = 2 * 1024 * 1024;
-            var read = function (blob) {
-                return new Promise(function (res, rej) {
-                    var r = new FileReader();
-                    r.onload = function () { res(r.result); };
-                    r.onerror = function () { rej(r.error); };
-                    r.readAsArrayBuffer(blob);
-                });
+        /* Two ways to get at a video's bytes, behind one shape: { size, read }.
+           A file chosen through an <input> is a Blob and slices itself; a file
+           chosen through the native dialog is a PATH on disk, and is read a
+           range at a time in Rust. The probe below only ever wants a couple of
+           megabytes from one end or the other, and must never be the reason a
+           gigabyte gets pulled into memory. */
+        function gpVideoSrcFile(file) {
+            return {
+                size: file.size,
+                read: function (off, len) {
+                    return new Promise(function (res, rej) {
+                        var r = new FileReader();
+                        r.onload = function () { res(r.result); };
+                        r.onerror = function () { rej(r.error); };
+                        r.readAsArrayBuffer(file.slice(off, off + len));
+                    });
+                }
             };
-            return read(file.slice(0, HEAD)).then(function (b) {
+        }
+
+        /* Own invoke rather than borrowing _tauriCall from another merged
+           block — these are separate anchored inserts and depending on one
+           hoisting into the other is a re-sync away from breaking. */
+        function gpTauriCall(cmd, args) {
+            var t = window.__TAURI_INTERNALS__ || (window.__TAURI__ && window.__TAURI__.core);
+            if (!t || !t.invoke) return Promise.reject(new Error("not running under Tauri"));
+            return t.invoke(cmd, args || {});
+        }
+
+        function gpVideoSrcPath(path, size) {
+            return {
+                size: size,
+                read: function (off, len) {
+                    return gpTauriCall("read_file_range", { path: path, offset: off, len: len })
+                        .then(function (bytes) { return new Uint8Array(bytes).buffer; });
+                }
+            };
+        }
+
+        function gpVideoProbeT0(src) {
+            var HEAD = 2 * 1024 * 1024;
+            return src.read(0, HEAD).then(function (b) {
                 var ms = gpMp4CreationMs(b);
-                if (ms !== null || file.size <= HEAD) return ms;
-                return read(file.slice(file.size - HEAD)).then(gpMp4CreationMsLoose);
+                if (ms !== null || src.size <= HEAD) return ms;
+                return src.read(Math.max(0, src.size - HEAD), HEAD).then(gpMp4CreationMsLoose);
             }).catch(function () { return null; });
         }
 
@@ -21327,16 +21694,279 @@
             return (target - elOf(lo) <= elOf(hi) - target) ? lo : hi;
         }
 
+        /* ---- which clock is aligning the footage, and what it reaches ------
+         * Three things can line a video up with a recording, in descending
+         * order of how much they deserve to be believed:
+         *   log    the logger wrote down where the recording starts in the
+         *          footage (VBOX avisynctime) — it recorded both, so it knows
+         *   cam    the camera's own file clock, corrected for a whole-hour
+         *          timezone error
+         *   start  neither exists: assume they were started together
+         * The app used to pick silently and never say which, so a video that
+         * lined up by luck and one that lined up by evidence looked identical
+         * — and there was no way to overrule a bad guess except by dragging a
+         * nudge slider until it looked right.
+         */
+        function gpVideoSources() {
+            var meta = gpCurSessionMeta(), v = gp.video, out = [];
+            if (!v || !meta) return out;
+            if (isFinite(meta.videoAnchorMs)) out.push("log");
+            if (v.autoT0 !== null && v.autoT0 !== undefined) out.push("cam");
+            out.push("start");
+            return out;
+        }
+
+        var GP_VSRC_LBL = { log: "Log", cam: "Camera", start: "Together" };
+        var GP_VSRC_TIP = {
+            log: "<b>The log's own figure</b>The logger recorded the data AND the video and wrote down how far into the footage the recording starts. Nothing beats it.",
+            cam: "<b>The camera's clock</b>When the file says it was created, corrected for a whole-hour timezone error. Cameras drift, so this can be seconds out.",
+            start: "<b>Started together</b>Assume the camera was rolling from the first sample. A guess — right when you started both at once, and the only option when neither clock is available."
+        };
+
+        window.gpVideoSyncSet = function (which) {
+            var v = gp.video, meta = gpCurSessionMeta();
+            if (!v || !meta) return;
+            if (which === "log") {
+                if (!isFinite(meta.videoAnchorMs)) return;
+                v.t0 = meta.recordedAt - meta.videoAnchorMs; v.fileT0 = v.t0; v.tzHours = 0;
+            } else if (which === "cam") {
+                if (v.autoT0 === null || v.autoT0 === undefined) return;
+                var tz = gpVideoTzFix(v.autoT0, meta.recordedAt);
+                v.t0 = tz.t0; v.tzHours = tz.hours; v.fileT0 = null;
+            } else {
+                which = "start";
+                v.t0 = meta.recordedAt; v.tzHours = 0; v.fileT0 = null;
+            }
+            v.src = which;
+            v.offsetMs = 0;
+            v.noOverlap = false;
+            gpVideoLinkSync();
+            gpVideoFollowSeek();
+            gpVideoDrawOverlay();
+            gpRenderGridSoft();
+        };
+
+        /* What span of the RECORDING the footage actually reaches, in seconds
+           from the first sample, and how much of the analysed lap it covers.
+           A 150 s clip against an eleven-minute session is a perfectly valid
+           pairing — but if the lap you are looking at falls outside it the
+           picture simply stops, which reads as a broken player rather than
+           footage that ran out. */
+        function gpVideoCover() {
+            var v = gp.video, el = document.getElementById("gpVideo"), meta = gpCurSessionMeta();
+            if (!v || !el || !meta || v.t0 === null || v.t0 === undefined) return null;
+            if (!isFinite(el.duration) || !gp.trace || !gp.trace.length) return null;
+            var a = (v.t0 + v.offsetMs - meta.recordedAt) / 1000;
+            var b = a + el.duration;
+            var lap = gpLapRange();
+            var ls = gpSampleUtc(lap.from), le = gpSampleUtc(lap.to);
+            if (ls === null || le === null) return null;
+            ls = (ls - meta.recordedAt) / 1000; le = (le - meta.recordedAt) / 1000;
+            var span = le - ls;
+            var ov = Math.min(b, le) - Math.max(a, ls);
+            return { from: a, to: b, lapFrom: ls, lapTo: le,
+                     frac: span > 0 ? Math.max(0, Math.min(1, ov / span)) : 0 };
+        }
+
+        /* Put the playhead where the footage actually is. If that is outside
+           the lap being analysed there is no point moving the cursor alone —
+           the lap is the frame, so widen it to the whole recording first. */
+        window.gpVideoGoto = function () {
+            var c = gpVideoCover();
+            if (!c) return;
+            var idx = gpIndexForVideoTime(0.05);
+            if (idx === null) return;
+            var lap = gpLapRange();
+            if (idx < lap.from || idx > lap.to) {
+                if (typeof window.gpLapAnalyse === "function") window.gpLapAnalyse(-1);
+            }
+            gp.playIdx = idx;
+            gpSyncScrub();
+            gpDrawPlayhead();
+            gpRenderGridSoft();
+        };
+
+        /* Pick a video. Under Tauri this goes through the NATIVE dialog, which
+           hands back a path on disk — the webview then streams it over the
+           asset protocol instead of holding it as a blob. An <input type=file>
+           can never give a path (browsers refuse), which is why the desktop
+           build cannot simply keep using one. Outside Tauri the input is still
+           the only way, and still works for ordinary-sized files. */
+        /* ---- linking footage to a recording -------------------------------
+         * The path, the sync source and the nudge live on the session's own
+         * meta, so opening that recording again brings its footage back lined
+         * up exactly as it was left. Only a PATH can be remembered — a file
+         * chosen through an <input> is a handle that dies with the page, which
+         * is why the tick only appears for videos opened the desktop way.
+         */
+        function gpVideoLinked(meta) {
+            return !!(meta && meta.videoPath);
+        }
+
+        window.gpVideoLink = function (on) {
+            var meta = gpCurSessionMeta(), v = gp.video;
+            if (!meta) return;
+            if (on && v && v.path) {
+                meta.videoPath = v.path;
+                meta.videoSrc = v.src || "start";
+                meta.videoOffsetMs = v.offsetMs || 0;
+            } else {
+                delete meta.videoPath; delete meta.videoSrc; delete meta.videoOffsetMs;
+            }
+            gpStore.putMeta(meta);
+            gpRenderGridSoft();
+        };
+
+        /* Keep a link current as the sync is adjusted, so what comes back is
+           what was on screen — not the alignment it happened to open with. */
+        function gpVideoLinkSync() {
+            var meta = gpCurSessionMeta(), v = gp.video;
+            if (!meta || !v || !v.path || !meta.videoPath) return;
+            meta.videoSrc = v.src || "start";
+            meta.videoOffsetMs = v.offsetMs || 0;
+            gpStore.putMeta(meta);
+        }
+
+        /* Re-attach on open. Silent when the file has moved: a missing video
+           is not a reason to interrupt someone opening a recording, but it is
+           a reason to forget the link rather than fail on it every time. */
+        function gpVideoRelink(meta) {
+            if (!gpVideoLinked(meta)) return;
+            if (!(window.__TAURI_INTERNALS__ || window.__TAURI__)) return;
+            var want = meta.videoPath;
+            gpTauriCall("video_allow", { path: want }).then(function (size) {
+                if (gp.sessionId !== meta.id) return;      /* they moved on */
+                var conv = (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) ||
+                           (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.convertFileSrc);
+                if (!conv) return;
+                gpVideoBegin(String(want).split(/[\\/]/).pop(), conv(want),
+                             gpVideoSrcPath(want, size), false, want,
+                             { src: meta.videoSrc, offsetMs: meta.videoOffsetMs });
+            }).catch(function () {
+                delete meta.videoPath; delete meta.videoSrc; delete meta.videoOffsetMs;
+                gpStore.putMeta(meta);
+                gpImportSaid("The video linked to this recording is no longer where it was, so the link has been dropped.", "error");
+            });
+        }
+
+        /* ---- is the picture actually being painted? ------------------------
+         * A file can load, seek, report readyState 4 and run its clock while
+         * never presenting a single frame — the Racelogic VBOX HD2's H.264 is
+         * one such (log2_max_frame_num at the top of the legal range), and it
+         * shows as a black rectangle with working readouts beside it, which
+         * reads as "the app is broken" rather than "this file will not decode
+         * here". requestVideoFrameCallback counts frames the compositor
+         * actually presented, so it can tell the difference. A healthy 30 fps
+         * video presents ~90 in three seconds; anything under 15 is not
+         * playing whatever the clock says.
+         */
+        function gpVideoWatch() {
+            var el = document.getElementById("gpVideo"), v = gp.video;
+            if (!el || !v || v.dead || v._watching || !el.requestVideoFrameCallback) return;
+            v._watching = true;
+            var n = 0;
+            var tick = function () { n++; if (gp.video === v) el.requestVideoFrameCallback(tick); };
+            el.requestVideoFrameCallback(tick);
+            setTimeout(function () {
+                if (gp.video !== v) return;
+                v._watching = false;
+                if (el.paused || n >= 15) return;
+                v.dead = true;
+                gpRenderGridSoft();
+            }, 3000);
+        }
+
+        window.gpVideoConvert = function () {
+            var v = gp.video;
+            if (!v || !v.path || v.converting) return;
+            v.converting = true;
+            gpRenderGridSoft();
+            gpTauriCall("video_convert", { src: v.path }).then(function (outPath) {
+                gpImportSaid("Converted — loading the playable copy.", "success");
+                window.gpVideoOpenPath(outPath);
+            }).catch(function (e) {
+                if (gp.video) { gp.video.converting = false; }
+                gpImportSaid("Could not convert that video: " + (e && e.message ? e.message : e), "error");
+                gpRenderGridSoft();
+            });
+        };
+
+        /* Asked once and remembered — the answer cannot change while the app
+           runs, and the panel re-renders often. */
+        function gpHaveFfmpeg() {
+            if (gp._ffmpeg === undefined) {
+                gp._ffmpeg = null;                       /* null = still asking */
+                gpTauriCall("video_have_ffmpeg").then(function (yes) {
+                    gp._ffmpeg = !!yes;
+                    if (gp.video && gp.video.dead) gpRenderGridSoft();
+                }).catch(function () { gp._ffmpeg = false; });
+            }
+            return gp._ffmpeg === true;
+        }
+
+        window.gpVideoPick = function () {
+            var inTauri = !!(window.__TAURI_INTERNALS__ || window.__TAURI__);
+            if (!inTauri || !window.RDM || !RDM.openFileDialog) {
+                /* #gpVideoFile only exists where the inspector markup is
+                   rendered, which Analyse no longer does — so make one rather
+                   than silently doing nothing when the button is pressed. */
+                var el = document.getElementById("gpVideoFile");
+                if (!el) {
+                    el = document.createElement("input");
+                    el.type = "file"; el.id = "gpVideoFile"; el.accept = "video/*";
+                    el.style.display = "none";
+                    el.addEventListener("change", function () { window.gpVideoOpen(el); });
+                    document.body.appendChild(el);
+                }
+                el.click();
+                return;
+            }
+            RDM.openFileDialog([{ name: "Video", extensions: ["mp4", "mov", "m4v", "avi", "mkv", "webm"] }])
+               .then(function (path) { if (path) window.gpVideoOpenPath(path); })
+               .catch(function () { });
+        };
+
+        window.gpVideoOpenPath = function (path) {
+            gpTauriCall("video_allow", { path: path })
+                .then(function (size) {
+                    var conv = (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) ||
+                               (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.convertFileSrc);
+                    if (!conv) throw new Error("convertFileSrc unavailable");
+                    var name = String(path).split(/[\\/]/).pop();
+                    gpVideoBegin(name, conv(path), gpVideoSrcPath(path, size), false, path, null);
+                })
+                .catch(function (e) {
+                    gpImportSaid("Could not open that video: " + (e && e.message ? e.message : e), "error");
+                });
+        };
+
         window.gpVideoOpen = function (input) {
             var f = input && input.files && input.files[0];
             if (!f) return;
-            if (gp.video && gp.video.url) { try { URL.revokeObjectURL(gp.video.url); } catch (e) { } }
+            input.value = "";
+            gpVideoBegin(f.name, URL.createObjectURL(f), gpVideoSrcFile(f), true);
+        };
+
+        /* Everything that is the same whichever way the file arrived. `blob`
+           says whether the url needs revoking when it is replaced. */
+        function gpVideoBegin(name, url, probeSrc, blob, path, restore) {
+            if (gp.video && gp.video.url && gp.video.blob) {
+                try { URL.revokeObjectURL(gp.video.url); } catch (e) { }
+            }
             var meta = gpCurSessionMeta();
             if (!gp.cam) gp.cam = gpCamLoad();
-            gp.video = { name: f.name, url: URL.createObjectURL(f),
-                         t0: meta ? meta.recordedAt : null,   /* aligned to session start until probed */
+            /* If the log stated where it sits in the footage, that IS the
+               answer and there is nothing to probe for: t0 is the moment the
+               video started, which is the first sample less its position in
+               the video. The camera clock is still read below, so the Auto
+               button can still fall back to it. */
+            var fileT0 = (meta && isFinite(meta.videoAnchorMs))
+                ? meta.recordedAt - meta.videoAnchorMs : null;
+            gp.video = { name: name, url: url, blob: !!blob, path: path || null,
+                         t0: meta ? (fileT0 !== null ? fileT0 : meta.recordedAt) : null,
+                         fileT0: fileT0,      /* non-null = the log knows; do not overrule it */
+                         src: fileT0 !== null ? "log" : "start",
                          autoT0: null, offsetMs: 0, follow: gp.cam.follow, probing: true };
-            input.value = "";
             var el = document.getElementById("gpVideo");
             if (el) {
                 el.src = gp.video.url;
@@ -21356,17 +21986,32 @@
             gp.viewFocus = null;               /* a fresh video arrives side by side */
             gpViewerSync();
             gpRenderInspector();
-            gpVideoProbeT0(f).then(function (ms) {
+            gpVideoProbeT0(probeSrc).then(function (ms) {
                 if (!gp.video) return;
                 gp.video.probing = false;
                 gp.video.autoT0 = ms;
                 /* Auto-sync only means something when the session itself is
                    GPS-dated — against a download-dated anchor the camera clock
                    is comparing apples to a guess. */
-                if (ms !== null && meta && meta.dated === "gps" && gp.cam.auto) {
+                if (ms !== null && meta && meta.dated === "gps" && gp.cam.auto &&
+                    gp.video.fileT0 === null) {
                     var tz = gpVideoTzFix(ms, meta.recordedAt);
                     gp.video.t0 = tz.t0;
                     gp.video.tzHours = tz.hours;
+                    gp.video.src = "cam";
+                }
+                /* A remembered alignment outranks anything worked out above:
+                   it is the answer this recording was LEFT on, camera clock
+                   included. Applied after the probe so it cannot be undone by
+                   it. */
+                if (restore && restore.src) {
+                    window.gpVideoSyncSet(restore.src);
+                    if (restore.offsetMs) window.gpVideoOffset(restore.offsetMs / 1000);
+                } else if (gp.video.path && meta) {
+                    /* Opened by path and not restored — remember it, so this
+                       is a thing you do once per recording rather than every
+                       time you open it. Untick Link to stop. */
+                    window.gpVideoLink(true);
                 }
                 gpRenderInspector();
                 if (gp.view === "session") gpRenderGrid();
@@ -21388,7 +22033,11 @@
         window.gpVideoClose = function () {
             var el = document.getElementById("gpVideo");
             if (el) { try { el.pause(); el.removeAttribute("src"); el.load(); } catch (e) { } }
-            if (gp.video && gp.video.url) { try { URL.revokeObjectURL(gp.video.url); } catch (e) { } }
+            /* Only a blob url is ours to revoke; an asset-protocol url is just
+               a path the webview streams from and revoking it is meaningless. */
+            if (gp.video && gp.video.url && gp.video.blob) {
+                try { URL.revokeObjectURL(gp.video.url); } catch (e) { }
+            }
             gp.video = null;
             gp.viewFocus = null;
             gpViewerSync();
@@ -21403,13 +22052,19 @@
             gp.video.offsetMs = Math.round((parseFloat(v) || 0) * 1000);
             var lab = document.getElementById("gpVideoOffLab");
             if (lab) lab.textContent = (gp.video.offsetMs / 1000).toFixed(2) + " s";
+            gpVideoLinkSync();
             gpVideoFollowSeek();
         };
 
         window.gpVideoAuto = function () {
             if (!gp.video || gp.video.autoT0 === null) return;
-            gp.video.t0 = gp.video.autoT0;
-            gp.video.offsetMs = 0;
+            /* Delegated so there is ONE camera-clock path. Setting t0 straight
+               from autoT0 here threw away the whole-hour timezone correction
+               gpVideoTzFix had just worked out, so pressing Auto on a camera
+               that writes local time moved the footage an hour off the lap —
+               undoing the fix, using the button whose job is to apply it. */
+            window.gpVideoSyncSet("cam");
+            return;
             gpRenderInspector();
             gpVideoFollowSeek();
         };
@@ -21520,8 +22175,39 @@
                 var v = gp.video;
                 if (!v) return;
                 if (v.follow && !el.paused) {
-                    /* The video is the driver while it plays. */
+                    /* The video is the driver while it plays — but it drives
+                       the RECORDING, and what is being analysed is one lap of
+                       it. gpIndexForVideoTime bounds itself by the whole trace,
+                       so with a lap selected the footage would carry the
+                       playhead straight out of it and on through the following
+                       laps: the dock went on dividing by the selected lap and
+                       read "7:25.70 / 1:09.30" — a position six times the lap
+                       it claimed to be in — while the graph cursor sat outside
+                       the analysed range entirely. The index ticker has always
+                       stopped at the end of the lap; this now does the same. */
                     var idx = gpIndexForVideoTime(el.currentTime);
+                    if (idx !== null) {
+                        var vr = gpLapRange();
+                        if (idx > vr.to) {
+                            gp.playIdx = vr.to;
+                            /* The footage does not stop at the line and nor
+                               does the replay — roll into the next lap and
+                               keep the picture running. Only when there is
+                               nowhere left to go does this end. */
+                            if (gpPlayRollOver()) {
+                                vr = gpLapRange();
+                                var ni = gpIndexForVideoTime(el.currentTime);
+                                idx = (ni === null) ? vr.from
+                                    : Math.max(vr.from, Math.min(vr.to, ni));
+                            } else {
+                                gpDrawPlayhead();
+                                gpSyncScrub();
+                                gpPlayStop();
+                                return;
+                            }
+                        }
+                        if (idx < vr.from) idx = vr.from;
+                    }
                     if (idx !== null && idx !== gp.playIdx) {
                         v.driving = true;
                         gp.playIdx = idx;
@@ -21547,6 +22233,8 @@
                     gp.playing = true;
                     gpPlayIcon(true);
                 }
+                /* First time this file is asked to play, check that it does. */
+                gpVideoWatch();
             });
             el.addEventListener("ended", function () {
                 if (gp.playing && gp.playIdx < gpLapRange().to) gpPlayResumeTicker();
@@ -21616,6 +22304,16 @@
             gp.delta = null; gp.deltaKey = ""; gp.coach = null;
             gp.chan = null; gp.chanKey = "";
             gp.sectors = null; gp.secKey = "";
+            /* The map's two comparison colourings cache on `selLap:cmpLap`
+               (gpDeltaRate, gpLineOffset), and a swapped ghost lands on the
+               SAME lap index — so that key does not change and the cache is
+               reused. Every other derived thing here was already dropped;
+               these two were not, which left "vs Ref" and "Line" painting the
+               track against the ghost you just replaced. gpDeltaRate returns
+               its own cache before it ever reaches the cleared gp.delta, so
+               dropping the delta alone was not enough. */
+            gp.rate = null; gp.rateKey = "";
+            gp.lineOff = null; gp.lineKey = "";
         }
 
         function gpGhostDrop() {
@@ -27061,6 +27759,13 @@
             if (gp.chanPop) { gp.chanPop = false; gpChanPopRender(); }
             if (gp.timer) { clearTimeout(gp.timer); gp.timer = null; }
             if (gp.lapTimer) { clearInterval(gp.lapTimer); gp.lapTimer = null; }
+            /* The two timers above were cleared and the playback ticker was
+               not, so leaving the workspace left a 20 Hz interval running
+               against a hidden view — still walking gp.playIdx, still driving
+               gpDrawPlayhead into canvases nobody was looking at, for as long
+               as the app stayed open. gpPlayStop also pauses the video, which
+               otherwise kept playing audio behind the home screen. */
+            gpPlayStop();
             var ws = document.getElementById("gpWorkspace");
             if (ws) ws.style.display = "none";
             window._suiteHomeShow();

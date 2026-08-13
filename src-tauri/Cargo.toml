@@ -8,7 +8,10 @@ description = "RDM Studio"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# protocol-asset: lets the webview stream a chosen file from disk with range
+# requests. A gigabyte of race video handed over as a blob breaks the media
+# stack — it seeks, reports ready, and then never shows another frame.
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"

@@ -177,6 +177,110 @@ async fn write_binary_file(path: String, data: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, &data).map_err(|e| format!("Failed to write {path}: {e}"))
 }
 
+/// Let the webview stream ONE chosen file over the asset protocol.
+///
+/// A race video is routinely a gigabyte. Handing that to the webview as a
+/// blob (`URL.createObjectURL`) defeats its media stack: the element seeks,
+/// reports readyState 4, and then shows the first decoded frame for ever
+/// while the clock runs on — measured on a 939 MB 1080p file, where the same
+/// footage trimmed to 137 MB played normally. The asset protocol serves the
+/// file from disk with range requests instead, so nothing is held in memory.
+///
+/// The scope starts EMPTY and each pick is added here, rather than shipping a
+/// `"**"` scope that would make every file on the machine readable by the
+/// page. Returns the size so the caller can report it.
+#[tauri::command]
+async fn video_allow(app: tauri::AppHandle, path: String) -> Result<u64, String> {
+    let md = std::fs::metadata(&path).map_err(|e| format!("Cannot read {path}: {e}"))?;
+    if !md.is_file() {
+        return Err(format!("{path} is not a file"));
+    }
+    app.asset_protocol_scope()
+        .allow_file(&path)
+        .map_err(|e| format!("Could not grant access to {path}: {e}"))?;
+    Ok(md.len())
+}
+
+/// Is there an ffmpeg on this machine we could convert with?
+#[tauri::command]
+async fn video_have_ffmpeg() -> bool {
+    std::process::Command::new("ffmpeg")
+        .arg("-version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Re-encode a video into something the webview can actually play.
+///
+/// Some loggers write a legal H.264 stream that Chromium will not decode at a
+/// usable speed — the Racelogic VBOX HD2 sets `log2_max_frame_num_minus4` to
+/// 12 (MaxFrameNum 65536, the top of the legal range) and the picture then
+/// stays black with the clock running, on hardware and software decode alike.
+/// Re-encoding the same footage to Main@4.0 plays perfectly, so that is what
+/// this does. Video only — the audio and the timeline are copied, so the sync
+/// the recording was lined up on still holds.
+///
+/// Returns the path written. Blocking on purpose: the caller shows "this takes
+/// a minute" and waits, which is honest for a job whose length depends on the
+/// footage.
+#[tauri::command]
+async fn video_convert(src: String) -> Result<String, String> {
+    let inp = std::path::Path::new(&src);
+    if !inp.is_file() {
+        return Err(format!("{src} is not a file"));
+    }
+    let stem = inp.file_stem().and_then(|s| s.to_str()).unwrap_or("video");
+    let out = inp.with_file_name(format!("{stem} (playable).mp4"));
+    if out.exists() {
+        return Ok(out.to_string_lossy().to_string());
+    }
+    let status = std::process::Command::new("ffmpeg")
+        .args([
+            "-v", "error", "-i", &src,
+            "-c:v", "libx264", "-profile:v", "main", "-level", "4.0",
+            "-preset", "veryfast", "-crf", "20",
+            "-c:a", "copy", "-movflags", "+faststart", "-y",
+        ])
+        .arg(&out)
+        .status()
+        .map_err(|e| format!("Could not run ffmpeg: {e}"))?;
+    if !status.success() {
+        let _ = std::fs::remove_file(&out);
+        return Err("ffmpeg could not convert that file".to_string());
+    }
+    Ok(out.to_string_lossy().to_string())
+}
+
+/// A slice of a file, without reading the rest of it. The video's creation
+/// time lives in the mp4 `moov` atom, which is a couple of megabytes at one
+/// end or the other — reading the whole file to find it would reintroduce
+/// exactly the problem the asset protocol is here to solve.
+#[tauri::command]
+async fn read_file_range(path: String, offset: u64, len: u64) -> Result<Vec<u8>, String> {
+    use std::io::{Read, Seek, SeekFrom};
+    const MAX: u64 = 8 * 1024 * 1024;
+    if len > MAX {
+        return Err(format!("range of {len} bytes is larger than the {MAX} byte limit"));
+    }
+    let mut f = std::fs::File::open(&path).map_err(|e| format!("Cannot open {path}: {e}"))?;
+    f.seek(SeekFrom::Start(offset))
+        .map_err(|e| format!("Cannot seek {path}: {e}"))?;
+    let mut buf = vec![0u8; len as usize];
+    let mut got = 0usize;
+    while got < buf.len() {
+        match f.read(&mut buf[got..]) {
+            Ok(0) => break,
+            Ok(n) => got += n,
+            Err(e) => return Err(format!("Cannot read {path}: {e}")),
+        }
+    }
+    buf.truncate(got);
+    Ok(buf)
+}
+
 // ── Serial Port Protocol ────────────────────────────────────────────
 
 const STX: u8 = 0x02;
@@ -1850,6 +1954,10 @@ pub fn run() {
             probe_device,
             read_binary_file,
             write_binary_file,
+            video_allow,
+            read_file_range,
+            video_have_ffmpeg,
+            video_convert,
             serial_list_ports,
             serial_auto_detect,
             serial_connect,
