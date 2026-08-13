@@ -1530,8 +1530,14 @@
            "sure, fine" instead of "none" is a lie either way, and the next
            caller to trust it would be bitten the same. Same reasoning as the
            _nonDashApiStub collections below: empty is the honest answer. */
+        /* `offline: true` marks this as the local stub rather than a dash,
+           the same way /api/device/info and /api/selftest already do. The
+           editor's channel page keys its offline mode off this: a bare 200
+           with an empty list is indistinguishable from a real dash that has
+           no channels yet, and reading it as "connected" would blank the
+           saved copy and disable offline channel editing (ADR-0030). */
         if (pathname === '/api/channels' || pathname === '/api/channels/canonical')
-            return ok({ channels: [], capacity: 128 });
+            return ok({ channels: [], capacity: 128, offline: true });
         /* Device-only families (CAN, OTA, dimmer, …): harmless no-op. */
         return ok({ ok: true });
     }
