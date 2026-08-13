@@ -1775,26 +1775,6 @@
         }
         .ch2-body { display: flex; flex: 1; min-height: 0; }
 
-        /* Where your channel edits are going. Three states, always printed —
-         * a blank here would read as "connected", which is the one wrong
-         * answer (ADR-0030). State in greys; only the "needs sending" case
-         * earns colour, because it is the only one asking for an action. */
-        .ch-sync-pill {
-            font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
-            padding: 3px 9px; border-radius: var(--radius-pill, 999px);
-            border: 1px solid var(--border); color: var(--text-muted);
-            white-space: nowrap; user-select: none;
-        }
-        .ch-sync-pill.live    { cursor: default; }
-        .ch-sync-pill.offline { cursor: default; border-style: dashed; }
-        .ch-sync-pill.pending {
-            cursor: pointer;
-            color: hsl(40, 85%, 62%);
-            border-color: hsl(40, 60%, 42%);
-            background: hsla(40, 85%, 55%, 0.08);
-        }
-        .ch-sync-pill.pending:hover { background: hsla(40, 85%, 55%, 0.18); }
-
         /* ── The two mounts ───────────────────────────────────────────────
          * #chShared holds the whole channels UI and is moved between the
          * modal shell and the Channels page. `.ch2-page` on it selects the
@@ -1825,17 +1805,40 @@
         #chShared.ch2-page .ch2-topbar { padding: 14px 20px; }
 
         /* Column headings for the table layout. Grid template is shared with
-         * .ch2-row below — change both together or the headings lie. */
+         * .ch2-row below — change both together or the headings lie.
+         * Horizontal inset must match the row's too: a row sits inside
+         * margin:20px + a 1px border + padding:12px (33px total), so the
+         * heading's own padding has to be 33px, not the row's outer 20px —
+         * otherwise "Channel" prints 13px left of where names actually
+         * start. */
         .ch2-thead {
             display: grid;
             grid-template-columns: var(--ch2-cols);
             gap: 10px;
-            padding: 8px 20px;
+            padding: 8px 33px;
             margin: 0;
             font-size: 10px; font-weight: 700; letter-spacing: .06em;
             text-transform: uppercase; color: var(--text-muted);
             border-bottom: 1px solid var(--border);
+            /* #chList below scrolls once channels overflow the pane — the
+             * common case past ~14 rows — and its scrollbar narrows its
+             * content width by a few px that this header never loses,
+             * drifting the columns right of the data under them. Reserving
+             * the same gutter here (never actually scrolling — overflow
+             * has nothing to hide) keeps both widths equal whether or not
+             * the list currently needs to scroll. */
+            overflow-y: hidden;
+            scrollbar-gutter: stable;
         }
+        /* .ch2-page-only (below) sets display:flex for the other elements
+         * that share the class, and #chShared.ch2-page .ch2-page-only
+         * outranks the bare .ch2-thead rule above on specificity — so
+         * without this, the heading silently became a flex row and every
+         * "column" just sized to its own text, floating free of the grid
+         * tracks the data rows actually use. This wins the tie back for
+         * the heading specifically, leaving the other .ch2-page-only
+         * elements (context strip, drawer head) on flex as intended. */
+        #chShared.ch2-page .ch2-thead.ch2-page-only { display: grid; }
         #chShared.ch2-page { --ch2-cols: minmax(160px, 2fr) minmax(120px, 1.4fr) 110px 130px 150px; }
 
         /* Editor: right-hand pane in the modal, drawer on the page. */
@@ -1934,7 +1937,7 @@
         }
         .ch2-filter-btn:hover { color: var(--text); }
         .ch2-filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-        .ch2-list { flex: 1; overflow-y: auto; }
+        .ch2-list { flex: 1; overflow-y: auto; scrollbar-gutter: stable; }
 
         /* One row markup, two layouts. In the modal the source sits under the
          * name and the extra cells are dropped; on the page the same five
@@ -2077,16 +2080,6 @@
         }
         #chShared.ch2-page .ch2-spill-head { margin: 18px 20px 4px; }
 
-        /* "You are browsing the catalogue" bar — sticky so the way back is
-         * never scrolled off in a hundred-row list. */
-        .ch2-browse-bar {
-            position: sticky; top: 0; z-index: 3;
-            display: flex; align-items: center; gap: 10px;
-            padding: 8px 12px; background: var(--panel-elevated);
-            border-bottom: 1px solid var(--border);
-            font-size: 11px; line-height: 1.45; color: var(--text-muted);
-        }
-        .ch2-browse-bar span { flex: 1; }
 
         /* OBD2 scan results — one tickable reading per row. */
         .ch2-scan-list {
@@ -4823,10 +4816,6 @@
             <div class="ch2-topbar">
                 <span style="font-weight:600; font-size:14px;">Channels <span id="chCount" style="font-weight:400; font-size:12px; color:var(--text-muted);"></span></span>
                 <div style="display:flex; align-items:center; gap:10px;">
-                    <!-- Live/offline state of the channel set. Reads "Live —
-                         edits go straight to the dash" when connected, and
-                         names the pending-edit count when not (ADR-0030). -->
-                    <span id="chSyncPill" class="ch-sync-pill" onclick="_chSyncPillClick()" title="Where your channel edits are going"></span>
                     <!-- Every way a channel comes into being, in one menu:
                          a pre-defined ECU, a DBC file, or typed by hand —
                          plus the backup file that holds the lot. These were
@@ -4888,7 +4877,6 @@
                             <button class="ch2-more-btn" id="chMoreBtn" onclick="_chToggleMoreMenu(event)" title="More">&#8943;</button>
                             <div class="layout-menu" id="chMoreMenu" style="right:0; left:auto;">
                                 <div class="layout-menu-item" id="chSelectModeBtn" onclick="_chCloseMoreMenu(); _chToggleSelectMode()"><svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg><span id="chSelectModeLbl">Select several&hellip;</span></div>
-                                <div class="layout-menu-item" onclick="_chCloseMoreMenu(); _chBrowseCatalogue()"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Browse the standard list&hellip;</div>
                             </div>
                         </div>
                     </div>
@@ -5995,6 +5983,14 @@
         }
 
         let currentLayout = { name: "default", widgets: [], signals: [] };
+        /* True once a layout has actually been loaded into the editor —
+         * from the device, a draft, an import or a deliberate New. Until
+         * then `currentLayout` is the placeholder above: named "default"
+         * with zero widgets, i.e. exactly the payload that would wipe the
+         * dash's default layout if a save fired early. buildFirmwarePayload
+         * only claims an empty widget list is intentional once this is
+         * true; the firmware refuses the rest (ADR-0038). */
+        let _layoutEverLoaded = false;
         let selectedIndex = -1;
         let selectedIndices = new Set();
         let _dragStartPositions = {};
@@ -7332,6 +7328,7 @@
             _showPromptOverlay('New Layout', '', (safeName) => {
                 pushHistory();
                 currentLayout = { name: safeName, widgets: [], signals: [] };
+                _layoutEverLoaded = true;   /* a deliberate New counts */
                 selectedIndex = -1; selectedIndices = new Set();
                 renderEditor();
                 renderSignals();
@@ -7483,6 +7480,7 @@
                         pushHistory();
                         firmwareToWebFormat(data);
                         currentLayout = data;
+                        _layoutEverLoaded = true;
                         if (!currentLayout.name) currentLayout.name = 'imported';
                         /* Prevent importing over default name */
                         if (currentLayout.name === 'default')
@@ -7536,6 +7534,7 @@
                 pushHistory();
                 firmwareToWebFormat(data);
                 currentLayout = data;
+                _layoutEverLoaded = true;
                 if (!currentLayout.name || currentLayout.name === 'default')
                     currentLayout.name = 'imported';
                 selectedIndex = -1; selectedIndices = new Set();
@@ -11635,6 +11634,14 @@
             /* Tag layout with target screen dimensions */
             payload.screen_w = CANVAS_W;
             payload.screen_h = CANVAS_H;
+            /* Saving zero widgets over a populated layout deletes someone's
+             * dashboard, so the firmware refuses it unless the client says it
+             * means it. We only mean it once a layout has actually been
+             * loaded here — before that an empty list is the placeholder, not
+             * a decision (ADR-0038). */
+            if (_layoutEverLoaded && (payload.widgets || []).length === 0) {
+                payload.allow_empty = true;
+            }
             /* Convert RGB888 → RGB565 BEFORE rules are converted to array format
              * (convertWidgetColors handles object-format rule overrides) */
             convertWidgetColors(payload.widgets, rgb888to565);
@@ -15144,6 +15151,7 @@
                 const draftStr = localStorage.getItem('rdm7_draft');
                 if (draftStr) {
                     currentLayout = JSON.parse(draftStr);
+                    _layoutEverLoaded = true;
                     if (!currentLayout.signals) currentLayout.signals = [];
                     history = [draftStr];
                     historyIndex = 0;
@@ -16112,6 +16120,7 @@
                 } else {
                     currentLayout = await response.json();
                 }
+                _layoutEverLoaded = true;
                 /* Snapshot raw device JSON BEFORE any transforms for accurate poll comparison */
                 const rawDeviceSnap = JSON.stringify(currentLayout);
                 if (!currentLayout.signals) currentLayout.signals = [];
@@ -18020,6 +18029,7 @@
                     pushHistory();
                     firmwareToWebFormat(layoutData);
                     currentLayout = layoutData;
+                    _layoutEverLoaded = true;
                     selectedIndex = -1; selectedIndices = new Set();
                     history = [JSON.stringify(currentLayout)];
                     historyIndex = 0;
@@ -18216,6 +18226,7 @@
                 const response = await fetch(`/api/layout/raw?name=${encodeURIComponent(name)}`);
                 if (!response.ok) throw new Error();
                 currentLayout = await response.json();
+                _layoutEverLoaded = true;
                 if (!currentLayout.signals) currentLayout.signals = [];
                 /* Convert firmware endian (int) to web is_little_endian (bool) */
                 currentLayout.signals.forEach(s => {
@@ -18339,6 +18350,7 @@
                     const prevSelectedId = selectedIndex >= 0 && currentLayout.widgets[selectedIndex]
                         ? currentLayout.widgets[selectedIndex].id : null;
                     currentLayout = deviceLayout;
+                    _layoutEverLoaded = true;
                     if (!currentLayout.signals) currentLayout.signals = [];
                     /* Convert firmware endian (int) to web is_little_endian (bool) */
                     currentLayout.signals.forEach(s => {
@@ -20838,7 +20850,6 @@
         let _chPendingId = null;   /* channel the buffer belongs to (NOT the
                                     * selected row — selection can move while
                                     * edits are still pending) */
-        let _chFilter = 'configured'; /* list view: configured (this car) | unconfigured (standard list) */
         let _chSignalValuesCache = {}; /* signal-name → {value, stale, unit} */
         let _chSelectMode = false; /* bulk-select mode for multi-delete */
         let _chSelected = new Set(); /* ids ticked while in select mode */
@@ -20881,8 +20892,9 @@
             const canV = document.getElementById('chCtxCanVal');
             if (!ecuV) return;
             if (!_chOnline) {
-                /* Dashes, not last-known values: the strip is live state, and
-                 * the pill right above it already explains why it's blank. */
+                /* Dashes, not last-known values: the strip is live state and
+                 * a stale ECU/bus reading shown as current would be the one
+                 * wrong answer while the dash is unreachable. */
                 ecuV.textContent = '—';
                 canV.textContent = '—';
                 const s = document.getElementById('chCtxSigVal');
@@ -20918,13 +20930,6 @@
 
         async function _chEnterPage() {
             _chMount('page');
-            /* The page leads with the channels this car actually has. The
-             * other ~100 are catalogue entries you could activate, and
-             * interleaving them buries the 30 that matter. Search still
-             * reaches everything — see _refreshChannelsList — and browsing
-             * the standard list is a detour you come back from, so arriving
-             * here always lands on the car. */
-            _chFilter = 'configured';
             await _chLoad();
             _chRefreshContextStrip();
         }
@@ -20948,7 +20953,6 @@
 
         async function openChannelsModal() {
             _chMount('modal');
-            _chFilter = 'configured';
             document.getElementById('channelsModal').style.display = 'flex';
             await _chLoad();
         }
@@ -21660,39 +21664,6 @@
             return true;
         }
 
-        /* The pill in the Channels topbar. It is the only place that says
-         * where an edit is going, so it never renders blank. */
-        function _chRenderSyncPill() {
-            const el = document.getElementById('chSyncPill');
-            if (!el) return;
-            const n = _chQueueCount();
-            const mirror = _chLoadJson(_CH_MIRROR_KEY, null);
-            if (_chOnline && !n) {
-                el.className = 'ch-sync-pill live';
-                el.textContent = 'Live on the dash';
-                el.title = 'The dash is connected — every change is saved to it as you make it.';
-            } else if (_chOnline && n) {
-                el.className = 'ch-sync-pill pending';
-                el.textContent = `${n} change${n === 1 ? '' : 's'} to send`;
-                el.title = 'Click to send your offline changes to the dash.';
-            } else if (n) {
-                el.className = 'ch-sync-pill pending';
-                el.textContent = `Offline · ${n} change${n === 1 ? '' : 's'} waiting`;
-                el.title = 'The dash is not connected. Your changes are saved here and will be offered to the dash when it reconnects.';
-            } else {
-                el.className = 'ch-sync-pill offline';
-                el.textContent = mirror ? 'Offline · your copy' : 'Offline · nothing saved yet';
-                el.title = mirror
-                    ? `Editing the copy saved from your dash on ${new Date(mirror.ts).toLocaleString()}. Changes are sent when it reconnects.`
-                    : 'Connect the dash once so its channel setup can be saved here for offline editing.';
-            }
-        }
-
-        function _chSyncPillClick() {
-            if (_chQueueCount() && _chOnline) _chPromptPendingSync(true);
-            else if (_chQueueCount()) _chPromptPendingSync(false);
-        }
-
         /* Replay the queue through the real endpoints, in order. */
         async function _chSendQueue() {
             const q = _chQueue();
@@ -21732,8 +21703,8 @@
             try {
                 const ok = await confirmAsync('Send your offline changes?',
                     `You changed ${n} thing${n === 1 ? '' : 's'} about this car's channels while the dash was disconnected. ` +
-                    `Send them to the dash now? Choosing Cancel keeps them here — you can send them later from the pill in the corner, ` +
-                    `or discard them by restoring the dash's own setup.`,
+                    `Send them to the dash now? Choosing Cancel keeps them here — you'll be asked again next time the ` +
+                    `dash reconnects, or you can discard them by restoring the dash's own setup.`,
                     'Send to dash');
                 if (!ok) return;
                 const res = await _chSendQueue();
@@ -21750,7 +21721,6 @@
                 _renderChannelDetail();
             } finally {
                 _chSyncPrompting = false;
-                _chRenderSyncPill();
             }
         }
 
@@ -21771,7 +21741,6 @@
                 let body = {};
                 try { body = JSON.parse((init && init.body) || '{}'); } catch (e) {}
                 _chQueuePush({ path, body, ts: Date.now(), label: _chOpLabel(path, body) });
-                _chRenderSyncPill();
                 return Promise.resolve(new Response(
                     JSON.stringify({ status: 'ok', queued: true }),
                     { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -21809,7 +21778,6 @@
                 if (typeof data.capacity === 'number' && data.capacity > 0)
                     _chCapacity = data.capacity;
                 _chStoreOfflineSnapshot();
-                _chRenderSyncPill();
                 _chUpdateCountLabel();
                 /* A dash is answering and there is work waiting — this is the
                  * prompt the customer asked for. Offered once per absence, so
@@ -21831,7 +21799,6 @@
                 _chSyncOffered = false;   /* offer again when it comes back */
                 _chLoadFromMirror();
                 _chUpdateCountLabel();
-                _chRenderSyncPill();
             }
         }
 
@@ -21886,10 +21853,9 @@
          * first weeks it only did so if you happened to REOPEN the page,
          * because this function swallowed every failure and never touched
          * _chOnline in either direction. Sitting on the Channels page, a
-         * dash dropping left the pill claiming "Live on the dash" while
-         * edits sailed into a dead socket; a dash returning never fired
-         * the prompt. Both transitions now happen right here, in place
-         * (ADR-0033). */
+         * dash dropping went unnoticed while edits sailed into a dead
+         * socket; a dash returning never fired the prompt. Both
+         * transitions now happen right here, in place (ADR-0033). */
         async function _pollChannelLive() {
             let data = null;
             try {
@@ -21940,15 +21906,14 @@
                 }
             } catch (e) {
                 if (_chOnline) {
-                    /* Lost the dash mid-view. Say so immediately: pill flips,
-                     * values blank (a stale number shown as current is how
-                     * someone trusts a reading the car never sent), and from
-                     * this moment edits queue instead of dying in a dead
-                     * fetch. Cache contents stay — they ARE the last truth. */
+                    /* Lost the dash mid-view. Say so immediately: values blank
+                     * (a stale number shown as current is how someone trusts
+                     * a reading the car never sent), and from this moment
+                     * edits queue instead of dying in a dead fetch. Cache
+                     * contents stay — they ARE the last truth. */
                     _chOnline = false;
                     _chSyncOffered = false;   /* offer again on return */
                     _chCache.forEach(c => { c.is_stale = true; c.current_value = null; });
-                    _chRenderSyncPill();
                     _chSyncAddMenuAvailability();
                     _refreshChannelsList();
                     _renderChannelDetail();
@@ -22090,21 +22055,6 @@
         /* Sidebar: every canonical channel + every custom channel, grouped
          * by purpose. Inactive (not yet in user's channels.json) rows fade
          * to 40% — click activates + auto-binds in one motion. */
-        /* Channel-list view (_chFilter declared with the other channel state
-         * above): 'configured' — this car — or 'unconfigured', the standard
-         * list you browse to add from. It is no longer a row of chips the
-         * user has to interpret; 'configured' is simply what the list is,
-         * and the catalogue is somewhere you go and come back from. */
-        function _setChFilter(f) {
-            _chFilter = f;
-            _refreshChannelsList();
-        }
-
-        function _chBrowseCatalogue() {
-            if (_chSelectMode) _chToggleSelectMode();
-            _setChFilter('unconfigured');
-        }
-
         function _chToggleMoreMenu(ev) {
             if (ev) ev.stopPropagation();
             const menu = document.getElementById('chMoreMenu');
@@ -22193,20 +22143,14 @@
                     || (c.signal || '').toLowerCase().includes(q)
                     || groupName.includes(q);
             };
-            const filtered = merged.filter(c => {
-                if (_chFilter === 'configured' && !c.is_active) return false;
-                if (_chFilter === 'unconfigured' && c.is_active) return false;
-                return matchesQuery(c);
-            });
-
-            /* Search must never hide a channel just because the current view
-             * is "Configured". Searching for something you haven't set up yet
-             * is exactly when you'd search. Those hits are appended under
-             * their own heading instead of being silently absent — the list
-             * leads with your car, but nothing is unreachable. */
-            const spillover = (q && _chFilter === 'configured')
-                ? merged.filter(c => !c.is_active && matchesQuery(c))
-                : [];
+            /* One list, always the whole list. Splitting it into "your car"
+             * and "the standard list" meant the answer to "where is X?"
+             * depended on a mode the user had to know about — and the
+             * catalogue rows are the whole point of a channel list you add
+             * from. Configured rows sort to the top of each group (see the
+             * bound-first sort in _renderGroups), so the car still leads
+             * without anything being hidden behind a view. */
+            const filtered = merged.filter(matchesQuery);
 
             const grouped = {};
             filtered.forEach(c => {
@@ -22229,21 +22173,10 @@
                      + `will be added when it reconnects.</div>`;
             }).join('');
 
-            /* Browsing the standard list is a place you went, so it says so
-             * and offers the way back. Without this the chip-less list would
-             * silently be showing ~100 channels the car doesn't have. */
-            const browseBanner = (_chFilter === 'unconfigured')
-                ? `<div class="ch2-browse-bar"><span>Showing the standard channel list — click one to see what it is, then Add it.</span>`
-                + `<button class="btn" style="padding:3px 10px; font-size:11px;" onclick="_setChFilter('configured')">Back to my car</button></div>`
-                : '';
-
             const order = Object.keys(grouped).map(Number).sort((a, b) => a - b);
-            if (!order.length && !spillover.length) {
-                const msg = (_chFilter === 'configured' && !q)
-                    ? 'No channels set up yet — use “+ Add channels” to bring some in.'
-                    : 'No matches.';
-                list.innerHTML = browseBanner + pendingBanner
-                    + `<div class="ch2-empty"><div class="ch2-empty-msg">${msg}</div></div>`;
+            if (!order.length) {
+                list.innerHTML = pendingBanner
+                    + `<div class="ch2-empty"><div class="ch2-empty-msg">No matches.</div></div>`;
                 return;
             }
             const _renderGroups = (order, grouped) => order.map(g => {
@@ -22305,17 +22238,7 @@
                     }).join('');
             }).join('');
 
-            let html = browseBanner + pendingBanner + _renderGroups(order, grouped);
-            if (spillover.length) {
-                const sg = {};
-                spillover.forEach(c => { (sg[c.group || 0] = sg[c.group || 0] || []).push(c); });
-                const sOrder = Object.keys(sg).map(Number).sort((a, b) => a - b);
-                html += `<div class="ch2-spill-head">Not set up yet — `
-                     +  `${spillover.length} match${spillover.length === 1 ? '' : 'es'} `
-                     +  `in the standard list. Click one to see what it is.</div>`
-                     +  _renderGroups(sOrder, sg);
-            }
-            list.innerHTML = html;
+            list.innerHTML = pendingBanner + _renderGroups(order, grouped);
         }
 
         /* Strip leading/trailing underscores + lowercase so names that
@@ -22589,6 +22512,11 @@
             _chSelectedId = null;
             _refreshChannelsList();
             _renderChannelDetail();
+            /* Same as _selectChannel: on the page the editor is a drawer that
+             * sits off-screen until opened. Without this the form rendered
+             * into a pane the user could not see, so "Custom channel…" looked
+             * like it did nothing at all. No-op in the modal. */
+            _chOpenDrawer('New channel');
         }
 
         function _chCancelNew() {
@@ -22633,6 +22561,7 @@
             _chSelectedId = null;
             _refreshChannelsList();
             _renderChannelDetail();
+            _chOpenDrawer('New channel');   /* see _chOpenNew — off-screen otherwise */
             /* Select the label so the first keystroke renames the copy. */
             const el = document.getElementById('chNewLabel');
             if (el) { el.focus(); el.select(); }
@@ -23848,7 +23777,6 @@
                     showToast(`Saved — ${n} channel${n === 1 ? '' : 's'} from ${_ecuImpSel.make} ${_ecuImpSel.version} will be added when the dash reconnects`, 'success');
                     closeEcuChannelImport();
                     _refreshChannelsList();   /* pending banner */
-                    _chRenderSyncPill();
                     return;
                 }
                 /* 202: the dash runs the apply on its LVGL task and answers
@@ -24982,6 +24910,11 @@
             await _fetchChannelsActive();
             _refreshChannelsList();
             _renderChannelDetail();
+            /* Nothing left to show: the drawer was displaying the channel that
+             * just went away. Leaving it open parked a stale title over "Pick
+             * a channel from the list" and covered the list the user now has
+             * to go back to. */
+            _chCloseDrawer();
         }
 
         /* ── Data Logger modal ──────────────────────────────────────── */
