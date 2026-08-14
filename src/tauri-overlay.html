@@ -201,10 +201,13 @@
             </div>
 ##[ end ]##
 
-#! Appended after the last firmware setup section (Developer Options)
+#! Appended after the last firmware setup section (Developer options).
+#! Re-anchored 2026-08-14: that section gained a second card (Load layout
+#! JSON) when Setup was regrouped, so "Bench & preview" stopped being the
+#! last stat line before the section closes (ADR-0039).
 ##[ block setup-cards ]##
 ##[ anchor ]##
-                <div class="card-stat">Bench &amp; preview</div>
+                <div class="card-stat">Paste &amp; preview</div>
             </div>
         </div>
 ##[ insert-after ]##
@@ -3489,7 +3492,14 @@
                     </div>
                 </div>
                 <div class="gp-vtile" id="gpVideoTile">
-                    <video id="gpVideo" playsinline controls></video>
+                    <!-- No `controls`: the bar at the bottom is the transport.
+                         The browser's own bar was a second one sitting on top
+                         of the picture with its own play button and its own
+                         scrub, competing with the dock and winning — the video
+                         drove the timeline and the dock could not move it.
+                         Volume is the one thing that bar provided which the
+                         dock does not, so the panel carries a mute button. -->
+                    <video id="gpVideo" playsinline></video>
                     <canvas id="gpVideoOv"></canvas>
                     <div class="gp-vtile-btns">
                         <button class="gp-mapbtn" onclick="gpViewFocus('video')"
@@ -3499,7 +3509,7 @@
                 </div>
                 <div class="gp-setup" id="gpSetupWrap"><div class="gp-setup-col" id="gpSetup"></div></div>
                 <canvas class="gp-strip" id="gpStrip"></canvas>
-                <canvas class="gp-nav" id="gpNav" title="The whole lap. Drag the bright window to move what the rack above is showing; drag its edges to widen or narrow it; double-click to see the lap again."></canvas>
+                <canvas class="gp-nav" id="gpNav" title="The whole lap. Drag across it to pick the stretch the rack above shows; drag the bright window to move it, or its edges to widen or narrow it; double-click to see the lap again."></canvas>
                 <div class="gp-playbar" id="gpPlaybar">
                     <div class="gp-modes" id="gpModes">
                         <button data-m="lap" onclick="gpMapModeSet('lap')"
@@ -3514,7 +3524,7 @@
                                 title="Colour the line by how far it ran from the comparison lap's line, and which side">Line</button>
                     </div>
                     <button class="gp-lanesbtn" id="gpPlotBtn" onclick="gpPlotModeToggle()"></button>
-                    <button class="gp-lanesbtn" id="gpLanesBtn" onclick="gpChanPopToggle()"></button>
+                    <button class="gp-lanesbtn" id="gpLanesBtn" onclick="gpChanPopToggle(this)"></button>
                     <span class="gp-sep"></span>
                     <!-- The transport cluster: the NLE grammar, icon for icon.
                          SVGs rather than glyphs so the geometry is ours.
@@ -7744,10 +7754,22 @@
             _gpUnits = u;
             try { window.localStorage.setItem(GP_UNITS_LS, u); } catch (e) { }
             gpSyncUnitBtns();
-            /* Every cached render carries formatted strings, so they all go. */
-            gp.stripCache = null; gp.stripZoom = null;
+            /* Every cached render carries formatted strings, so they all go.
+               The navigator's window does NOT: it is a range of sample
+               indices, and no sample moved because speeds are spelled in mph
+               now. Clearing it here threw away a zoom the user had set up,
+               for nothing. */
+            gp.stripCache = null;
             gp.coach = null; gp.chan = null; gp.chanKey = "";
             gpBuildRail(); gpDrawTrace(); gpRenderInspector();
+            /* Analyse is panels (ADR-0025), and every one of them prints
+               speeds, distances and temperatures. gpRenderInspector draws the
+               rail no view renders any more, so switching units left the lap
+               report, the stat tiles, the splits grid and the corner table on
+               the OLD units while the dock — which has its own render — showed
+               the new ones: 123 mph in the dock and 199 km/h in the panel next
+               to it, until some unrelated click happened to rebuild the grid. */
+            if (gp.view === "session" && typeof gpRenderGrid === "function") gpRenderGrid();
         };
 
         function gpSyncUnitBtns() {
@@ -9493,6 +9515,21 @@
            Speed is in the READING units and the header says which, because a
            column of bare numbers with a unit nobody recorded is how data gets
            misread a year later. Position stays raw degrees. */
+        /* A CSV column header is name_unit, and a unit written in symbols does
+           not survive [^\w]: "%" left the throttle column called "Throttle_",
+           and "°/s" collapsed to "_s" — which, opened in Excel a year from now,
+           reads as SECONDS on a channel measured in degrees per second. Spell
+           the symbol units out, and when nothing survives append nothing rather
+           than a bare underscore. Ordinary word units ("g", "rpm", "kPa") and
+           "km/h" come out exactly as they always did. */
+        function gpCsvUnit(u) {
+            return String(u === undefined || u === null ? "" : u)
+                .replace(/°\s*\/\s*s/g, "dps")
+                .replace(/°/g, "deg")
+                .replace(/%/g, "pct")
+                .replace(/[^\w]+/g, "");
+        }
+
         function gpCsvBuild() {
             var rows = gp.trace || [];
             if (!rows.length) return null;
@@ -9525,7 +9562,8 @@
                        (gpHaveGyro() ? ",car_yaw_dps" : "");
             canLanes.forEach(function (l) {
                 var nm = String(l.label).replace(/[^\w]+/g, "_").replace(/^_|_$/g, "");
-                head += "," + nm + (l.unit ? "_" + String(l.unit).replace(/[^\w]+/g, "") : "");
+                var u = gpCsvUnit(l.unit);
+                head += "," + nm + (u ? "_" + u : "");
             });
             var out = [head];
             for (var i = 0; i < rows.length; i++) {
@@ -10766,7 +10804,28 @@
                 var laps = gp.traceLaps.filter(function (l) { return !l.ghost; });
                 var times = laps.map(function (l) { return gpSecs(gp.trace, l.from, l.to); });
                 var best = times.length ? Math.min.apply(null, times) : null;
-                if (meta.lapCount !== times.length || (gpN(meta.bestLapS) || 0) !== (best || 0)) {
+                /* And the track those laps were timed against, when the stored
+                   copy never named one. A null trackId means "never said" (see
+                   gpSessionTrack: noTrack is the marker for a deliberate no),
+                   and such a session BORROWS the active track to cut its laps —
+                   which gpAutoSetUp may have just recognised from where the
+                   recording was driven. The borrow was never written down,
+                   though, and the history trend filters session metadata
+                   strictly on trackId: so every imported recording — every
+                   .rdmsession from another PC, and every sim stint from
+                   ac_record.py, all of which carry trackId: null — stayed
+                   invisible to "History at this track" no matter how many days
+                   were saved, having been recognised, timed and analysed
+                   perfectly well. Laps on the board are the evidence the borrow
+                   was right: those gates cut THIS recording. */
+                var bTrk = meta.noTrack ? null : gpActiveTrack();
+                var adopt = (!meta.trackId && bTrk && times.length) ? bTrk : null;
+                if (meta.lapCount !== times.length || (gpN(meta.bestLapS) || 0) !== (best || 0) || adopt) {
+                    if (adopt) {
+                        meta.trackId = adopt.id;
+                        meta.trackName = adopt.name;
+                        meta.trial = gpIsTrial(adopt);
+                    }
                     meta.lapCount = times.length;
                     meta.bestLapS = best;
                     meta.lapTimesS = times.map(function (t) { return Math.round(t * 1000) / 1000; });
@@ -10785,7 +10844,15 @@
                                      s: Math.round(gpSecs(gp.trace, c.entry, c.exit) * 1000) / 1000 };
                         });
                     var inList = (gp.sessions || []).filter(function (x) { return x.id === meta.id; })[0];
-                    if (inList) { inList.lapCount = meta.lapCount; inList.bestLapS = meta.bestLapS; inList.lapTimesS = meta.lapTimesS; inList.corners = meta.corners; }
+                    if (inList) {
+                        inList.lapCount = meta.lapCount; inList.bestLapS = meta.bestLapS;
+                        inList.lapTimesS = meta.lapTimesS; inList.corners = meta.corners;
+                        /* The trend reads gp.sessions, not the store, so a track
+                           healed only into the store would not show up until the
+                           next reload. */
+                        inList.trackId = meta.trackId; inList.trackName = meta.trackName;
+                        inList.trial = meta.trial;
+                    }
                     gpStore.putMeta(meta);
                 }
                 gpDrawTrace(); gpFitTrace();
@@ -11785,7 +11852,15 @@
             { id: "times", label: "Lap times" },
             { id: "report", label: "Lap report" },
             { id: "corners", label: "Where the time went" },
-            { id: "splits", label: "Splits" }
+            { id: "splits", label: "Splits" },
+            /* "Am I quicker here than I was in March?" — history across saved
+               sessions at this track. It shipped as part of the old one-column
+               Analyse inspector, and ADR-0025 turned that column into panels
+               without giving this one a panel: gpHistoryHtml's only caller went
+               with the inspector, so the trend, the personal best and the
+               since-last-visit corner deltas became unreachable from every
+               screen while the code sat there looking present. */
+            { id: "history", label: "History at this track" }
         ];
         /* ---- the mosaic (ADR-0026) -----------------------------------------
            ADR-0025's arrangement was strictly row-major: every row spanned
@@ -12030,8 +12105,14 @@
         };
         window.gpLapRef = function (i) {
             i = parseInt(i, 10);
-            window.gpCompareLap(i === gp.cmpLap ? -1 : i);
-            if (i !== gp.cmpLap) gpShownLaps()[i] = true;
+            /* Read the toggle BEFORE gpCompareLap moves gp.cmpLap. Testing it
+               afterwards asked "is this lap the reference" of a variable that
+               had just been set to exactly that, so the answer was inverted in
+               both directions: setting a reference never ticked it onto the
+               map, and clearing one ticked it. */
+            var off = (i === gp.cmpLap);
+            window.gpCompareLap(off ? -1 : i);
+            if (!off) gpShownLaps()[i] = true;
             gpRenderGrid();
         };
 
@@ -12773,7 +12854,7 @@
                      "' onclick=\"gpPlotModeSet('tiled')\" title='One lane per channel, each with its own frame and scale'>Stacked</button>" +
                      "<button class='" + (over ? "on" : "") +
                      "' onclick=\"gpPlotModeSet('over')\" title='Every channel in one well, so their shapes line up against each other'>Combined</button>" +
-                     "<button onclick='gpChanPopToggle()' title='Choose which channels the rack draws'>Channels</button>" +
+                     "<button onclick='gpChanPopToggle(this)' title='Choose which channels the rack draws'>Channels</button>" +
                      "</div>";
             }
             h += "<span class='sp'></span>";
@@ -12829,7 +12910,17 @@
                recording opens. The recording underneath was therefore
                unplayable: verified on the bench at 1:17.40 of a 3:34.72 drive.
                It belongs here, where a run is chosen. */
-            var wholeMin = gpSecs(gp.trace, 0, gp.trace.length - 1) / 60;
+            /* To the end of THIS recording, not to the end of the array: a
+               ghost lap from another day is appended onto gp.trace behind
+               gp.ghostFence, and its samples carry that day's clock. Measuring
+               to trace.length-1 therefore timed the open recording from its
+               own first sample to a sample recorded months earlier or later —
+               it read 1.9 min on a 5.6 min session the moment a ghost was
+               loaded, and against a genuinely different day it is whatever the
+               gap between the two days happens to be. gpLapRange and eight
+               other readers already fence this off; this line did not. */
+            var wholeEnd = (gp.ghostFence !== null ? gp.ghostFence : gp.trace.length) - 1;
+            var wholeMin = gpSecs(gp.trace, 0, wholeEnd) / 60;
             h += "<button class='gpb-lapline" + (gp.selLap < 0 ? " sel" : "") + "' data-gp-lapline='-1'" +
                  " title='Play and analyse the entire recording, not one " + gpRunWord() + "'>" +
                  "<i class='sw' style='background:var(--gpb-n400)'></i>" +
@@ -12908,28 +12999,84 @@
 
         function gpPanelCornersHtml() {
             var ops = gpCoachOps();
-            if (!ops || !ops.length)
-                return gpPanelEmpty("Pick a " + gpRunWord() + " and a REF in Lap times, and this ranks every corner.");
-            var mx = 0;
-            ops.forEach(function (o) { mx = Math.max(mx, Math.abs(o.total_s)); });
+            if (!ops || !ops.length) {
+                /* Four different reasons reach here and they want four
+                   different answers. One sentence covered them all — "Pick a
+                   lap and a REF in Lap times" — which with nothing open at all
+                   asks you to pick from an empty list, and with a lap already
+                   set as its own reference tells you to do what you have just
+                   done. The last two readings are gpRenderCoach's, which said
+                   it properly and became unreachable with the inspector. */
+                if (!(gp.trace && gp.trace.length)) return gpPanelEmpty("No recording open.");
+                if (!(gp.traceLaps || []).filter(function (l) { return !l.ghost; }).length)
+                    return gpPanelEmpty(gpNoLapsWhy());
+                if (gp.selLap >= 0 && gp.selLap === gp.cmpLap)
+                    return gpPanelEmpty("This is the reference " + gpRunWord() + " itself — pick a different one " +
+                                        "to compare it against.");
+                if (gp.selLap < 0 || gp.cmpLap < 0)
+                    return gpPanelEmpty("Pick a " + gpRunWord() + " and a REF in Lap times, and this ranks every corner.");
+                return gpPanelEmpty("No corners could be matched between these two " + gpRunWord() + "s. That " +
+                                    "usually means one of them left the circuit or is not complete.");
+            }
+            var mx = 0, avail = 0;
+            ops.forEach(function (o) {
+                mx = Math.max(mx, Math.abs(o.total_s));
+                if (o.total_s > 0) avail += o.total_s;
+            });
             mx = Math.max(0.05, mx);
+            /* What the corners add up to, in the Corners view's own words. The
+               rows alone cannot answer "so where did the lap go?" — a lap six
+               tenths slower can have every corner on pace, because the corners
+               are not the whole lap. Without this the panel invited the
+               opposite conclusion. */
             var h = "<div class='gpb-pscroll' style='padding:8px 12px'>" +
                 "<div style='display:flex;justify-content:space-between;font-size:10px;letter-spacing:0.1em;" +
                 "text-transform:uppercase;color:var(--gpb-muted);padding:2px 0 6px'>" +
-                "<span>" + gpRunWord(true) + " " + (gp.selLap + 1) + " vs " + gpEsc(gpRefName()) + " &mdash; per corner</span>" +
+                "<span>" + gpRunWord(true) + " " + (gp.selLap + 1) + " vs " + gpEsc(gpRefName()) +
+                " &middot; " + avail.toFixed(2) + " s available</span>" +
                 "<span>&larr; lost &middot; gained &rarr;</span></div>";
             ops.forEach(function (o) {
                 var v = o.total_s;                      /* + is time LOST */
                 var w = Math.min(50, Math.abs(v) / mx * 50).toFixed(1);
+                /* Signed the way the whole rest of the app signs a time delta:
+                   PLUS is slower. The lap list says a slower lap is "+0.56",
+                   the dock says "Δ vs lap 1 +0.56 s", the Corners view's own
+                   table heads the column "Time lost" and prints "+0.12", and
+                   the Lap report's "Where the time went" prints "+0.12" for
+                   the same corner from the same gpCoachOps — while this panel
+                   printed that corner as "−0.12". Two panels, one number,
+                   opposite signs, on screen together: a corner you lost two
+                   tenths in read as a corner you gained them in. The bar keeps
+                   its own geometry, which the header explains — lost grows
+                   left in solid red, gained grows right. */
                 h += "<div class='gpb-div-row' data-gp-cjump='" + o.selApex + ":" + o.selEntry + ":" + o.selExit +
                      "' style='cursor:pointer'>" +
                      "<span class='lb'>T" + o.n + "</span><span class='gpb-div-track'><i class='mid'></i>" +
                      (v > 0 ? "<i class='neg' style='width:" + w + "%'></i>"
                             : "<i class='pos' style='width:" + w + "%'></i>") +
-                     "</span><span class='vl'>" + (v > 0 ? "&minus;" : "+") + Math.abs(v).toFixed(2) + "</span></div>";
+                     "</span><span class='vl'>" + gpSigned(v, 2, "") + "</span></div>";
             });
             h += "</div>";
             return h;
+        }
+
+        /* gpHistoryHtml answers with "" for three different reasons — no
+           recording open, a recording not tied to a track, or a track with no
+           timed lap — and a panel that goes blank says none of them. Each one
+           is a different thing for the user to do about it, so each gets said.
+           The SVG sparkline inside needs no post-render hook, which is why this
+           can be plain innerHTML like every other panel. */
+        function gpPanelHistoryHtml() {
+            if (!(gp.trace && gp.trace.length)) return gpPanelEmpty("No recording open.");
+            var h = gpHistoryHtml();
+            if (h) return "<div class='gpb-pscroll' style='padding:6px 10px'>" + h + "</div>";
+            var meta = (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0];
+            if (!meta) return gpPanelEmpty("This recording has not been saved yet, so there is no session to trend.");
+            if (!meta.trackId)
+                return gpPanelEmpty("This recording is not tied to a track yet. Name the track in Sessions " +
+                                    "and the trend across your days here builds itself.");
+            return gpPanelEmpty("No timed " + gpRunWord() + " in this session yet, so there is nothing to compare " +
+                                "against your other days at " + gpEsc(meta.trackName || "this track") + ".");
         }
 
         function gpPanelEmpty(msg) {
@@ -12955,6 +13102,10 @@
                          "<span id='gpVideoOffLab'>" + (v.offsetMs / 1000).toFixed(2) + " s</span></label>";
                     h += "<button class='" + (v.follow ? "on" : "") + "' onclick='gpVideoFollowToggle()' " +
                          "title='Keep the picture on the playhead'>" + (v.follow ? "Following" : "Follow") + "</button>";
+                    /* The browser's own control bar is gone (the dock is the
+                       transport), and volume went with it. */
+                    h += "<button onclick='gpVideoMute()' title='Mute the footage'>" +
+                         (gp.cam && gp.cam.muted ? "Muted" : "Sound") + "</button>";
                     /* No separate "Auto" button: the Sync chooser below offers
                        the camera clock as one named option among the others,
                        which is the same action with the reason attached. */
@@ -13110,6 +13261,7 @@
             else if (p.type === "corners") h2 += gpPanelCornersHtml();
             else if (p.type === "splits") h2 += "<div class='gpb-pscroll' style='padding:6px 10px'>" +
                 (gp.trace && gp.trace.length ? gpSplitsHtml() : gpPanelEmpty("No recording open.")) + "</div>";
+            else if (p.type === "history") h2 += gpPanelHistoryHtml();
             else if (p.type === "video") h2 += gpPanelVideoHtml();
             else if (p.type === "graph") h2 += "<div class='gpb-graphwrap'>" + gpPanelGraphLegendHtml() + "</div>";
             return h2 + "</div></section>";
@@ -14376,16 +14528,28 @@
             if (isNaN(li) || !gp.traceLaps[li]) return;
             gp.selLap = li;
             gp.insightCursor = -1;
+            var rng = null;
             if (sectorIdx === undefined || sectorIdx === null) {
                 gp.stripZoom = null;
             } else {
-                var rng = gpSectorRange(gp.traceLaps[li], parseInt(sectorIdx, 10));
+                rng = gpSectorRange(gp.traceLaps[li], parseInt(sectorIdx, 10));
                 gp.stripZoom = rng ? { lap: li, from: rng.from, to: rng.to } : null;
             }
-            gp.playIdx = gpLapRange().from;
+            /* Clicking a sector goes TO that sector. It used to zoom the rack
+               onto the stretch and then park the playhead back at the start
+               line, so the map, the video and every at-cursor number described
+               a different part of the lap from the one filling the screen.
+               A whole-lap row still lands on the start line, which is that
+               row's own beginning. */
+            gp.playIdx = rng ? rng.from : gpLapRange().from;
             gpPlayStop();
             gpSyncScrub();
+            gpVideoFollowSeek(true);
             gpDrawTrace(); gpFitTrace(); gpDrawStrip(); gpRenderInspector();
+            /* Analyse is panels (ADR-0025), and this changes the analysed lap:
+               without a grid render the lap times, the report and the corner
+               table go on showing the lap that was open before. */
+            if (gp.view === "session") gpRenderGrid();
         };
 
         /* ---- Tooltips ------------------------------------------------------
@@ -15999,8 +16163,17 @@
                 if (f === null) return;
                 var win = gpNavWin();
                 win0 = win;
+                /* Whole lap showing: there is nothing to pan — every drag was
+                   clamped straight back to the full width, so dragging across
+                   the middle of the strip did NOTHING, with no feedback. The
+                   only way in was a 6 px edge sliver at the very end of the
+                   canvas, which is a target you have to already know about.
+                   From here a drag draws the window instead, which is the
+                   gesture the strip looks like it wants. */
+                var whole = win.a <= 0.0005 && win.b >= 0.9995;
                 if (edgePx(ev, win.a) <= GP_NAV_EDGE) mode = "a";
                 else if (edgePx(ev, win.b) <= GP_NAV_EDGE) mode = "b";
+                else if (whole) { mode = "band"; grabF = f; }
                 else if (f > win.a && f < win.b) { mode = "pan"; grabF = f - win.a; }
                 else {
                     /* Outside: centre the current width on where they clicked
@@ -16019,7 +16192,14 @@
                 if (!mode) return;
                 var f = fracAt(ev);
                 if (f === null) return;
-                if (mode === "pan") {
+                if (mode === "band") {
+                    /* Anchored on where the press landed, so the drag can go
+                       either way. A press that never moves is a click, and a
+                       click on the whole lap means nothing — hold it there
+                       until it has actually travelled. */
+                    if (Math.abs(f - grabF) < 0.005) return;
+                    gpNavSet(Math.min(grabF, f), Math.max(grabF, f));
+                } else if (mode === "pan") {
                     var wid = win0.b - win0.a;
                     gpNavSet(f - grabF, f - grabF + wid);
                 } else if (mode === "a") {
@@ -16413,19 +16593,37 @@
         /* Clicking an opportunity puts you at that corner: playhead on the apex,
            map framed on the corner. Reading a number is not the same as seeing
            what you did. */
+        /* The sample roughly `secs` before `idx`, never past the start of
+           whatever is being played. Walked rather than computed because the
+           sample rate is not a constant — a VBO import is 10 Hz, a puck
+           download 25, and the puck skips samples while stationary. */
+        function gpIdxSecondsBefore(idx, secs) {
+            var rows = gp.trace, r = gpLapRange();
+            if (!rows || !rows.length) return idx;
+            var i = Math.max(r.from, Math.min(r.to, idx));
+            while (i > r.from && gpSecs(rows, i, idx) < secs) i--;
+            return i;
+        }
+
+        var GP_CORNER_RUNUP = 2.0;      /* seconds of approach before a corner */
+
+        /* Clicking a corner sets you up to WATCH it, and nothing else.
+         *
+         * It used to do two other things, both unwanted: it parked the
+         * playhead on the apex, so pressing play started halfway through the
+         * corner with the braking already over; and it re-framed the map and
+         * the rack onto the corner, throwing away whatever view had been set
+         * up — click three corners in a row and the map had zoomed three
+         * times. The zoom is the user's; a jump does not get to spend it.
+         *
+         * So: land a couple of seconds before the entry, ready to play into
+         * the corner, and leave both zooms exactly as they were.
+         */
         window.gpCoachJump = function (focus, a, b) {
-            var r = gpLapRange(), i;
+            var r = gpLapRange();
             gpPlayStop();
-            window.gpScrubTo(Math.max(0, Math.min(r.to - r.from, focus - r.from)));
-            if (a < b) {
-                gp.stripZoom = { lap: gp.selLap, from: a, to: b };
-                gpDrawStrip();
-                if (gp.map) {
-                    var pts = [];
-                    for (i = a; i <= b; i++) pts.push([gp.trace[i].lat, gp.trace[i].lon]);
-                    if (pts.length > 1) gp.map.fitBounds(L.latLngBounds(pts).pad(0.6));
-                }
-            }
+            var target = (a < b) ? gpIdxSecondsBefore(a, GP_CORNER_RUNUP) : focus;
+            window.gpScrubTo(Math.max(0, Math.min(r.to - r.from, target - r.from)));
         };
 
         /* Pausing the node's log, and watching it live, used to be one button
@@ -19791,6 +19989,7 @@
          * ═════════════════════════════════════════════════════════════════ */
         var GP_TRACE_PANE = "gpTracePane";
         var GP_TRACE_CASE = "#0a0c0e";      /* the dark casing under the bright lap */
+        var GP_TRACE_WHOLE = "#f2f2f3";     /* the whole recording, when no lap owns it */
 
         var GpTraceLayer = L.Layer.extend({
             options: { pane: GP_TRACE_PANE, padding: 0.25 },
@@ -19813,7 +20012,19 @@
             },
 
             getEvents: function () {
+                /* zoomend MUST reset. A zoom leaves a CSS scale on the canvas
+                   (_onZoom/_onAnimZoom transform it rather than redrawing, so
+                   the picture tracks the animation), and only _reset clears
+                   that and re-projects at the new zoom. Leaving it to moveend
+                   is not enough: skip one — as _onMoveEnd is entitled to when
+                   the viewport is still inside the drawn region — and the
+                   canvas stays scaled, so the trace draws as a magnified loop
+                   with no relation to the road under it while the car marker,
+                   which Leaflet positions itself, stays correct. A redraw does
+                   not repair it either, because a redraw does not touch the
+                   element's transform. */
                 var ev = { viewreset: this._reset, zoom: this._onZoom,
+                           zoomend: this._reset,
                            moveend: this._onMoveEnd, resize: this._reset };
                 if (this._zoomAnimated) ev.zoomanim = this._onAnimZoom;
                 return ev;
@@ -19905,15 +20116,36 @@
                 ctx.lineJoin = "round";
                 ctx.lineCap = "round";
                 var org = this._map.getPixelOrigin();
-                for (var i = 0; i < this._strands.length; i++)
-                    this._strand(this._strands[i], pr, org.x, org.y);
+                this._wk = gpTraceWidthScale(this._map);
+                /* Every casing FIRST, then every line. A casing is wider than
+                   the line it backs, so drawing them strand by strand lets one
+                   lap's dark backing paint over the COLOUR of the lap drawn
+                   before it. With several laps within a pixel of each other at
+                   circuit zoom the whole bundle goes dark and only the last one
+                   drawn keeps its colour — which is exactly "why is my trace
+                   all one colour when I have three laps ticked". */
+                var i;
+                for (i = 0; i < this._strands.length; i++)
+                    this._strand(this._strands[i], pr, org.x, org.y, 0);
+                for (i = 0; i < this._strands.length; i++)
+                    this._strand(this._strands[i], pr, org.x, org.y, 1);
                 ctx.setLineDash([]);
                 ctx.globalAlpha = 1;
             },
 
-            _strand: function (st, pr, ox, oy) {
+            _strand: function (st, pr, ox, oy, phase) {
                 var ctx = this._ctx, ax = pr.ax, ay = pr.ay;
                 if (st.to <= st.from || st.to >= ax.length) return;
+                /* Thin out as the view pulls back. The floor is per strand so
+                   the hierarchy survives: the analysed lap stays the thickest
+                   line on the map even when everything is a hairline. */
+                var wk = this._wk === undefined ? 1 : this._wk;
+                var sw = Math.max(st.minW || GP_TRACE_MIN_W, st.width * wk);
+                var sc = st.casing ? st.casing * wk : 0;
+                /* A dark casing under a hairline is not a casing, it is a
+                   second line twice as wide — exactly the fattening this
+                   scaling exists to undo. Below a useful thickness, drop it. */
+                if (sc < 0.6) sc = 0;
                 /* A circuit is far bigger than the window at corner zoom and
                    most of it is off-screen, so segments with both ends past
                    the same edge are dropped before they reach the context. */
@@ -19951,8 +20183,11 @@
                 var flat = function () { return GP_TRACE_CASE; };
                 var own = typeof st.col === "function" ? st.col
                                                       : function () { return st.col; };
-                if (st.casing) pass(st.width + st.casing, flat, st.caseAlpha || 0.5, null);
-                pass(st.width, own, st.alpha === undefined ? 1 : st.alpha, st.dash);
+                if (phase === 0) {
+                    if (sc) pass(sw + sc, flat, st.caseAlpha || 0.5, null);
+                    return;
+                }
+                pass(sw, own, st.alpha === undefined ? 1 : st.alpha, st.dash);
             }
         });
 
@@ -20014,6 +20249,38 @@
            photo of gravel is a coin toss; the same line with a hairline of
            near-black under it reads on anything. */
         var GP_LAP_CASE = 1.8;
+
+        /* ---- a line is a width on the GROUND, not on the screen ------------
+         * A 4 px stroke is about a car's width at corner zoom, which is what
+         * it is meant to read as. Zoom out to the whole circuit and the same
+         * 4 px is a good fraction of the track's apparent width: four laps a
+         * metre apart merge into one fat worm and the map stops answering the
+         * question it exists for, which is "whose line is this".
+         *
+         * So the width tracks metres per pixel and thins as you pull back,
+         * floored per strand so a line never vanishes entirely. GP_TRACE_MPP
+         * is the scale at which the drawn widths are taken at face value —
+         * roughly a corner filling the panel.
+         */
+        var GP_TRACE_MPP = 0.55;        /* metres per pixel at full width */
+        var GP_TRACE_MIN_W = 1.0;       /* never thinner than a hairline */
+
+        function gpTraceWidthScale(map) {
+            if (!map || !map.getSize) return 1;
+            try {
+                var sz = map.getSize();
+                if (!sz.x) return 1;
+                var y = Math.round(sz.y / 2);
+                var a = map.containerPointToLatLng([0, y]);
+                var b = map.containerPointToLatLng([100, y]);
+                var mpp = map.distance(a, b) / 100;
+                if (!isFinite(mpp) || mpp <= 0) return 1;
+                /* Never THICKER than authored: zooming into a corner should
+                   not inflate the line into a sausage that hides the line
+                   difference at the other end of the scale. */
+                return Math.max(0.18, Math.min(1, GP_TRACE_MPP / mpp));
+            } catch (e) { return 1; }
+        }
 
         /* The key. Only worth the space once more than one lap is drawn, and
            it says which line is the SUBJECT (thick) and which is the
@@ -20266,7 +20533,14 @@
                    modes ask "what was the car doing here"; this one asks
                    "whose line is this", and answering both at once means
                    answering neither. */
-                var own = gpLapColour(gp.selLap < 0 ? 0 : gp.selLap);
+                /* With no lap selected the subject is the WHOLE recording, and
+                   "whose line is this" has no answer — so it must not answer
+                   lap 1's. It used to take gpLapColour(0), which painted the
+                   entire drive in the first lap's red, last and widest, over
+                   every ticked lap: tick three laps and the map showed one red
+                   line. Neutral, and pushed UNDERNEATH the ticked laps below,
+                   so the laps you asked to see are the coloured things on it. */
+                var own = gp.selLap < 0 ? GP_TRACE_WHOLE : gpLapColour(gp.selLap);
                 value = function () { return 0; };
                 colour = function () { return own; };
             } else if (mode === "speed") {
@@ -20322,13 +20596,23 @@
                whole purpose. Which lap it is comes from the key and from the
                playhead sitting on it. */
             var subject = mode === "lap";
-            strands.push({
+            var subjectStrand = {
                 from: r.from, to: r.to,
                 width: subject ? 2.8 : 4.2,
+                /* Floored above the others so the lap being analysed is still
+                   the thickest line on the map once everything has thinned to
+                   hairlines. */
+                minW: 1.6,
                 casing: subject ? GP_LAP_CASE : 3.4,
                 caseAlpha: subject ? 0.45 : 0.52,
                 col: function (i) { return colour((value(i - 1) + value(i)) / 2); }
-            });
+            };
+            /* On top when it is a LAP — the thing being studied wins. At the
+               bottom when it is the whole recording, because then it is the
+               ground the ticked laps are drawn on, not a subject competing
+               with them. */
+            if (gp.selLap < 0) strands.unshift(subjectStrand);
+            else strands.push(subjectStrand);
 
             cv.setStrands(strands);
             gpDrawLegend();
@@ -21252,6 +21536,7 @@
             else if (what === "back") gp.playIdx = Math.max(r.from, gp.playIdx - 1);
             else if (what === "fwd") gp.playIdx = Math.min(r.to, gp.playIdx + 1);
             gpSyncScrub();
+            gpVideoFollowSeek(true);
             gpDrawPlayhead();
         };
 
@@ -21264,6 +21549,9 @@
         window.gpScrubTo = function (v) {
             var r = gpLapRange();
             gp.playIdx = Math.max(r.from, Math.min(r.to, r.from + (parseInt(v, 10) || 0)));
+            /* The bar moved the playhead on purpose — take the picture with
+               it, playing or not. */
+            gpVideoFollowSeek(true);
             gpDrawPlayhead();
         };
         window.gpPlayRateSet = function (v) {
@@ -21969,6 +22257,7 @@
                          autoT0: null, offsetMs: 0, follow: gp.cam.follow, probing: true };
             var el = document.getElementById("gpVideo");
             if (el) {
+                el.muted = !!gp.cam.muted;
                 el.src = gp.video.url;
                 /* gpVideoFollowSeek refuses to move a video whose duration it
                    does not know yet, and a file that has only just been handed
@@ -22073,7 +22362,17 @@
             if (!gp.video) return;
             gp.video.follow = !gp.video.follow;
             gpRenderInspector();
-            gpVideoFollowSeek();
+            gpRenderGridSoft();
+            gpVideoFollowSeek(true);
+        };
+
+        window.gpVideoMute = function () {
+            if (!gp.cam) gp.cam = gpCamLoad();
+            gp.cam.muted = !gp.cam.muted;
+            try { window.localStorage.setItem(GP_CAM_LS, JSON.stringify(gp.cam)); } catch (e) { }
+            var el = document.getElementById("gpVideo");
+            if (el) el.muted = !!gp.cam.muted;
+            gpRenderGridSoft();
         };
 
         /* One place decides what the viewer shows: which tiles exist, which
@@ -22099,13 +22398,18 @@
             gpViewerSync();
         };
 
-        function gpVideoFollowSeek() {
+        function gpVideoFollowSeek(force) {
             var v = gp.video, el = document.getElementById("gpVideo");
             if (!v || !el || !v.follow || v.driving) return;
-            /* While the video is PLAYING it is the master — it drives the
-               timeline through timeupdate, and seeking it from here every
-               playhead tick would stutter the picture it is busy decoding. */
-            if (!el.paused) return;
+            /* While the video is playing it is the CLOCK — it advances the
+               timeline through timeupdate, and seeking it on every playhead
+               tick would stutter the picture it is busy decoding.
+               It is not the TRANSPORT. A deliberate move from the bar at the
+               bottom — scrub, step, jump — outranks the clock and the picture
+               follows it. Without this the dock was simply ignored while the
+               footage played: ask for five minutes in and timeupdate wrote the
+               playhead straight back on the next frame. */
+            if (!force && !el.paused) return;
             var tsec = gpVideoTimeFor(gp.playIdx);
             if (tsec === null || !isFinite(el.duration)) return;
             var c = Math.max(0, Math.min(el.duration, tsec));
@@ -22344,6 +22648,15 @@
                index-keyed caches would serve the old rows. Cleared, always. */
             gpGhostCaches();
             gpDrawTrace(); gpDrawStrip(); gpBuildRail(); gpRenderInspector();
+            /* Analyse is panels (ADR-0025), and this changes the REFERENCE —
+               which the lap list marks, the dock names, the corner table
+               compares against and the day list ticks. Without a grid render,
+               "compare against another day" looked like a button that did
+               nothing at all: the map quietly repainted against the other day
+               while every panel went on saying "vs lap 1", until some unrelated
+               click happened to rebuild the grid and the whole change appeared
+               at once. */
+            gpRenderGridSoft();
         }
 
         window.gpGhostLap = function (li) { gpGhostShow(parseInt(li, 10)); };
@@ -25498,11 +25811,33 @@
         }
 
         /* ---- the list, floating over the rack ----------------------------- */
-        window.gpChanPopToggle = function () {
+        window.gpChanPopToggle = function (btn) {
             gp.chanPop = !gp.chanPop;
+            /* Remember WHICH button opened it, because two do and only one of
+               them is laid out at a time. See gpChanPopAnchor. */
+            gp._chanPopBtn = gp.chanPop ? (btn || null) : null;
             gpChanPopRender();
             gpSyncLanesBtn();
         };
+
+        /* What the list hangs off. Live's Lanes button and the graph panel's
+           Channels button both open it, and in Analyse the Live one is still IN
+           the document — merely collapsed to 0×0, because that view is not laid
+           out. Positioning off it unconditionally therefore read a rect of all
+           zeros and put a 389 px list at (8, 8): the far top-left corner, over
+           the track map, while the button that opened it sat a thousand pixels
+           away on the right. A zero rect is not a position.
+
+           So: the button that was pressed, as long as it is still in the
+           document and still has a box — the Analyse grid is rebuilt by
+           innerHTML, so a remembered button can be detached by the time the
+           list re-renders. */
+        function gpChanPopAnchor() {
+            var a = gp._chanPopBtn;
+            if (a && document.contains(a) && (a.offsetWidth || a.offsetHeight)) return a;
+            var b = document.getElementById("gpLanesBtn");
+            return (b && (b.offsetWidth || b.offsetHeight)) ? b : null;
+        }
 
         function gpChanPopRender() {
             var el = document.getElementById("gpChanPop");
@@ -25530,6 +25865,12 @@
                 gp._chanPopAway = function (e) {
                     var t = e.target;
                     if (t && t.closest && (t.closest("#gpChanPop") || t.closest("#gpLanesBtn"))) return;
+                    /* …and the same for the panel-header button, which has no
+                       id. Naming only #gpLanesBtn made the Analyse button
+                       one-way: this handler closed the list on mousedown and
+                       the button's own click opened it straight back up, so
+                       pressing Channels a second time did nothing at all. */
+                    if (t && gp._chanPopBtn && gp._chanPopBtn.contains && gp._chanPopBtn.contains(t)) return;
                     window.gpChanPopToggle();
                 };
                 gp._chanPopKey = function (e) {
@@ -25543,14 +25884,26 @@
             el.innerHTML = "<div class='gp-chpop-hd'><b>Channels</b>" +
                 "<button onclick='gpChanPopToggle()' title='Close (Esc)'>×</button></div>" +
                 gpChannelListHtml();
-            /* Above the button, clamped to the window. */
-            var b = document.getElementById("gpLanesBtn");
+            /* Above the button, clamped to the window — and below it when
+               there is no room above, which is the usual case for a panel
+               header near the top of the grid. */
+            var b = gpChanPopAnchor(), w = el.offsetWidth, hh = el.offsetHeight;
             if (b) {
-                var r = b.getBoundingClientRect(), w = el.offsetWidth, hh = el.offsetHeight;
-                var x = Math.max(8, Math.min(window.innerWidth - w - 8, r.left));
+                var r = b.getBoundingClientRect();
+                /* Right-aligned on the button: the list is much wider than the
+                   button, and the buttons that open it sit at the right-hand
+                   end of their bar, so hanging it off the LEFT edge pushed it
+                   out towards the middle of the screen away from its own
+                   opener. Clamped either way. */
+                var x = Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w));
                 var y = r.top - hh - 8;
                 el.style.left = Math.round(x) + "px";
                 el.style.top = Math.round(y > 8 ? y : Math.min(r.bottom + 8, window.innerHeight - hh - 8)) + "px";
+            } else {
+                /* Nothing visible to hang it off — only reachable if the
+                   opener went away mid-gesture. Centred beats cornered. */
+                el.style.left = Math.round(Math.max(8, (window.innerWidth - w) / 2)) + "px";
+                el.style.top = Math.round(Math.max(8, (window.innerHeight - hh) / 2)) + "px";
             }
             gpTipInit();
             gpRestoreMsgs();
@@ -25988,7 +26341,11 @@
             try { s = JSON.parse(window.localStorage.getItem(GP_CAM_LS) || "null"); } catch (e) { }
             return { auto: !s || s.auto !== false,
                      follow: !s || s.follow !== false,
-                     overlay: !s || s.overlay !== false };
+                     overlay: !s || s.overlay !== false,
+                     /* Default MUTED: footage opens beside a recording to be
+                        looked at, and engine noise at whatever level the last
+                        file was mastered to is not a welcome surprise. */
+                     muted: !s || s.muted !== false };
         }
         window.gpCamSet = function (k, v) {
             v = (v === "1" || v === 1 || v === true);
