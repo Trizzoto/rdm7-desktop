@@ -30335,6 +30335,35 @@
             if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
 ##[ end ]##
 
+#! …and the OTHER way an edit reaches the dash. hook-trigger-preview above was
+#! written when triggerPreview() — re-push the whole layout — was the only one.
+#! The live-edit fast paths changed that: a move, a resize and most inspector
+#! edits now PATCH one live widget (/api/widget/transform, /api/widget/set) and
+#! never re-push the layout, so the hook stopped firing for the edit people make
+#! most often. The WASM backdrop kept painting the last layout it was handed.
+#!
+#! Offline that backdrop IS the screen, which is how it was reported: "the
+#! screen doesn't update when you move a widget, even when clicking save or
+#! sync — I have to go to a different dashboard then back again". A layout
+#! switch is hook-switch-wasm below, which does fire; save and sync never
+#! touched the WASM at all. Connected, the same staleness was masked by the
+#! real dash showing the move.
+#!
+#! Nor does the editor's own safety net cover it: _doWidgetTransform falls back
+#! to a full triggerPreview() when the device answers `found: false`, but
+#! offline the local router's catch-all replies 200 {ok:true} — no `found` —
+#! so the patch reads as applied to a device that isn't there.
+#!
+#! _flushLiveEdits is the single choke point for both fast paths and is already
+#! coalesced (80 ms trailing), so one call here covers drag, resize and the
+#! inspector without a rebuild per pointer event.
+##[ block hook-live-edit-wasm ]##
+##[ anchor ]##
+            sets.forEach(e => e.fields.forEach((def, field) => _doFieldSet(e.w, field, def)));
+##[ insert-after ]##
+            if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+##[ end ]##
+
 #! Switching layouts FROM THE DESKTOP (layoutSelect dropdown) rebuilds
 #! currentLayout and re-renders the editor, but — same bug as the device-sync
 #! path — never refreshed the WASM backdrop. Hook the end of the switch flow.
