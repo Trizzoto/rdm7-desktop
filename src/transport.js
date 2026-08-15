@@ -638,7 +638,19 @@
                 const binary = atob(b64);
                 const bytes = new Uint8Array(binary.length);
                 for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                const url = baseUrl + '/api/track/upload?name=' + encodeURIComponent(name);
+                /* Stamp a revision. The dash and the puck settle who sends by
+                   whose revision is higher, so it has to come from the one
+                   place that sees both — Studio — and it must only ever go up.
+                   MINUTES since 2020, not seconds: the wire field is 24 bits
+                   and seconds since 2020 passed 16.7 M years ago, which would
+                   silently truncate and make a new push look older than an old
+                   one. Minutes fit until 2051. Two pushes inside one minute
+                   would tie, so the dash bumps anything not strictly greater
+                   than what it already holds — time gives global ordering,
+                   the device guarantees strict increase. */
+                const rev = Math.floor((Date.now() / 1000 - 1577836800) / 60);
+                const url = baseUrl + '/api/track/upload?name=' + encodeURIComponent(name) +
+                            '&rev=' + rev;
                 /* http_upload_binary hardcodes application/octet-stream and
                    POSTs a raw byte array, so it is asset-type agnostic — no
                    Rust change was needed for this path. */
