@@ -910,21 +910,69 @@
             },
 
             /* ── OTA ───────────────────────────────────────────── */
+            /* Push a firmware image over the LAN via POST /api/ota/upload.
+             *
+             * Two hard requirements from the firmware side, both of which this
+             * used to get wrong (it wrapped the image in FormData and sent no
+             * header, so it failed 403 and would then have failed "bad magic"
+             * — the WiFi flash path had never actually worked):
+             *
+             *   1. RAW body. The handler reads the body directly and rejects
+             *      anything whose first byte is not 0xE9. A multipart body
+             *      starts with "------WebKitFormBoundary".
+             *   2. X-RDM-Device must carry THIS board's serial, or 403. It is
+             *      a deliberate-target check, not authentication.
+             *
+             * Returns the parsed JSON. Note `rebooting` may be false: the
+             * image is installed and bootable but the dash could not schedule
+             * its own restart, and the user must power-cycle. Firmware older
+             * than that fix always claims true — callers should verify the
+             * dash actually comes back rather than trust this field alone. */
             async uploadFirmware(data, onProgress) {
-                const formData = new FormData();
-                formData.append('firmware', new Blob([data]), 'firmware.bin');
-                const xhr = new XMLHttpRequest();
-                return new Promise((res, rej) => {
-                    xhr.open('POST', baseUrl + '/api/ota/upload');
+                const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+                if (bytes[0] !== 0xE9) {
+                    throw new Error('Not an ESP32 app image (expected 0xE9 magic) — ' +
+                                    'use esp32-firmware.bin, not the merged flash image');
+                }
+
+                const info = await this.getDeviceInfo();
+                const serial = info && (info.serial || info.device_id);
+                if (!serial) throw new Error('Could not read the dash serial — is it still connected?');
+
+                const url = baseUrl + '/api/ota/upload';
+                /* 3 MB over WiFi has taken up to ~35 s on a phone hotspot;
+                   allow generously for a weak link before calling it dead. */
+                const TIMEOUT_MS = 300000;
+
+                if (_isTauri()) {
+                    /* Rust path bypasses the webview's CORS on the device origin.
+                       No byte-level progress available, so report coarsely. */
+                    if (onProgress) onProgress(0);
+                    const respText = await _tauriInvoke('http_upload_binary', {
+                        url, data: Array.from(bytes), timeout_ms: TIMEOUT_MS,
+                        headers: { 'X-RDM-Device': serial },
+                    });
+                    if (onProgress) onProgress(100);
+                    try { return JSON.parse(respText); } catch (e) { return { ok: true }; }
+                }
+
+                return await new Promise((res, rej) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', url);
+                    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+                    xhr.setRequestHeader('X-RDM-Device', serial);
                     xhr.upload.onprogress = (e) => {
                         if (e.lengthComputable && onProgress)
                             onProgress(Math.round(e.loaded / e.total * 100));
                     };
-                    xhr.onload = () => xhr.status < 300 ? res(JSON.parse(xhr.responseText)) : rej(new Error(xhr.responseText));
-                    xhr.onerror = () => rej(new Error('Upload failed'));
-                    xhr.timeout = 120000;
+                    xhr.onload = () => {
+                        if (xhr.status >= 300) return rej(new Error(xhr.responseText || ('HTTP ' + xhr.status)));
+                        try { res(JSON.parse(xhr.responseText)); } catch (e) { res({ ok: true }); }
+                    };
+                    xhr.onerror = () => rej(new Error('Upload failed — lost contact with the dash'));
+                    xhr.timeout = TIMEOUT_MS;
                     xhr.ontimeout = () => rej(new Error('Upload timed out'));
-                    xhr.send(formData);
+                    xhr.send(bytes);
                 });
             },
 

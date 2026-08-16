@@ -1474,24 +1474,50 @@ async fn http_fetch_binary(url: String, timeout_ms: Option<u64>) -> Result<Vec<u
 }
 
 #[tauri::command]
-async fn http_upload_binary(url: String, data: Vec<u8>, timeout_ms: Option<u64>) -> Result<String, String> {
+/// POST a raw byte body to a device endpoint.
+///
+/// `headers` is optional and additive — the firmware's OTA upload endpoint
+/// requires `X-RDM-Device: <serial>` (see the SECURITY note in
+/// web_server_ota.c) and answers 403 without it. Content-Type stays
+/// application/octet-stream: `/api/ota/upload` reads the RAW body and rejects
+/// anything whose first byte is not 0xE9, so a multipart wrapper fails as
+/// "bad magic".
+async fn http_upload_binary(
+    url: String,
+    data: Vec<u8>,
+    timeout_ms: Option<u64>,
+    headers: Option<std::collections::HashMap<String, String>>,
+) -> Result<String, String> {
     let client = device_http_client()?;
     let timeout = Duration::from_millis(timeout_ms.unwrap_or(30000));
 
-    let resp = client
+    let mut req = client
         .post(&url)
-        .header("Content-Type", "application/octet-stream")
+        .header("Content-Type", "application/octet-stream");
+    for (k, v) in headers.unwrap_or_default() {
+        req = req.header(k, v);
+    }
+
+    let resp = req
         .body(data)
         .timeout(timeout)
         .send()
         .await
         .map_err(|e| format!("HTTP upload failed: {e}"))?;
 
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status().as_u16()));
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    if !status.is_success() {
+        /* Carry the body through — the dash explains the refusal there
+           (wrong serial, bad magic, image too large), and swallowing it
+           leaves the user with a bare "HTTP 403". */
+        return Err(if body.is_empty() {
+            format!("HTTP {}", status.as_u16())
+        } else {
+            format!("HTTP {}: {}", status.as_u16(), body)
+        });
     }
-
-    resp.text().await.map_err(|e| format!("Failed to read response: {e}"))
+    Ok(body)
 }
 
 // ── Firmware Update Check (GitHub API) ──────────────────────────────

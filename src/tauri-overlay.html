@@ -3018,6 +3018,10 @@
         #gpWorkspace .gpb-lapline:hover { background: rgba(29,31,32,0.04); }
         #gpWorkspace .gpb-lapline.sel { background: rgba(29,31,32,0.06); box-shadow: inset 3px 0 0 var(--gpb-n900); }
         #gpWorkspace .gpb-lapline input[type=checkbox] { accent-color: var(--gpb-red); width: 15px; height: 15px; cursor: pointer; }
+        /* The lap being analysed is always drawn, so its tick is on and not
+           yours to take off. Full strength, not the browser's grey: it is
+           locked, not unavailable, and a faded tick reads as the opposite. */
+        #gpWorkspace .gpb-lapline input[type=checkbox]:disabled { cursor: default; opacity: 1; }
         #gpWorkspace .gpb-lapline .sw { width: 11px; height: 11px; flex: none; }
         #gpWorkspace .gpb-lapline .nm { font-family: var(--gpb-head); font-weight: 600; font-size: 14px; letter-spacing: 0.05em; width: 54px; }
         #gpWorkspace .gpb-lapline .tm { font-family: var(--gpb-head); font-weight: 600; font-size: 17px; font-variant-numeric: tabular-nums; }
@@ -12072,12 +12076,17 @@
 
         /* Which laps get DRAWN. Separate from gp.selLap / gp.cmpLap, which
            are what gets ANALYSED — see ADR-0025. Defaults to the analysed
-           pair, so the grid opens showing what the report is about. */
+           pair, so the grid opens showing what the report is about.
+
+           Seeded ONCE, when the set is created — which is after every
+           re-split, where gp.shownLaps is set back to null. It used to
+           re-seed whenever the set was empty, so unticking your last lap
+           silently put two laps back: the analysed one and the reference,
+           and the reference is auto-picked (the fastest lap), so a lap
+           nobody had ever clicked reappeared on the graph on its own. */
         function gpShownLaps() {
-            if (!gp.shownLaps) gp.shownLaps = {};
-            var any = false, k;
-            for (k in gp.shownLaps) if (gp.shownLaps[k]) { any = true; break; }
-            if (!any) {
+            if (!gp.shownLaps) {
+                gp.shownLaps = {};
                 if (gp.selLap >= 0) gp.shownLaps[gp.selLap] = true;
                 if (gp.cmpLap >= 0) gp.shownLaps[gp.cmpLap] = true;
             }
@@ -12088,8 +12097,65 @@
             (gp.traceLaps || []).forEach(function (l, i) { if (sh[i]) out.push(i); });
             return out;
         }
+
+        /* ---- what the graph draws, and what its key therefore says -------
+           The rack and the legend used to work this out separately, and
+           disagreed in four different ways: a single ticked lap drew a
+           lap-coloured line under a key reading "colour = channel"; the
+           analysed lap was drawn whether or not it was ticked and never
+           appeared in the key at all; ticked laps were listed in Combined,
+           which draws one lap and has never drawn a second; and ticked laps
+           were drawn against the WHOLE SESSION, where the x-axis is elapsed
+           time from each lap's own start and a 1:06 lap lands squashed into
+           the first fifth of a 5:38 axis.
+
+           So it is decided once, here, and both read it. `colour: null`
+           means this line is drawn in its CHANNEL's colour — the nicer
+           default, and only available when there is one line to draw. */
+        function gpGraphLines() {
+            var laps = gp.traceLaps || [];
+            var subj = (gp.selLap >= 0 && laps[gp.selLap]) ? gp.selLap : -1;
+            /* The subject is always drawn: it is what the playhead runs on,
+               what the delta is measured from and what every lane's scale
+               comes from. Which is exactly why it has to be in the key. */
+            var out = [{ lap: subj, subject: true, colour: null }];
+            if (gp.plotMode !== "over" && subj >= 0) {
+                gpShownList().forEach(function (li) {
+                    var l = laps[li];
+                    if (li === subj || !l || l.to <= l.from) return;
+                    out.push({ lap: li, subject: false, colour: null });
+                });
+            }
+            if (out.length > 1)
+                out.forEach(function (e) { e.colour = gpLapColour(e.lap); });
+            return out;
+        }
+
+        /* One token for "what is on the graph", for the caches that key on it. */
+        function gpGraphLinesSig() {
+            return gpGraphLines().map(function (e) {
+                return e.lap + (e.colour || "-");
+            }).join(",");
+        }
+
+        /* Ticked laps the graph is leaving off, and why — said in the key
+           rather than left as a tick that does nothing. */
+        function gpGraphLeftOff() {
+            var drawn = {}, off = 0;
+            gpGraphLines().forEach(function (e) { drawn[e.lap] = true; });
+            gpShownList().forEach(function (li) { if (!drawn[li]) off++; });
+            if (!off) return "";
+            if (gp.plotMode === "over")
+                return "Combined draws one " + gpRunWord() + " — switch to Stacked to compare.";
+            return "Pick a " + gpRunWord() + " to compare against; the whole session has no lap to line them up with.";
+        }
+
         window.gpLapShowToggle = function (i) {
             i = parseInt(i, 10);
+            /* The analysed lap cannot be unticked off the graph — it is the
+               subject. The tick used to go off while the line stayed on
+               screen, which is the "a lap I never ticked is drawn" report. */
+            if (i === gp.selLap) return;
             var sh = gpShownLaps();
             sh[i] = !sh[i];
             gpDrawTrace(); gpDrawStrip(); gpRenderGrid();
@@ -12928,9 +12994,16 @@
                  "<span class='tm'>" + wholeMin.toFixed(1) + " min</span>" +
                  "<span class='dl'></span><span class='sp' style='flex:1'></span></button>";
             real.forEach(function (r) {
+                /* The lap being analysed is always drawn — it is what the
+                   playhead runs on and what every reading is measured from.
+                   The tick used to come off while the line stayed on the
+                   graph, so the two disagreed; now it says so instead. */
+                var lock = r.i === gp.selLap;
                 h += "<button class='gpb-lapline" + (gp.selLap === r.i ? " sel" : "") + "' data-gp-lapline='" + r.i + "'>" +
-                     "<input type='checkbox' data-gp-lapshow='" + r.i + "'" + (sh[r.i] ? " checked" : "") +
-                     " title='Draw this " + gpRunWord() + " on the graph and map'>" +
+                     "<input type='checkbox' data-gp-lapshow='" + r.i + "'" +
+                     (lock || sh[r.i] ? " checked" : "") + (lock ? " disabled" : "") +
+                     " title='" + (lock ? "The " + gpRunWord() + " you are analysing is always drawn"
+                                        : "Draw this " + gpRunWord() + " on the graph and map") + "'>" +
                      "<i class='sw' style='background:" + gpLapColour(r.i) + "'></i>" +
                      "<span class='nm'>" + word + " " + (r.i + 1) + "</span>" +
                      "<span class='tm'>" + gpLapTime(r.s) + "</span>" +
@@ -13204,30 +13277,38 @@
            rack is in — a swatch beside "LAP 1" that matches nothing on the
            canvas is worse than no swatch at all. */
         function gpPanelGraphLegendHtml() {
-            var shown = gpShownList();
-            if (!shown.length) return "";
+            if (!(gp.trace && gp.trace.length)) return "";
+            var lines = gpGraphLines();
             var word = gpRunWord(true);
-            var over = gp.plotMode === "over", multi = shown.length > 1;
+            var multi = lines.length > 1;
             var h = "<div class='gpb-glegend'>";
-            shown.forEach(function (i) {
-                var l = gp.traceLaps[i];
-                if (!l) return;
-                var ref = i === gp.selLap;
-                /* Combined colours by channel, so the lap can only be told
-                   apart by its line: solid for the one being analysed,
-                   dashed for the rest. Say so, with the mark itself. */
-                var mark = over
-                    ? "<i style='background:none;border-bottom:2px " + (ref ? "solid" : "dashed") +
-                      " var(--gpb-n700);height:0;width:14px'></i>"
-                    : "<i style='background:" + gpLapColour(i) + "'></i>";
-                h += "<span class='sw'>" + mark +
-                     "<b>" + word.toUpperCase() + " " + (i + 1) + "</b>" +
-                     "<span style='color:var(--gpb-muted)'>" + gpLapTime(gpSecs(gp.trace, l.from, l.to)) + "</span></span>";
+            lines.forEach(function (e) {
+                var name, time;
+                if (e.lap < 0) {
+                    /* To the fence, never to the end of the array — a ghost
+                       lap from another day is appended behind it and carries
+                       that day's clock. */
+                    var end = (gp.ghostFence !== null ? gp.ghostFence : gp.trace.length) - 1;
+                    name = "WHOLE SESSION";
+                    time = (gpSecs(gp.trace, 0, end) / 60).toFixed(1) + " min";
+                } else {
+                    var l = gp.traceLaps[e.lap];
+                    if (!l) return;
+                    name = word.toUpperCase() + " " + (e.lap + 1);
+                    time = gpLapTime(gpSecs(gp.trace, l.from, l.to));
+                }
+                /* No swatch where colour does not mean the lap: a mark that
+                   matches nothing on the canvas is worse than no mark. */
+                h += "<span class='sw'>" +
+                     (e.colour ? "<i style='background:" + e.colour + "'></i>" : "") +
+                     "<b>" + name + "</b>" +
+                     "<span style='color:var(--gpb-muted)'>" + time + "</span></span>";
             });
             h += "<span style='color:var(--gpb-muted);font-size:10px'>" +
-                 (over ? "colour&nbsp;=&nbsp;channel"
-                       : (multi ? "colour&nbsp;=&nbsp;" + gpRunWord() : "colour&nbsp;=&nbsp;channel")) +
+                 (multi ? "colour&nbsp;=&nbsp;" + gpRunWord() : "colour&nbsp;=&nbsp;channel") +
                  "</span>";
+            var off = gpGraphLeftOff();
+            if (off) h += "<span style='color:var(--gpb-muted);font-size:10px'>" + gpEsc(off) + "</span>";
             h += "<span class='cur' id='gpGraphCur'></span></div>";
             return h;
         }
@@ -15142,6 +15223,50 @@
             return { from: r.from, to: r.to, base: r.from };
         }
 
+        /* ---- the window follows the playhead --------------------------------
+         * Zoomed into a corner and pressing play, the window stayed exactly
+         * where it was: the playhead crossed the right-hand edge a second
+         * later, stopped being drawn at all (it is only drawn inside the
+         * window), and the rack sat there showing a stretch of track the car
+         * had already left. Watching a lap zoomed in meant dragging the
+         * navigator along by hand.
+         *
+         * So it pages. When the playhead reaches the last tenth of the
+         * window, the window jumps most of a windowful forward and the
+         * playhead carries on from near the left edge. Pages rather than
+         * scrolls for two reasons: a picture that slides under a stationary
+         * cursor is much harder to read a trace off than one that holds
+         * still, and the rack's cached layer is keyed on the window, so a
+         * window that moves every frame rebuilds every lane every frame.
+         * The overlap it keeps is deliberate — a page that showed nothing you
+         * had already seen would leave no thread to follow across the jump.
+         *
+         * Landing OUTSIDE the window is a different gesture (a scrub, a jump
+         * to a corner, J and L) and gets a different answer: centre on it,
+         * whether or not anything is playing.
+         */
+        var GP_FOLLOW_EDGE = 0.9,   /* page once the playhead is this far across */
+            GP_FOLLOW_STEP = 0.8;   /* ...and move the window this much of itself */
+
+        function gpStripFollow() {
+            if (!gp.stripZoom || gp.stripZoom.lap !== gp.selLap) return;   /* whole lap: nothing to follow */
+            var lap = gpLapRange(), i = gp.playIdx;
+            var rng = gpStripRange();
+            var span = rng.to - rng.from;
+            if (span < 2 || span >= lap.to - lap.from) return;
+            var from = null;
+            if (i < rng.from || i > rng.to) from = Math.round(i - span / 2);
+            else if (gp.playing && i >= rng.from + span * GP_FOLLOW_EDGE)
+                from = Math.round(rng.from + span * GP_FOLLOW_STEP);
+            if (from === null) return;
+            /* Never past the end of the lap: the last window holds and the
+               playhead runs out to the finish inside it, which is where the
+               roll-over into the next lap takes over. */
+            from = Math.max(lap.from, Math.min(from, lap.to - span));
+            if (from === rng.from) return;
+            gp.stripZoom = { lap: gp.selLap, from: from, to: from + span };
+        }
+
         /* ---- The lane rack ---------------------------------------------------
            One canvas, lanes stacked on a shared x-axis, one playhead through
            all of them. Every desktop tool surveyed converges on this shape:
@@ -15412,7 +15537,7 @@
            difference between a hairline and a grey smear. */
         function gpRackStatic(w, h, rng, dpr) {
             var key = [gp.selLap, gp.cmpLap, rng.from, rng.to, w, h, dpr, gpLaneSig(), gp.plotMode,
-                       gpShownList().join(","),
+                       gpGraphLinesSig(),
                        JSON.stringify(gp.laneW || {})].join(":");
             if (gp.stripCache && gp.stripCache.key === key) return gp.stripCache.cv;
 
@@ -15668,14 +15793,11 @@
                 var env = gpDecimate(lane, rng, Math.max(1, Math.round(plotW * sx)));
                 /* Whose lap is this line? With one lap on the rack the colour
                    is free to mean the CHANNEL, which is the nicer default.
-                   With several, colour has to mean the LAP — the legend above
-                   the rack has always drawn a swatch per lap, and the
-                   analysed lap was the one line on the canvas ignoring it, so
-                   Lap 1's legend swatch was dark red and its speed trace was
-                   black. Same colour, same lap, or the key is a lie. */
-                var shownS = noData ? [] : gpShownList();
-                g.strokeStyle = (shownS.length > 1 && gp.selLap >= 0)
-                    ? gpLapColour(gp.selLap) : lane.colour;
+                   With several, colour has to mean the LAP. gpGraphLines
+                   decides which, and the key above the rack reads the same
+                   answer — same colour, same lap, or the key is a lie. */
+                var linesS = noData ? [{ lap: -1, colour: null }] : gpGraphLines();
+                g.strokeStyle = linesS[0].colour || lane.colour;
                 if (env) {
                     g.lineWidth = hairV;
                     /* Butt caps, or every column grows half a stroke at each
@@ -15717,15 +15839,15 @@
                    which is the comparison, not an artefact. Drawn as plain
                    thin lines: the envelope decimation belongs to the lap
                    being analysed, and stacking envelopes turns the well into
-                   a smear. Skipped in overlaid mode, where the well already
-                   carries every channel. */
-                if (gp.plotMode !== "over" && !noData && lane.id !== "delta") {
+                   a smear. Which laps these are — none, in Combined or
+                   against the whole session — is gpGraphLines' decision. */
+                if (!noData && lane.id !== "delta") {
                     var selSpan = gpSecs(gp.trace, rng.from, rng.to) || 1;
-                    gpShownList().forEach(function (li) {
-                        if (li === gp.selLap) return;
+                    linesS.slice(1).forEach(function (e) {
+                        var li = e.lap;
                         var lp = gp.traceLaps[li];
                         if (!lp || lp.to <= lp.from) return;
-                        g.strokeStyle = gpLapColour(li);
+                        g.strokeStyle = e.colour;
                         g.lineWidth = 1.1;
                         g.lineJoin = "round"; g.lineCap = "round";
                         g.globalAlpha = 0.85;
@@ -16161,6 +16283,13 @@
             cv.addEventListener("mousedown", function (ev) {
                 var f = fracAt(ev);
                 if (f === null) return;
+                /* Taking hold of the window pauses, the same contract the
+                   rack and the step buttons already keep: the window now
+                   follows the playhead, so a drag against a running playhead
+                   would be undone on the next frame — you cannot go and look
+                   somewhere while the thing dragging the view is still
+                   running. */
+                gpPlayStop();
                 var win = gpNavWin();
                 win0 = win;
                 /* Whole lap showing: there is nothing to pan — every drag was
@@ -21419,6 +21548,11 @@
         function gpDrawPlayhead() {
             gpVideoFollowSeek();
             gpVideoDrawOverlay();
+            /* Before the strip, not after: this is the one funnel every
+               playhead move goes through — the ticker, the scrub, the
+               transport buttons, the keyboard and the video's own clock — so
+               the window it draws is already the right one. */
+            gpStripFollow();
             gpDrawStrip();
             gpUpdateDock();
             if (!gp.map || !gp.trace || !gp.trace.length) return;
@@ -30635,12 +30769,35 @@
             } catch (e) { console.log('Desktop update check skipped:', e); }
         }
 
+        /* Read the connected dash's firmware version over WHATEVER transport is
+         * live. This used to call serial_request('device.info') directly, so it
+         * only ever worked over USB — a WiFi-connected dash threw, the error was
+         * swallowed, and the update banner never appeared. That is the common
+         * case for a remote customer, who has no cable. */
+        async function _readDeviceFirmwareVersion() {
+            /* /api/ota/status is the authority: current_version is the running
+               image, and it exists on every transport. */
+            try {
+                const st = await RDM.getOtaStatus();
+                if (st && st.current_version) return st.current_version;
+            } catch (e) { /* fall through */ }
+            try {
+                const info = await RDM.getDeviceInfo();
+                if (info) {
+                    const v = info.fw_version || info.app_version || info.version;
+                    if (v) return v;
+                }
+            } catch (e) { /* fall through */ }
+            return null;
+        }
+
         async function _checkFirmwareUpdate() {
             if (!RDM.isTauri()) return;
+            /* Offline/local mode has no dash to update. */
+            if (!RDM.deviceTransport || !RDM.deviceTransport()) return;
             try {
-                const deviceInfo = await _tauriCall('serial_request', { method: 'device.info', params: {} });
-                const deviceVersion = (deviceInfo && deviceInfo.result)
-                    ? (deviceInfo.result.app_version || deviceInfo.result.version || '0.0.0') : '0.0.0';
+                const deviceVersion = await _readDeviceFirmwareVersion();
+                if (!deviceVersion) return;   /* no dash reachable — stay silent */
                 const info = await _tauriCall('check_firmware_update', {
                     repo: _UPDATE_FIRMWARE_REPO, currentVersion: deviceVersion
                 });
@@ -30664,6 +30821,34 @@
                 if (msg) msg.innerHTML = `Firmware update: <strong>v${info.latest_version}</strong> (current: v${info.current_version}) — ${sizeMB} MB`;
             }
             if (banner) banner.style.display = 'flex';
+        }
+
+        /* Poll until the dash is answering again after a firmware install.
+         *
+         * Resolves true once it responds (with the expected version if we can
+         * read one), false if it never comes back inside the window. Measured
+         * 2026-08-16: a dash on a phone hotspot took well over 90 s to rejoin
+         * the network after reboot — repeatedly — so a short timeout produces
+         * a false "it failed" on a perfectly good flash. Three minutes. */
+        async function _awaitDashReturn(expectedVersion, timeoutMs = 180000) {
+            const deadline = Date.now() + timeoutMs;
+            /* Let it get through reset before the first probe. */
+            await new Promise(r => setTimeout(r, 8000));
+            while (Date.now() < deadline) {
+                try {
+                    const v = await _readDeviceFirmwareVersion();
+                    if (v) {
+                        /* Answering at all means it booted. If it reports the old
+                           version the bootloader rolled back — surface that rather
+                           than calling it a success. */
+                        if (!expectedVersion || v === expectedVersion) return true;
+                        console.log('Dash returned on ' + v + ', expected ' + expectedVersion);
+                        return false;
+                    }
+                } catch (e) { /* still down */ }
+                await new Promise(r => setTimeout(r, 5000));
+            }
+            return false;
         }
 
         async function _installDesktopUpdate() {
@@ -30701,13 +30886,44 @@
                     if (msgEl) msgEl.innerHTML = 'Downloading firmware...';
                     if (btnEl) btnEl.disabled = true;
                     const binData = await _tauriCall('download_firmware_binary', { url: info.download_url });
-                    if (msgEl) msgEl.innerHTML = 'Flashing firmware...';
-                    await _tauriCall('serial_upload_chunked', {
-                        uploadType: 'ota', name: 'firmware', data: Array.from(new Uint8Array(binData))
+                    const bytes = new Uint8Array(binData);
+
+                    /* Route through the active transport instead of hardcoding
+                       serial_upload_chunked — that pinned the flash to USB, so a
+                       customer connected over WiFi could never update. RDM.uploadFirmware
+                       dispatches to serial or the LAN /api/ota/upload as appropriate. */
+                    if (msgEl) msgEl.innerHTML = 'Flashing firmware... do NOT unplug the dash';
+                    const res = await RDM.uploadFirmware(bytes, (pct) => {
+                        if (msgEl) msgEl.innerHTML = `Flashing firmware... ${pct}% — do NOT unplug the dash`;
                     });
-                    if (banner) banner.style.display = 'none';
+
+                    /* The image is written, validated and bootable by now. Whether
+                       the dash RESTARTS is a separate question: on a dash low on
+                       internal RAM the reboot could not be scheduled, and firmware
+                       predating that fix reports "rebooting":true regardless. So
+                       confirm it actually came back rather than trusting the field.
+                       Keep the banner up while unresolved — a transient toast is
+                       the wrong place for an instruction the user MUST act on. */
                     _pendingDesktopUpdate = null;
-                    showToast('Firmware updated! Device is rebooting...', 'success');
+                    if (res && res.rebooting === false) {
+                        if (msgEl) msgEl.innerHTML =
+                            '<strong>Firmware installed.</strong> The dash could not restart itself — ' +
+                            'power-cycle it to finish the update.';
+                        if (btnEl) btnEl.style.display = 'none';
+                        return;
+                    }
+
+                    if (msgEl) msgEl.innerHTML = 'Firmware installed — waiting for the dash to restart...';
+                    const back = await _awaitDashReturn(info.latest_version);
+                    if (back) {
+                        if (banner) banner.style.display = 'none';
+                        showToast('Firmware updated to v' + info.latest_version, 'success');
+                    } else {
+                        if (msgEl) msgEl.innerHTML =
+                            '<strong>Firmware installed.</strong> The dash has not come back — ' +
+                            'power-cycle it to finish the update.';
+                        if (btnEl) btnEl.style.display = 'none';
+                    }
                 } catch (e) {
                     if (msgEl) msgEl.innerHTML = 'Update failed: ' + (e.message || e);
                     if (btnEl) btnEl.disabled = false;
