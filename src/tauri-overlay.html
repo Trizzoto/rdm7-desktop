@@ -1475,6 +1475,15 @@
         .gp-chtab .sub { display: block; color: var(--text-muted); font-size: 9px; margin-top: 1px; }
         .gp-chtab tbody tr:hover td { background: var(--panel-elevated); }
         .gp-chtab tr.off .nm { color: var(--text-muted); }
+        /* The name IS the "show only this one" control, so it has to look
+           pressable without turning a list of channels into a wall of
+           buttons: plain text until the pointer is on it. */
+        .gp-chtab button.nm { background: none; border: none; padding: 0; margin: 0;
+            font: inherit; color: var(--text); cursor: pointer; text-align: left; }
+        .gp-chtab button.nm:hover { text-decoration: underline; text-underline-offset: 2px; }
+        .gp-chtab button.nm.solo { color: var(--accent); font-weight: 600; }
+        .gp-chtab button.nm.solo::after { content: " only"; font-size: 9px; letter-spacing: 0.08em;
+            text-transform: uppercase; color: var(--text-muted); font-weight: 400; }
         /* ---- the two marks -------------------------------------------------
            First cut was twenty accent-filled tickboxes on one screen, which
            breaks this app's own rule (ADR-0014: chrome is monochrome, the
@@ -12167,16 +12176,24 @@
             /* The fill rule is the answer to "why is there a scrollbar in my
                lap list" — say it in the same place you can override it. */
             gpRootCol(g);
-            var byHand = g.auto === false && !g.fit;
+            var nRows = g.root.kids.length, nHeld = gpHeldRows(g);
             h += "<div class='hd' style='margin-top:2px'>Panel height</div>" +
                 seg([["full", "FULL"], ["fit", "FIT"]],
-                    g.auto !== false ? "full" : (byHand ? "" : "fit"), "gpGridFitSet") +
+                    nHeld === 0 ? "full" : (nHeld === nRows && g.fit ? "fit" : ""), "gpGridFitSet") +
                 "<div class='note'>" +
                 "<b>Full</b> gives every panel the height its own contents need, so nothing scrolls " +
                 "inside a panel &mdash; the page scrolls instead. <b>Fit</b> packs the rows into the " +
                 "window and lets whatever no longer has room scroll on its own." +
-                (byHand ? " Row heights are set by hand at the moment; Full takes them back."
-                        : " Dragging a divider between rows takes them over by hand.") +
+                /* Which rows, not merely whether: one drag no longer speaks for
+                   the whole spine, so a note that said "row heights are set by
+                   hand" would be true of two rows out of five and read as all
+                   of them. */
+                (nHeld === 0
+                    ? " Dragging a divider holds the two rows it separates at that height."
+                    : " " + (nHeld === nRows ? "Every row is" :
+                             nHeld + " of " + nRows + " rows " + (nHeld === 1 ? "is" : "are")) +
+                      " held at a height you set &mdash; Full releases them all, " +
+                      "or double-click a divider to release just those two.") +
                 "</div>";
 
             h += "<div class='hd' style='margin-top:2px'>Saved arrangements</div>" +
@@ -13271,6 +13288,17 @@
                 var ok = gpNodeNormalise(g.root);
                 if (!ok) return null;
                 gpNodeReseq(g.root);
+                /* `g.auto` — the old whole-spine flag — is deliberately not
+                   carried across, and it is not being thrown away either: it
+                   was already dropped on this exact line before rows carried
+                   their own hold, so an arrangement came back MEASURED on
+                   every launch no matter what the flag said. Measured is
+                   therefore what these grids have always done on load, and
+                   keeping that is the compatible move.
+                   It could not be honestly translated in any case: one drag
+                   anywhere on the spine set it, so it records no intention
+                   about any particular row, and the new model needs one per
+                   row. FIT is one click away and now it persists. */
                 return { v: 2, preset: g.preset || null, fit: g.fit !== false, root: g.root };
             }
             if (g.rows && g.rows.length) return gpGridFromRows(g);
@@ -13336,6 +13364,33 @@
             if (!g.root.kids || g.root.dir !== "col")
                 g.root = { id: gpNodeId(), dir: "col", kids: [g.root], sz: [1] };
             return g.root;
+        }
+
+        /* ---- rows you have set by hand -------------------------------------
+         * A row of the spine is either MEASURED — it takes the height its own
+         * panels need — or HELD at the height you dragged it to. Which of the
+         * two is a fact about ONE row, and it is stored on that row.
+         *
+         * It used to be a single flag over the whole spine, and that was wrong
+         * in two directions at once. Drag the divider under the map and every
+         * other row stopped measuring too: the lap list two rows away, which
+         * nobody had touched, stopped growing to fit its contents and started
+         * hiding them behind a scrollbar — the one thing ADR-0043 exists to
+         * prevent. And the flag was not part of the saved tree, so gpGridAdopt
+         * dropped it on the way back in: a spine sized by hand came back
+         * measured on the next launch, with the heights silently replaced.
+         * Measured live: a lap list dragged to 372 px wanted 435 and clipped
+         * four runs; the same panel with the row released came out at 436 and
+         * showed all of them.
+         *
+         * Held lives on the row node, so it is saved and restored with the
+         * arrangement it describes, and it only ever describes its own row. */
+        function gpRowHeld(k) { return !!(k && k.held); }
+        function gpHeldRows(g) { return gpRootCol(g).kids.filter(gpRowHeld).length; }
+        function gpHoldRows(g, on) {
+            gpRootCol(g).kids.forEach(function (k) {
+                if (on) k.held = true; else delete k.held;
+            });
         }
         /* ---- walking the tree ---- */
         function gpNodeWalk(n, fn, parent, idx) {
@@ -13750,15 +13805,34 @@
             gpRootCol(g);
             gpSpineToPx(g, gpSpineAvail(g));
             if (mode === "full") {
-                g.auto = true;      /* the measuring happens in gpGridLayout */
+                gpHoldRows(g, false);   /* the measuring happens in gpGridLayout */
             } else {
-                g.auto = false;
+                gpHoldRows(g, true);
                 g.fit = true;
             }
+            delete g.auto;              /* the old whole-spine flag; rows carry it now */
             gpGridSave();
             gpRenderGrid();
             gpRenderCtx();
         };
+
+        /* Double-click a divider to release the rows it separates back to
+           measured. FULL is the all-or-nothing way back and always was; this
+           is the one that matches the gesture that held them — you took two
+           rows over by dragging the rule between them, so the same rule is
+           where you hand them back. */
+        function gpSplitRelease(nodeId, idx) {
+            var g = gpGrid(), hit = gpNodeFind(g.root, nodeId);
+            if (!hit || hit.node !== gpRootCol(g)) return;   /* only the spine has holds */
+            var kids = hit.node.kids;
+            if (!kids[idx] || !kids[idx + 1]) return;
+            if (!gpRowHeld(kids[idx]) && !gpRowHeld(kids[idx + 1])) return;
+            delete kids[idx].held;
+            delete kids[idx + 1].held;
+            gpGridSave();
+            gpRenderGrid();
+            gpRenderCtx();
+        }
 
         /* ---- saved arrangements ---- */
         window.gpLayoutsToggle = function () {
@@ -13921,11 +13995,20 @@
                 if (grow) {
                     var sum = px.reduce(function (a, b) { return a + b; }, 0);
                     g.fit = sum <= avail + 1;
-                    /* Dragging THIS spine is the one gesture that contradicts
-                       auto row heights, so it is the one that turns them off.
-                       A horizontal drag, or one inside a nested stack, changes
-                       nothing about how tall the rows are and leaves it on. */
-                    g.auto = false;
+                    /* Dragging THIS spine is the one gesture that contradicts a
+                       measured row height, so it is the one that holds a row at
+                       what you dragged it to. A horizontal drag, or one inside
+                       a nested stack, says nothing about how tall the rows are
+                       and holds nothing.
+
+                       Only the rows this drag actually MOVED are held. Taking
+                       the whole spine over instead meant one pull on the top
+                       divider stopped every row below from fitting its own
+                       contents — rows the gesture never touched and said
+                       nothing about. */
+                    sp.kids.forEach(function (k, j) {
+                        if (Math.abs(px[j] - px0[j]) > 0.5) k.held = true;
+                    });
                 }
                 g.preset = null;
                 gpGridApplyFlex();
@@ -14224,6 +14307,40 @@
                 return elastic[j] ? Math.max(mins[j], s + slack / ne) : s;
             });
         }
+        /* The whole row-height decision, as arithmetic on plain arrays: which
+           rows keep the height they were dragged to, which take the height
+           their contents need, and where the leftover goes. Kept separate from
+           gpGridLayout — which is all DOM measurement — so it can be checked
+           without a window (tools/check_gridfit.js).
+
+           `sz` is what the rows are now, `wants` what the measured ones asked
+           for (held rows are not measured, so their entry is ignored). */
+        function gpSpineSizes(sz, held, mins, wants, elastic, avail) {
+            var out = sz.slice(), i;
+            var allHeld = held.length > 0;
+            for (i = 0; i < held.length; i++) if (!held[i]) { allHeld = false; break; }
+            /* Every row held AND the spine still fits: a window resize keeps
+               the shape you set instead of opening a scrollbar it did not
+               need. With even one measured row this is the wrong move — that
+               row's height is about its contents, not about the window — and
+               the leftover is handed out below instead. */
+            if (allHeld) {
+                var sum = out.reduce(function (a, b) { return a + b; }, 0) || 1;
+                if (sum <= avail + 1)
+                    out = out.map(function (s) { return s * avail / sum; });
+            }
+            out = out.map(function (s, i2) {
+                return held[i2] ? Math.max(mins[i2], gpNum(s, mins[i2]))
+                                : Math.max(mins[i2], gpNum(wants[i2], mins[i2]));
+            });
+            /* A held row does not absorb slack either — it is the height you
+               asked for, and quietly growing it is the same lie as quietly
+               shrinking it. */
+            return gpSpineFill(out, mins, elastic.map(function (e, i2) {
+                return e && !held[i2];
+            }), avail);
+        }
+
         /* A stack nested inside a row cannot make the page taller — it is
            bounded by the row it is in. So rather than growing, its shares get
            nudged: at the height the row is guaranteed (gpNodeMinH above),
@@ -14298,21 +14415,20 @@
             var gaps = (root.kids.length - 1) * GP_GAP;
             var avail = gpSpineAvail(g);
             var mins = root.kids.map(gpNodeMinH);
-            /* Auto is the default, and it is the answer to "why is there a
-               scrollbar inside my lap list": every row takes the height its
-               panels actually need and the page is the only thing that
-               scrolls. Drag a divider and you have taken the spine over —
-               FULL hands it back. */
-            if (g.auto !== false) {
-                root.sz = root.kids.map(function (k, i) {
-                    return Math.max(mins[i], gpNodeWantH(k));
-                });
-                root.sz = gpSpineFill(root.sz, mins, root.kids.map(gpNodeElastic), avail);
-            } else {
-                var sum = root.sz.reduce(function (a, b) { return a + b; }, 0) || 1;
-                if (g.fit) root.sz = root.sz.map(function (s) { return s * avail / sum; });
-                root.sz = root.sz.map(function (s, i) { return Math.max(s, mins[i]); });
-            }
+            /* Measured is the default, and it is the answer to "why is there a
+               scrollbar inside my lap list": a row takes the height its panels
+               actually need and the page is the only thing that scrolls. Drag
+               a divider and THOSE rows — only those — are held at what you
+               dragged them to. FULL, or a double-click on the divider, hands
+               them back.
+               Only the measured rows are measured: gpNodeWantH reaches into
+               the DOM for every panel under it, and a held row's answer would
+               be thrown away. */
+            var held = root.kids.map(gpRowHeld);
+            root.sz = gpSpineSizes(
+                root.sz, held, mins,
+                root.kids.map(function (k, i) { return held[i] ? 0 : gpNodeWantH(k); }),
+                root.kids.map(gpNodeElastic), avail);
             var total = root.sz.reduce(function (a, b) { return a + b; }, 0);
             g.fit = total <= avail + 1;
             /* Fitted, the canvas just flexes into the port. Tall, its own
@@ -14556,7 +14672,14 @@
                 days.forEach(function (x) {
                     var on = gp.ghostSrc && gp.ghostSrc.sesId === x.id;
                     var who = [x.car, x.driver].filter(Boolean).join(" · ");
-                    h += "<button class='ws-item" + (on ? " on" : "") + "' style='margin:0 8px' data-gp-ghost='" +
+                    /* .ws-item is width:100% — it was built to fill the
+                       sidebar rail — so an inset has to come off the width as
+                       well as being added as margin. Margin alone made the
+                       button a whole panel wide PLUS 16 px, and the lap list
+                       grew a horizontal scrollbar for a strip of empty space
+                       nobody could put anything in. */
+                    h += "<button class='ws-item" + (on ? " on" : "") +
+                         "' style='margin:0 8px;width:calc(100% - 16px)' data-gp-ghost='" +
                          gpEsc(x.id) + "'><span class='st" + (on ? " on" : "") + "'></span>" +
                          gpEsc(gpSesDay(x.recordedAt)) + "<span class='tag'>" +
                          (x.bestLapS ? gpLapTime(x.bestLapS) : x.lapCount + " laps") + "</span>" +
@@ -14853,7 +14976,10 @@
                     if (i < n.kids.length - 1)
                         h += "<div class='gpb-h" + (n.dir === "row" ? "col" : "row") +
                              "' data-gp-hs='" + n.id + ":" + i + "' title='Drag to resize" +
-                             (n.dir === "col" ? " — past the bottom row the page starts scrolling" : "") +
+                             (n.dir === "col"
+                                ? " — past the bottom row the page starts scrolling. " +
+                                  "Double-click to let these two rows fit their contents again"
+                                : "") +
                              "'><i></i></div>";
                 });
                 return h + "</div>";
@@ -15014,6 +15140,7 @@
             Array.prototype.forEach.call(host.querySelectorAll("[data-gp-hs]"), function (el) {
                 var p = (el.getAttribute("data-gp-hs") || "").split(":");
                 el.addEventListener("pointerdown", function (e) { gpDragSplit(p[0], +p[1], e); });
+                el.addEventListener("dblclick", function () { gpSplitRelease(p[0], +p[1]); });
             });
             Array.prototype.forEach.call(host.querySelectorAll("[data-gp-pdrag]"), function (el) {
                 var pid = el.getAttribute("data-gp-pdrag");
@@ -18554,7 +18681,23 @@
                 e.preventDefault();
                 gpLaneScalePop(lane, e.clientX, e.clientY);
             });
+            /* ---- click a lane's own label to show only that channel --------
+               The label is what you are looking at at the moment you think
+               "just speed", and the gutter it sits in has nothing to seek to —
+               the plot starts at GP_LANE_LBL. Same gesture, same meaning, as
+               clicking the name in the Channels list. */
+            var labelAt = function (ev) {
+                var r = cv.getBoundingClientRect();
+                if (ev.clientX - r.left >= GP_LANE_LBL) return null;
+                return laneAt(ev);
+            };
             cv.addEventListener("mousedown", function (e) {
+                var lbl = labelAt(e);
+                if (lbl && !lbl.pending) {
+                    e.preventDefault();
+                    window.gpLaneSolo(lbl.id);
+                    return;
+                }
                 var si = sepAt(e);
                 if (si > 0) {
                     var rows = gpLaneRows(), W = gpLaneWeights();
@@ -18584,8 +18727,11 @@
                     return;
                 }
                 if (drag) { seek(e); return; }
-                /* Cursor says which surface you are over before you commit. */
-                cv.style.cursor = sepAt(e) > 0 ? "row-resize" : "crosshair";
+                /* Cursor says which surface you are over before you commit —
+                   including the label gutter, which is the only hint that the
+                   name under the pointer is a control. */
+                cv.style.cursor = sepAt(e) > 0 ? "row-resize"
+                                : labelAt(e) ? "pointer" : "crosshair";
             });
             window.addEventListener("mouseup", function () {
                 if (rs) { gpLaneWSave(); rs = null; }
@@ -29170,14 +29316,17 @@
                      "changes size.") + gpChanBulkHtml("log", rows) + "</th>" +
                  "<th class='n'>Graph" + gpTip("Graph", "Draw it in the rack below. Free, instant, and " +
                      "nothing to do with what the puck records — hide a channel here and it is " +
-                     "still in the recording.") + gpChanBulkHtml("graph", rows) + "</th>" +
+                     "still in the recording. To see ONE channel on its own, click its name " +
+                     "rather than untick everything else — clicking it again brings back the " +
+                     "set you had. The label on a lane in the rack does the same thing.") +
+                 gpChanBulkHtml("graph", rows) + "</th>" +
                  "<th class='lvh'>Live" + gpTip("Live", "What the puck is reading off the bus right " +
                      "now, for channels it is logging. This is how you check a decode with the " +
                      "engine running instead of finding out after the drive: blip the throttle " +
                      "and the number should move the way you expect. “Quiet” means the frame " +
                      "has not arrived for a second.") + "</th></tr></thead><tbody>";
 
-            var grp = null, any = false;
+            var grp = null, any = false, solo = gpLaneSoloId();
             [GP_GRP_PUCK, GP_GRP_HERE, GP_GRP_DASH, GP_GRP_DBC, GP_GRP_MINE,
              GP_GRP_CAR, GP_GRP_NONE].forEach(function (g) {
                 rows.filter(function (r) { return r.group === g; }).forEach(function (r) {
@@ -29196,7 +29345,20 @@
                     h += "<tr class='" + (shown ? "" : "off") +
                          (gp.decEdit && gp.decEdit.id === r.dashId ? " editing" : "") + "'>" +
                          "<td><span class='gp-chdot'" + (colour && shown ? " style='background:" + colour + "'" : "") +
-                         "></span><span class='nm'>" + gpEsc(r.name) + "</span>" +
+                         "></span>" +
+                         /* The name is the solo control wherever there is a
+                            lane to solo. A channel with no lane — nothing in
+                            this recording draws it — stays plain text rather
+                            than a button that would do nothing. */
+                         (r.lane
+                            ? "<button class='nm" + (solo === r.lane.id ? " solo" : "") + "' " +
+                              "onclick=\"gpLaneSolo('" + gpEsc(r.lane.id) + "')\" data-tip=\"" +
+                              (solo === r.lane.id
+                                 ? "Showing only this one &mdash; click to put the others back"
+                                 : "Show only this channel on the graph. Click its name again, " +
+                                   "or the label on its lane, to bring the rest back.") +
+                              "\">" + gpEsc(r.name) + "</button>"
+                            : "<span class='nm'>" + gpEsc(r.name) + "</span>") +
                          (r.unit ? "<span class='un'>" + gpEsc(String(r.unit)) + "</span>" : "") +
                          /* The way in to fixing a wrong reading, on the row
                             that is reading wrong. Sliders, not a pencil: this
@@ -29740,6 +29902,23 @@
             gpSyncLanesBtn();
             if (gp.view === "setup") gpRenderSetup();
             gpChanPopRender();
+            /* Which channels are drawn is what decides how tall the rack ASKS
+               to be — one lane or nineteen — and the mosaic sizes the graph
+               panel from that answer. Without a re-measure right here, showing
+               one channel on its own left the panel at the height nineteen
+               lanes needed and stranded the single trace at the top of a
+               mostly empty box; hiding channels was the same in reverse.
+               The reflow after it is because the canvas has a new box and does
+               not find that out on its own.
+
+               Only while the mosaic is the view on screen. gpGridLayout WRITES
+               the row heights it measures, and every panel in a hidden view
+               measures zero — running it from the Setup screen, which also
+               carries the channel list, would quietly flatten the saved
+               arrangement. Same guard the resize handler keeps. */
+            if (gp.view === "session" && document.getElementById("gpGrid")) {
+                gpGridApplyFlex(); gpGridReflow();
+            }
             /* The list is what the live values are for, so the poll follows
                it on and off screen rather than running all session. */
             gpChanLiveStart();
@@ -29787,6 +29966,52 @@
 
         window.gpLaneShowReset = function () {
             gp.laneShow = {};
+            gp.laneSoloPrev = null;
+            gpLaneShowSave();
+            gp.stripCache = null;
+            gpDrawStrip();
+            gpChanUiRefresh();
+        };
+
+        /* ---- one channel, on its own ---------------------------------------
+         * "Just show me speed" is the commonest thing anyone asks of a rack of
+         * a dozen traces, and until now it was a dozen clicks to get there and
+         * a dozen more to get back. The bulk tick helped — all off, then tick
+         * the one — but that is still two gestures and it forgets what you had
+         * been looking at.
+         *
+         * So: the channel's NAME is the control, in the list and on the lane
+         * label in the rack itself. One click shows only that channel; the
+         * same click again puts back exactly the set that was showing before.
+         * The one soloed lane is derived from the map rather than stored, so a
+         * tick that happens to leave one channel showing lights up as a solo
+         * and un-solos on the next click — there is no second piece of state
+         * to fall out of step with what is drawn.
+         */
+        function gpLaneSoloId() {
+            var on = gpLaneRowsAll().filter(gpLaneShown);
+            return on.length === 1 ? on[0].id : null;
+        }
+
+        window.gpLaneSolo = function (id) {
+            var rows = gpLaneRowsAll();
+            if (!rows.some(function (l) { return l.id === id; })) return;
+            if (gpLaneSoloId() === id) {
+                /* Back to the set that was showing before — or to every
+                   channel with data, when this window has nothing remembered
+                   because the solo came from a previous session. */
+                gp.laneShow = gp.laneSoloPrev || {};
+                gp.laneSoloPrev = null;
+            } else {
+                if (!gpLaneSoloId()) {
+                    var m = gpLaneShowMap(), keep = {};
+                    Object.keys(m).forEach(function (k) { keep[k] = m[k]; });
+                    gp.laneSoloPrev = keep;
+                }
+                var next = {};
+                rows.forEach(function (l) { next[l.id] = (l.id === id); });
+                gp.laneShow = next;
+            }
             gpLaneShowSave();
             gp.stripCache = null;
             gpDrawStrip();

@@ -43,7 +43,8 @@ function grabConst(src, name) {
 }
 
 const src = fs.readFileSync(path.join(ROOT, REL), 'utf8');
-const WANT = ['gpFlowH', 'gpNodeMinH', 'gpNodeWantH', 'gpNodeElastic', 'gpSpineFill'];
+const WANT = ['gpFlowH', 'gpNodeMinH', 'gpNodeWantH', 'gpNodeElastic', 'gpSpineFill',
+              'gpNum', 'gpSpineSizes', 'gpRowHeld'];
 const CONSTS = ['GP_ROW_MIN', 'GP_GAP', 'GP_SNAP'];
 const parts = [], missing = [];
 for (const n of CONSTS) parts.push(grabConst(src, n));
@@ -66,6 +67,8 @@ const F = new Function(`
         min: typeof gpNodeMinH === 'function' ? gpNodeMinH : null,
         elastic: typeof gpNodeElastic === 'function' ? gpNodeElastic : null,
         fill: typeof gpSpineFill === 'function' ? gpSpineFill : null,
+        sizes: typeof gpSpineSizes === 'function' ? gpSpineSizes : null,
+        rowHeld: typeof gpRowHeld === 'function' ? gpRowHeld : null,
         GP_ROW_MIN: GP_ROW_MIN, GP_GAP: GP_GAP, GP_SNAP: GP_SNAP,
     };
 `)();
@@ -200,6 +203,84 @@ console.log('\nthe input is never mutated');
 const before = [400, 300];
 F.fill(before, [150, 150], [true, false], 800);
 ok('the caller keeps its own array', before[0] === 400 && before[1] === 300);
+
+/* ---- gpSpineSizes: which rows are measured and which are held ----------
+ * A row is either MEASURED — it takes the height its own panels need — or
+ * HELD at the height it was dragged to. This used to be one flag over the
+ * whole spine: drag the top divider and every row below stopped fitting its
+ * contents, including rows the gesture never touched. These pin down that a
+ * hold now only ever speaks for its own row.
+ *
+ * Argument order: (sz, held, mins, wants, elastic, avail).
+ */
+if (!F.sizes) { console.log('\ngpSpineSizes is not in this revision'); }
+else {
+    const MIN = [150, 150, 150];
+
+    console.log('\nnothing held: every row takes what its contents need');
+    let s = F.sizes([1, 1, 1], [false, false, false], MIN, [300, 435, 356],
+                    [false, false, false], 2000);
+    ok('the measured heights win over whatever was stored',
+       near(s[0], 300) && near(s[1], 435) && near(s[2], 356), JSON.stringify(s));
+
+    console.log('\na held row keeps its height; its neighbours still measure');
+    /* The bug this replaced: dragging row 0 also froze rows 1 and 2, so the
+       lap list stayed at 372 while its contents needed 435 and clipped. */
+    s = F.sizes([372, 372, 359], [true, false, false], MIN, [0, 435, 356],
+                [false, false, false], 2000);
+    ok('the dragged row stays where it was put', near(s[0], 372), String(s[0]));
+    ok('the untouched row grows to fit its contents', near(s[1], 435), String(s[1]));
+    ok('and so does the one after it', near(s[2], 356), String(s[2]));
+
+    console.log('\na held row is never below what a panel can be drawn in');
+    s = F.sizes([20, 400], [true, false], [150, 150], [0, 400], [false, false], 2000);
+    ok('it stops at the floor', s[0] === 150, String(s[0]));
+
+    console.log('\nspare height goes to elastic rows that are NOT held');
+    s = F.sizes([200, 300], [false, false], [150, 150], [200, 300], [true, false], 700);
+    ok('the free elastic row takes the slack', near(s[0], 400) && near(s[1], 300),
+       JSON.stringify(s));
+    s = F.sizes([200, 300], [true, false], [150, 150], [0, 300], [true, false], 700);
+    ok('a HELD elastic row is not quietly grown', near(s[0], 200), String(s[0]));
+    ok('and the spine simply comes up short rather than lying',
+       near(s[0] + s[1], 500), (s[0] + s[1]).toFixed(1));
+
+    console.log('\nevery row held and fitting: a resize keeps the shape');
+    s = F.sizes([300, 200], [true, true], [150, 150], [0, 0], [false, false], 1000);
+    ok('both scale to the new window', near(s[0], 600) && near(s[1], 400),
+       JSON.stringify(s));
+    ok('and the proportions are exactly the ones that went in',
+       near(s[0] / s[1], 1.5, 0.01), (s[0] / s[1]).toFixed(3));
+
+    console.log('\nevery row held and already too tall: left alone, page scrolls');
+    s = F.sizes([700, 600], [true, true], [150, 150], [0, 0], [false, false], 500);
+    ok('no rescale down into the window', near(s[0], 700) && near(s[1], 600),
+       JSON.stringify(s));
+
+    console.log('\none held row does not drag the others into the window with it');
+    /* The rescale is only right when EVERY row is held — with one measured
+       row in the spine it would be scaling a height that means "what my
+       contents need" by a factor that means "what the window has". */
+    s = F.sizes([300, 200], [true, false], [150, 150], [0, 356], [false, false], 1000);
+    ok('the held row is not stretched', near(s[0], 300), String(s[0]));
+    ok('the measured one is still its own height', near(s[1], 356), String(s[1]));
+
+    console.log('\nthe stored size of a MEASURED row is irrelevant');
+    s = F.sizes([9999, 1], [false, false], [150, 150], [300, 400], [false, false], 2000);
+    ok('a stale number does not survive a measure',
+       near(s[0], 300) && near(s[1], 400), JSON.stringify(s));
+
+    console.log('\nthe caller keeps its own arrays');
+    const sz0 = [372, 372], held0 = [true, false];
+    F.sizes(sz0, held0, [150, 150], [0, 435], [false, false], 2000);
+    ok('sizes untouched', sz0[0] === 372 && sz0[1] === 372, JSON.stringify(sz0));
+    ok('holds untouched', held0[0] === true && held0[1] === false, JSON.stringify(held0));
+
+    console.log('\nwhat counts as held');
+    ok('a row with the mark', F.rowHeld({ held: true }) === true);
+    ok('a row without it', F.rowHeld({}) === false);
+    ok('nothing at all', F.rowHeld(null) === false);
+}
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
