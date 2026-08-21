@@ -30662,7 +30662,14 @@
                        "button is for, and the node keeps your choice through its own " +
                        "self-restarts either way.") + "</div>" +
                  gpSetRow("Start at power-on",
-                     gp.node === null
+                     /* Loose, like `rb` two lines up and like every other group
+                        in Setup. `gp.node === null` treated "never read" as
+                        KNOWN: gp.node starts undefined — it is not a key in the
+                        gp literal at all — so before the first nodeConfigGet
+                        answers, or after any step of gpRefreshDevice's chain
+                        rejects, this drew the On/Off segment with Off lit and
+                        asserted a setting nobody had read. */
+                     !gp.node
                        ? "<span class='gp-set-na'>waiting for the node</span>"
                        : "<div class='ws-seg' style='width:144px'>" +
                          "<button class='" + (rb ? "on" : "") + "' onclick='gpRecBootSet(1)'>On</button>" +
@@ -32604,6 +32611,18 @@
         function gpLinkLost() {
             if (!gpDev()) return;
             gp.status = null; gp._prev = null; gp.rates = {}; gp._misses = 0;
+            /* The node's own config goes with the node. Left standing, Setup
+               kept drawing Mounting, Timezone, "Match this PC", Gyro zero and
+               the Recording segment as live, enabled controls — because all of
+               them gate on `gp.node`, which was still the config of a puck that
+               is no longer there. Every one of their handlers returns on
+               !gpDev() BEFORE it says anything, so they did nothing and said
+               nothing. Measured: pull the USB and those four groups stay
+               enabled and inert while Identify, WiFi and CAN correctly grey out
+               beside them, which is a worse lie than either state alone.
+               Only the node's config — gp.info keeps naming which puck it was,
+               which is what the chips report while it is away. */
+            gp.node = null;
             gp._relinkAt = Date.now();
             /* detachDevice, not detach: it also releases the serial port, and
                the port has to be free before anything can re-open it. */
