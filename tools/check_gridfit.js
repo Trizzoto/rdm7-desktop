@@ -44,7 +44,7 @@ function grabConst(src, name) {
 
 const src = fs.readFileSync(path.join(ROOT, REL), 'utf8');
 const WANT = ['gpFlowH', 'gpNodeMinH', 'gpNodeWantH', 'gpNodeElastic', 'gpSpineFill',
-              'gpNum', 'gpSpineSizes', 'gpRowHeld'];
+              'gpNum', 'gpSpineSizes', 'gpRowHeld', 'gpNodeCollapse'];
 const CONSTS = ['GP_ROW_MIN', 'GP_GAP', 'GP_SNAP'];
 const parts = [], missing = [];
 for (const n of CONSTS) parts.push(grabConst(src, n));
@@ -69,6 +69,7 @@ const F = new Function(`
         fill: typeof gpSpineFill === 'function' ? gpSpineFill : null,
         sizes: typeof gpSpineSizes === 'function' ? gpSpineSizes : null,
         rowHeld: typeof gpRowHeld === 'function' ? gpRowHeld : null,
+        collapse: typeof gpNodeCollapse === 'function' ? gpNodeCollapse : null,
         GP_ROW_MIN: GP_ROW_MIN, GP_GAP: GP_GAP, GP_SNAP: GP_SNAP,
     };
 `)();
@@ -295,6 +296,43 @@ else {
     F.sizes(sz0, held0, [150, 150], [0, 435], [false, false], 2000);
     ok('sizes untouched', sz0[0] === 372 && sz0[1] === 372, JSON.stringify(sz0));
     ok('holds untouched', held0[0] === true && held0[1] === false, JSON.stringify(held0));
+
+    console.log('\na hold survives the row collapsing to its last panel');
+    /* The hold is a property of the row's PLACE in the spine, not of the node
+       object sitting there — and gpNodeCollapse replaces a row that lost every
+       panel but one WITH that panel. Closing one panel of a two-panel row used
+       to release the height the row was being held at, silently. */
+    if (!F.collapse) console.log('  (gpNodeCollapse not exported to the harness)');
+    else {
+        let root = { id: 'r', dir: 'col', sz: [300, 200], kids: [
+            { id: 'a', dir: 'row', held: true, sz: [1], kids: [{ id: 'p1', type: 'map' }] },
+            { id: 'b', type: 'times' } ] };
+        F.collapse(root);
+        ok('the surviving panel keeps the hold', root.kids[0].held === true,
+           JSON.stringify(root.kids.map(k => !!k.held)));
+        ok('and it really is the panel now', root.kids[0].type === 'map', root.kids[0].type);
+
+        /* Flattening a same-axis nest spreads one held row over several: their
+           sizes sum to what it had, so holding all of them keeps the spine
+           exactly as tall as it was. */
+        root = { id: 'r', dir: 'col', sz: [300, 200], kids: [
+            { id: 'a', dir: 'col', held: true, sz: [1, 1],
+              kids: [{ id: 'p1', type: 'map' }, { id: 'p2', type: 'graph' }] },
+            { id: 'b', type: 'times' } ] };
+        F.collapse(root);
+        ok('a flattened nest carries the hold to both halves',
+           root.kids[0].held === true && root.kids[1].held === true,
+           JSON.stringify(root.kids.map(k => !!k.held)));
+        ok('and their sizes still sum to what the row had',
+           near(root.sz[0] + root.sz[1], 300), (root.sz[0] + root.sz[1]).toFixed(1));
+
+        root = { id: 'r', dir: 'col', sz: [300, 200], kids: [
+            { id: 'a', dir: 'row', sz: [1], kids: [{ id: 'p1', type: 'map' }] },
+            { id: 'b', type: 'times' } ] };
+        F.collapse(root);
+        ok('a row that was NOT held does not acquire one', !root.kids[0].held,
+           JSON.stringify(root.kids.map(k => !!k.held)));
+    }
 
     console.log('\nwhat counts as held');
     ok('a row with the mark', F.rowHeld({ held: true }) === true);

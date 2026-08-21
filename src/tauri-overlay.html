@@ -3257,9 +3257,12 @@
            screen and Close, so the way OUT of a too-narrow panel was the part
            that disappeared. Measured: a Sectors panel five to a row wanted
            357 px of header and had 240.
-           Wrapping costs nothing when there is room, and gpPanelWantH reads
-           the header's real offsetHeight, so a two-line header simply makes
-           the panel two lines taller. */
+           Wrapping costs nothing when there is room. For a panel whose height
+           is MEASURED, gpPanelWantH reads the header's real offsetHeight, so a
+           two-line header simply makes the panel two lines taller. A map or a
+           video is sized from its width instead and keeps the height it had —
+           the header takes the extra line out of the picture, which at these
+           widths is the right trade either way. */
         #gpWorkspace .gpb-phead {
             display: flex; align-items: center; gap: 6px; flex-wrap: wrap; row-gap: 3px;
             padding: 4px 5px 4px 5px; border-bottom: 1px solid var(--gpb-div); flex: none;
@@ -6407,7 +6410,10 @@
            frame poll re-renders a few times a second and picks the filter up on
            its own. Pause the bus and that stops: the box then did nothing at
            all, which is exactly when you most want to filter a captured list.
-           tools/check_controls.js now fails on any handler sealed this way. */
+           tools/check_controls.js fails on any handler sealed this way that it
+           can see — it reads the on* attributes in the built page, so it covers
+           markup and the template literals that build markup, but not a handler
+           assigned from script (el.onclick = ...). */
         window.caRender = caRender;
         /* SavvyCAN declutter controls */
         window.caChkClick = function (e, id) {
@@ -8520,8 +8526,10 @@
         /* A message with nowhere to go is still a message. The slot is normally
            on screen and this writes into it, and gpRestoreMsgs puts it back
            after a re-render. But some slots outlived the surface that drew
-           them: "gpTraceMsg" is rendered only by the Analyse inspector that
-           ADR-0025 retired, and it is now in NO view — measured, all seven.
+           them: "gpTraceMsg" is emitted only by builders the Analyse inspector
+           used, and ADR-0025 retired that inspector — so although the markup for
+           it is still in this file, the element reaches no view. Measured live
+           in all seven.
            A dozen call sites still report into it, so "Download failed",
            "Could not open that recording", "Export failed" and "Could not open
            that day" all went nowhere at all. A failure that says nothing is
@@ -12279,7 +12287,12 @@
                    hand" would be true of two rows out of five and read as all
                    of them. */
                 (nHeld === 0
-                    ? " Dragging a divider holds the two rows it separates at that height."
+                    /* Not "the two rows it separates": a downward drag takes its
+                       space from the next row that has any to give, and the one
+                       after that, so gpDragSplit holds every row whose height it
+                       actually moved. Saying two would be wrong on any spine
+                       deeper than two. */
+                    ? " Dragging a divider holds the rows it moves at that height."
                     : " " + (nHeld === nRows ? "Every row is" :
                              nHeld + " of " + nRows + " rows " + (nHeld === 1 ? "is" : "are")) +
                       " held at a height you set &mdash; Full releases them all, " +
@@ -12802,7 +12815,7 @@
                          "<td class='pick'><input type='checkbox' data-gp-spick='" + gpEsc(s.id) + "'" +
                          (pk[s.id] ? " checked" : "") +
                          " title='Tick this recording — the bar at the bottom " +
-                         "moves, clears or deletes everything ticked'></td>" +
+                         "moves or deletes everything ticked'></td>" +
                          "<td class='when" + (sameDay ? " same" : "") + "'>" +
                          "<b>" + gpEsc(day) + "</b><em>" + gpEsc(gpSesClock(s.recordedAt)) + "</em>" +
                          (s.dated === "gps" ? "" :
@@ -13677,12 +13690,25 @@
             var kids = [], sz = [];
             n.kids.forEach(function (k, i) {
                 var w = gpNum(n.sz[i], 1);
+                /* A hold is a property of the row's PLACE in the spine, not of
+                   the node object sitting there — and both branches below throw
+                   that node away. Closing one panel of a two-panel row collapsed
+                   the row to its survivor and silently released the height the
+                   row was being held at; the mosaic jumped and Arrange said one
+                   fewer row was held, with nothing having asked for either. */
+                var held = !!k.held;
                 if (k.kids && k.kids.length === 1) k = k.kids[0];          /* a split of one */
                 if (k.kids && k.dir === n.dir) {                            /* same-axis nest */
                     var tot = k.sz.reduce(function (a, b) { return a + b; }, 0) || 1;
-                    k.kids.forEach(function (gk, j) { kids.push(gk); sz.push(w * k.sz[j] / tot); });
+                    k.kids.forEach(function (gk, j) {
+                        /* Their sizes sum to what the held row had, so holding
+                           all of them keeps the spine exactly as tall as it was. */
+                        if (held) gk.held = true;
+                        kids.push(gk); sz.push(w * k.sz[j] / tot);
+                    });
                     return;
                 }
+                if (held) k.held = true;
                 kids.push(k); sz.push(w);
             });
             n.kids = kids; n.sz = sz;
@@ -13845,9 +13871,18 @@
             });
         };
 
-        /* A row at the bottom, full width. Squeeze the existing rows to make
-           room while they can all still be read; past that, extend below the
-           fold and let the grid scroll. */
+        /* A row at the bottom, full width.
+           Rows that are MEASURED take the height their contents need, so there
+           is nothing to squeeze out of them and the page takes the new row's
+           height. Rows you have HELD keep the height you set — that is what
+           holding one means, and quietly shrinking it to make room for a row
+           you just added would undo a choice nobody revisited. So the squeeze
+           below only bites while the spine still fits; past that it extends
+           below the fold and the grid scrolls, which is also what FULL does
+           with a mosaic too tall for the window.
+           (Before rows carried their own hold, one flag covered the spine and
+           this branch rescaled all of it. It reads as a regression and is not:
+           the height it used to take was one nobody had asked for.) */
         window.gpRowAdd = function () {
             gpGridMutate(function (g) {
                 var root = gpRootCol(g);
@@ -15108,16 +15143,24 @@
            One recursive function for the whole mosaic: a split is a flex box
            of its children with a divider between each pair, and a panel is a
            panel. The `flex` argument is the size its parent gave it. */
-        function gpNodeHtml(n, flex) {
+        function gpNodeHtml(n, flex, isRoot) {
             var st = " style='flex:" + gpNum(flex, 1) + " 1 0%'";
             if (n.kids) {
                 var h = "<div class='gpb-node " + n.dir + "' data-gp-node='" + n.id + "'" + st + ">";
                 n.kids.forEach(function (k, i) {
-                    h += gpNodeHtml(k, n.sz[i]);
+                    h += gpNodeHtml(k, n.sz[i], false);
                     if (i < n.kids.length - 1)
                         h += "<div class='gpb-h" + (n.dir === "row" ? "col" : "row") +
                              "' data-gp-hs='" + n.id + ":" + i + "' title='Drag to resize" +
-                             (n.dir === "col"
+                             /* Only the ROOT spine can promise either of these.
+                                Holds live on the spine's own rows, so
+                                gpSplitRelease refuses any other splitter — and a
+                                panel split top/bottom is a col too, so every one
+                                of those was advertising a double-click that does
+                                nothing. Scrolling is the same: a nested stack is
+                                bounded by the row it sits in and cannot make the
+                                page taller. */
+                             (n.dir === "col" && isRoot
                                 ? " — past the bottom row the page starts scrolling. " +
                                   "Double-click to let these two rows fit their contents again"
                                 : "") +
@@ -15180,7 +15223,9 @@
                         "</div>";
             }
             html += "<div class='gpb-canvas" + (fullHit ? " full" : "") + "'>" +
-                (fullHit ? gpNodeHtml(fullHit.node, 1) : gpNodeHtml(root, 1)) + "</div>";
+                /* Full screen draws ONE node, which is not the spine however
+                   deep it sits — so its dividers make neither promise. */
+                (fullHit ? gpNodeHtml(fullHit.node, 1, false) : gpNodeHtml(root, 1, true)) + "</div>";
             if (!fullHit) {
                 html += "<button class='gpb-addrow' onclick='gpRowAdd()' " +
                     "title='Add a full-width row along the bottom'><i></i><span>+ Row</span><i></i></button>";
@@ -20250,6 +20295,20 @@
             }
             if (diag.startUsable === 1)
                 return "The line was crossed once, which starts a " + word + " but cannot finish one. Two crossings make the first " + word + ".";
+            /* The dead time is the one reason that reads as a contradiction:
+               the line WAS crossed, several times, and every crossing after the
+               first was thrown away for arriving too soon. Saying "no two of
+               them bracket a lap" there is true and useless — the remedy is a
+               number in Tracks, and without naming it nobody would find it.
+               gpRunsFromCrossings counts the rejections for exactly this. */
+            if (diag.rejectedMinTime) {
+                var trk2 = gpActiveTrack();
+                var dead = Math.round(gpDeadMs(trk2) / 1000);
+                return diag.rejectedMinTime + " crossing" + (diag.rejectedMinTime === 1 ? " was" : "s were") +
+                       " ignored for coming under " + dead + " s after the one before — that is this track's " +
+                       "minimum lap time, which stops a car crawling over the line timing twice. " +
+                       "Lower it in Tracks if these really are separate " + word + "s.";
+            }
             return "Crossings were found but no two of them bracket a " + word + " — if this recording is several separate runs, each may hold only one crossing.";
         }
 
