@@ -3251,12 +3251,25 @@
            off the top and leave you reading an unlabelled table. Above
            Leaflet's controls (z 1000) or the map's + and - would punch
            through the header as it passed under them. */
+        /* Wraps rather than clips. A panel narrow enough that the type picker,
+           the mode buttons and the three corner icons cannot sit on one line
+           used to cut whichever came last — and what came last was Split, Full
+           screen and Close, so the way OUT of a too-narrow panel was the part
+           that disappeared. Measured: a Sectors panel five to a row wanted
+           357 px of header and had 240.
+           Wrapping costs nothing when there is room, and gpPanelWantH reads
+           the header's real offsetHeight, so a two-line header simply makes
+           the panel two lines taller. */
         #gpWorkspace .gpb-phead {
-            display: flex; align-items: center; gap: 6px;
+            display: flex; align-items: center; gap: 6px; flex-wrap: wrap; row-gap: 3px;
             padding: 4px 5px 4px 5px; border-bottom: 1px solid var(--gpb-div); flex: none;
             cursor: grab; user-select: none; touch-action: none;
             position: sticky; top: 0; z-index: 1010; background: var(--gpb-surface);
         }
+        /* The three corner icons move as one. Left to wrap individually, a
+           header one icon too narrow put Close on a line of its own under the
+           other two. */
+        #gpWorkspace .gpb-pacts { display: flex; align-items: center; margin-left: auto; flex: none; }
         #gpWorkspace .gpb-phead:active { cursor: grabbing; }
         /* The header IS the handle, but a surface you can drag has to look
            like one — six dots is the one idiom nobody has to be taught. */
@@ -3312,7 +3325,10 @@
             border: 1px solid var(--gpb-div); padding: 1px 4px; cursor: pointer;
         }
         #gpWorkspace .gpb-phead .sp { flex: 1; }
-        #gpWorkspace .gpb-pseg { display: inline-flex; border: 1px solid var(--gpb-div); margin-left: 4px; }
+        /* The map's five modes are wider than a narrow panel, so they wrap
+           among themselves rather than pushing the whole segment off the
+           header. The borders between buttons still read as one control. */
+        #gpWorkspace .gpb-pseg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--gpb-div); margin-left: 4px; }
         #gpWorkspace .gpb-pseg button {
             font-size: 10.5px; padding: 2px 7px; background: transparent; border: none;
             cursor: pointer; color: var(--gpb-soft); white-space: nowrap;
@@ -3339,6 +3355,11 @@
             color: var(--gpb-ink); padding: 5px 7px; text-align: left;
         }
         #gpWorkspace .gpb-splitmenu button:hover { background: var(--gpb-red-100); color: var(--gpb-red-800); }
+        /* Offered but not available: still hoverable, because the reason it is
+           off is on its own tooltip and a control you cannot point at cannot
+           explain itself. */
+        #gpWorkspace .gpb-splitmenu button[disabled] { color: var(--gpb-muted); cursor: not-allowed; }
+        #gpWorkspace .gpb-splitmenu button[disabled]:hover { background: transparent; color: var(--gpb-muted); }
         #gpWorkspace .gpb-splitmenu button svg { flex: none; opacity: 0.7; }
         #gpWorkspace .gpb-pbody { flex: 1; min-height: 0; position: relative; overflow: hidden; }
         #gpWorkspace .gpb-pscroll { position: absolute; inset: 0; overflow: auto; }
@@ -3420,10 +3441,19 @@
             background: transparent; border-left: none; border-right: none; border-top: none;
             font: inherit; color: var(--gpb-ink); text-align: left;
         }
-        #gpWorkspace .gpb-lapline .ln { display: flex; align-items: center; gap: 9px; }
+        /* Wraps for the same reason the header does: in a narrow column the
+           REF tag sat past the right edge, and REF is how you choose what
+           everything else is measured against — not something to lose. */
+        #gpWorkspace .gpb-lapline .ln { display: flex; align-items: center; gap: 9px;
+            flex-wrap: wrap; row-gap: 2px; }
         /* Indented to clear the tick and the swatch, so the sectors read as
            belonging to the lap above them rather than as a row of their own. */
-        #gpWorkspace .gpb-lapline .gp-secs { margin: 4px 0 1px 24px; gap: 4px; }
+        /* Sector chips wrap. Four of them at a 58 px floor plus the indent
+           need about 290 px on one line, so a lap list in a narrow column
+           overflowed sideways and hid its own sector times behind a scrollbar
+           — measured at 401 px of content in a 234 px panel. Wrapped, they run
+           onto a second line and gpPanelWantH grows the panel to suit. */
+        #gpWorkspace .gpb-lapline .gp-secs { margin: 4px 0 1px 24px; gap: 4px; flex-wrap: wrap; }
         #gpWorkspace .gpb-lapline .gp-secs span {
             flex: 0 0 auto; min-width: 58px; padding: 1px 6px; font-size: 10.5px;
             text-align: left; display: inline-flex; align-items: baseline; gap: 5px;
@@ -14530,7 +14560,10 @@
                      " title='Each sector against the reference lap &mdash; what it cost, or gained'>Deltas</button>" +
                      "</div>";
             }
-            h += "<span class='sp'></span>";
+            /* The three that act on the panel itself travel together, so a
+               header too narrow for them wraps all three onto the next line
+               rather than stranding Close under the other two. */
+            h += "<span class='gpb-pacts'>";
             /* Splitting replaced "add a panel beside this one" and the
                add-a-row banner both: cutting THIS panel is the one gesture
                that reaches every arrangement the mosaic can hold, including
@@ -14555,9 +14588,20 @@
             h += "<button class='gpb-picon' title='Close this panel' data-gp-pclose='" + p.id + "'>" +
                  "<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'>" +
                  "<path d='M18 6 6 18M6 6l12 12'></path></svg></button>";
+            h += "</span>";
             if (gp.splitMenu === p.id) {
+                /* Side by side is offered only when both halves would clear
+                   the width a panel can actually be drawn in — the same floor
+                   a divider drag already refuses to go below. Splitting a
+                   241 px lap list in two gave two columns too narrow for a
+                   lap time, and the only way back was to close one of them. */
+                var pel = document.querySelector("#gpGrid [data-gp-panel='" + p.id + "']");
+                var wide = !pel || pel.getBoundingClientRect().width >= GP_COL_MIN * 2 + GP_GAP;
                 h += "<div class='gpb-splitmenu' style='top:30px;right:4px'>" +
-                     "<button data-gp-dosplit='" + p.id + ":row'>" +
+                     "<button data-gp-dosplit='" + p.id + ":row'" +
+                     (wide ? "" : " disabled title='Too narrow to split side by side — each half " +
+                             "would be under " + GP_COL_MIN + " px. Split it top / bottom instead, " +
+                             "or widen this panel first.'") + ">" +
                      "<svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'>" +
                      "<rect x='3' y='4' width='18' height='16'></rect><path d='M12 4v16'></path></svg>" +
                      "Split left / right</button>" +
