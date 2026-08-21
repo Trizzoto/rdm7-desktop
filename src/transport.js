@@ -485,6 +485,71 @@
             });
         };
 
+        /* Firmware older than v1.3.0 has no POST /api/ota/upload. The request
+           then matches only the /api/* OPTIONS handler the dash registers for
+           CORS, so esp_http_server answers 405 "Specified method is invalid
+           for this resource" rather than 404 — which reads as a broken app
+           instead of an old dash, and is exactly the dash you are most likely
+           to be updating. Those builds do have the release flow (check ->
+           start) and the updater is installing a published release anyway, so
+           hand off to it instead of dying on the 405. */
+        const _noUploadEndpoint = (e) => /40[45]/.test(String((e && e.message) || e || ''));
+
+        const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+        async function _releaseOta(onProgress) {
+            if (onProgress) onProgress(0);
+            const TOO_OLD = 'This dash runs firmware too old to be flashed over WiFi, and ';
+
+            /* The dash's check is NOT observable while it runs: check_for_update()
+               never sets OTA_CHECKING, so /api/ota/status reports the PREVIOUS
+               verdict right up until the new one lands. A dash auto-checks ~15 s
+               after boot, so the status is almost always already 'no_update' when
+               we get here — reading it straight back would call a check that has
+               not finished yet a definitive "nothing to install".
+
+               So: never trust 'no_update' before the check has had time to run.
+               Only 'available' and 'failed' are acted on early; anything else has
+               to survive to the settle deadline. */
+            const SETTLE_MS = 12000;   /* floor: TLS + GitHub API on a weak link */
+            const GIVE_UP_MS = 60000;  /* the dash itself retries 2-3 times */
+
+            await api('/api/ota/check', { method: 'POST' });
+
+            const t0 = Date.now();
+            let st = null;
+            while (Date.now() - t0 < GIVE_UP_MS) {
+                await _sleep(2000);
+                st = await api('/api/ota/status').catch(() => null);
+                const s = st && st.status;
+                if (s === 'available') break;
+                if (s === 'failed')
+                    throw new Error(TOO_OLD + 'its own update check failed — it could ' +
+                                    'not reach the update server. Connect it by USB.');
+                if (s === 'no_update' && Date.now() - t0 >= SETTLE_MS)
+                    throw new Error(TOO_OLD + 'there is no published update to fall back ' +
+                                    'on — it is already on the newest release. Connect it ' +
+                                    'by USB to flash this build.');
+            }
+            if (!st || st.status !== 'available')
+                throw new Error(TOO_OLD + 'its update check did not finish. Connect it by USB.');
+
+            await api('/api/ota/start', { method: 'POST' });
+
+            /* The download is the dash's job now — mirror its progress until it
+               reboots. A dropped poll means it already restarted, not a failure. */
+            for (let i = 0; i < 150; i++) {
+                await _sleep(2000);
+                const p = await api('/api/ota/status').catch(() => null);
+                if (!p) break;
+                if (onProgress) onProgress(Math.max(0, Math.min(100, p.progress | 0)));
+                if (p.status === 'completed') break;
+                if (p.status === 'failed')
+                    throw new Error('The dash fetched the update but could not install it.');
+            }
+            return { ok: true, legacy: true, rebooting: true };
+        }
+
         return {
             name: 'wifi',
             baseUrl,
@@ -948,10 +1013,16 @@
                     /* Rust path bypasses the webview's CORS on the device origin.
                        No byte-level progress available, so report coarsely. */
                     if (onProgress) onProgress(0);
-                    const respText = await _tauriInvoke('http_upload_binary', {
-                        url, data: Array.from(bytes), timeout_ms: TIMEOUT_MS,
-                        headers: { 'X-RDM-Device': serial },
-                    });
+                    let respText;
+                    try {
+                        respText = await _tauriInvoke('http_upload_binary', {
+                            url, data: Array.from(bytes), timeout_ms: TIMEOUT_MS,
+                            headers: { 'X-RDM-Device': serial },
+                        });
+                    } catch (e) {
+                        if (_noUploadEndpoint(e)) return await _releaseOta(onProgress);
+                        throw e;
+                    }
                     if (onProgress) onProgress(100);
                     try { return JSON.parse(respText); } catch (e) { return { ok: true }; }
                 }
@@ -966,6 +1037,8 @@
                             onProgress(Math.round(e.loaded / e.total * 100));
                     };
                     xhr.onload = () => {
+                        if (xhr.status === 404 || xhr.status === 405)
+                            return _releaseOta(onProgress).then(res, rej);
                         if (xhr.status >= 300) return rej(new Error(xhr.responseText || ('HTTP ' + xhr.status)));
                         try { res(JSON.parse(xhr.responseText)); } catch (e) { res({ ok: true }); }
                     };

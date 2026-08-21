@@ -46,8 +46,8 @@ function constOf(name) {
 }
 
 const WANT = [
-    'gpN', 'gpMetres', 'gpMetresPerDeg', 'gpSecs', 'gpStep', 'gpChanDefsById',
-    'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpChannels',
+    'gpN', 'gpMetres', 'gpMetresPerDeg', 'gpSecs', 'gpStep', 'gpChanDefsById', 'gpChanFixes', 'gpChanFixApply', 'gpChanFixFor', 'gpChanRawRange', 'gpChanWouldRead', 'gpChanDef', 'gpChanValue', 'gpChanDefsFor', 'gpDashChansCached',
+    'gpSignedDist', 'gpCrossAt', 'gpSpanSecs', 'gpHz', 'gpGateHits', 'gpMainDir', 'gpChannels',
     'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess',
     'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle',
     'gpDriftSeek', 'gpDriftSwitches', 'gpDriftSegments', 'gpDriftStats',
@@ -640,6 +640,96 @@ head('Degenerate recordings');
     for (let i = 0; i < still.length; i++) if (ds.ok[i]) claimed++;
     ok('a parked car claims no angle anywhere', claimed === 0, claimed + ' samples claimed');
     ok('and no switches', API.gpDriftSwitches().length === 0);
+}
+
+/* ---- spins -------------------------------------------------------------
+ * The event a drift day is guaranteed to produce, and the one the engine has
+ * to refuse to score rather than score badly: nought stars would read as a
+ * corner driven poorly, and a spin is not that. Two ways to know, and they
+ * are not equally certain — going past 100 degrees is unambiguous, still
+ * being sideways when the car fell below the speed the angle can be read at
+ * is not, because a spin and a deliberate finish sideways look identical
+ * from there.
+ */
+head('A spin is refused, not scored');
+{
+    const whole = (rows) => ({ from: 0, to: rows.length - 1 });
+
+    /* Round it goes: 130 degrees at the first corner. */
+    const over = makeRun({ beta: t => bump(t, 11, 1.6, 5.0, 2.2, 130) + betaOf(t) - bump(t, 11, 1.6, 5.0, 2.2, 38) });
+    load(over);
+    const so = API.gpDriftSpun(whole(over));
+    ok('past ' + K.GP_DRIFT_SPIN + ' degrees is called a spin', !!so && so.why === 'over',
+       so ? so.why + ' at ' + Math.round(so.deg) + ' deg' : 'nothing reported');
+    ok('and it says how far round it actually went',
+       !!so && so.deg > K.GP_DRIFT_SPIN, so ? Math.round(so.deg) + ' deg' : '');
+
+    /* The ordinary drive: big angles that all come back. */
+    load(makeRun());
+    const rows0 = gp.trace;
+    ok('a drive that never over-rotates is not accused of it',
+       API.gpDriftSpun(whole(rows0)) === null);
+
+    /* Sideways, and the car stops there.
+       This has to be built as a spin actually behaves or the engine is right
+       to disagree with it: a car at 60 degrees of slip whose COURSE does not
+       change and which carries no lateral load is, by every measurement the
+       engine has, going straight — and the first version of this fixture held
+       exactly that for eight seconds and was correctly zeroed. A real one
+       keeps rotating while the speed collapses. */
+    const spinChi = t => chiOf(t) + 130 * ss((t - 45) / 3.5);
+    const stall = makeRun({
+        T: 60,
+        chi: spinChi,
+        beta: t => bump(t, 11, 1.6, 5.0, 2.2, 38) + bump(t, 45, 1.5, 12, 6, 70),
+        /* 60 km/h until it lets go, then nothing four seconds later — so it
+           falls through the readable speed about two seconds after the last
+           stretch the engine could anchor on. */
+        kphAt: t => (t < 45 ? 60 : Math.max(0, 60 * (1 - (t - 45) / 4))),
+    });
+    load(stall);
+    const sd = API.gpDriftSpun(whole(stall));
+    ok('still ' + K.GP_DRIFT_SPIN_DROP + '+ degrees sideways below ' + K.GP_DRIFT_MIN_KPH +
+       ' km/h is reported too', !!sd && sd.why === 'dropped',
+       sd ? sd.why + ' at ' + Math.round(sd.deg) + ' deg' : 'nothing reported');
+    /* Different word, because it is a different amount of certainty — the
+       view prints two different explanations off this. */
+    ok('but as a DROP, not as an over-rotation', !sd || sd.why !== 'over');
+
+    /* Coming to a stop straight is just parking. */
+    const parkStraight = makeRun({
+        T: 60,
+        beta: t => bump(t, 11, 1.6, 5.0, 2.2, 38),
+        kphAt: t => (t < 45 ? 60 : Math.max(0, 60 * (1 - (t - 45) / 4))),
+    });
+    load(parkStraight);
+    ok('stopping straight is not a spin', API.gpDriftSpun(whole(parkStraight)) === null);
+
+    /* An angle that goes away and comes back is a drift, whatever it did in
+       the middle — the recovery is the whole point. */
+    const caught = makeRun({
+        T: 90,
+        chi: t => chiOf(t) + 110 * ss((t - 45) / 3),
+        beta: t => bump(t, 11, 1.6, 5.0, 2.2, 38) + bump(t, 45, 1.5, 5, 3, 66),
+        /* It gets slow enough that the angle stops being readable — and then
+           it goes again, which is a caught slide and not a spin. */
+        kphAt: t => (t > 47 && t < 51 ? 18 : 60),
+    });
+    load(caught);
+    ok('a car that drops below the read speed and drives on is not a spin',
+       API.gpDriftSpun(whole(caught)) === null,
+       JSON.stringify(API.gpDriftSpun(whole(caught))));
+
+    /* And a rating is never produced for one. */
+    load(stall);
+    ok('a span the engine calls spun is never given stars',
+       (function () {
+           const sp = API.gpDriftSpun(whole(gp.trace));
+           if (!sp) return false;                       /* the setup above must still spin */
+           /* Nought stars would read as a corner driven badly, and it is not
+              one — it is a corner nobody finished. */
+           return API.gpDriftStars({ spun: sp }, 60) === null;
+       })());
 }
 
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) : 'passed all ' + pass) + ' checks');

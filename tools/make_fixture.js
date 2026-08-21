@@ -162,6 +162,18 @@ let prevV = null;
     }
 }
 
+/* What the two raw columns MEAN. These ride in the file's own meta, the way
+ * an imported VBO's do (gpChanDefsById reads meta.chanDefs and they win for
+ * their own ids), so the fixture describes itself on any PC. It used to print
+ * a localStorage line to paste into the console instead — and a fixture whose
+ * channels are unnamed and unscaled until you perform a ritual reads as an app
+ * bug: throttle came out as "avg pedal 628%", which is the ×10 raw count and
+ * looks exactly like a scaling fault in the report. */
+const CHAN_DEFS = [
+    { id: 'my:fixture_rpm', name: 'Engine RPM', unit: 'rpm', decimals: 0, scale: 1,   offset: 0 },
+    { id: 'my:fixture_thr', name: 'Throttle',   unit: '%',   decimals: 1, scale: 0.1, offset: 0 }
+];
+
 const n = rows.length;
 const NCH = 2;
 const lat = new Int32Array(n), lon = new Int32Array(n);
@@ -185,10 +197,8 @@ const out = {
         recordedAt: clock, dated: 'gps', savedAt: Date.now(),
         device: 'RDM GPS', samples: n, durationS: (n - 1) * 0.04,
         lapCount: 0, bestLapS: null, lapTimesS: [], corners: [], car: '', driver: '',
-        /* The ids these columns mean. They match the two definitions the
-           fixture README asks you to add by hand (or import), so the rack can
-           name and scale them. */
-        chanIds: ['my:fixture_rpm', 'my:fixture_thr']
+        chanIds: CHAN_DEFS.map(d => d.id),
+        chanDefs: CHAN_DEFS
     },
     data: { n, lat: b64(lat), lon: b64(lon), kph: b64(kph), hdg: b64(hdg), t: b64(t),
             nch: NCH, can: b64(can) }
@@ -197,17 +207,5 @@ const dst = path.join('C:', 'Users', 'ruuva', 'workspace', 'rdm7-desktop', 'src'
 fs.writeFileSync(dst, JSON.stringify(out));
 console.log('wrote', dst, n, 'samples,', ((n - 1) * 0.04 / 60).toFixed(1), 'min');
 
-/* The recording carries raw counts; what they MEAN lives in the channel
- * definitions, which are per-PC. Without these two the columns still draw —
- * unnamed and unscaled, which is the honest fallback — so paste this into the
- * app's console first if you want them labelled properly. */
-const defs = [
-    { id: 'my:fixture_rpm', name: 'Engine RPM', unit: 'rpm', decimals: 0,
-      decode: { can_id: 0x360, bit_start: 0, bit_length: 16, is_signed: false,
-                endian: 1, scale: 1, offset: 0 } },
-    { id: 'my:fixture_thr', name: 'Throttle', unit: '%', decimals: 1,
-      decode: { can_id: 0x360, bit_start: 16, bit_length: 16, is_signed: false,
-                endian: 1, scale: 0.1, offset: 0 } }
-];
-console.log('\nto have the two channels named and scaled, paste into the app console:\n');
-console.log("localStorage.setItem('rdm7_gp_mychans', '" + JSON.stringify(defs) + "'); location.reload()");
+console.log('channels: ' + CHAN_DEFS.map(d => d.name + ' (' + d.unit + ')').join(', ') +
+            ' — named and scaled by the file itself, nothing to paste');

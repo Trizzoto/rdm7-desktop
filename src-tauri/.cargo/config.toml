@@ -1,0 +1,11 @@
+# Build tuning for an 8 GB / 8-core machine.
+#
+# Cargo defaults to one rustc process per logical core. Eight concurrent
+# rustc processes, each peaking at 1-2 GB on the heavier Tauri crates, do
+# not fit in 8 GB — the machine falls into the page file and the build
+# takes longer than it would with fewer jobs.
+#
+# Two is the number that keeps a full `cargo build` resident. Raise it (or
+# delete this file) on a machine with more RAM.
+[build]
+jobs = 2

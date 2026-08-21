@@ -42,30 +42,36 @@ function grabVar(name) {
 }
 
 const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyCardHtml',
-    'gpMetres', 'gpSecs', 'gpStep', 'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpSplitRows', 'gpNoLapsWhy',
+    'gpMetres', 'gpSecs', 'gpSpanSecs', 'gpCrossAt', 'gpHz', 'gpStep', 'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpSplitRows', 'gpNoLapsWhy',
     'gpTrackById', 'gpActiveTrack', 'gpIsTrial', 'gpRunWord', 'gpTrackUid', 'gpTracksSave', 'gpSaveOwned', 'gpImportSaid',
-    'gpTraceHome', 'gpKmBetween', 'gpMatchTrack', 'gpHeadingAt', 'gpAngleDiff',
+    'gpTraceHome', 'gpKmBetween', 'gpTrackReach', 'gpMatchTrack', 'gpHeadingAt', 'gpAngleDiff',
     'gpLoopClosure', 'gpProposeLine', 'gpAutoLine', 'gpAutoSetUp', 'gpStints',
-    'gpLapRange', 'gpLaneScale', 'gpScaleFor',
+    'gpLapRange', 'gpLaneRanges', 'gpLaneScale', 'gpScaleFor',
     'gpLogChans', 'gpRingMinutes', 'gpLaneRows', 'gpLaneRowsAll',
     'gpDeviceChanIds', 'gpChanArraysEqual', 'gpChanToDevShape',
-    'gpSessionSectors', 'gpSectorMarks', 'gpSectorTimes',
-    'gpSplitsStats', 'gpSectorRange', 'gpHeatColour', 'gpSplitsHtml', 'gpTip', 'gpLapTime',
+    'gpSessionSectors', 'gpSectorHits', 'gpSectorMarks', 'gpSectorTimes',
+    'gpSplitsStats', 'gpSectorRange', 'gpHeatColour', 'gpSplitsHtml', 'gpSecDelta',
+    'gpSectorChips', 'gpSectorName',
+    'gpRefName', 'gpTip', 'gpLapTime',
     'gpLinesAgree', 'gpNodeTrackState', 'gpEmptyDownloadMsg', 'gpSnapGate',
     'gpDash', 'gpU', 'gpSpdU', 'gpLaneShowMap', 'gpLaneShowSave', 'gpLaneShown', 'gpLaneShowSet', 'gpLaneSig',
-    'gpChannelRows', 'gpChkHtml', 'gpChannelListHtml', 'gpLanesBtnLabel',
+    'gpChannelRows', 'gpChkHtml', 'gpChannelListHtml', 'gpChanBulkHtml', 'gpChanBulkState', 'gpChanRowsVisible', 'gpDecodeFormHtml', 'gpDecodeReadHtml', 'gpChanAutoRead', 'gpFetchDashChannels', 'gpDashChansCache', 'gpLanesBtnLabel',
     'gpMyChans', 'gpMyChansSave', 'gpAllChans', 'gpChanGroup', 'gpParseId', 'gpMyChanCheck',
     'gpToggleHtml', 'gpMyChanFormHtml',
     'gpRowsPack', 'gpRowsUnpack', 'gpSessionFileBuild', 'gpSessionFileParse', 'gpB64', 'gpB64Dec',
-    'gpSesUid', 'gpChannels', 'gpCsvBuild', 'gpSpdN', 'gpSmoothPath',
+    'gpSesUid', 'gpChannels', 'gpCsvBuild', 'gpCsvUnit', 'gpSpdN', 'gpSmoothPath',
     'gpSectorGates', 'gpSectorName', 'gpSectorNamed', 'gpSortSectors', 'gpSectorOfSample',
     'gpBusSeenHtml', 'gpElsewhereSays',
-    'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess', 'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle', 'gpChanDefsById',
+    'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess', 'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle', 'gpChanDefsById', 'gpChanFixes', 'gpChanFixApply', 'gpChanFixFor', 'gpChanRawRange', 'gpChanWouldRead', 'gpChanDef', 'gpChanValue', 'gpChanDefsFor', 'gpDashChansCached',
     'gpSlipLane',
-    'gpReadyRows',
+    'gpReadyRows', 'gpTraceFixBytes', 'gpFramed',
+    'gpMoveRuns', 'gpSplitLapsAuto', 'gpSplitLaps', 'gpRunWord', 'gpSortSectors',
+    'gpShapeFromDrive', 'gpOutlineFromRows', 'gpOutlineSimplify', 'gpOutlineStats',
+    'gpOutlineSrcShort', 'gpTrackUid', 'gpFrameTrack',
+    'gpSmoothAxis', 'gpSmoothNoise', 'gpToLocalM', 'gpRdpKeep',
     'gpReadyVerdict',
     'gpSnapGateToOutline'];
-const NEEDED_VAR = ['GP_LANES', 'GP_CHAN_LS', 'GP_DEVCHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_CHAN_COLOURS',
+const NEEDED_VAR = ['GP_SMOOTH_LIVE', 'GP_SMOOTH_MAXW', 'GP_OUTLINE_MAX', 'GP_OUTLINE_TOL_M', 'GP_RUN_STOP_KPH', 'GP_RUN_STOP_S', 'GP_RUN_MIN_S', 'GP_LANES', 'GP_CHAN_LS', 'GP_DEVCHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_CHAN_COLOURS',
     'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
     'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S',
     'GP_SHOW_LS', 'GP_GRP_PUCK', 'GP_GRP_HERE', 'GP_GRP_CAR', 'GP_GRP_NONE', 'GP_UNITS',
@@ -93,6 +99,11 @@ global.gpUnits = () => 'metric';
 global.savedFailures = [];
 global.showToast = (t, tone) => { global.savedFailures.push(tone + ': ' + t); };
 global.gpSetMsg = () => {};
+/* gpSplitLaps clears caches that live outside what this harness extracts.
+   Stubbed rather than pulled in: they are other subsystems, and what is
+   under test here is which SPANS come back, not what got invalidated. */
+global.gpDriftForget = () => {};
+global.gpCornerForget = () => {};
 const F = run(env);
 
 /* Every export has to be a real value. An assertion written against an
@@ -187,7 +198,7 @@ console.log('\nproposing a start/finish line');
 ok('a line was placed', !!(F.gpActiveTrack() && F.gpActiveTrack().start_finish));
 const laps = F.gpSplitRows(rows);
 ok('5 laps driven -> 4 timed laps', laps.length === 4, 'got ' + laps.length);
-const times = laps.map(l => F.gpSecs(rows, l.from, l.to));
+const times = laps.map(l => F.gpSpanSecs(rows, l));
 console.log('  lap times: ' + times.map(t => t.toFixed(2)).join(', '));
 const mean = times.reduce((a, b) => a + b, 0) / (times.length || 1);
 const sd = Math.sqrt(times.reduce((a, b) => a + (b - mean) ** 2, 0) / (times.length || 1));
@@ -211,6 +222,77 @@ console.log('\nan existing track is preferred over minting a new one');
 said = F.gpAutoSetUp(rows);
 ok('no second Winton was created', global.gp.tracks.tracks.length === 1,
     global.gp.tracks.tracks.length + ' tracks');
+
+console.log('\na point-to-point course, recorded from the driveway');
+/* The failure from a real track day, 2026-08-21. Two things defeated the old
+   matcher at once, and either alone was enough:
+     1. the puck records from boot, so a session starts at HOME - 20 km away -
+        and gpTraceHome is the first fix above 8 km/h, i.e. the driveway
+     2. Mount Barker Time Trial runs 3.3 km start line to finish line, further
+        than GP_MATCH_KM, so measuring to a single point puts the course's own
+        finish outside its own track
+   The recording came back "not near any track in the library" and the drive
+   then silently borrowed whatever track happened to be active. */
+freshGp();
+const MB_START = { lat: -35.0922136, lon: 138.8391329, heading: 194.1, half_width_m: 5.1 };
+const MB_FIN = { lat: -35.1048439, lon: 138.8063175, heading: 185.6, half_width_m: 15 };
+const mbOutline = [];
+for (let i = 0; i <= 40; i++) {
+    const f = i / 40;
+    mbOutline.push([MB_START.lat + (MB_FIN.lat - MB_START.lat) * f,
+                    MB_START.lon + (MB_FIN.lon - MB_START.lon) * f]);
+}
+function mbTrack(id) {
+    return { id: id, name: 'Mount Barker Time Trial',
+             center: [(MB_START.lat + MB_FIN.lat) / 2, (MB_START.lon + MB_FIN.lon) / 2],
+             zoom: 14, start_finish: MB_START, finish: MB_FIN, sectors: [],
+             min_lap_time_s: 10, outline: { pts: mbOutline, src: 'lap' } };
+}
+global.gp.tracks.tracks.push(mbTrack('trk_mb'));
+global.gp.tracks.active = null;
+
+const mbRows = [];
+let mbT = 0;
+const HOME = [-34.9392, 138.6411];
+for (let i = 0; i < 25 * 900; i++) {          /* 15 min of commute */
+    const f = i / (25 * 900);
+    mbRows.push({ lat: HOME[0] + (MB_START.lat - HOME[0]) * f,
+                  lon: HOME[1] + (MB_START.lon - HOME[1]) * f,
+                  kph: 80, hdg: 120, t: mbT += 40, g: 0 });
+}
+for (let i = 0; i < 25 * 150; i++) {          /* 2.5 min down the course */
+    const f = i / (25 * 150);
+    mbRows.push({ lat: MB_START.lat + (MB_FIN.lat - MB_START.lat) * f,
+                  lon: MB_START.lon + (MB_FIN.lon - MB_START.lon) * f,
+                  kph: 90, hdg: 200, t: mbT += 40, g: 0 });
+}
+
+const mbHome = F.gpTraceHome(mbRows);
+const mbHomeKm = F.gpKmBetween(mbHome.lat, mbHome.lon, MB_START.lat, MB_START.lon);
+ok('gpTraceHome really is the driveway, not the track', mbHomeKm > 15,
+   mbHomeKm.toFixed(1) + ' km from the start line');
+const mbLenKm = F.gpKmBetween(MB_START.lat, MB_START.lon, MB_FIN.lat, MB_FIN.lon);
+ok('and the course is longer end to end than the match radius', mbLenKm > F.GP_MATCH_KM,
+   mbLenKm.toFixed(2) + ' km vs GP_MATCH_KM ' + F.GP_MATCH_KM);
+
+const mbMatch = F.gpMatchTrack(mbRows);
+ok('the track is recognised anyway', !!mbMatch && mbMatch.track.id === 'trk_mb',
+   mbMatch ? mbMatch.track.name : 'no match');
+ok('no duplicate track was minted', global.gp.tracks.tracks.length === 1,
+   global.gp.tracks.tracks.length + ' tracks');
+ok('its own finish line is inside its own track', (function () {
+    const reach = F.gpTrackReach(global.gp.tracks.tracks[0]);
+    return F.gpKmBetween(MB_FIN.lat, MB_FIN.lon, reach.lat, reach.lon) <= reach.spanKm + F.GP_MATCH_KM;
+})());
+
+/* The fix must not have turned the matcher into something that matches
+   everything: a drive nowhere near it is still rejected. */
+freshGp();
+global.gp.tracks.tracks.push(mbTrack('trk_mb2'));
+const mbElsewhere = [];
+for (let i = 0; i < 25 * 300; i++)
+    mbElsewhere.push({ lat: -25.0 + i * 0.00001, lon: 133.0, kph: 90, hdg: 0, t: i * 40, g: 0 });
+ok('a drive in the middle of Australia still matches nothing', !F.gpMatchTrack(mbElsewhere));
 
 console.log('\nnowhere near a known circuit');
 freshGp();
@@ -364,8 +446,14 @@ ok('the empty ring matches the node partition (6.375 MB, 14 B, 25 Hz)',
 /* The estimate must not move because the node currently HOLDS channels: it
    reports capacity for its present record size, so the byte capacity is
    capacity × that size. Reading it as ×12 made two channels on the puck show
-   206 minutes when the partition still held 278 — caught live after a Send. */
-global.gp.traceInfo = { capacity_samples: 417792, record_bytes: 16 };
+   206 minutes when the partition still held 278 — caught live after a Send.
+
+   n_channels travels in the same JSON object as record_bytes on the node
+   (serial_rpc.c trace.info), so the fixture states both — a record_bytes with
+   no n_channels beside it is not a shape any node produces, and leaving it out
+   made this fixture read as "16-byte fix, no channels" instead of "14-byte fix
+   carrying one". */
+global.gp.traceInfo = { capacity_samples: 417792, record_bytes: 16, n_channels: 1 };
 ok('the estimate is the same whatever record the node is on now',
     Math.round(F.gpRingMinutes(0)) === 318, Math.round(F.gpRingMinutes(0)) + ' min');
 ok('and costing four extra bytes gives the same answer either way',
@@ -514,6 +602,94 @@ global.gp.readyOpen = true; html = F.gpReadyCardHtml();
 ok('dropped samples are called out as bad', /Dropped[\s\S]*?bad[\s\S]*?42/.test(html), 'no bad-toned Dropped row');
 ok('a wrapped ring warns that laps are gone', /oldest laps overwritten/.test(html));
 ok('a recording node does not nag', !/press Record on before you drive/.test(html));
+
+/* ---- will today record a drift angle? -------------------------------
+ * The one prerequisite a drift day has that a lap day does not, and the
+ * only one that cannot be fixed after the fact: drive all day on a puck
+ * whose ring has no room for the gyro and the recording comes back with
+ * lap times, a map, and no angle anywhere in it.
+ */
+console.log('\nthe card answers "will this record an angle?" BEFORE the drive');
+const readyWith = (info, status) => {
+    global.gp.traceInfo = info;
+    global.gp.status = status === undefined ? { fix_type: 3, sats: 11, hacc_mm: 800 } : status;
+    global.gp.readyOpen = false;      /* collapsed — this must not need expanding */
+    return F.gpReadyCardHtml();
+};
+const REC = { capacity_samples: 25 * 60 * 370, used_samples: 25 * 60 * 12,
+              recording: true, dropped: 0, wrapped: false };
+
+ok('a 12-byte puck says so without being expanded',
+    /Angle[\s\S]*?not recorded/.test(readyWith(Object.assign({ record_bytes: 12, n_channels: 0 }, REC))),
+    'no pinned Angle row');
+ok('and names the remedy rather than the symptom',
+    /12-byte samples/.test(readyWith(Object.assign({ record_bytes: 12, n_channels: 0 }, REC))) &&
+    /update it/.test(readyWith(Object.assign({ record_bytes: 12, n_channels: 0 }, REC))));
+/* record_bytes counts the channel tail, so a 12-byte fix with four
+   channels is a 20-byte record — reading that as the fix width would call
+   a gyro-less puck fine. */
+ok('the channel tail is not mistaken for gyro room',
+    /Angle[\s\S]*?not recorded/.test(readyWith(Object.assign({ record_bytes: 20, n_channels: 4 }, REC))),
+    F.gpTraceFixBytes ? 'fix width read as ' + F.gpTraceFixBytes() : 'no gpTraceFixBytes');
+
+html = readyWith(Object.assign({ record_bytes: 14, n_channels: 0 }, REC),
+                 { fix_type: 3, sats: 11, hacc_mm: 800 });
+ok('a 14-byte puck with no IMU talking says THAT instead',
+    /no IMU reported/.test(html), 'expected the IMU row');
+html = readyWith(Object.assign({ record_bytes: 14, n_channels: 0 }, REC),
+                 { fix_type: 3, sats: 11, hacc_mm: 800, imu: { gz_cdps: 240 } });
+ok('and a puck that can do it does not say anything at all when collapsed',
+    !/Angle/.test(html), html.slice(0, 300));
+global.gp.readyOpen = true;
+html = F.gpReadyCardHtml();
+ok('opened, it confirms the angle is being recorded',
+    /Angle[\s\S]*?recording/.test(html) && /own gyro/.test(html), 'expected a green Angle row');
+
+/* Studio cannot know whether today is a drift day. A circuit driver whose
+   puck has no gyro is not one thing away from ready. */
+ok('none of it turns a good card into "one thing to fix"',
+    !/things to fix/.test(readyWith(Object.assign({ record_bytes: 12, n_channels: 0 }, REC))) &&
+    !/One thing to fix/.test(readyWith(Object.assign({ record_bytes: 12, n_channels: 0 }, REC))),
+    readyWith(Object.assign({ record_bytes: 12, n_channels: 0 }, REC)).slice(0, 200));
+
+console.log('\nthe fix width itself');
+ok('a plain 12-byte record is 12', F.gpTraceFixBytes.call(null) !== null);
+global.gp.traceInfo = { record_bytes: 14, n_channels: 0 };
+ok('14 bytes with no channels is a 14-byte fix', F.gpTraceFixBytes() === 14, String(F.gpTraceFixBytes()));
+global.gp.traceInfo = { record_bytes: 30, n_channels: 8 };
+ok('and the channel tail comes off', F.gpTraceFixBytes() === 14, String(F.gpTraceFixBytes()));
+global.gp.traceInfo = { record_bytes: 900, n_channels: 0 };
+ok('a nonsense width is refused rather than believed', F.gpTraceFixBytes() === null);
+global.gp.traceInfo = null;
+ok('and no node attached is "do not know", not "12"', F.gpTraceFixBytes() === null);
+
+/* ---- a fit belongs to the box it was made in --------------------------
+ * The same map is hosted in three cells of three different widths — Drift's
+ * ~780, Corners' 340, Analyse's panel. Marked framed once, it kept whichever
+ * box it saw first: measured live at zoom 17 in Drift, 15 after a trip
+ * through Corners, and it never came back.
+ */
+console.log('\nthe map re-frames when it lands in a different-sized box');
+const sized = (x, y) => { global.gp.map = { getSize: () => ({ x: x, y: y }) }; };
+global.gp.framed = true; global.gp._framedW = 780; global.gp._framedH = 560;
+sized(780, 560);
+ok('the same box is still framed', F.gpFramed() === true);
+sized(760, 548);
+ok('a divider nudge does not throw the zoom away', F.gpFramed() === true,
+   'a few percent should not re-fit');
+sized(340, 560);
+ok('but Corners’ narrow cell is a different box', F.gpFramed() === false);
+sized(780, 200);
+ok('and so is one half the height', F.gpFramed() === false);
+sized(0, 0);
+ok('a box that cannot be measured is never re-fitted into', F.gpFramed() === true,
+   'fitting into nothing would mark it framed at 0x0');
+global.gp.framed = false;
+sized(780, 560);
+ok('an unframed recording is unframed whatever the box', F.gpFramed() === false);
+global.gp.framed = true; global.gp._framedW = 0; global.gp._framedH = 0;
+ok('and a framing from before this rule existed is left alone', F.gpFramed() === true);
+global.gp.map = null;
 
 console.log('\nthe split times report: stats before any sector lines exist');
 freshGp();
@@ -728,8 +904,95 @@ ok('the midpoint sits between green and red on every channel',
 console.log('\nthe table itself: headers, grading, and a lap that lost a split');
 const html4 = F.gpSplitsHtml();
 ok('one clickable header per sector', (html4.match(/data-gp-split-hd/g) || []).length === 3);
-ok('the session-best cell in each column is marked purple',
-    (html4.match(/class='p'/g) || []).length === 3, JSON.stringify(html4.match(/class='p'/g)));
+/* Two rows of marked cells now, and they are two different claims: the best
+   cell inside each column of laps, and the Best row that states the same
+   three times as the datum every lap under it is measured against. */
+const bestRow = (html4.match(/<tr class='sum'>[\s\S]*?<\/tr>/) || [])[0] || '';
+const lapPart = html4.replace(bestRow, '');
+ok('the session-best cell in each column is marked',
+    (lapPart.match(/class='p'/g) || []).length === 3,
+    JSON.stringify(lapPart.match(/class='p'/g)));
+ok('the ideal lap is spelled out as its own row', !!bestRow, 'no tr.sum');
+ok('with one cell per sector', (bestRow.match(/class='p'/g) || []).length === 3);
+ok('and each one says which lap set it',
+    (bestRow.match(/<i>[A-Z]\d+<\/i>/g) || []).length === 3,
+    JSON.stringify(bestRow.match(/<i>[^<]*<\/i>/g)));
+/* The row is the working behind the Ideal lap figure, so the two have to
+   agree — a summary that did not add up to the number beside it would be
+   worse than not showing it. */
+const bestSecs = (bestRow.match(/>(\d+\.\d\d)</g) || []).map(x => parseFloat(x.slice(1)));
+const idealTxt = (html4.match(/Ideal lap<\/span><span class='v'>([^<]+)</) || [])[1];
+const mmss = (t) => {
+    const m = /(\d+):(\d+\.\d+)/.exec(t);
+    return m ? Number(m[1]) * 60 + Number(m[2]) : Number(t);
+};
+ok('the best sectors add up to the ideal lap printed under them',
+    bestSecs.length === 3 &&
+    Math.abs(bestSecs.reduce((a, b) => a + b, 0) - mmss(idealTxt)) < 0.02,
+    JSON.stringify(bestSecs) + ' vs ' + idealTxt);
+/* Every cell in it is a real lap's real sector, so clicking it can go there. */
+ok('and each is clickable through to the lap that set it',
+    (bestRow.match(/data-gp-split-cell='\d+:\d'/g) || []).length === 3);
+
+console.log('\ndeltas are the same grid measured from somewhere');
+global.gp.secMode = 'delta';
+global.gp.cmpLap = -1;
+const dHtml = F.gpSplitsHtml();
+ok('with no reference set it falls back to the best sector',
+    /Against <b>the best sector of the session<\/b>/.test(dHtml));
+const dSum = (dHtml.match(/<tr class='sum'>[\s\S]*?<\/tr>/) || [''])[0];
+ok('so the Best row itself reads as all zeroes — it IS the datum',
+    (dSum.match(/class='p'[^>]*>0\.00</g) || []).length === 3, dSum.slice(0, 160));
+ok('and its total with them, because the ideal is the sum of the best',
+    /<td class='tot'>0\.00<\/td>/.test(dSum), dSum.slice(-60));
+ok('and every other cell is signed', /[+−]\d+\.\d\d/.test(dHtml));
+ok('the heat still grades the TIME, not the delta',
+    (dHtml.match(/background:rgba/g) || []).length ===
+    (html4.match(/background:rgba/g) || []).length);
+global.gp.secMode = 'abs';
+
+console.log('\nthe same sectors, on the lap line');
+/* "Which third did I lose it in" is asked while reading the list of lap
+   times, so the answer belongs there. Three states and they must be three
+   different marks: best of the session, quicker than the reference, slower
+   than it. */
+global.gp.cmpLap = -1;
+const chipsNoRef = F.gpSectorChips(0);
+ok('one chip per sector', (chipsNoRef.match(/ title=/g) || []).length === 3,
+    chipsNoRef.slice(0, 120));
+ok('each says which sector it is', (chipsNoRef.match(/<b>S\d<\/b>/g) || []).length === 3);
+ok('with no reference, only the session bests are marked',
+    (chipsNoRef.match(/class='[gr]'/g) || []).length === 0, chipsNoRef.slice(0, 200));
+
+/* Lap 1 owns two of the three best sectors in this fixture, so compare
+   against a lap that owns none and the marks have to split three ways. */
+const owner0 = F.gpSplitsHtml().match(/<i>[A-Z](\d+)<\/i>/) || [];
+global.gp.cmpLap = 1;
+const chipsRef = F.gpSectorChips(0);
+ok('against a reference every sector is marked one of three ways',
+    (chipsRef.match(/class='[pgr]'/g) || []).length === 3, chipsRef.slice(0, 240));
+ok('and a sector that is the session best stays the session best',
+    /class='p'/.test(chipsRef), chipsRef.slice(0, 240));
+ok('the reference is named in the tooltip, with what the sector cost',
+    /against /.test(chipsRef) && /[+−]\d+\.\d\d s/.test(chipsRef),
+    chipsRef.slice(0, 240));
+ok('a lap compared against itself gets no green or red',
+    (F.gpSectorChips(1).match(/class='[gr]'/g) || []).length === 0);
+global.gp.cmpLap = -1;
+
+/* A track nobody has split yet has to cost the lap line nothing at all —
+   not an empty row, not a stray element. Swapped in under the key the cache
+   already holds, so gpSessionSectors hands back the empty answer instead of
+   recomputing — and put back exactly as found, because the section below
+   deliberately depends on this cache surviving. */
+F.gpSessionSectors();
+const secsWas = global.gp.sectors, keyWas = global.gp.secKey;
+global.gp.sectors = { per: [], best: null, owner: null };
+ok('a track with no sector lines adds nothing to the lap line',
+    F.gpSectorChips(0) === '', JSON.stringify(F.gpSectorChips(0)));
+global.gp.sectors = secsWas;
+global.gp.secKey = keyWas;
+
 ok('every stat row is there', /Average/.test(html4) && /Median/.test(html4) &&
     /Consistency/.test(html4) && /Best lap/.test(html4) && /Ideal lap/.test(html4));
 
@@ -980,6 +1243,22 @@ ok('a stale sample is left EMPTY, not zero — a spreadsheet averages a zero',
 ok('every row has as many fields as the header',
     csvRow0.split(',').length === csvHead.split(',').length &&
     csvRow1.split(',').length === csvHead.split(',').length);
+/* A unit written in symbols has to survive into the column name as WORDS.
+   "%" used to leave the column called "Throttle_" — a dangling separator — and
+   "°/s" collapsed to "_s", which opened in a spreadsheet next season reads as
+   seconds on a channel measured in degrees per second. */
+ok('per cent becomes a word, with no dangling separator',
+    F.gpCsvUnit('%') === 'pct', JSON.stringify(F.gpCsvUnit('%')));
+ok('degrees per second does not decay into seconds',
+    F.gpCsvUnit('°/s') === 'dps', JSON.stringify(F.gpCsvUnit('°/s')));
+ok('and plain degrees says so', F.gpCsvUnit('°') === 'deg', JSON.stringify(F.gpCsvUnit('°')));
+ok('word units are untouched, km/h included',
+    F.gpCsvUnit('g') === 'g' && F.gpCsvUnit('rpm') === 'rpm' &&
+    F.gpCsvUnit('kPa') === 'kPa' && F.gpCsvUnit('km/h') === 'kmh',
+    [F.gpCsvUnit('g'), F.gpCsvUnit('rpm'), F.gpCsvUnit('kPa'), F.gpCsvUnit('km/h')].join(' '));
+ok('a unitless channel appends nothing at all',
+    F.gpCsvUnit('') === '' && F.gpCsvUnit(null) === '' && F.gpCsvUnit(undefined) === '');
+
 /* And a GPS-only recording exports exactly what it always did. */
 global.gp.traceChanIds = null;
 global.gp.trace = [{ lat: -36.5, lon: 146.0, kph: 100, hdg: 0, g: 0 }];
@@ -1168,7 +1447,10 @@ ok('recording time is stated in minutes', /Recording time/.test(chtml) && /min/.
 ok('Send only appears when the puck differs from what is ticked',
     /Send 2 to the puck/.test(chtml), 'no send button');
 global.gp.deviceChanIds = ['rpm', 'calc'];
-ok('and disappears once they agree', !/Send .* to the puck/.test(F.gpChannelListHtml()));
+/* The BUTTON, not the words. Matching "Send ... to the puck" as prose caught
+   the bulk tick's tooltip ("you still have to Send it to the puck"), which is
+   a sentence about the button rather than the button. */
+ok('and disappears once they agree', !/gpChanSend\(\)/.test(F.gpChannelListHtml()));
 ok('a tick is a real pressed-state control',
     /aria-pressed='true'/.test(chtml) && /aria-pressed='false'/.test(chtml));
 
@@ -1211,6 +1493,227 @@ console.log('\nan empty download explains itself');
 ok('recording on: says go drive', /go drive/.test(F.gpEmptyDownloadMsg(true)));
 ok('recording off: says turn it on first', /Recording is OFF/.test(F.gpEmptyDownloadMsg(false)));
 ok('both say the node only logs while moving', /moving/.test(F.gpEmptyDownloadMsg(true)) && /moving/.test(F.gpEmptyDownloadMsg(false)));
+
+/* ---- a drift day has no line, and often cannot have one ----------------
+ * Two shapes, and both used to end with no laps at all:
+ *   - a one-way run through a course. gpProposeLine looks for a LOOP to close
+ *     on, there isn't one, and it returns nothing.
+ *   - a skid pan that IS a loop. A line gets proposed and then thrown out,
+ *     because gpAutoLine checks the lap times do not scatter more than 35%
+ *     and a "lap" holding the queue between two runs is minutes against a run
+ *     of forty seconds.
+ * Either way the whole Drift board — the point of the exercise — said "No laps
+ * in this recording." The boundary was in the data all along: the car stops
+ * between runs.
+ */
+console.log('\nno start/finish line, but the car still did runs');
+freshGp();
+
+/* One outing: bursts of driving with the car stopped in between. `holeS`
+   leaves a hole in the CLOCK, which is what the puck does — it writes nothing
+   under 8 km/h. `idleS` writes stationary samples, which is what an imported
+   log does. Both have to cut. */
+function runsRecording(bursts, opt) {
+    opt = opt || {};
+    const rows = [];
+    const LAT0 = -34.715, LON0 = 138.540;
+    const MLAT = 111320, MLON = 111320 * Math.cos(LAT0 * Math.PI / 180);
+    let t = Date.UTC(2026, 7, 21, 9, 0, 0);
+    /* Each burst drives the same S through two corners. It has to CURVE: a
+       straight line is two points after RDP, and a two-point shape is not one
+       — which is exactly what the first version of this fixture proved. */
+    const at = (u) => {
+        let x = 0, y = 0;
+        for (let s2 = 0; s2 < u; s2 += 0.002) {
+            const hdg = (40 * Math.sin(s2 * Math.PI * 3) + 90) * Math.PI / 180;
+            x += 15 * Math.sin(hdg) * 0.002;
+            y += 15 * Math.cos(hdg) * 0.002;
+        }
+        return [LAT0 + y / MLAT, LON0 + x / MLON];
+    };
+    bursts.forEach((secs, k) => {
+        const n = Math.round(secs * 25);
+        for (let i = 0; i < n; i++) {
+            const [la, lo] = at(i / n);
+            rows.push({ lat: la, lon: lo, kph: 55, hdg: 90, t: t, g: 0 });
+            t += 40;
+        }
+        if (k === bursts.length - 1) return;
+        if (opt.idleS) {
+            const [la, lo] = at(1);
+            for (let i = 0; i < Math.round(opt.idleS * 25); i++) {
+                rows.push({ lat: la, lon: lo, kph: 0, hdg: 90, t: t, g: 0 });
+                t += 40;
+            }
+        } else {
+            t += (opt.holeS || 120) * 1000;
+        }
+    });
+    return rows;
+}
+
+const fourRuns = runsRecording([42, 38, 51, 47]);
+let runs = F.gpMoveRuns(fourRuns);
+ok('a hole in the clock ends a run', runs.length === 4,
+   runs.length + ' runs: ' +
+   runs.map(r => Math.round(F.gpSecs(fourRuns, r.from, r.to)) + 's').join(' '));
+
+const idle = runsRecording([42, 38, 51], { idleS: 40 });
+runs = F.gpMoveRuns(idle);
+ok('so does sitting still with the logger running', runs.length === 3, runs.length + ' runs');
+ok('and the stationary samples are not inside a run',
+   runs.every(r => idle[r.from].kph >= F.GP_RUN_STOP_KPH && idle[r.to].kph >= F.GP_RUN_STOP_KPH),
+   JSON.stringify(runs.map(r => [idle[r.from].kph, idle[r.to].kph])));
+
+/* A pause at the top of the run is not the end of it. */
+runs = F.gpMoveRuns(runsRecording([42, 38], { idleS: 2 }));
+ok('a two-second hesitation does not cut a run in half', runs.length === 1, runs.length + ' runs');
+
+/* A shuffle in the paddock is not a run. */
+runs = F.gpMoveRuns(runsRecording([40, 3, 45], { holeS: 120 }));
+ok('a three-second shuffle between two runs is not a third run', runs.length === 2,
+   runs.length + ' runs');
+
+/* One continuous drive is one thing, and the fallback must leave it alone —
+   "run 1 of 1" says nothing the whole-session row does not already say. */
+ok('a single unbroken drive is not carved up', F.gpMoveRuns(runsRecording([300])).length === 1);
+
+console.log('\nand the splitter falls back to them, labelled honestly');
+freshGp();
+global.gp.tracks = { active: null, tracks: [] };      /* nothing to propose a line onto */
+global.gp.ghostFence = null;
+global.gp.trace = runsRecording([42, 38, 51, 47]);
+const said7 = F.gpSplitLapsAuto();
+ok('four runs become four entries', global.gp.traceLaps.length === 4,
+   global.gp.traceLaps.length + ' entries');
+ok('it says where they came from, and what would give real laps',
+   /split into 4 runs/.test(said7 || '') && /Tracks/.test(said7 || ''), said7);
+ok('and they are called RUNS, not laps', F.gpRunWord() === 'run', F.gpRunWord());
+ok('with no reference picked — there is no lap time to be quickest at',
+   global.gp.cmpLap === -1, String(global.gp.cmpLap));
+
+/* A real gate still wins, and the word goes back to "lap". */
+freshGp();
+const rows7 = drive(WINTON.center, 4);
+F.gpAutoSetUp(rows7);
+global.gp.ghostFence = null;
+global.gp.trace = rows7;
+F.gpSplitLapsAuto();
+ok('a recording that DOES have a line is timed as laps, not cut at the stops',
+   global.gp.traceLaps.length >= 2 && F.gpRunWord() === 'lap',
+   global.gp.traceLaps.length + ' laps, word "' + F.gpRunWord() + '"');
+
+/* ---- a track you have driven should LOOK like the track you drove ------
+ * gpAutoSetUp put a start/finish line on a recognised circuit and stopped
+ * there, so a track that arrived from a recording was a gate marker floating
+ * on satellite imagery with nothing to place it against. The shape was always
+ * available — the Tracks inspector has a button that takes it off a lap — but
+ * a button you have to find is not the same as the track having a shape.
+ */
+console.log('\nthe track takes the shape of the drive');
+freshGp();
+const rows8 = drive(WINTON.center, 4);
+global.gp.ghostFence = null;
+F.gpAutoSetUp(rows8);
+global.gp.trace = rows8;
+let trk8 = F.gpActiveTrack();
+ok('the track starts with no shape at all', !trk8.outline);
+F.gpSplitLapsAuto();
+trk8 = F.gpActiveTrack();
+ok('after a drive it has one', !!(trk8.outline && trk8.outline.pts),
+   trk8.outline ? trk8.outline.pts.length + ' points' : 'still none');
+ok('and it says where it came from', trk8.outline && trk8.outline.src === 'lap',
+   trk8.outline && trk8.outline.src);
+
+/* The shape has to be ONE lap, not every lap drawn over each other — which is
+   what taking it before the re-split would have given. A 2.6 km loop driven
+   four times is 2.6 km of shape, not 10.4. */
+const st8 = F.gpOutlineStats(trk8.outline);
+ok('it is one lap of the circuit, not all four',
+   st8.metres > 1800 && st8.metres < 4000, Math.round(st8.metres) + ' m');
+ok('and it is simplified, not every fix kept',
+   trk8.outline.pts.length <= F.GP_OUTLINE_MAX, trk8.outline.pts.length + ' points');
+
+/* Never overwrite: a shape you traced, or one that shipped from the survey,
+   beats a single lap of GPS. Same rule the OSM adoption follows. */
+const mine = { pts: [[1, 1], [1, 2], [2, 2]], src: 'traced', at: 1 };
+trk8.outline = mine;
+F.gpSplitLapsAuto();
+ok('a shape you traced by hand is not replaced by a lap',
+   F.gpActiveTrack().outline === mine, F.gpActiveTrack().outline.src);
+trk8.outline = { pts: [[1, 1], [1, 2], [2, 2]], src: 'osm', at: 1 };
+F.gpSplitLapsAuto();
+ok('and neither is the surveyed one', F.gpActiveTrack().outline.src === 'osm',
+   F.gpActiveTrack().outline.src);
+
+/* The case that needs it most: a course with no gate, where nothing shipped a
+   shape and nothing could propose a line either. */
+console.log('\nincluding the one with no line at all');
+freshGp();
+global.gp.tracks = { active: 'tX', tracks: [{ id: 'tX', name: 'Skid pan', sectors: [], min_lap_time_s: 10 }] };
+global.gp.ghostFence = null;
+global.gp.trace = runsRecording([42, 38, 51, 47]);
+F.gpSplitLapsAuto();
+const trk9 = F.gpActiveTrack();
+ok('runs cut at the stops still give the track its shape',
+   !!(trk9.outline && trk9.outline.pts.length >= 3),
+   trk9.outline ? trk9.outline.pts.length + ' points' : 'none');
+ok('and a run is called a run when the shape is described',
+   /from a run/.test(F.gpOutlineSrcShort(trk9.outline.src)),
+   F.gpOutlineSrcShort(trk9.outline.src));
+
+/* Nothing to take a shape from must leave the track alone rather than store
+   a two-point smear. */
+freshGp();
+global.gp.tracks = { active: 'tY', tracks: [{ id: 'tY', name: 'Empty', sectors: [] }] };
+global.gp.ghostFence = null;
+global.gp.trace = [{ lat: 1, lon: 1, kph: 0, hdg: 0, t: 0 }];
+F.gpShapeFromDrive();
+ok('a recording too short for a shape does not get one',
+   !F.gpActiveTrack().outline);
+
+/* ---- "show me this track" ---------------------------------------------
+ * Both callers used to zoom 18 on the start/finish. That is the right view
+ * for putting a gate on the paint and the wrong one for answering "which
+ * track is this": at 18 the circuit is entirely off screen and the only thing
+ * visible is the line — which is what "it only shows the start finish points"
+ * meant.
+ */
+console.log('\nthe map opens on the shape when there is one');
+{
+    const calls = [];
+    global.gp.map = {
+        getZoom: () => 14,
+        fitBounds: (pts, o) => calls.push({ fit: pts.length }),
+        setView: (c, z) => calls.push({ view: c, zoom: z }),
+    };
+    const shaped = { id: 'a', name: 'A', outline: { pts: [[1, 1], [1, 2], [2, 2], [1, 1]], src: 'lap' },
+                     start_finish: { lat: 1, lon: 1 }, center: [1, 1], zoom: 16 };
+    F.gpFrameTrack(shaped);
+    ok('a shape wins over the gate', calls.length === 1 && calls[0].fit === 4,
+       JSON.stringify(calls));
+
+    calls.length = 0;
+    F.gpFrameTrack({ id: 'b', name: 'B', start_finish: { lat: 3, lon: 4 }, center: [3, 4], zoom: 16 });
+    ok('no shape still opens on the gate, close in',
+       calls.length === 1 && calls[0].zoom >= 18, JSON.stringify(calls));
+
+    calls.length = 0;
+    F.gpFrameTrack({ id: 'c', name: 'C', center: [5, 6], zoom: 15 });
+    ok('and a track with neither opens on its centre',
+       calls.length === 1 && calls[0].zoom === 15, JSON.stringify(calls));
+
+    calls.length = 0;
+    F.gpFrameTrack({ id: 'd', name: 'D', outline: { pts: [[1, 1]], src: 'lap' },
+                     start_finish: { lat: 9, lon: 9 } });
+    ok('a one-point shape is not a shape', calls.length === 1 && calls[0].zoom >= 18,
+       JSON.stringify(calls));
+
+    calls.length = 0;
+    F.gpFrameTrack(null);
+    ok('and nothing selected moves nothing', calls.length === 0);
+    global.gp.map = null;
+}
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

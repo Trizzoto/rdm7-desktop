@@ -52,12 +52,13 @@ const K = {};
  'GP_DRIFT_STAR_DEG', 'GP_DRIFT_STAR_SETTLE', 'GP_DRIFT_RHO_MIN_KPH',
  'GP_DRIFT_SPIN', 'GP_DRIFT_SPIN_DROP', 'GP_DRIFT_SCORE_VER',
  'GP_DRIFT_ROUGH', 'GP_MAX_STEP_S', 'GP_CHAN_STALE',
- 'GP_COAST_G', 'GP_BRAKE_G', 'GP_CORNER_PAD'].forEach(n => K[n] = constOf(n));
+ 'GP_COAST_G', 'GP_BRAKE_G', 'GP_CORNER_PAD',
+ 'GP_TURN_DPS', 'GP_TURN_MIN_S', 'GP_TURN_MIN_DEG', 'GP_TURN_SAME_S'].forEach(n => K[n] = constOf(n));
 K.GP_DRIFT_STAR_W = eval('(' + /var GP_DRIFT_STAR_W = (\{[^}]*\})/.exec(SRC)[1] + ')');
 
 const FNS = [
-    'gpN', 'gpMetres', 'gpMetresPerDeg', 'gpSecs', 'gpStep', 'gpChanDefsById',
-    'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpChannels', 'gpComputeG',
+    'gpN', 'gpMetres', 'gpMetresPerDeg', 'gpSecs', 'gpStep', 'gpChanDefsById', 'gpChanFixes', 'gpChanFixApply', 'gpChanFixFor', 'gpChanRawRange', 'gpChanWouldRead', 'gpChanDef', 'gpChanValue', 'gpChanDefsFor', 'gpDashChansCached',
+    'gpSignedDist', 'gpCrossAt', 'gpSpanSecs', 'gpHz', 'gpGateHits', 'gpMainDir', 'gpChannels', 'gpComputeG',
     'gpArcLength', 'gpCornerScan', 'gpFindCorners', 'gpCornerPhases', 'gpNearestIndex',
     'gpSplitRows',
     'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess',

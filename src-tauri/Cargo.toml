@@ -25,3 +25,21 @@ base64 = "0.22"
 tauri-plugin-updater = "2"
 semver = "1"
 tempfile = "3"
+
+# ── Build profiles ────────────────────────────────────────────────────
+# Debug info is the bulk of what makes `target/` enormous — tens of GB of
+# .pdb on Windows. Turning it off keeps dev builds on a small disk and
+# cuts link time. The cost is that a native debugger (and Rust panic
+# backtraces with line numbers) no longer resolves symbols; set
+# `debug = 1` temporarily if you need to step through Rust code.
+[profile.dev]
+debug = 0
+
+# Release stays at the cargo defaults for LTO and codegen-units on
+# purpose. `lto = "fat"` / `codegen-units = 1` produce a smaller binary
+# but do the final optimisation in ONE process holding the whole crate
+# graph — several GB of peak RSS. That is the one thing an 8 GB machine
+# cannot page its way out of. Leave these alone unless building on CI.
+[profile.release]
+debug = 0
+strip = true

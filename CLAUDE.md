@@ -14,19 +14,7 @@ This repo (rdm7-desktop) is one part of a larger project that includes: **Web St
 - Where new workspace UI gets authored (firmware-first vs desktop-first) — `../RDM-7_Dash/docs/STUDIO_SHELL_PLAN_2026-07.md` §2.0
 - CAN channel logging on the GPS puck itself (node firmware, unbuilt) — `../rdm-gps-node/docs/TRACE_V2_CAN_CHANNELS.md`
 
-## Build & Development Commands
-
-```bash
-# Development (hot-reload frontend, Rust recompiles on change)
-cargo tauri dev
-
-# Production build (generates MSI + NSIS installers)
-cargo tauri build
-
-# Rust checks only (faster iteration on backend)
-cd src-tauri && cargo check
-cd src-tauri && cargo clippy
-```
+## Build
 
 There is no npm/yarn — the frontend has no bundler or package manager. The WASM artifacts (`src/build/index.js` and `src/build/index.wasm`) are built externally in the `rdm7-wasm-editor` repo and copied in.
 
@@ -57,9 +45,6 @@ src/firmware-base.html    verbatim copy of RDM-7_Dash/main/web/index.html
 ## Architecture
 
 ### Backend (`src-tauri/`)
-- **`src/lib.rs`** — All Tauri commands (~18 `#[tauri::command]` functions) and the `run()` function that wires up plugins and state. This is the main file for backend work.
-- **`src/main.rs`** — Minimal entry point, calls `lib::run()`.
-- **State:** `SerialState` (Mutex-wrapped serial port) is the only shared Tauri state.
 
 Key backend subsystems:
 - **Device discovery** — parallel HTTP sweep of every local /24 subnet probing `GET /api/device/info` (the firmware has no mDNS — it was removed 2026-04-27). `discover_devices` takes `extra_ips` to probe known addresses first; `probe_device` checks a single IP fast. Emits `scan-progress` events.
@@ -72,32 +57,15 @@ Key backend subsystems:
 - **`transport.js`** — Transport abstraction layer exposing `window.RDM` API. Implementations: LocalTransport, WifiTransport (+ hotspot variant), UsbTransport, plus the `fetch()` interceptor that reroutes the firmware's raw `/api/*` calls through the active transport under Tauri. **Local (Offline) is a "virtual dash"**: `_localRouteApiCall` serves `/api/layout/*`, `/api/image|font/list`, `/api/storage/info`, `/api/device/info`, etc. from `LocalTransport` (localStorage/IndexedDB), so the firmware editor code works offline unchanged. It keeps its own active layout in `rdm7_local_active`. The interceptor routes ALL modes (including local) through `proxyApiCall` — the earlier `mode!=='local'` skip made offline `/api` calls 404 on the tauri.localhost origin. `RDM.local` (the local store) and `RDM.deviceTransport()` (device when connected) are exposed so layout **transfer** can read/write both stores at once.
 - **`build/`** — WASM module. Loaded at runtime for real-time canvas rendering of dashboard widgets/signals.
 
-### Communication Flow
-Frontend JS → `window.__TAURI__.core.invoke("command_name", {args})` → Rust `#[tauri::command]` → serial port / HTTP / mDNS → response back to JS.
+## Release Process
 
-## Release Process (installers + built-in self-update)
-
-1. Bump `version` in `src-tauri/tauri.conf.json` (single source of truth —
-   `Cargo.toml` should match; the frontend's `_DESKTOP_VERSION` is injected
-   from it by merge_overlay.py).
-2. Commit, then tag `v<version>` (e.g. `v0.2.0`) and push the tag.
-3. GitHub Actions (tauri-action) builds Windows setup.exe (NSIS) + MSI, macOS
-   DMGs, Linux AppImage/deb/rpm, **signs each bundle** with the
-   `TAURI_SIGNING_PRIVATE_KEY` repo secret, generates `latest.json` with the
-   signatures, and publishes everything to the GitHub release.
-4. Installed apps poll `releases/latest/download/latest.json` (checked ~3 s
-   after launch, banner → one-click passive update via tauri-plugin-updater;
-   the pubkey in tauri.conf.json verifies every download).
+Cutting a release is a skill — see `.claude/skills/release/SKILL.md`.
 
 **Updater signing key**: private key at `C:\Users\ruuva\.tauri\rdm7-desktop-updater.key`
 (no password) + the `TAURI_SIGNING_PRIVATE_KEY` GitHub secret. **Back it up —
 if it's lost, already-installed apps can never self-update again** (they
 verify against the pubkey baked into their config). Local signed builds:
 `TAURI_SIGNING_PRIVATE_KEY_PATH=~/.tauri/rdm7-desktop-updater.key cargo tauri build`.
-
-Not yet done: Windows Authenticode code-signing (SmartScreen will show the
-"unknown publisher" warning until an OV/EV certificate is purchased and wired
-into the workflow).
 
 ## Important Notes
 
