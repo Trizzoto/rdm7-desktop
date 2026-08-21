@@ -35631,7 +35631,23 @@
         }
 
         async function otaFirmwareUpdate() {
-            /* Route to the firmware's built-in OTA flow */
+            /* The dash fetches its own update off the internet, so this needs a
+               network route TO the dash. Over USB there is none: the serial
+               transport answers every /api/ota/* with a bare {ok:true}, so the
+               install modal opened, POSTed start to nothing, and then polled a
+               status that never carries a `status` field — "installing — 0%"
+               for ever, with no firmware moving anywhere.
+               The message below has been here all along as a fallback for a
+               missing _otaShowInstall, which is never missing: it is defined in
+               the firmware base in every build. The thing that has to be tested
+               is the CONNECTION, not the function. */
+            var mode = (typeof RDM !== 'undefined' && RDM.mode) || '';
+            if (mode !== 'wifi' && mode !== 'hotspot') {
+                showToast(mode === 'usb'
+                    ? 'The dash downloads its own update, so it needs to be on WiFi for this — there is no route for it over USB'
+                    : 'Connect to a dash over WiFi first — it downloads its own update', 'info');
+                return;
+            }
             if (typeof _otaShowInstall === 'function') { _otaShowInstall(); return; }
             showToast('OTA update requires a WiFi connection to the device', 'info');
         }
