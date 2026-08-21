@@ -32904,6 +32904,13 @@
             /* A popover appended to document.body outlives the workspace div
                it belongs to, so it has to be taken down by hand. */
             if (gp.chanPop) { gp.chanPop = false; gpChanPopRender(); }
+            /* Full screen is a VIEW state and the view is being left. Left set,
+               gpEscapeCaught went on claiming Escape for a panel that is no
+               longer on screen — so the first press anywhere else in Studio,
+               on the Home screen included, did nothing at all and only the
+               second one worked. Leaving by the Home button rather than by
+               Escape was all it took. */
+            gp.full = null;
             if (gp.timer) { clearTimeout(gp.timer); gp.timer = null; }
             if (gp.lapTimer) { clearInterval(gp.lapTimer); gp.lapTimer = null; }
             /* The two timers above were cleared and the playback ticker was
