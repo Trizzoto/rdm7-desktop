@@ -1554,6 +1554,16 @@
         }
         /* No "live in-memory" layout offline — 404 so loadLayout uses /raw. */
         if (pathname === '/api/layout/current') return { status: 404, data: '' };
+        /* The virtual dash has no screen and no finger. Falling through to the
+           catch-all `{ok:true}` at the bottom meant /api/screenshot answered
+           200 with JSON where an image had been promised, and the editor did
+           createImageBitmap() on it: "InvalidStateError: The source image could
+           not be decoded", logged every time anything asked for a live frame.
+           It recovered — the catch falls back to the SVG preview, which is the
+           right picture offline — but it recovered from a lie. 404 is the true
+           answer and reaches the same fallback by the honest route. */
+        if (pathname === '/api/screenshot' || pathname === '/api/touch')
+            return { status: 404, data: '' };
         if (pathname === '/api/layout/raw') {
             const l = await T.loadLayout(params.name || 'default');
             return l ? ok(l) : { status: 404, data: '' };

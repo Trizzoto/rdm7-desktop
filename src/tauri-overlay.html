@@ -12742,8 +12742,15 @@
                     lastDay = day;
                     h += "<tr class='" + (sel ? "sel " : "") + (pk[s.id] ? "picked" : "") +
                          "' data-gp-srow='" + gpEsc(s.id) + "'>" +
+                         /* The column has no heading — there is only room for
+                            the tick-all box up there — so the row's own box is
+                            the only place that can say what ticking does. The
+                            header box has said so all along; this one had
+                            nothing at all. */
                          "<td class='pick'><input type='checkbox' data-gp-spick='" + gpEsc(s.id) + "'" +
-                         (pk[s.id] ? " checked" : "") + "></td>" +
+                         (pk[s.id] ? " checked" : "") +
+                         " title='Tick this recording — the bar at the bottom " +
+                         "moves, clears or deletes everything ticked'></td>" +
                          "<td class='when" + (sameDay ? " same" : "") + "'>" +
                          "<b>" + gpEsc(day) + "</b><em>" + gpEsc(gpSesClock(s.recordedAt)) + "</em>" +
                          (s.dated === "gps" ? "" :
