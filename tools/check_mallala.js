@@ -60,7 +60,7 @@ const FNS = [
     'gpN', 'gpMetres', 'gpMetresPerDeg', 'gpSecs', 'gpStep', 'gpChanDefsById', 'gpChanFixes', 'gpChanFixApply', 'gpChanFixFor', 'gpChanRawRange', 'gpChanWouldRead', 'gpChanDef', 'gpChanValue', 'gpChanDefsFor', 'gpDashChansCached',
     'gpSignedDist', 'gpCrossAt', 'gpSpanSecs', 'gpHz', 'gpGateHits', 'gpMainDir', 'gpChannels', 'gpComputeG',
     'gpArcLength', 'gpCornerScan', 'gpFindCorners', 'gpCornerPhases', 'gpNearestIndex',
-    'gpSplitRows',
+    'gpDeadMs', 'gpRunsFromCrossings', 'gpSplitRows',
     'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess',
     'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle',
     'gpDriftSeek', 'gpDriftSwitches', 'gpDriftSegments', 'gpDriftStats',

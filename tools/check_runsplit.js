@@ -49,7 +49,7 @@ function grabFrom(src, name) {
 }
 
 const WANT = ['gpN', 'gpSignedDist', 'gpCrossAt', 'gpGateHits', 'gpMainDir',
-              'gpSplitRows', 'gpSecs', 'gpSpanSecs'];
+              'gpDeadMs', 'gpRunsFromCrossings', 'gpSplitRows', 'gpSecs', 'gpSpanSecs'];
 const src = fs.readFileSync(path.join(ROOT, REL), 'utf8');
 const parts = WANT.map(n => grabFrom(src, n));
 
@@ -61,6 +61,7 @@ const prelude = `
 
 const F = new Function(prelude + parts.join('\n') + `
     return { split: gpSplitRows, secs: gpSpanSecs,
+             runs: gpRunsFromCrossings, deadMs: gpDeadMs,
              setTrack: function (t) { ACTIVE = t; } };
 `)();
 
@@ -198,6 +199,83 @@ const cl = timesOf(LAPS, F.split(LAPS));
 ok('consecutive crossings make laps', cl.length === 2, JSON.stringify(cl));
 ok('each is the gap between them', cl.every(x => Math.abs(x - 300) < 0.05),
    JSON.stringify(cl));
+
+/* ---- the dead time the line keeps after it fires -----------------------
+ * "Minimum lap time" in the Tracks inspector. lap_core.c rejects a start
+ * crossing that comes sooner than that after the line last fired
+ * (crossings_rejected_mintime); Studio used to ignore it entirely, so a car
+ * crawling over the line produced a five-second "lap" here that the dash
+ * never reported. Two answers to one question, from the same samples.
+ *
+ * gpRunsFromCrossings(startHits, finishHits, isTrial, deadMs, diag) takes the
+ * crossings straight, so these are about the rule and not about geometry.
+ */
+console.log('\nhow long the line stays deaf');
+ok('the stored value, in ms', F.deadMs({ min_lap_time_s: 25 }) === 25000,
+   String(F.deadMs({ min_lap_time_s: 25 })));
+ok('zero means the ten seconds the dash forces', F.deadMs({ min_lap_time_s: 0 }) === 10000,
+   String(F.deadMs({ min_lap_time_s: 0 })));
+ok('and so does a negative one', F.deadMs({ min_lap_time_s: -5 }) === 10000);
+ok('and a missing one', F.deadMs({}) === 10000);
+ok('and no track at all', F.deadMs(null) === 10000);
+
+/* crossing stubs: i is the sample index (ordering), t the instant in ms */
+const X = (i, t) => ({ i: i, t: t });
+
+console.log('\na circuit ignores a second crossing inside the dead time');
+/* Crawling over the line: 0 s, then 3 s later, then a real lap at 95 s. */
+let r = F.runs([X(0, 0), X(10, 3000), X(100, 95000)], [], false, 10000);
+ok('one lap, not two', r.length === 1, JSON.stringify(r.map(x => (x.tTo - x.tFrom) / 1000)));
+ok('and it is the real 95 s one', r[0].tFrom === 0 && r[0].tTo === 95000,
+   JSON.stringify(r[0]));
+
+console.log('\nbut a crossing past the dead time counts');
+r = F.runs([X(0, 0), X(10, 11000), X(100, 95000)], [], false, 10000);
+ok('two laps', r.length === 2, JSON.stringify(r.map(x => (x.tTo - x.tFrom) / 1000)));
+ok('11 s then 84 s', (r[0].tTo - r[0].tFrom) === 11000 && (r[1].tTo - r[1].tFrom) === 84000,
+   JSON.stringify(r.map(x => (x.tTo - x.tFrom) / 1000)));
+
+console.log('\nthe dead time is measured from the last crossing, not the last lap');
+/* Three crossings 6 s apart: the second is rejected, and the third is
+   measured against the FIRST (the last one that actually fired), so it is
+   12 s clear and counts. */
+r = F.runs([X(0, 0), X(10, 6000), X(20, 12000)], [], false, 10000);
+ok('one lap', r.length === 1, JSON.stringify(r.map(x => (x.tTo - x.tFrom) / 1000)));
+ok('0 s to 12 s', r[0].tFrom === 0 && r[0].tTo === 12000, JSON.stringify(r[0]));
+
+console.log('\nthe very first crossing is never too soon');
+/* Nothing is armed yet, so there is no line to be deaf. */
+r = F.runs([X(0, 500), X(10, 60000)], [], false, 10000);
+ok('it arms and the next crossing closes a lap', r.length === 1, JSON.stringify(r));
+
+console.log('\na sprint re-arms at once after its finish');
+/* Cross start, cross finish 40 s later, then start again 2 s after that --
+   well inside the dead time, but the line is DISARMED, and lap_core reaches
+   its !armed branch before the min-time test. A second run must be possible
+   straight away. */
+r = F.runs([X(0, 0), X(50, 42000)], [X(40, 40000), X(90, 82000)], true, 10000);
+ok('two runs', r.length === 2, JSON.stringify(r.map(x => (x.tTo - x.tFrom) / 1000)));
+ok('40 s then 40 s', (r[0].tTo - r[0].tFrom) === 40000 && (r[1].tTo - r[1].tFrom) === 40000,
+   JSON.stringify(r.map(x => (x.tTo - x.tFrom) / 1000)));
+
+console.log('\nbut a sprint restart INSIDE the dead time is jitter, not a retake');
+/* Armed, and the start line fires again 3 s later: on a real hillclimb the
+   car has not come back round in three seconds. Rejected, so the run still
+   times from the first crossing. */
+r = F.runs([X(0, 0), X(5, 3000)], [X(80, 90000)], true, 10000);
+ok('one run', r.length === 1, JSON.stringify(r));
+ok('timed from the first crossing', r[0].tFrom === 0 && r[0].tTo === 90000,
+   JSON.stringify(r[0]));
+
+console.log('\nand a real retake past the dead time still restarts it');
+r = F.runs([X(0, 0), X(50, 40000)], [X(80, 90000)], true, 10000);
+ok('one run', r.length === 1, JSON.stringify(r));
+ok('timed from the SECOND crossing', r[0].tFrom === 40000, JSON.stringify(r[0]));
+
+console.log('\nthe rejections are counted, so a diagnosis can say so');
+const diag = {};
+F.runs([X(0, 0), X(10, 3000), X(20, 4000), X(100, 95000)], [], false, 10000, diag);
+ok('two crossings rejected', diag.rejectedMinTime === 2, String(diag.rejectedMinTime));
 
 console.log('\nnothing to time');
 F.setTrack({ start_finish: START, finish: FINISH });

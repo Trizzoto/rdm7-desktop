@@ -19951,41 +19951,84 @@
                 return { from: a.i, to: b.i, tFrom: a.t, tTo: b.t };
             };
 
-            if (!fin) {
-                for (var k = 1; k < sHits.length; k++)
-                    out.push(span(sHits[k - 1], sHits[k]));
-                return out;
+            var fHits = [];
+            if (fin) {
+                var F = gpGateHits(rows, fin, 0, rows.length - 1);
+                var dirF = gpMainDir(F.hits);
+                fHits = F.hits.filter(function (h) { return h.dir === dirF; });
+                if (diag) { diag.finish = F; diag.finishUsable = fHits.length; }
             }
+            return gpRunsFromCrossings(sHits, fHits, !!fin, gpDeadMs(trk), diag);
+        }
 
-            var F = gpGateHits(rows, fin, 0, rows.length - 1);
-            var dirF = gpMainDir(F.hits);
-            var fHits = F.hits.filter(function (h) { return h.dir === dirF; });
-            if (diag) { diag.finish = F; diag.finishUsable = fHits.length; }
+        /* The dead time the gate keeps after it fires, in milliseconds. It is
+           what the Tracks inspector's "Minimum lap time" sets, and lap_core.c
+           forces anything at or below zero up to ten seconds — so this reads
+           the same default rather than trusting the stored value. */
+        function gpDeadMs(trk) {
+            var s = gpN(trk && trk.min_lap_time_s);
+            return ((s === null || s <= 0) ? 10 : s) * 1000;
+        }
 
-            /* Every finish belongs to the LAST start before it — a timing loop
-               re-arms each time the car crosses the start line, and the run it
-               ends up timing is the one from the most recent arming.
+        /* ---- the run set, from the crossings ------------------------------
+         * A transcription of the state machine in lap_core.c: armed / not
+         * armed, one dead time on the line however it last fired, a circuit's
+         * finish line being its own start line, and a sprint that disarms at
+         * its finish and re-arms at its start. Studio splits laps itself so
+         * that they line up with what the dash timed, and the only way that
+         * holds is if the two run the same rules on the same geometry.
+         *
+         * Two of those rules were missing here.
+         *
+         * Every finish belongs to the LAST start before it. Pairing each start
+         * with the next unused finish instead timed ABANDONED runs: cross the
+         * start, pull off or miss the finish gate, come back round and cross
+         * the start again, and the finish was charged to the first of those
+         * crossings. In a 92-minute Mount Barker recording a start at 40:48
+         * was paired with a finish at 55:51 for a fifteen-minute "run", and
+         * the real 4:11 that began at 51:40 was swallowed by it — three of
+         * that recording's four runs, each hiding a genuine one underneath.
+         *
+         * And the dead time was ignored altogether. The puck rejects a start
+         * crossing that comes too soon after the line last fired
+         * (crossings_rejected_mintime); Studio did not, so a car crawling over
+         * the line could produce a five-second "lap" here that the dash never
+         * reported — two answers to one question, from the same samples.
+         *
+         * Kept as arithmetic on crossing lists so it can be checked without a
+         * window — tools/check_runsplit.js.
+         */
+        function gpRunsFromCrossings(sHits, fHits, trial, deadMs, diag) {
+            var out = [], rejected = 0;
+            var span = function (a, b) {
+                return { from: a.i, to: b.i, tFrom: a.t, tTo: b.t };
+            };
+            /* One timeline. The dead time is a property of the LINE, not of a
+               list, so the finishes have to be in the order too. */
+            var marks = sHits.map(function (h) { return { h: h, start: true }; })
+                .concat(fHits.map(function (h) { return { h: h, start: false }; }))
+                .sort(function (a, b) { return a.h.i - b.h.i; });
 
-               Pairing each start with the next unused finish instead timed
-               ABANDONED runs. Cross the start, pull off or miss the finish
-               gate, come back round and cross the start again, and the finish
-               was charged to the first of those crossings: in a 92-minute
-               Mount Barker recording, a start at 40:48 was paired with a
-               finish at 55:51 for a fifteen-minute "run", and the real 4:11
-               that began at 51:40 was swallowed by it. Three of that
-               recording's four runs were junk for exactly this reason, and
-               each junk one hid a genuine run underneath.
-
-               A start with no finish before the NEXT start times nothing. The
-               driver crossed the line and did not complete the run; there is
-               no honest number to put against it, and inventing one by
-               reaching further down the recording is what caused this. */
-            var si = 0;
-            fHits.forEach(function (f) {
-                var use = -1;
-                while (si < sHits.length && sHits[si].i < f.i) { use = si; si++; }
-                if (use >= 0) out.push(span(sHits[use], f));
+            var armed = false, open = null, last = 0;
+            marks.forEach(function (m) {
+                var h = m.h;
+                if (m.start) {
+                    /* Disarmed, the line is live again whatever the clock says:
+                       a sprint that has just finished must be able to start the
+                       next run immediately. Mirrors the !armed branch, which
+                       lap_core reaches before its min-time test. */
+                    if (armed && (h.t - last) < deadMs) { rejected++; return; }
+                    if (!armed) { armed = true; open = h; last = h.t; return; }
+                    if (trial) { open = h; last = h.t; return; }   /* aborted, retaken */
+                    /* A circuit's finish line IS its start line. */
+                    out.push(span(open, h));
+                    open = h; last = h.t;
+                } else if (trial && armed) {
+                    out.push(span(open, h));
+                    armed = false; open = null; last = h.t;
+                }
             });
+            if (diag) diag.rejectedMinTime = rejected;
             return out;
         }
 

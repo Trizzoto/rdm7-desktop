@@ -42,7 +42,7 @@ function grabVar(name) {
 }
 
 const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyCardHtml',
-    'gpMetres', 'gpSecs', 'gpSpanSecs', 'gpCrossAt', 'gpHz', 'gpStep', 'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpSplitRows', 'gpNoLapsWhy',
+    'gpMetres', 'gpSecs', 'gpSpanSecs', 'gpCrossAt', 'gpHz', 'gpStep', 'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpDeadMs', 'gpRunsFromCrossings', 'gpSplitRows', 'gpNoLapsWhy',
     'gpTrackById', 'gpActiveTrack', 'gpIsTrial', 'gpRunWord', 'gpTrackUid', 'gpTracksSave', 'gpSaveOwned', 'gpImportSaid',
     'gpTraceHome', 'gpKmBetween', 'gpTrackReach', 'gpMatchTrack', 'gpHeadingAt', 'gpAngleDiff',
     'gpLoopClosure', 'gpProposeLine', 'gpAutoLine', 'gpAutoSetUp', 'gpStints',
