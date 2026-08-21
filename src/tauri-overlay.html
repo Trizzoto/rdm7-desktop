@@ -8517,12 +8517,28 @@
             });
         }
 
+        /* A message with nowhere to go is still a message. The slot is normally
+           on screen and this writes into it, and gpRestoreMsgs puts it back
+           after a re-render. But some slots outlived the surface that drew
+           them: "gpTraceMsg" is rendered only by the Analyse inspector that
+           ADR-0025 retired, and it is now in NO view — measured, all seven.
+           A dozen call sites still report into it, so "Download failed",
+           "Could not open that recording", "Export failed" and "Could not open
+           that day" all went nowhere at all. A failure that says nothing is
+           indistinguishable from success.
+           So: if the slot is not in the document, say it out loud instead.
+           Only for something worth interrupting for — an ordinary status line
+           with no home is not worth a toast on top of whatever you are doing. */
         function gpSetMsg(id, text, tone) {
             gp._msgs = gp._msgs || {};
             if (text) gp._msgs[id] = { text: text, tone: tone };
             else delete gp._msgs[id];
             var el = document.getElementById(id);
-            if (!el) return;
+            if (!el) {
+                if (text && (tone === "bad" || tone === "warn") && typeof showToast === "function")
+                    showToast(text, tone === "bad" ? "error" : "info");
+                return;
+            }
             el.textContent = text || "";
             el.className = "gp-msg" + (tone ? " " + tone : "");
         }
