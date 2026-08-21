@@ -3564,6 +3564,10 @@
             font: 12.5px var(--gpb-body); color: var(--gpb-ink); cursor: pointer;
         }
         #gpWorkspace .gpb-exppop button:hover { background: rgba(29,31,32,0.05); }
+        /* Still hoverable while unavailable: the reason it is off is on its own
+           tooltip, and a control you cannot point at cannot explain itself. */
+        #gpWorkspace .gpb-exppop button[disabled] { color: var(--gpb-muted); cursor: not-allowed; }
+        #gpWorkspace .gpb-exppop button[disabled]:hover { background: transparent; }
         #gpWorkspace .gpb-exppop button small { display: block; color: var(--gpb-muted); font-size: 10.5px; }
         #gpWorkspace .gpb-exppop button + button { border-top: 1px solid var(--gpb-div-lt); }
 
@@ -10722,17 +10726,26 @@
             return { meta: meta, pk: packed, note: note, gates: gates, rows: rows };
         }
 
+        /* Built from the LOADED rows, so there is one thing they cannot do —
+           and returning quietly is how a working button and a dead one come to
+           look identical. Every caller now hears the reason. */
+        function gpNeedsLoaded(id) {
+            if (id === gp.sessionId && gp.trace && gp.trace.length) return false;
+            gpImportSaid("Open this recording first — VBO and CSV are built from " +
+                         "the samples in memory. .rdmsession exports without opening it.", "error");
+            return true;
+        }
+
         window.gpSessionExportVbo = function (id) {
-            if (id !== gp.sessionId || !gp.trace || !gp.trace.length) return;
+            if (gpNeedsLoaded(id)) return;
             var meta = (gp.sessions || []).filter(function (s) { return s.id === id; })[0];
             var vbo = gpVboBuild();
             if (vbo) _wsDownload(gpSesFilename(meta, ".vbo"), vbo, "text/plain");
         };
 
         window.gpSessionExportCsv = function (id) {
-            /* CSV is built from the LOADED rows (it needs g and the lap split),
-               and the buttons only render on the loaded recording. */
-            if (id !== gp.sessionId || !gp.trace || !gp.trace.length) return;
+            /* CSV is built from the LOADED rows (it needs g and the lap split). */
+            if (gpNeedsLoaded(id)) return;
             var meta = (gp.sessions || []).filter(function (s) { return s.id === id; })[0];
             var csv = gpCsvBuild();
             if (csv) _wsDownload(gpSesFilename(meta, ".csv"), csv, "text/csv");
@@ -15483,12 +15496,28 @@
             if (old) { old.remove(); return; }
             var id = (gp.view === "sessions" && gp.sessSel) ? gp.sessSel : gp.sessionId;
             if (!id) return;
+            /* VBO and CSV are built from the LOADED samples — they need the lap
+               split and the computed g, and those only exist in memory for the
+               recording that is open. Highlighting a row in Sessions sets the
+               target without loading it, and the two handlers then returned
+               silently: the popover shut and nothing whatever happened, no file
+               and no message. .rdmsession is different — it reads the store, so
+               it works on any row.
+               Offered and explained rather than offered and inert. */
+            var live = !!(id === gp.sessionId && gp.trace && gp.trace.length);
+            var why = live ? "" : " disabled title='Open this recording first — " +
+                "VBO and CSV are built from the samples in memory, and only the open " +
+                "recording has them. .rdmsession works from here.'";
             var pop = document.createElement("div");
             pop.className = "gpb-exppop";
             pop.id = "gpExpPop";
             pop.innerHTML =
-                "<button data-x='vbo'>VBO<small>opens in Circuit Tools, Track Attack, DataSpeed</small></button>" +
-                "<button data-x='csv'>CSV<small>one row per sample — Excel, i2, RaceRender</small></button>" +
+                "<button data-x='vbo'" + why + ">VBO<small>" +
+                (live ? "opens in Circuit Tools, Track Attack, DataSpeed"
+                      : "open this recording first") + "</small></button>" +
+                "<button data-x='csv'" + why + ">CSV<small>" +
+                (live ? "one row per sample — Excel, i2, RaceRender"
+                      : "open this recording first") + "</small></button>" +
                 "<button data-x='file'>.rdmsession<small>the whole recording, for another PC running Studio</small></button>";
             var ws = document.getElementById("gpWorkspace");
             ws.appendChild(pop);
