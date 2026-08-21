@@ -5308,6 +5308,22 @@
                 "<div class='kp-guide-body' id='kpGuideBody'></div></div>";
             m.addEventListener("click", function (e) { if (e.target === m) kpCloseEcuGuide(); });
             document.body.appendChild(m);
+            /* Escape closes the guide, not the workspace under it. It cannot do
+               that with a listener of its own — the suite's is at capture on
+               document and fires first — so it claims the key instead. Without
+               this, Escape over the guide shut the keypad workspace and left
+               the guide sitting over the Home screen.
+               Registered HERE, with the modal, rather than at the top of the
+               file: _escClaim is defined further down and did not exist yet
+               when this block first ran, so the guard skipped it silently and
+               the claim was never made. The modal is built on first open, by
+               which time everything is defined. */
+            if (typeof window._escClaim === "function") window._escClaim(function () {
+                var g = document.getElementById("kpEcuGuideModal");
+                if (!g || !g.classList.contains("show")) return false;
+                window.kpCloseEcuGuide();
+                return true;
+            });
         }
         window.kpOpenEcuGuide = function (tab) {
             _kpEnsureGuideModal();
@@ -13929,6 +13945,14 @@
            has already closed the whole workspace, popover and all. It asks
            this first instead. */
         window.gpEscapeCaught = function () {
+            /* The channel list first — it is a floating panel over everything
+               else in the workspace, so it is the innermost thing Escape can
+               mean. It registers its own document keydown when it opens, but
+               that fires SECOND: the suite's handler is at capture and was
+               registered first, so Escape shut the entire workspace and tore
+               the list down with it. Claimed here instead, where the GPS
+               workspace already gets first refusal. */
+            if (gp.chanPop) { window.gpChanPopToggle(); return true; }
             if (gp.layoutsOpen || gp.splitMenu) {
                 var wasMenu = !!gp.splitMenu;
                 gp.layoutsOpen = false; gp.splitMenu = null;
@@ -32916,11 +32940,39 @@
              * header's connection dot now, not just the Home heading. */
             if (_shLiveTimer) { clearInterval(_shLiveTimer); _shLiveTimer = null; }
         };
+        /* ---- who gets Escape first -----------------------------------------
+         * Anything that can sit ON TOP of a workspace has to be able to claim
+         * Escape before the workspace does, and it cannot do that with a
+         * listener of its own: this handler is at capture on document and was
+         * registered before any workspace drew anything, so a listener added
+         * later fires second — by which time Escape has already closed the
+         * whole workspace out from under the thing it was meant to close.
+         *
+         * There used to be exactly one claimant, hard-coded: gpEscapeCaught.
+         * So the GPS workspace's popovers were safe and nothing else was. The
+         * keypad's setup guide is a modal on document.body at z-index 16000:
+         * pressing Escape over it closed the keypad workspace and left the
+         * guide floating over the Home screen with the workspace gone.
+         *
+         * Claimants are asked most-recently-registered first — the thing that
+         * opened last is the innermost, and Escape closes the innermost first.
+         * Each returns true if it consumed the key. */
+        window._escClaim = function (fn) {
+            if (typeof fn === "function") (window.__escClaims || (window.__escClaims = [])).push(fn);
+        };
         document.addEventListener("keydown", function (e) {
             if (e.key !== "Escape") return;
             /* A workspace with something open on top of it gets first refusal:
                Escape means "close the popover", and only means "leave the
                workspace" once there is no popover left to close. */
+            var claims = window.__escClaims || [];
+            for (var ci = claims.length - 1; ci >= 0; ci--) {
+                var took = false;
+                /* One claimant throwing must not strand Escape for the rest —
+                   the key would stop working with nothing on screen saying so. */
+                try { took = !!claims[ci](); } catch (err) { took = false; }
+                if (took) { e.stopPropagation(); return; }
+            }
             if (window.gpEscapeCaught && window.gpEscapeCaught()) { e.stopPropagation(); return; }
             var open = _wsVisible();
             var home = document.getElementById("suiteHome");
