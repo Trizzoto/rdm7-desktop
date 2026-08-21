@@ -19757,13 +19757,29 @@
             var fHits = F.hits.filter(function (h) { return h.dir === dirF; });
             if (diag) { diag.finish = F; diag.finishUsable = fHits.length; }
 
-            /* A run is a start crossing followed by the next finish crossing —
-               and only ever one run per start, so a lap that re-crosses the
-               start line on its way out does not swallow the next one. */
-            var fi = 0;
-            sHits.forEach(function (h) {
-                while (fi < fHits.length && fHits[fi].i <= h.i) fi++;
-                if (fi < fHits.length) { out.push(span(h, fHits[fi])); fi++; }
+            /* Every finish belongs to the LAST start before it — a timing loop
+               re-arms each time the car crosses the start line, and the run it
+               ends up timing is the one from the most recent arming.
+
+               Pairing each start with the next unused finish instead timed
+               ABANDONED runs. Cross the start, pull off or miss the finish
+               gate, come back round and cross the start again, and the finish
+               was charged to the first of those crossings: in a 92-minute
+               Mount Barker recording, a start at 40:48 was paired with a
+               finish at 55:51 for a fifteen-minute "run", and the real 4:11
+               that began at 51:40 was swallowed by it. Three of that
+               recording's four runs were junk for exactly this reason, and
+               each junk one hid a genuine run underneath.
+
+               A start with no finish before the NEXT start times nothing. The
+               driver crossed the line and did not complete the run; there is
+               no honest number to put against it, and inventing one by
+               reaching further down the recording is what caused this. */
+            var si = 0;
+            fHits.forEach(function (f) {
+                var use = -1;
+                while (si < sHits.length && sHits[si].i < f.i) { use = si; si++; }
+                if (use >= 0) out.push(span(sHits[use], f));
             });
             return out;
         }
