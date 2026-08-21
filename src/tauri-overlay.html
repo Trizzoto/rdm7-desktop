@@ -1416,6 +1416,15 @@
         .gp-video-status { font-size: 10px; color: var(--text-muted); margin: 2px 0 7px; }
         .lt-expbtns .ws-btn-line.on { border-color: var(--accent); color: var(--text);
                                       box-shadow: inset 0 -2px 0 var(--accent); }
+        /* Recordings / Laps. Same underline the expand buttons use, so the two
+           places in the app that ask "which of these am I looking at" answer
+           the same way. */
+        .gpb-segbar { display: flex; gap: 6px; align-items: center; }
+        .gpb-segbar .ws-btn-line.on { border-color: var(--accent); color: var(--text);
+                                      box-shadow: inset 0 -2px 0 var(--accent); }
+        /* A lap row is a destination, not a label. */
+        .gpb-sesstable tr[data-gp-lapopen] { cursor: pointer; }
+        .gpb-sesstable tr[data-gp-ltrack] { cursor: pointer; }
         .gp-ghost-pick { width: 100%; box-sizing: border-box; margin: 3px 0 5px;
                          background: var(--bg-inset, #16191d); border: 1px solid var(--line, #2a2f35);
                          border-radius: 6px; color: var(--text); font: inherit; font-size: 11px; padding: 4px 6px; }
@@ -11659,6 +11668,182 @@
             });
         };
 
+        /* Re-file several recordings onto one track, re-cutting each.
+         *
+         * gpSessionTrack zeroes a recording's lap numbers and lets them heal
+         * when it is next opened. That is right for one recording and wrong
+         * for a batch: the lap view is built from lapTimesS, so a batch left
+         * to heal lazily shows an empty list until every recording has been
+         * opened by hand — which is the chore the lap view exists to remove.
+         *
+         * Laps are cut by gpSplitRows against the ACTIVE track, so the active
+         * track is moved for the duration and put back afterwards. In memory
+         * only, and restored in every exit path: leaving the library pointing
+         * somewhere the user did not choose would be a worse bug than the one
+         * this fixes. */
+        window.gpSessBulkTrack = function (trackId) {
+            if (gp.traceBusy) return;
+            /* gpSessPicked returns the session ROWS, not their ids — it filters
+               against gp.sessions so a tick left pointing at a deleted
+               recording drops out. Handing those objects to gpStore.meta gets
+               "the parameter is not a valid key" from IndexedDB, which reads
+               like a storage fault rather than a type mistake. */
+            var ids = gpSessPicked().map(function (s) { return s.id; });
+            if (!ids.length) return;
+            /* "__auto" means work it out per recording from where the car
+               actually was. That is the honest answer for a library filed by
+               the old matcher, which handed a recording whatever track
+               happened to be active — three Mallala afternoons ended up under
+               a Mount Barker sprint track, cutting 8-second "laps" out of a
+               gate pair they never crossed. Naming a track by hand cannot fix
+               that in one go, because the right answer differs per row. */
+            var auto = (trackId === "__auto");
+            var trk = (trackId && !auto) ? gpTrackById(trackId) : null;
+            if (trackId && !auto && !trk) return;   /* the library changed under the menu */
+            var wasActive = gp.tracks ? gp.tracks.active : null;
+            if (trk && gp.tracks) gp.tracks.active = trk.id;
+
+            var done = 0, cut = 0, blank = 0, moved = {};
+            var restore = function () {
+                if (gp.tracks) gp.tracks.active = wasActive;
+            };
+
+            var one = function (id) {
+                return gpStore.meta(id).then(function (meta) {
+                    if (!meta) return;
+                    return gpStore.rows(id).then(function (pk) {
+                        var rows = gpRowsUnpack(pk);
+                        /* Per recording, so a batch spanning three venues
+                           lands each row where it was actually driven. */
+                        var use = trk;
+                        if (auto) {
+                            /* Leave a plausible filing alone. Two configurations
+                               of one venue — Winton and Winton Club — both match
+                               a drive there, and picking between them on closest
+                               approach is a coin toss that churns recordings the
+                               user already filed correctly. Only move one whose
+                               current track it was demonstrably NOT driven at. */
+                            var cur = meta.trackId ? gpTrackById(meta.trackId) : null;
+                            if (cur && rows.length && gpRowsAtTrack(rows, cur)) {
+                                use = cur;
+                            } else {
+                                var m = rows.length ? gpMatchTrack(rows) : null;
+                                use = m ? m.track : null;
+                            }
+                        }
+                        if (use) {
+                            delete meta.noTrack;
+                            meta.trackId = use.id;
+                            meta.trackName = use.name;
+                            meta.trial = gpIsTrial(use);
+                            moved[use.name] = (moved[use.name] || 0) + 1;
+                            if (gp.tracks) gp.tracks.active = use.id;  /* gpSplitRows reads this */
+                        } else {
+                            meta.noTrack = true;
+                            meta.trackId = null;
+                            meta.trackName = null;
+                            meta.trial = false;
+                            moved["no track"] = (moved["no track"] || 0) + 1;
+                        }
+                        var times = [], laps = [];
+                        if (rows.length) {
+                            gpComputeG(rows);
+                            if (use) laps = gpSplitRows(rows);
+                            /* Same fallback gpSplitLapsAuto uses, and for the
+                               same reason: with no gate crossings a recording is
+                               cut into RUNS where the car stopped. It applies
+                               with NO track too — where the car stopped is a
+                               fact about the driving, not about the geometry —
+                               so a recording moved to "no track" keeps its runs
+                               instead of coming back empty.
+                               Without this the batch quietly threw away laps
+                               the ordinary open would have found: recordings
+                               holding 11 and 17 runs came back with none, which
+                               looks like data loss because it is. */
+                            if (!laps.length) {
+                                var runs = gpMoveRuns(rows);
+                                if (runs.length >= 2) laps = runs;
+                            }
+                            times = laps.map(function (l) { return gpSpanSecs(rows, l); })
+                                        .filter(function (t) { return t > 0; });
+                        }
+                        meta.lapCount = times.length;
+                        meta.bestLapS = times.length ? Math.min.apply(null, times) : null;
+                        meta.lapTimesS = times.map(function (t) { return Math.round(t * 1000) / 1000; });
+                        /* The corner fingerprint is cut from the best lap, so it
+                           goes stale with the numbers — the history trend would
+                           otherwise compare this recording by a lap that the new
+                           geometry never produced. */
+                        var bi = -1;
+                        times.forEach(function (t, i) { if (bi < 0 || t < times[bi]) bi = i; });
+                        meta.corners = (bi < 0 || !laps[bi]) ? [] :
+                            gpFindCorners(rows, laps[bi].from, laps[bi].to).map(function (c) {
+                                var apex = rows[c.apex];
+                                return { lat: apex.lat, lon: apex.lon,
+                                         kph: Math.round(apex.kph * 10) / 10,
+                                         s: Math.round(gpSecs(rows, c.entry, c.exit) * 1000) / 1000 };
+                            });
+                        done++;
+                        if (times.length) cut++; else blank++;
+                        return gpStore.putMeta(meta);
+                    });
+                });
+            };
+
+            /* One at a time. A recording is tens of thousands of samples and
+               all of them unpack into memory; firing eighteen of those at once
+               is how a machine with 8 GB in it stops responding. */
+            var chain = Promise.resolve();
+            ids.forEach(function (id) { chain = chain.then(function () { return one(id); }); });
+
+            return chain.then(function () {
+                restore();
+                return gpSessionsRefresh();
+            }).then(function () {
+                gpBuildRail();
+                /* The open recording was cut by the old geometry. Re-open it
+                   through the same door as any open, so what is on screen
+                   agrees with what was just written. */
+                var reopen = (gp.sessionId && ids.indexOf(gp.sessionId) >= 0)
+                    ? window.gpSessionLoad(gp.sessionId) : null;
+                return Promise.resolve(reopen);
+            }).then(function () {
+                gpRenderSessions();
+                /* Name every destination, not just a count. "8 recordings
+                   moved" tells you nothing about whether it did the right
+                   thing; "5 to Mount Barker Time Trial, 3 to Mallala" is
+                   checkable against what you remember driving. */
+                var where = Object.keys(moved).map(function (k) {
+                    return moved[k] + " to " + k;
+                }).join(", ");
+                gpSetMsg("gpSessMsg",
+                    done + " recording" + (done === 1 ? "" : "s") + " re-filed" +
+                    (where ? " — " + where : "") + ". " +
+                    cut + " gave up " + gpRunWord() + "s" +
+                    (blank ? ", " + blank + " crossed no line" : "") + ".",
+                    blank && !cut ? "bad" : "ok");
+            }).catch(function (e) {
+                restore();
+                gpSetMsg("gpSessMsg", "Could not re-file: " + (e && e.message ? e.message : e), "bad");
+                gpRenderSessions();
+            });
+        };
+
+        /* The track menu for the selected recordings. Only offered with
+           something ticked — an assign control with no subject is a puzzle. */
+        function gpBulkTrackHtml(n) {
+            var o = "<option value='' selected disabled>Move " + n + " to\u2026</option>";
+            /* First, because it is the right answer far more often than any
+               single track is: it asks the GPS instead of asking you. */
+            o += "<option value='__auto'>Work it out from where I drove</option>";
+            ((gp.tracks && gp.tracks.tracks) || []).forEach(function (tk) {
+                o += "<option value='" + gpEsc(tk.id) + "'>" + gpEsc(tk.name) + "</option>";
+            });
+            o += "<option value='__none'>No track \u2014 whole recording</option>";
+            return "<select class='gp-ghost-pick' style='width:auto;min-width:180px;margin:0' " +
+                   "data-gp-bulktrack>" + o + "</select>";
+        }
+
         function gpRecordingsHtml() {
             var h = "";
             if (gp.sessions === null) return "<div class='ws-note'>Reading\u2026</div>";
@@ -12186,6 +12371,12 @@
                 b.addEventListener("click", function () {
                     var t = b.getAttribute("data-gp-strack");
                     gp.sessFilter.track = t || null;
+                    /* Picking a track is asking about driving there, so it
+                       lands on the laps rather than on the list of files that
+                       happen to contain them. "All tracks" is the opposite
+                       gesture — no track in mind — and goes back to the
+                       recordings. Either is one click from the other. */
+                    gp.sesMode = t ? "laps" : "recordings";
                     gpBuildRail(); gpRenderSessions();
                 });
             });
@@ -12200,16 +12391,256 @@
             });
         };
 
+        /* ══════════════════════════════════════════════════════════════
+         * Laps at a track, across every recording
+         *
+         * A recording is a filing decision — where the ring happened to be
+         * downloaded, how many times the car was switched off. It is not how
+         * anyone thinks about their driving. "My best lap at Mount Barker" is
+         * a question about the TRACK, and answering it meant opening files one
+         * at a time and remembering numbers.
+         *
+         * Built entirely from session metadata: trackId, lapTimesS[] and
+         * recordedAt are all already in memory, so the whole history across
+         * every day appears without reading one sample back off disk.
+         * ══════════════════════════════════════════════════════════════ */
+
+        /* Every lap driven at a track, newest recordings first within equal
+           times. trackName rather than trackId because that is what the rail
+           filters on, and a track renamed between two track days should still
+           gather its laps together. */
+        function gpTrackLapRows(trackName) {
+            var out = [];
+            (gp.sessions || []).forEach(function (s) {
+                if (trackName && s.trackName !== trackName) return;
+                if (!trackName && !s.trackName) return;   /* untracked: nothing to rank against */
+                var times = s.lapTimesS || [];
+                times.forEach(function (t, i) {
+                    if (!(t > 0)) return;                 /* an out-lap that never got timed */
+                    out.push({ sesId: s.id, sesName: s.name, track: s.trackName,
+                               trial: s.trial, lapIdx: i, t: t,
+                               when: s.recordedAt, dated: s.dated,
+                               driver: s.driver, car: s.car });
+                });
+            });
+            out.sort(function (a, b) { return a.t - b.t; });
+            return out;
+        }
+
+        /* The tracks that actually have laps, best first by best lap. */
+        function gpLapTrackSummary() {
+            var by = {};
+            (gp.sessions || []).forEach(function (s) {
+                if (!s.trackName) return;
+                var n = (s.lapTimesS || []).filter(function (t) { return t > 0; }).length;
+                if (!n) return;
+                var e = by[s.trackName] || (by[s.trackName] = {
+                    name: s.trackName, laps: 0, days: {}, best: null, trial: s.trial });
+                e.laps += n;
+                e.days[gpSesDay(s.recordedAt)] = 1;
+                (s.lapTimesS || []).forEach(function (t) {
+                    if (t > 0 && (e.best === null || t < e.best)) e.best = t;
+                });
+            });
+            return Object.keys(by).map(function (k) {
+                by[k].dayCount = Object.keys(by[k].days).length;
+                return by[k];
+            }).sort(function (a, b) { return b.laps - a.laps; });
+        }
+
+        /* Open one lap: load the recording it came from if it is not already
+           open, then select that lap and show it. The lap index is an index
+           into the session's OWN laps, which is what lapTimesS was built from,
+           so it survives the round trip as long as no ghost has been appended
+           — and loading clears ghosts. */
+        window.gpOpenLap = function (sesId, lapIdx) {
+            if (gp.traceBusy) return;
+            var i = parseInt(lapIdx, 10);
+            var go = function () {
+                if (gp.traceLaps && gp.traceLaps[i]) window.gpSelectLap(i);
+                window.gpSetView("session");
+            };
+            if (sesId === gp.sessionId && gp.trace && gp.trace.length) { go(); return; }
+            Promise.resolve(window.gpSessionLoad(sesId)).then(function () {
+                if (gp.sessionId === sesId) go();
+            });
+        };
+
+        /* Put a lap up against the one already open, on the ghost. Only
+           offered for a lap from a DIFFERENT recording — comparing two laps
+           inside one recording is what the reference picker in Analyse already
+           does, and offering both here would be two names for one thing. */
+        window.gpLapGhost = function (sesId) {
+            window.gpCompareGhost(sesId);
+            window.gpSetView("session");
+        };
+
+        function gpLapsPanelHtml(trackName) {
+            var rows = gpTrackLapRows(trackName);
+            var word = gpRunWord();
+            if (!rows.length) {
+                return "<div class='ws-none' style='padding:40px 0'>No timed " + word +
+                       "s here yet.<br>A recording gives up its " + word +
+                       "s once the track has a start/finish line on it.</div>";
+            }
+            var best = rows[0].t;
+            /* Best of each DAY, so a personal best is not the only thing that
+               ever gets a mark — most sessions are about beating yesterday. */
+            var dayBest = {};
+            rows.forEach(function (r) {
+                var d = gpSesDay(r.when);
+                if (dayBest[d] === undefined || r.t < dayBest[d]) dayBest[d] = r.t;
+            });
+            var h = "<table class='gpb-sesstable'><thead><tr>" +
+                    "<th class='n'>#</th><th class='n'>" + gpEsc(gpRunWord(true)) + "</th>" +
+                    "<th class='n'>Gap</th><th>Date</th><th>Recording</th>" +
+                    "<th>Driver</th><th>Car</th><th></th></tr></thead><tbody>";
+            var lastDay = null;
+            rows.forEach(function (r, i) {
+                var day = gpSesDay(r.when);
+                var sameDay = day === lastDay; lastDay = day;
+                var gap = r.t - best;
+                var open = r.sesId === gp.sessionId;
+                h += "<tr class='" + (open ? "sel " : "") + "' data-gp-lapopen='" + gpEsc(r.sesId) +
+                     "' data-gp-lapidx='" + r.lapIdx + "'>" +
+                     "<td class='n'>" + (i + 1) + "</td>" +
+                     "<td class='n" + (i === 0 ? " best" : "") + "'>" + gpLapTime(r.t) +
+                     (i === 0 ? "" : (dayBest[day] === r.t ? " <span title='best of that day'>\u00b7</span>" : "")) +
+                     "</td>" +
+                     "<td class='n'>" + (i === 0 ? "\u2014" : "+" + gap.toFixed(3)) + "</td>" +
+                     "<td class='when" + (sameDay ? " same" : "") + "'><b>" + gpEsc(day) +
+                     "</b><em>" + gpEsc(gpSesClock(r.when)) + "</em>" +
+                     (r.dated === "gps" ? "" : " <span title='the node had no fix when this was downloaded'>*</span>") +
+                     "</td>" +
+                     "<td>" + gpEsc(r.sesName) + "</td>" +
+                     "<td>" + gpEsc(r.driver || "\u2014") + "</td>" +
+                     "<td>" + gpEsc(r.car || "\u2014") + "</td>" +
+                     "<td class='n'><button class='open' data-gp-lapopen2='" + gpEsc(r.sesId) +
+                     "' data-gp-lapidx2='" + r.lapIdx + "'>Open</button>" +
+                     (open || !gp.trace || !gp.trace.length ? "" :
+                        " <button class='ws-btn-line' data-gp-lapghost='" + gpEsc(r.sesId) +
+                        "' title='put this day up against the one open in Analyse'>Compare</button>") +
+                     "</td></tr>";
+            });
+            h += "</tbody></table>";
+            return h;
+        }
+
+        /* The track list, for when no single track is picked in the rail —
+           the way in that the rail's filter cannot be, because it answers
+           "where have I driven" before you have chosen anywhere. */
+        function gpLapTracksHtml() {
+            var ts = gpLapTrackSummary();
+            if (!ts.length)
+                return "<div class='ws-none' style='padding:40px 0'>No timed " + gpRunWord() +
+                       "s on any track yet.</div>";
+            var h = "<table class='gpb-sesstable'><thead><tr><th>Track</th>" +
+                    "<th class='n'>" + gpEsc(gpRunWord(true)) + "s</th><th class='n'>Days</th>" +
+                    "<th class='n'>Best</th><th></th></tr></thead><tbody>";
+            ts.forEach(function (t) {
+                h += "<tr data-gp-ltrack='" + gpEsc(t.name) + "'>" +
+                     "<td><b>" + gpEsc(t.name) + "</b></td>" +
+                     "<td class='n'>" + t.laps + "</td>" +
+                     "<td class='n'>" + t.dayCount + "</td>" +
+                     "<td class='n best'>" + gpLapTime(t.best) + "</td>" +
+                     "<td class='n'><button class='open' data-gp-ltrack2='" + gpEsc(t.name) +
+                     "'>Show " + gpRunWord() + "s</button></td></tr>";
+            });
+            h += "</tbody></table>";
+            return h;
+        }
+
+        /* Recordings or laps. Held on gp rather than in localStorage: which
+           question you are asking belongs to the sitting, not to the install,
+           and picking a track in the rail already moves it for you. */
+        function gpSesMode() {
+            if (!gp.sesMode) gp.sesMode = "auto";
+            if (gp.sesMode !== "auto") return gp.sesMode;
+            /* Picking a track IS asking about laps. */
+            return (gp.sessFilter && gp.sessFilter.track) ? "laps" : "recordings";
+        }
+
+        window.gpSesModeSet = function (m) {
+            gp.sesMode = m;
+            gpRenderSessions();
+        };
+
+        /* Rail track -> laps at that track. Separate from gpSesModeSet so the
+           rail can move BOTH the filter and the question in one click. */
+        /* Row clicks for the lap tables. Bound after render rather than with
+           inline onclick because the values are user text (track and recording
+           names) and quoting them into an attribute is one apostrophe away
+           from a broken handler. */
+        function gpBindLapRows(wrap) {
+            var each = function (attr, fn) {
+                Array.prototype.forEach.call(wrap.querySelectorAll("[" + attr + "]"), function (el) {
+                    el.addEventListener("click", function (ev) { ev.stopPropagation(); fn(el, ev); });
+                });
+            };
+            each("data-gp-ltrack2", function (el) {
+                window.gpLapsForTrack(el.getAttribute("data-gp-ltrack2"));
+            });
+            each("data-gp-ltrack", function (el) {
+                window.gpLapsForTrack(el.getAttribute("data-gp-ltrack"));
+            });
+            each("data-gp-lapghost", function (el) {
+                window.gpLapGhost(el.getAttribute("data-gp-lapghost"));
+            });
+            each("data-gp-lapopen2", function (el) {
+                window.gpOpenLap(el.getAttribute("data-gp-lapopen2"),
+                                 el.getAttribute("data-gp-lapidx2"));
+            });
+            each("data-gp-lapopen", function (el) {
+                window.gpOpenLap(el.getAttribute("data-gp-lapopen"),
+                                 el.getAttribute("data-gp-lapidx"));
+            });
+        }
+
+        window.gpLapsForTrack = function (name) {
+            if (!gp.sessFilter) gp.sessFilter = { q: "", track: null };
+            gp.sessFilter.track = name || null;
+            gp.sesMode = "laps";
+            gpBuildRail();
+            gpRenderSessions();
+        };
+
         function gpRenderSessions() {
             var wrap = document.getElementById("gpSessionsWrap");
             if (!wrap || gp.view !== "sessions") return;
             var list = gpSessFiltered();
             var dev = gpDev();
-            var h = "<h3>Sessions</h3><div class='sub'>every recording on this PC · " +
-                    "open one, or plug the node in and download the latest drive</div>";
+            var mode = gpSesMode();
+            var onTrack = gp.sessFilter && gp.sessFilter.track;
+            /* Two questions, one library. "Which file" and "which lap" are
+               different enough that one table cannot answer both: a lap list
+               has to cross recordings to be worth anything, and a recording
+               list has to stay one row per file to be renameable. */
+            var h = "<h3>" + (mode === "laps" ? (onTrack ? gpEsc(onTrack) : "Laps") : "Sessions") + "</h3>" +
+                    "<div class='sub'>" +
+                    (mode === "laps"
+                        ? (onTrack
+                            ? "every " + gpRunWord() + " you have driven here, quickest first, across every recording"
+                            : "where you have driven — pick a track for its " + gpRunWord() + "s")
+                        : "every recording on this PC · open one, or plug the node in and download the latest drive") +
+                    "</div>";
+            h += "<div class='gpb-segbar' style='margin:0 0 12px'>" +
+                 "<button class='ws-btn-line" + (mode === "recordings" ? " on" : "") +
+                 "' onclick='gpSesModeSet(\"recordings\")'>Recordings</button>" +
+                 "<button class='ws-btn-line" + (mode === "laps" ? " on" : "") +
+                 "' onclick='gpSesModeSet(\"laps\")'>" + gpRunWord(true) + "s</button>" +
+                 (mode === "laps" && onTrack
+                    ? "<button class='ws-btn-line' onclick='gpLapsForTrack(\"\")' " +
+                      "title='every track'>All tracks</button>" : "") +
+                 "</div>";
             if (gp.sessions === null) {
                 h += "<div class='ws-note'>Reading…</div>";
                 wrap.innerHTML = h; return;
+            }
+            if (mode === "laps") {
+                h += onTrack ? gpLapsPanelHtml(onTrack) : gpLapTracksHtml();
+                wrap.innerHTML = h;
+                gpBindLapRows(wrap);
+                return;
             }
             /* a loaded-but-unsaved trace must not look saved */
             if (gp.trace && gp.trace.length && !gp.sessionId) {
@@ -12285,10 +12716,17 @@
                 h += "<div class='gpb-pickbar'>" +
                      "<b>" + picked.length + "</b> selected" +
                      "<span class='sp'></span>" +
+                     /* Re-filing several recordings at once is the whole
+                        reason the tick boxes are worth having. A recording
+                        that borrowed the wrong track cut its laps from the
+                        wrong geometry, and fixing that one at a time through
+                        the per-recording menu is the chore this removes. */
+                     gpBulkTrackHtml(picked.length) +
                      "<button class='ws-btn-line' onclick='gpSessPickClear()'>Clear</button>" +
                      "<button class='ws-btn-line danger' onclick='gpSessDeletePicked()'>Delete " +
                      picked.length + "</button></div>";
             }
+            h += "<div class='gp-msg' id='gpSessMsg'></div>";
             /* actions for the highlighted row */
             var cur = (gp.sessions || []).filter(function (s) { return s.id === (gp.sessSel || gp.sessionId); })[0];
             if (cur) {
@@ -12326,6 +12764,16 @@
                     window.gpSessPickAll(all.checked);
                 });
             }
+            var bulk = wrap.querySelector("[data-gp-bulktrack]");
+            if (bulk) {
+                bulk.addEventListener("change", function (e) {
+                    e.stopPropagation();
+                    var v = bulk.value;
+                    if (!v) return;
+                    window.gpSessBulkTrack(v === "__none" ? null : v);
+                });
+            }
+            gpRestoreMsgs();
             Array.prototype.forEach.call(wrap.querySelectorAll("[data-gp-ssort]"), function (el) {
                 el.addEventListener("click", function () {
                     window.gpSessSortBy(el.getAttribute("data-gp-ssort"));
@@ -21404,6 +21852,22 @@
                    then behaves exactly as before. */
                 spanKm: gpKmBetween(loLat, loLon, hiLat, hiLon) / 2
             };
+        }
+
+        /* Was this recording driven at this track at all? A yes/no, not a
+           ranking — used to leave an existing filing alone rather than churn
+           it for a marginally closer neighbour. Two configurations of one
+           venue both answer yes, which is the point: neither is wrong enough
+           to move a recording off. */
+        function gpRowsAtTrack(rows, trk) {
+            var reach = gpTrackReach(trk);
+            if (!reach || !rows || !rows.length) return false;
+            var limit = reach.spanKm + GP_MATCH_KM;
+            var step = Math.max(1, Math.floor(rows.length / 400));
+            for (var i = 0; i < rows.length; i += step)
+                if (gpKmBetween(rows[i].lat, rows[i].lon, reach.lat, reach.lon) <= limit)
+                    return true;
+            return false;
         }
 
         /* Nearest thing to the recording, preferring a track the user has
