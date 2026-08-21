@@ -12216,8 +12216,15 @@
             gpRootCol(g);
             var nRows = g.root.kids.length, nHeld = gpHeldRows(g);
             h += "<div class='hd' style='margin-top:2px'>Panel height</div>" +
+                /* Which of the two the rows are in, which is held-ness and
+                   nothing else. This used to also require `g.fit`, which is
+                   the DERIVED "does the spine currently fit" and is false
+                   whenever the floors stop it — so pressing FIT on a mosaic
+                   too tall to pack (four panels in a 534 px window cannot each
+                   be 150 px) held every row, packed as far as it could, and
+                   then lit neither button. */
                 seg([["full", "FULL"], ["fit", "FIT"]],
-                    nHeld === 0 ? "full" : (nHeld === nRows && g.fit ? "fit" : ""), "gpGridFitSet") +
+                    nHeld === 0 ? "full" : (nHeld === nRows ? "fit" : ""), "gpGridFitSet") +
                 "<div class='note'>" +
                 "<b>Full</b> gives every panel the height its own contents need, so nothing scrolls " +
                 "inside a panel &mdash; the page scrolls instead. <b>Fit</b> packs the rows into the " +
@@ -13603,7 +13610,12 @@
             var g = gpGrid();
             fn(g);
             gpNodeCollapse(g.root);
-            if (!g.root.kids && !g.root.type) g.root = { id: gpNodeId(), type: "graph" };
+            /* The net under every mutation: a tree with nothing in it is not
+               an arrangement. `!g.root.kids` alone never caught the case it
+               was written for — an emptied split still HAS a kids array, and
+               `[]` is truthy — so a mosaic could be left with no panels in it
+               at all. Ask whether anything is actually there. */
+            if (!gpNodeLeaves(g.root).length) g.root = { id: gpNodeId(), type: "graph" };
             gpRootCol(g);
             gpGridSave();
             gpRenderGrid();
@@ -13767,7 +13779,14 @@
             gp.splitMenu = null;
             gpGridMutate(function (g) {
                 var hit = gpNodeFind(g.root, id);
-                if (!hit || !hit.parent) return;          /* never close the last one */
+                if (!hit || !hit.parent) return;
+                /* Never close the last one. The test used to be `!hit.parent`
+                   alone, which gpRootCol makes unreachable — it wraps a lone
+                   panel in a col spine, so the last panel always HAS a parent.
+                   Closing it emptied the mosaic: no panels at all, just the
+                   "+ Row" strip, saved to localStorage and still empty after a
+                   re-render. Count what is actually left instead. */
+                if (gpNodeLeaves(g.root).length <= 1) return;
                 var p = hit.parent;
                 var freed = gpNum(p.sz[hit.idx], 1);
                 p.kids.splice(hit.idx, 1);
@@ -14360,18 +14379,23 @@
 
            `sz` is what the rows are now, `wants` what the measured ones asked
            for (held rows are not measured, so their entry is ignored). */
-        function gpSpineSizes(sz, held, mins, wants, elastic, avail) {
+        function gpSpineSizes(sz, held, mins, wants, elastic, avail, packIn) {
             var out = sz.slice(), i;
             var allHeld = held.length > 0;
             for (i = 0; i < held.length; i++) if (!held[i]) { allHeld = false; break; }
-            /* Every row held AND the spine still fits: a window resize keeps
-               the shape you set instead of opening a scrollbar it did not
-               need. With even one measured row this is the wrong move — that
-               row's height is about its contents, not about the window — and
-               the leftover is handed out below instead. */
+            /* Every row held: the spine's own proportions are the whole answer,
+               so scale them to the window. `packIn` is FIT asking for it — the
+               one case where the rows have to come DOWN to meet the window.
+               Without it, scaling only ever ran when the spine already fitted,
+               which made FIT inert in exactly the situation it exists for: a
+               mosaic taller than the window did not move when you pressed it,
+               and the segment then lit neither FULL nor FIT.
+               With even one measured row this is the wrong move — that row's
+               height is about its contents, not about the window — and the
+               leftover is handed out by gpSpineFill below instead. */
             if (allHeld) {
                 var sum = out.reduce(function (a, b) { return a + b; }, 0) || 1;
-                if (sum <= avail + 1)
+                if (packIn || sum <= avail + 1)
                     out = out.map(function (s) { return s * avail / sum; });
             }
             out = out.map(function (s, i2) {
@@ -14473,7 +14497,12 @@
             root.sz = gpSpineSizes(
                 root.sz, held, mins,
                 root.kids.map(function (k, i) { return held[i] ? 0 : gpNodeWantH(k); }),
-                root.kids.map(gpNodeElastic), avail);
+                root.kids.map(gpNodeElastic), avail,
+                /* FIT asked for the rows to be packed into the window. It stays
+                   true afterwards because the packed total then fits, and a
+                   divider drag past the window clears it — so this is the flag
+                   asking, not a mode being re-asserted. */
+                g.fit === true);
             var total = root.sz.reduce(function (a, b) { return a + b; }, 0);
             g.fit = total <= avail + 1;
             /* Fitted, the canvas just flexes into the port. Tall, its own

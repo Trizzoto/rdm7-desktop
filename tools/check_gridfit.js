@@ -257,6 +257,26 @@ else {
     ok('no rescale down into the window', near(s[0], 700) && near(s[1], 600),
        JSON.stringify(s));
 
+    console.log('\nFIT packs an overflowing spine back into the window');
+    /* The seventh argument is FIT asking. Without it this was inert in exactly
+       the case FIT exists for: a mosaic taller than the window did not move
+       when pressed, and the segment then lit neither FULL nor FIT. */
+    s = F.sizes([700, 600], [true, true], [150, 150], [0, 0], [false, false], 500, true);
+    ok('the rows come down to meet it', near(s[0] + s[1], 500), (s[0] + s[1]).toFixed(1));
+    ok('and keep the proportions they had', near(s[0] / s[1], 700 / 600, 0.01),
+       (s[0] / s[1]).toFixed(3));
+
+    console.log('\nFIT still respects the floor a panel can be drawn in');
+    s = F.sizes([700, 600], [true, true], [150, 150], [0, 0], [false, false], 200, true);
+    ok('neither row goes under it', s[0] >= 150 && s[1] >= 150, JSON.stringify(s));
+
+    console.log('\nFIT does not speak for a spine that still has a measured row');
+    /* A measured row's height is about its contents, not about the window, so
+       scaling the pair by one window-shaped factor would be meaningless. */
+    s = F.sizes([700, 600], [true, false], [150, 150], [0, 356], [false, false], 500, true);
+    ok('the held row keeps its height', near(s[0], 700), String(s[0]));
+    ok('the measured one is still its own', near(s[1], 356), String(s[1]));
+
     console.log('\none held row does not drag the others into the window with it');
     /* The rescale is only right when EVERY row is held — with one measured
        row in the spine it would be scaling a height that means "what my
