@@ -6381,6 +6381,14 @@
 
         function caSort(k) { ca.sort = k; caRender(); }
         window.caSort = caSort;
+        /* The filter box calls this straight from its oninput, and everything in
+           here is sealed inside an IIFE — so without the export every keystroke
+           threw ReferenceError. It looked like it worked anyway, because the
+           frame poll re-renders a few times a second and picks the filter up on
+           its own. Pause the bus and that stops: the box then did nothing at
+           all, which is exactly when you most want to filter a captured list.
+           tools/check_controls.js now fails on any handler sealed this way. */
+        window.caRender = caRender;
         /* SavvyCAN declutter controls */
         window.caChkClick = function (e, id) {
             e.stopPropagation();                       /* don't select the row */
