@@ -34385,14 +34385,14 @@
                     if (!first) return;
                     try {
                         const bytes = await RDM.readFile(first);
-                        /* Trigger the importRdm pipeline by simulating a file object */
-                        const blob = new Blob([bytes], { type: 'application/octet-stream' });
-                        const file = new File([blob], first.split(/[\\/]/).pop() || 'imported.rdm');
-                        const dt = new DataTransfer();
-                        dt.items.add(file);
-                        const input = document.getElementById('importRdmInput');
-                        input.files = dt.files;
-                        input.dispatchEvent(new Event('change'));
+                        /* Straight into the import body. Handing the bytes to
+                         * importRdmInput and firing 'change' used to be the
+                         * way in, but that input only gets an onchange in
+                         * importRdm()'s browser branch — under Tauri it takes
+                         * the native-dialog branch and returns first, so the
+                         * event landed on nothing and double-clicking a .rdm
+                         * did nothing at all. */
+                        await _processRdmBytes(bytes, first.split(/[\\/]/).pop() || 'imported.rdm');
                     } catch (err) {
                         showToast('Failed to open file: ' + (err.message || err), 'error');
                     }
@@ -35383,22 +35383,26 @@
                     const view = new DataView(arrayBuf);
 ##[ replace-with ]##
         /* Body extracted from firmware's importRdm so the Tauri file-open
-         * pipeline (file association / drag-drop) can feed raw bytes in. */
+         * pipeline (file association / drag-drop) can feed raw bytes in.
+         *
+         * The body below is firmware source copied VERBATIM, and in the
+         * firmware it runs inside an <input type=file> onchange where `file`
+         * is in scope. Here it isn't — so every `file.name` the firmware adds
+         * lands as a ReferenceError that the surrounding catch reports as
+         * "Import failed: file is not defined", killing the import. That is
+         * exactly what shipped in 0.7.0/0.7.1. Anchoring each mention would
+         * only re-break on the next one, so stand up a stand-in instead: the
+         * body gets the `file` it expects and future mentions just work. */
         async function _processRdmBytes(u8, fileName) {
             {
+                const file = { name: fileName, size: u8.length };
                 const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
 
                 try {
 ##[ end ]##
 
-##[ block import-rdm-name ]##
-##[ anchor ]##
-                    updateStatus(`Imported ${file.name}${assetMsg}`);
-                    showToast(`Imported ${file.name}${assetMsg}`, 'success');
-##[ replace-with ]##
-                    updateStatus(`Imported ${fileName}${assetMsg}`);
-                    showToast(`Imported ${fileName}${assetMsg}`, 'success');
-##[ end ]##
+#! The firmware body's `file.name` mentions need no anchors of their own —
+#! import-rdm-head gives the extracted body a `file` stand-in to read them off.
 
 ##[ block import-rdm-tail ]##
 ##[ anchor ]##
