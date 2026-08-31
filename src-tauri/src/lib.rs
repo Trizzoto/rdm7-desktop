@@ -167,14 +167,75 @@ async fn probe_device(ip: String, timeout_ms: Option<u64>) -> Result<Option<Disc
 
 // ── File System Commands ────────────────────────────────────────────
 
+/// Bytes, as bytes.
+///
+/// A command that returns `Vec<u8>` is serialised by Tauri with
+/// `serde_json::to_string` — a JSON ARRAY OF NUMBERS. A 128 MB video came back
+/// as ~380 MB of text for the webview to parse into 128 million JS numbers,
+/// which is how "Preparing the footage…" came to sit there for minutes with
+/// nothing to press. `ipc::Response` sends the bytes over the IPC unchanged and
+/// arrives in JS as an ArrayBuffer, which is what every caller here already
+/// wraps in a Uint8Array.
 #[tauri::command]
-async fn read_binary_file(path: String) -> Result<Vec<u8>, String> {
-    std::fs::read(&path).map_err(|e| format!("Failed to read {path}: {e}"))
+async fn read_binary_file(path: String) -> Result<tauri::ipc::Response, String> {
+    let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read {path}: {e}"))?;
+    Ok(tauri::ipc::Response::new(bytes))
 }
 
+/// …and the same, going out.
+///
+/// A `data: Vec<u8>` ARGUMENT is the mirror of the bug above: the webview has
+/// to `Array.from` the bytes and `JSON.stringify` them, and serde has to parse
+/// every number back. Measured at 20 MB: 11.4 s, and an exported lap is many
+/// times that — three minutes of frozen app at the save step, which is where
+/// the export appeared to hang a second time.
+///
+/// So the bytes travel as the request BODY (`Uint8Array` payload → Tauri sends
+/// `application/octet-stream` → `InvokeBody::Raw`) and the destination travels
+/// in a header. Headers are ASCII, and this is Windows — a path with a space or
+/// an accent in it must not become a 400 — so it is percent-encoded by the
+/// caller and decoded here.
 #[tauri::command]
-async fn write_binary_file(path: String, data: Vec<u8>) -> Result<(), String> {
-    std::fs::write(&path, &data).map_err(|e| format!("Failed to write {path}: {e}"))
+async fn write_binary_file(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let raw = request
+        .headers()
+        .get("x-path")
+        .ok_or_else(|| "write_binary_file: no x-path header".to_string())?
+        .to_str()
+        .map_err(|e| format!("write_binary_file: bad x-path header: {e}"))?;
+    let path = percent_decode(raw)?;
+    let bytes: &[u8] = match request.body() {
+        tauri::ipc::InvokeBody::Raw(b) => b,
+        tauri::ipc::InvokeBody::Json(_) => {
+            return Err("write_binary_file: expected raw bytes, got JSON".to_string())
+        }
+    };
+    std::fs::write(&path, bytes).map_err(|e| format!("Failed to write {path}: {e}"))
+}
+
+/// `%XX` back to bytes, then UTF-8. Only what `encodeURIComponent` produces.
+fn percent_decode(s: &str) -> Result<String, String> {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' {
+            if i + 2 >= b.len() {
+                return Err("write_binary_file: truncated escape in x-path".to_string());
+            }
+            let hex = std::str::from_utf8(&b[i + 1..i + 3])
+                .map_err(|_| "write_binary_file: bad escape in x-path".to_string())?;
+            out.push(
+                u8::from_str_radix(hex, 16)
+                    .map_err(|_| "write_binary_file: bad escape in x-path".to_string())?,
+            );
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).map_err(|_| "write_binary_file: x-path is not UTF-8".to_string())
 }
 
 /// Let the webview stream ONE chosen file over the asset protocol.
@@ -259,7 +320,7 @@ async fn video_convert(src: String) -> Result<String, String> {
 /// end or the other — reading the whole file to find it would reintroduce
 /// exactly the problem the asset protocol is here to solve.
 #[tauri::command]
-async fn read_file_range(path: String, offset: u64, len: u64) -> Result<Vec<u8>, String> {
+async fn read_file_range(path: String, offset: u64, len: u64) -> Result<tauri::ipc::Response, String> {
     use std::io::{Read, Seek, SeekFrom};
     const MAX: u64 = 8 * 1024 * 1024;
     if len > MAX {
@@ -278,7 +339,9 @@ async fn read_file_range(path: String, offset: u64, len: u64) -> Result<Vec<u8>,
         }
     }
     buf.truncate(got);
-    Ok(buf)
+    /* Raw, not JSON — the demuxer asks for these a megabyte at a time and a
+       JSON array of numbers triples the bytes and costs a parse each way. */
+    Ok(tauri::ipc::Response::new(buf))
 }
 
 // ── Serial Port Protocol ────────────────────────────────────────────

@@ -60,9 +60,9 @@
         return ('serial' in info || 'schema' in info) ? DEVICE_DASH : null;
     }
 
-    async function _tauriInvoke(cmd, args) {
+    async function _tauriInvoke(cmd, args, options) {
         if (window.__TAURI_INTERNALS__) {
-            return window.__TAURI_INTERNALS__.invoke(cmd, args);
+            return window.__TAURI_INTERNALS__.invoke(cmd, args, options);
         }
         throw new Error('Tauri invoke not available');
     }
@@ -2383,13 +2383,26 @@
 
         /**
          * Write binary data to a file path (Tauri only).
+         *
+         * The bytes go as the request BODY, not as an argument. Tauri sends a
+         * Uint8Array payload as application/octet-stream and JSON-encodes
+         * anything else -- and `{ data: Array.from(bytes) }` meant a 20 MB
+         * write spent 11.4 s turning itself into 21 million JSON numbers and
+         * back. An exported video is many times that; the save step looked
+         * like the export had hung. The destination rides in a header, so it
+         * is percent-encoded (headers are ASCII, these are Windows paths).
          */
         async writeFile(path, data) {
-            return _tauriInvoke('write_binary_file', { path, data: Array.from(data) });
+            const u8 = data instanceof Uint8Array ? data : new Uint8Array(data);
+            return _tauriInvoke('write_binary_file', u8,
+                                { headers: { 'x-path': encodeURIComponent(path) } });
         },
 
         /**
          * Read binary data from a file path (Tauri only). Returns Uint8Array.
+         *
+         * Comes back as an ArrayBuffer -- read_binary_file returns
+         * tauri::ipc::Response for the same reason writeFile sends a body.
          */
         async readFile(path) {
             const arr = await _tauriInvoke('read_binary_file', { path });
