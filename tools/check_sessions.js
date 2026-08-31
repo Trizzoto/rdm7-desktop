@@ -49,7 +49,8 @@ function grabVar(src, name) {
 }
 
 const WANT = ['gpN', 'gpSecs', 'gpSpanSecs', 'gpSesUid', 'gpSesDate', 'gpSampleDate',
-              'gpTraceAnchor', 'gpIsTrial', 'gpFindCorners', 'gpSessionMeta',
+              'gpTraceAnchor', 'gpIsTrial', 'gpFindCorners', 'gpSignedDist', 'gpCrossAt',
+              'gpGateHits', 'gpNearTrack', 'gpCleanRuns', 'gpSessionMeta',
               'gpSessionPrior', 'gpSessionSave', 'gpSessionSaveNow', 'gpStints',
               'gpSessAvg', 'gpSessSort', 'gpSessFiltered', 'gpSessSortBy',
               'gpSessPick', 'gpSessPicked', 'gpSessPickToggle', 'gpSessPickRange',

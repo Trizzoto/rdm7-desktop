@@ -39,7 +39,7 @@ function grabFrom(src, name) {
 }
 
 const WANT = ['gpN', 'gpMetres', 'gpMetresPerDeg', 'gpGateFromEnd', 'gpSignedDist', 'gpSecs',
-              'gpSpanSecs', 'gpCrossAt', 'gpGateHits', 'gpMainDir', 'gpDeadMs', 'gpRunsFromCrossings', 'gpSplitRows',
+              'gpSpanSecs', 'gpCrossAt', 'gpGateHits', 'gpMainDir', 'gpDeadMs', 'gpRunsFromCrossings', 'gpRunGapMs', 'gpRunBreakM', 'gpGradeRuns', 'gpSplitRows',
               'gpHz', 'gpCornerScan', 'gpFindCorners'];
 
 const src = fs.readFileSync(path.join(ROOT, REL), 'utf8');

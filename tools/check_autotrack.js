@@ -42,7 +42,7 @@ function grabVar(name) {
 }
 
 const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyCardHtml',
-    'gpMetres', 'gpSecs', 'gpSpanSecs', 'gpCrossAt', 'gpHz', 'gpStep', 'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpDeadMs', 'gpRunsFromCrossings', 'gpSplitRows', 'gpNoLapsWhy',
+    'gpMetres', 'gpSecs', 'gpSpanSecs', 'gpCrossAt', 'gpHz', 'gpStep', 'gpSignedDist', 'gpGateHits', 'gpMainDir', 'gpDeadMs', 'gpRunsFromCrossings', 'gpRunGapMs', 'gpRunBreakM', 'gpGradeRuns', 'gpSplitRows', 'gpNoLapsWhy',
     'gpTrackById', 'gpActiveTrack', 'gpIsTrial', 'gpRunWord', 'gpTrackUid', 'gpTracksSave', 'gpSaveOwned', 'gpImportSaid',
     'gpTraceHome', 'gpKmBetween', 'gpTrackReach', 'gpMatchTrack', 'gpHeadingAt', 'gpAngleDiff',
     'gpLoopClosure', 'gpProposeLine', 'gpAutoLine', 'gpAutoSetUp', 'gpStints',
@@ -62,10 +62,10 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyCardHtml',
     'gpSesUid', 'gpChannels', 'gpCsvBuild', 'gpCsvUnit', 'gpSpdN', 'gpSmoothPath',
     'gpSectorGates', 'gpSectorName', 'gpSectorNamed', 'gpSortSectors', 'gpSectorOfSample',
     'gpBusSeenHtml', 'gpElsewhereSays',
-    'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess', 'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle', 'gpChanDefsById', 'gpChanFixes', 'gpChanFixApply', 'gpChanFixFor', 'gpChanRawRange', 'gpChanWouldRead', 'gpChanDef', 'gpChanValue', 'gpChanDefsFor', 'gpDashChansCached',
+    'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess', 'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle', 'gpChanQuiet', 'gpChanDefsById', 'gpChanFixes', 'gpChanFixApply', 'gpChanFixFor', 'gpChanRawRange', 'gpChanWouldRead', 'gpChanDef', 'gpChanValue', 'gpChanDefsFor', 'gpDashChansCached',
     'gpSlipLane',
     'gpReadyRows', 'gpTraceFixBytes', 'gpFramed',
-    'gpMoveRuns', 'gpSplitLapsAuto', 'gpSplitLaps', 'gpRunWord', 'gpSortSectors',
+    'gpMoveRuns', 'gpOrientGates', 'gpCleanRuns', 'gpRunFlagWhy', 'gpSplitLapsAuto', 'gpSplitLaps', 'gpRunWord', 'gpSortSectors',
     'gpShapeFromDrive', 'gpOutlineFromRows', 'gpOutlineSimplify', 'gpOutlineStats',
     'gpOutlineSrcShort', 'gpTrackUid', 'gpFrameTrack',
     'gpSmoothAxis', 'gpSmoothNoise', 'gpToLocalM', 'gpRdpKeep',
@@ -315,19 +315,42 @@ ok('it admits it', /could not find a repeated loop/.test(said || ''), JSON.strin
 console.log('\nthe gate arrow points the wrong way (the bug from the bench)');
 /* Same five laps, but flip the placed line's heading 180 deg — as happens
    whenever a gate is dropped by hand and the arrow lands against traffic.
-   The old splitter required crossings in the arrow's direction and produced
-   zero laps with no explanation. */
+   A gate dropped backwards must still end up timing laps.
+
+   It is no longer the SPLITTER that copes with it. Deciding direction inside
+   the split, per recording, by majority vote, is what put runs on the board
+   backwards: measured on the real 21 Aug Mount Barker recording the start
+   line went six crossings one way and five the other, one pass from
+   inverting the session. gpSplitRows now reads the heading and nothing else,
+   exactly as lap_core.c does, and gpOrientGates turns the gate round ONCE
+   from the driving and writes the corrected heading onto the track — so the
+   node reaches the same answer on the same drive. */
 freshGp();
 F.gpAutoSetUp(rows);
 const sfGood = F.gpActiveTrack().start_finish;
 const before = F.gpSplitRows(rows).length;
 F.gpActiveTrack().start_finish = Object.assign({}, sfGood, { heading: (sfGood.heading + 180) % 360 });
-ok('flipping the line changes nothing', F.gpSplitRows(rows).length === before,
+ok('a backwards gate, on its own, times nothing', F.gpSplitRows(rows).length === 0,
+    F.gpSplitRows(rows).length + ' laps');
+const turned = F.gpOrientGates(rows);
+ok('the driving turns it round', /turned round/.test(turned || ''), String(turned));
+const hdgNow = F.gpActiveTrack().start_finish.heading;
+ok('and the correction lands on the TRACK, so the node agrees too',
+    Math.abs(((hdgNow - sfGood.heading) % 360 + 360) % 360) < 1, hdgNow + ' vs ' + sfGood.heading);
+ok('flipping the line changes nothing, once it has been oriented',
+    F.gpSplitRows(rows).length === before,
     F.gpSplitRows(rows).length + ' vs ' + before);
-/* And driven the other way round — laps must still split. */
+ok('and the gate is settled, so nothing re-decides it', F.gpActiveTrack().start_finish.dir_ok === true);
+/* Driven the other way round against a SETTLED gate: not laps, and it says
+   so rather than timing them backwards. That is the behaviour change — a
+   track has a direction, and one reversed session does not overturn it. */
 const revRows = rows.slice().reverse().map((r, i) => Object.assign({}, r, { t: i * 40 }));
-ok('driving the circuit the other way still splits', F.gpSplitRows(revRows).length === before,
-    F.gpSplitRows(revRows).length + ' vs ' + before);
+ok('driving the circuit the other way does not time laps against a settled gate',
+    F.gpSplitRows(revRows).length === 0, F.gpSplitRows(revRows).length + ' laps');
+global.gp.trace = revRows;
+ok('and it says the direction is set the other way',
+    /already set the other way/.test(F.gpNoLapsWhy()), F.gpNoLapsWhy());
+global.gp.trace = rows;
 F.gpActiveTrack().start_finish = sfGood;
 
 console.log('\nzero laps always says why');

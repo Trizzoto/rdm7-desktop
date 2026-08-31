@@ -49,7 +49,7 @@ function grabFrom(src, name) {
 }
 
 const WANT = ['gpN', 'gpSignedDist', 'gpCrossAt', 'gpGateHits', 'gpMainDir',
-              'gpDeadMs', 'gpRunsFromCrossings', 'gpSplitRows', 'gpSecs', 'gpSpanSecs'];
+              'gpDeadMs', 'gpRunsFromCrossings', 'gpRunGapMs', 'gpRunBreakM', 'gpGradeRuns', 'gpSplitRows', 'gpSecs', 'gpSpanSecs'];
 const src = fs.readFileSync(path.join(ROOT, REL), 'utf8');
 const parts = WANT.map(n => grabFrom(src, n));
 
