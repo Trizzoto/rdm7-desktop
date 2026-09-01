@@ -644,6 +644,121 @@ function reader(blob) {
         ok('nothing to read gives nothing back', F.codec(null) === null && F.codec(new Uint8Array([1])) === null);
     }
 
+    /* ══ an export is a snapshot, not a worker (ADR-0052) ═════════════════ */
+    console.log('\nthe frame loop borrows the app’s state and gives it back');
+    {
+        const SNAPF = ['gpExportSnap', 'gpWithSnapshot', 'gpExportQueue',
+                       'gpExportPump', 'gpExportCancel', 'gpExportDone'];
+        const sparts = [grabVar(src, 'GP_SNAP_KEYS')];
+        SNAPF.forEach(f => sparts.push(grabFn(src, f)));
+        const S = new Function('ARGgp', 'ARGlog', `
+            var gp = ARGgp, LOG = ARGlog;
+            function gpExportStrip() { LOG.strips++; }
+            function gpExportRunNow(job) { LOG.ran.push(job.id); }
+            function gpExportName() { return 'x.mp4'; }
+            function gpFastAvailable() { return true; }
+            ${sparts.join('\n')}
+            return { keys: GP_SNAP_KEYS, snap: gpExportSnap, withSnap: gpWithSnapshot,
+                     queue: gpExportQueue, pump: gpExportPump, cancel: gpExportCancel,
+                     done: gpExportDone, gp: gp };
+        `);
+
+        const mk = () => {
+            const gp = { trace: ['A'], selLap: 0, cmpLap: -1, cam: { hud: { v: 1, w: {} } },
+                         delta: 'dA', deltaKey: 'kA', ghostFence: null, spdUnit: 'kph' };
+            const log = { strips: 0, ran: [] };
+            return { E: S(gp, log), gp, log };
+        };
+
+        {
+            const { E, gp } = mk();
+            const snap = E.snap();
+            ok('the snapshot copies the camera settings rather than pointing at them',
+               snap.cam !== gp.cam && JSON.stringify(snap.cam) === JSON.stringify(gp.cam));
+            /* The rows array is REPLACED by gpSessionLoad, never mutated in
+               place, so holding the old one is both cheap and correct. */
+            ok('…and holds the rows by reference, because they are replaced not edited',
+               snap.trace === gp.trace);
+            ok('every key it names is captured',
+               E.keys.every(k => Object.prototype.hasOwnProperty.call(snap, k)),
+               E.keys.filter(k => !(k in snap)).join(' '));
+        }
+        {
+            const { E, gp } = mk();
+            const snap = E.snap();
+            gp.selLap = 4; gp.delta = 'dLIVE'; gp.deltaKey = 'kLIVE';
+            gp.cam.hud.w.hudSpeed = { dx: 99, dy: 0, k: 1 };
+
+            let sawLap = null, sawDelta = null, sawHud = null;
+            E.withSnap(snap, function () {
+                sawLap = gp.selLap; sawDelta = gp.delta;
+                sawHud = JSON.stringify(gp.cam.hud.w);
+            });
+            /* THE check the whole design turns on: a job's frames must not
+               change because somebody re-selected a lap or nudged a widget
+               while it was running. The modal used to prevent that by
+               construction; the snapshot has to now. */
+            ok('inside the borrow, the frame sees the job’s lap, not the live one',
+               sawLap === 0, String(sawLap));
+            ok('…the job’s derived delta, not the live cache', sawDelta === 'dA', String(sawDelta));
+            ok('…and the job’s overlay layout, not the one being edited',
+               sawHud === '{}', sawHud);
+
+            ok('afterwards the live lap is back', gp.selLap === 4, String(gp.selLap));
+            ok('…the live cache is back', gp.delta === 'dLIVE' && gp.deltaKey === 'kLIVE');
+            ok('…and so is the layout being edited',
+               !!gp.cam.hud.w.hudSpeed && gp.cam.hud.w.hudSpeed.dx === 99);
+        }
+        {
+            /* A throw inside the composite must not leave the app wearing a
+               half-finished export's state. */
+            const { E, gp } = mk();
+            const snap = E.snap();
+            gp.selLap = 7;
+            let threw = false;
+            try { E.withSnap(snap, function () { throw new Error('composite blew up'); }); }
+            catch (e) { threw = true; }
+            ok('a throw inside the borrow still propagates', threw);
+            ok('…and the state is given back anyway', gp.selLap === 7, String(gp.selLap));
+        }
+        {
+            const { E } = mk();
+            let ran = 0;
+            E.withSnap(null, function () { ran++; });
+            ok('no snapshot is not an error — it is the old, unqueued behaviour', ran === 1);
+        }
+        {
+            /* One at a time: two WebCodecs pipelines contend for the same
+               hardware encoder and both get slower. */
+            const { E, gp, log } = mk();
+            const a = { id: 'a', state: 'queued', plan: {} };
+            const b = { id: 'b', state: 'queued', plan: {} };
+            E.queue().push(a, b);
+            E.pump();
+            ok('the head of the queue runs', log.ran.join() === 'a', log.ran.join());
+            E.pump();
+            ok('…and a second pump does not start another beside it',
+               log.ran.join() === 'a', log.ran.join());
+            E.done(a, 'done');
+            ok('…the next one starts when the first finishes',
+               log.ran.join() === 'a,b', log.ran.join());
+        }
+        {
+            const { E, gp, log } = mk();
+            const a = { id: 'a', state: 'queued', plan: {} };
+            const b = { id: 'b', state: 'queued', plan: {} };
+            E.queue().push(a, b);
+            E.cancel('b');
+            ok('a queued job can be stopped before it starts', b.state === 'cancelled');
+            E.pump();
+            ok('…and stopping it does not disturb the one in front',
+               log.ran.join() === 'a', log.ran.join());
+            E.cancel('a');
+            ok('stopping the running one marks it rather than yanking it',
+               a.cancelled === true && a.state === 'running', a.state);
+        }
+    }
+
     console.log('\n' + pass + ' passed, ' + fail + ' failed');
     process.exit(fail ? 1 : 0);
 })();

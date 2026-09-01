@@ -1729,6 +1729,39 @@
            Deliberately a modal: it is a decision with a cost (it runs for as
            long as the footage does), and one that should not be started by
            brushing past a control. */
+        /* The queue. Deliberately NOT inset:0 — that is the whole point
+           (ADR-0052). Bottom right, above the dock, out of the road. */
+        #gpWorkspace .gp-expstrip {
+            position: absolute; right: 14px; bottom: 14px; z-index: 900;
+            display: flex; flex-direction: column; gap: 6px; max-width: 340px;
+            pointer-events: none;
+        }
+        #gpWorkspace .gp-expjob {
+            pointer-events: auto;
+            display: grid; grid-template-columns: 1fr auto; gap: 3px 8px;
+            align-items: center;
+            background: var(--gpb-bg, #fff); border: 1px solid var(--gpb-div, #d8d8d8);
+            box-shadow: 0 8px 24px rgba(20,20,22,0.18);
+            border-radius: 4px; padding: 8px 10px; font-size: 11px;
+        }
+        #gpWorkspace .gp-expjob.on { border-color: var(--gpb-red, #d2232a); }
+        #gpWorkspace .gp-expjob .n {
+            font-weight: 600; white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis; max-width: 220px;
+        }
+        #gpWorkspace .gp-expjob button {
+            grid-row: 1 / span 3; align-self: center;
+            background: transparent; border: 1px solid var(--gpb-div, #d8d8d8);
+            border-radius: 3px; padding: 3px 8px; cursor: pointer; font-size: 10.5px;
+        }
+        #gpWorkspace .gp-expjob .b {
+            grid-column: 1; height: 3px; background: var(--gpb-n200, #eee); border-radius: 2px;
+        }
+        #gpWorkspace .gp-expjob .b i {
+            display: block; height: 100%; background: var(--gpb-red, #d2232a); border-radius: 2px;
+        }
+        #gpWorkspace .gp-expjob .s { grid-column: 1; color: var(--gpb-n700, #777); }
+
         .gp-expdlg { position: fixed; inset: 0; z-index: 17000; display: flex;
                      align-items: center; justify-content: center;
                      background: rgba(6,8,10,0.55); }
@@ -32115,7 +32148,8 @@
            the slow path is actually about to run. Doing it up front read a
            700 MB file into RAM for nothing, and refused anything bigger that
            the fast path would have handled happily. */
-        function gpExportSlowPrepared(p) {
+        function gpExportSlowPrepared(p, job) {
+            gp.expJob = job || null;
             var quit = false;
             var ready = gpExportProgress(function () { quit = true; ready.close(); },
                                          "Preparing the footage…");
@@ -32133,27 +32167,167 @@
             });
         }
 
-        function gpExportRun(p) { gpExportRunNow(p); }
+        /* ---- an export is a snapshot, not a worker (ADR-0052) ---------------
+         * A 40-second export used to own the app, and the obvious reading —
+         * the work is on the main thread, move it to a Worker — is wrong.
+         * Decode and encode are already off-main-thread inside Chromium, and
+         * the fast path already survives a hidden window on dequeue-event
+         * backpressure: 31.2 s of 1080x1920 exported in ~18 s in a throttled,
+         * hidden pane. A Worker would have had to fork gpHudRender, and
+         * everything it leans on is document-scoped — the fonts whose
+         * measureText drives LAYOUT and not just glyphs, an Image for the mark
+         * and the map tiles, localStorage for the overlay itself, and an
+         * invoke that only exists on the main thread.
+         *
+         * What actually blocked the app was a full-screen modal, and shared
+         * mutable state read live every frame: re-select a lap or nudge a
+         * widget mid-export and the file changes halfway through. The modal
+         * prevented that by construction, so removing it without fixing this
+         * would trade a blocked UI for corrupted exports.
+         *
+         * So the job carries a snapshot, and the frame loop BORROWS the app's
+         * state for the length of one frame and gives it straight back.
+         * gpHudRender and gpHudData are not refactored to take a context: they
+         * stay exactly as they are, and the pixel-identity contract with them.
+         */
+        var GP_SNAP_KEYS = [
+            /* what the picture is of */
+            "trace", "traceLaps", "selLap", "cmpLap", "ghostFence", "lapsFrom",
+            "traceChanIds", "traceChanDefs", "sessionId", "sessionMeta", "spdUnit",
+            /* how it is drawn */
+            "cam",
+            /* and every derived answer keyed off the above, so the job's frames
+               are computed from the job's state rather than from whatever the
+               live app has since cached */
+            "drift", "driftKey", "delta", "deltaKey", "chan", "chanKey",
+            "path", "pathKey", "pathSigma", "_hudChan", "_hudChanKey",
+            "_hudList", "_hudListKey", "_hudRunSpans", "_hudRunKey",
+            "driftBoard", "driftBoardKey", "driftCorn", "driftCornKey"
+        ];
+
+        function gpExportSnap() {
+            var s = {};
+            GP_SNAP_KEYS.forEach(function (k) { s[k] = gp[k]; });
+            /* gp.trace is REPLACED by gpSessionLoad, never mutated in place, so
+               holding the old array is both cheap and correct. gp.cam is small
+               and IS edited in place by the overlay designer, so it is the one
+               thing that has to be copied. */
+            try { s.cam = JSON.parse(JSON.stringify(gp.cam || {})); } catch (e) { s.cam = gp.cam; }
+            return s;
+        }
+
+        /* Borrowed for the length of one frame, and given back in a finally so
+           a throw inside the composite cannot leave the app wearing a
+           half-finished export's state. */
+        function gpWithSnapshot(snap, fn) {
+            if (!snap) return fn();
+            var was = {};
+            GP_SNAP_KEYS.forEach(function (k) { was[k] = gp[k]; gp[k] = snap[k]; });
+            try { return fn(); }
+            finally { GP_SNAP_KEYS.forEach(function (k) { gp[k] = was[k]; }); }
+        }
+
+        /* ---- the queue -------------------------------------------------------
+         * One job at a time. Two concurrent WebCodecs pipelines contend for the
+         * same hardware encoder and both get slower; the queue exists so you do
+         * not have to wait to press the button again, not to export in
+         * parallel. */
+        function gpExportQueue() { return (gp.expQ = gp.expQ || []); }
+
+        window.gpExportRun = function (p) {
+            var job = { id: "x" + (gp.expSeq = (gp.expSeq || 0) + 1),
+                        plan: p, snap: gpExportSnap(),
+                        name: gpExportName("mp4"), dest: null,
+                        state: "queued", frames: 0,
+                        /* Known at enqueue, because gpFastAvailable already
+                           knows it — and a job that will need the window in
+                           front should say so before it is queued behind four
+                           others. */
+                        slow: !gpFastAvailable() };
+            /* The destination up front. The save dialog used to appear when the
+               export FINISHED, which in a queue means a finished job sits
+               holding its whole MP4 in memory waiting for somebody to answer —
+               and the save is one buffer end to end. */
+            var pick = (typeof RDM !== "undefined" && RDM && RDM.isTauri && RDM.isTauri() &&
+                        typeof RDM.saveFileDialog === "function")
+                ? RDM.saveFileDialog(job.name, [{ name: "Video", extensions: ["mp4"] }])
+                : Promise.resolve(null);
+            return pick.then(function (path) {
+                if (path === null && typeof RDM !== "undefined" && RDM && RDM.isTauri && RDM.isTauri())
+                    return;                                  /* cancelled at the dialog */
+                job.dest = path || null;
+                gpExportQueue().push(job);
+                gpExportStrip();
+                gpExportPump();
+            });
+        };
+
+        function gpExportPump() {
+            if (gp.expRun) return;
+            var q = gpExportQueue();
+            var job = q.filter(function (j) { return j.state === "queued"; })[0];
+            if (!job) { gpExportStrip(); return; }
+            gp.expRun = job; job.state = "running";
+            gpExportStrip();
+            gpExportRunNow(job, false);
+        }
+
+        window.gpExportCancel = function (id) {
+            var q = gpExportQueue();
+            q.forEach(function (j) {
+                if (j.id !== id) return;
+                j.cancelled = true;
+                if (j.state === "queued") j.state = "cancelled";
+            });
+            gpExportStrip();
+        };
+
+        function gpExportDone(job, how, said) {
+            job.state = how;
+            job.said = said || "";
+            if (gp.expRun === job) gp.expRun = null;
+            /* Finished rows are kept for a moment so the last one can be read,
+               then cleared once nothing is running. */
+            if (!gpExportQueue().some(function (j) { return j.state === "queued" || j.state === "running"; }))
+                setTimeout(function () {
+                    if (gp.expRun) return;
+                    gp.expQ = [];
+                    gpExportStrip();
+                }, 9000);
+            gpExportStrip();
+            gpExportPump();
+        }
 
         /* Fast when the file allows it, real time when it does not — decided
            here rather than by a switch in the dialog, because "which of these
            two encoders can read my camera's files" is not a question anyone
            should be asked. */
-        function gpExportRunNow(p, waited) {
+        function gpExportRunNow(job, waited) {
+            /* Called with a JOB by the queue, and with a bare plan by anything
+               that predates it. A plan on its own is a job of one with no
+               snapshot — which is exactly the old behaviour, and is what the
+               export harness drives. */
+            if (job && !job.plan) job = { plan: job, snap: null, name: gpExportName("mp4"),
+                                          dest: null, state: "running", frames: 0 };
+            var p = job.plan;
             /* One wait, before either path starts, so frame 0 carries the same
                mark as frame 2000. `waited` rather than a flag on the record:
                the promise resolves on the timeout too, and a re-entry that
                tested "has it loaded" would spin for ever on a missing file. */
             if (!waited) {
-                gpHudLogoReady().then(function () { gpExportRunNow(p, true); });
+                gpHudLogoReady().then(function () { gpExportRunNow(job, true); });
                 return;
             }
-            if (!gpFastAvailable()) { gpExportSlowPrepared(p); return; }
+            if (!gpFastAvailable()) { gpExportSlowPrepared(p, job); return; }
             var cancelled = false;
-            var ui = gpExportProgress(function () { cancelled = true; }, "Exporting");
+            gp.expJob = job;              /* what the frame loop borrows from */
+            var ui = gpExportProgress(function () { cancelled = true; job.cancelled = true; },
+                                      "Exporting", job);
             var giveUp = function () {
                 ui.close();
-                if (cancelled) {
+                gp.expJob = null;
+                if (cancelled || job.cancelled) {
+                    gpExportDone(job, "cancelled");
                     if (typeof showToast === "function") showToast("Export cancelled.", "info");
                     return;
                 }
@@ -32162,17 +32336,21 @@
                    up here rather than as a broken download. */
                 if (typeof showToast === "function")
                     showToast("Recording this one in real time — it cannot be re-encoded directly.", "info");
-                gpExportSlowPrepared(p);
+                gpExportSlowPrepared(p, job);
             };
-            gpExportFast(p, ui, function () { return cancelled; }).then(function (res) {
+            gpExportFast(p, ui, function () { return cancelled || !!job.cancelled; }).then(function (res) {
+                gp.expJob = null;
                 if (!res || !res.blob) { giveUp(); return; }
                 ui.close();
-                if (cancelled) {
+                if (cancelled || job.cancelled) {
+                    gpExportDone(job, "cancelled");
                     if (typeof showToast === "function") showToast("Export cancelled.", "info");
                     return;
                 }
-                var name = gpExportName("mp4");
-                gpSaveVideoBlob(res.blob, name).then(function (where) {
+                var name = job.name || gpExportName("mp4");
+                gpSaveVideoBlob(res.blob, name, job.dest).then(function (where) {
+                    gpExportDone(job, where ? "done" : "cancelled",
+                                 where ? (res.blob.size / 1e6).toFixed(0) + " MB" : "");
                     if (typeof showToast !== "function") return;
                     if (!where) { showToast("Export discarded.", "info"); return; }
                     showToast("Saved " + (where === name ? name : where) + " — " +
@@ -32185,6 +32363,7 @@
                                          : ", but this file's audio could not be copied — the camera " +
                                            "did not record AAC."), "ok");
                 }, function (e) {
+                    gpExportDone(job, "failed", "could not be saved");
                     showToast("The video was made but could not be saved: " +
                               (e && e.message ? e.message : e), "error");
                 });
@@ -32287,10 +32466,12 @@
             function frame(mediaTime) {
                 if (done) return;
                 g.drawImage(el, 0, 0, p.W, p.H);
-                var idx = gpIndexForVideoTime(mediaTime);
-                if (idx !== null) {
-                    try { gpHudRender(g, p.W, p.H, idx); } catch (e) { }
-                }
+                gpWithSnapshot(gp.expJob && gp.expJob.snap, function () {
+                    var idx = gpIndexForVideoTime(mediaTime);
+                    if (idx !== null) {
+                        try { gpHudRender(g, p.W, p.H, idx); } catch (e) { }
+                    }
+                });
                 try { track.requestFrame(); } catch (e) { }
                 frames++;
                 lastFrame = Date.now();
@@ -32358,7 +32539,7 @@
          * layout export uses — so use them, say where the file went, and keep
          * the anchor only for the browser build.
          */
-        function gpSaveVideoBlob(blob, name) {
+        function gpSaveVideoBlob(blob, name, dest) {
             var browserSave = function () {
                 var a = document.createElement("a");
                 a.href = URL.createObjectURL(blob);
@@ -32375,7 +32556,13 @@
                          typeof RDM.saveFileDialog === "function" && typeof RDM.writeFile === "function");
             if (!tauri) return browserSave();
             var ext = (name.split(".").pop() || "mp4").toLowerCase();
-            return RDM.saveFileDialog(name, [{ name: "Video", extensions: [ext] }])
+            /* The queue picks the destination when the job is ENQUEUED, so a
+               finished export is written the moment it exists rather than
+               sitting on a whole MP4 waiting for somebody to answer a dialog
+               (ADR-0052). Asking here is the path anything without a queue
+               still takes. */
+            return (dest ? Promise.resolve(dest)
+                         : RDM.saveFileDialog(name, [{ name: "Video", extensions: [ext] }]))
                 .then(function (path) {
                     if (!path) return null;                       /* cancelled, not failed */
                     return blob.arrayBuffer().then(function (buf) {
@@ -33326,8 +33513,15 @@
                                 g.drawImage(frame, -dw / 2, -dh / 2, dw, dh);
                                 g.restore();
                             } else g.drawImage(frame, 0, 0, p.W, p.H);
-                            var idx = gpIndexForVideoTime(tsec);
-                            if (idx !== null) { try { gpHudRender(g, p.W, p.H, idx); } catch (e) { } }
+                            /* Borrowed for one frame (ADR-0052). Both the
+                               index lookup and the HUD read live gp state —
+                               the trace, the lap selection, the overlay
+                               layout — and without this a lap re-selected
+                               mid-export changes the file halfway through. */
+                            gpWithSnapshot(gp.expJob && gp.expJob.snap, function () {
+                                var idx = gpIndexForVideoTime(tsec);
+                                if (idx !== null) { try { gpHudRender(g, p.W, p.H, idx); } catch (e) { } }
+                            });
                             var outUs = Math.round((tsec - p.t0) * 1e6);
                             var wantKey = (outUs - lastKeyUs) >= 2e6;
                             if (wantKey) lastKeyUs = outUs;
@@ -33508,7 +33702,62 @@
                 .catch(function () { return null; });
         }
 
-        function gpExportProgress(onCancel, title) {
+        /* ---- the queue, along the bottom -----------------------------------
+         * NOT a modal. The progress dialog used to be `.gp-expdlg` —
+         * position:fixed, inset:0, z-index 17000 — which blocked every pointer
+         * event in the app for the length of an export and left Stop as the
+         * only control. That, and shared state read live per frame, was the
+         * whole of what "the export owns the app" meant (ADR-0052).
+         *
+         * The OPTIONS dialog stays modal. That one is a decision being made,
+         * briefly, and it is the moment the job's snapshot is taken. */
+        function gpExportStrip() {
+            var q = gpExportQueue();
+            var box = document.getElementById("gpExpStrip");
+            if (!q.length) { if (box) box.remove(); return; }
+            if (!box) {
+                box = document.createElement("div");
+                box.id = "gpExpStrip"; box.className = "gp-expstrip";
+                (document.getElementById("gpWorkspace") || document.body).appendChild(box);
+            }
+            var h = "";
+            q.forEach(function (j) {
+                var pct = j.plan && j.plan.secs ? Math.round((j.frac || 0) * 100) : 0;
+                h += "<div class='gp-expjob" + (j.state === "running" ? " on" : "") + "'>" +
+                     "<span class='n'>" + gpEsc(j.name || "export") + "</span>" +
+                     "<span class='b'><i style='width:" + pct + "%'></i></span>" +
+                     "<span class='s'>" +
+                     (j.state === "running" ? pct + "% · " + (j.frames || 0) + " frames"
+                      : j.state === "queued" ? (j.slow ? "waiting — needs the window in front" : "queued")
+                      : j.state === "done" ? "saved" + (j.said ? " · " + gpEsc(j.said) : "")
+                      : j.state === "cancelled" ? "stopped" : gpEsc(j.said || "failed")) +
+                     "</span>" +
+                     (j.state === "running" || j.state === "queued"
+                        ? "<button onclick=\"gpExportCancel('" + j.id + "')\">Stop</button>" : "") +
+                     "</div>";
+            });
+            box.innerHTML = h;
+        }
+
+        function gpExportProgress(onCancel, title, job) {
+            /* With a job, the strip IS the progress and nothing is put over the
+               picture. Without one — anything predating the queue, and the
+               harness — the old modal still appears, because a foreground
+               export with no queue behind it has nowhere else to report. */
+            if (job) {
+                var last = 0;
+                return {
+                    tick: function (frac, frames) {
+                        job.frac = Math.max(0, Math.min(1, frac));
+                        job.frames = frames;
+                        var now = Date.now();
+                        if (now - last < 120) return;      /* the bar is not the job */
+                        last = now;
+                        gpExportStrip();
+                    },
+                    close: function () { gpExportStrip(); }
+                };
+            }
             var d = document.createElement("div");
             d.className = "gp-expdlg"; d.id = "gpExpProg";
             d.innerHTML = "<div class='gp-expbox'><div class='t'>" +
@@ -33521,12 +33770,12 @@
             if (onCancel) d.querySelector("button.c").onclick = onCancel;
             var bar = d.querySelector(".gp-expbar i"), stat = d.querySelector("#gpExpStat");
             if (!onCancel) stat.textContent = "Reading the file…";
-            var last = 0;
+            var last2 = 0;
             return {
                 tick: function (frac, frames) {
                     var now = Date.now();
-                    if (now - last < 120) return;      /* the bar is not the job */
-                    last = now;
+                    if (now - last2 < 120) return;      /* the bar is not the job */
+                    last2 = now;
                     var f = Math.max(0, Math.min(1, frac));
                     bar.style.width = (f * 100).toFixed(1) + "%";
                     stat.textContent = Math.round(f * 100) + "% · " + frames + " frames written";
