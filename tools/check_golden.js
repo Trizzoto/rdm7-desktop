@@ -131,6 +131,37 @@ const MEANS = {
           holds: g => g.laps.by === 'gate' && g.laps.clean === 1 &&
                       Math.abs(g.laps.bestS - 136.091) < 0.002,
           detail: g => g.laps.by + ', ' + g.laps.clean + ' clean, best ' + g.laps.bestS }
+    ],
+    'donington-driver1': [
+        /* Circuit Tools 3's own answers for this file: a different program,
+           written by different people, from the same raw VBO. Every other
+           number in this directory is ours checked against ours — this is the
+           only one that can catch us being consistently and confidently
+           wrong, which is the one kind of wrong a self-consistent suite
+           cannot see. Lap 7 is excluded and stays excluded: the two programs
+           put the gate in slightly different places and it is the out-lap.
+           ±30 ms, the tolerance check_laptime.js already argued for. */
+        { what: 'the six flying laps still agree with Circuit Tools 3',
+          holds: g => {
+              const CT = [70.12, 69.24, 69.61, 68.49, 73.10, 68.213];
+              return CT.every((v, i) => Math.abs(g.laps.timesS[i] - v) <= 0.03);
+          },
+          detail: g => {
+              const CT = [70.12, 69.24, 69.61, 68.49, 73.10, 68.213];
+              return CT.map((v, i) => ((g.laps.timesS[i] - v) * 1000).toFixed(0) + ' ms')
+                       .join(', ');
+          } },
+        { what: '…and the fastest is still the one the file itself declares',
+          holds: g => Math.abs(g.laps.bestS - 68.21) < 0.03,
+          detail: g => String(g.laps.bestS) },
+        /* The only committed recording that is not 25 Hz. Anything that reads
+           a cadence off a constant instead of off the data fails here first. */
+        { what: 'it is still the 10 Hz one, which is why it is here twice over',
+          holds: g => Math.abs(g.hz - 10) < 0.01,
+          detail: g => g.hz + ' Hz' },
+        { what: '…and a clean file still reports no gaps at all',
+          holds: g => g.breaks.count === 0,
+          detail: g => String(g.breaks.count) }
     ]
 };
 

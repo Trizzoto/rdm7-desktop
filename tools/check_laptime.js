@@ -21,13 +21,14 @@ const path = require('path');
 const ROOT = process.env.RDM_ROOT || path.join(__dirname, '..');
 const REL = 'src/tauri-overlay.html';
 /* The only fixture whose expected lap times do not come from us — they are
-   checkable against Circuit Tools 3. Its [comments] block carries
-   (c) Racelogic, so whether it may be COMMITTED is a licence question and not
-   a technical one (ADR-0050). Until that is answered it lives outside the
-   repo: committed copy first if one ever lands, then the env override, then
-   the machine it was downloaded on. */
+   checkable against Circuit Tools 3, a different program written by different
+   people from the same raw file. Committed on his instruction 2026-09-01,
+   gzipped like every recording here; its [comments] block carries
+   (c) Racelogic and travels with it byte for byte. The env override and the
+   old download path are kept so a different copy can still be pointed at. */
 const VBO = process.env.DONINGTON_VBO ||
-    [path.join(__dirname, 'fixtures', 'donington-driver1.vbo'),
+    [path.join(__dirname, 'fixtures', 'donington-driver1.vbo.gz'),
+     path.join(__dirname, 'fixtures', 'donington-driver1.vbo'),
      'C:/Users/ruuva/Downloads/rdm-test/donington/Donington - Lotus Evora GTE - Driver1.vbo']
         .filter(function (f) { try { return fs.existsSync(f); } catch (e) { return false; } })[0] ||
     'donington-driver1.vbo';
@@ -86,7 +87,11 @@ if (!fs.existsSync(VBO)) {
     console.log('\n0 passed, 0 failed');
     process.exit(0);
 }
-const lines = fs.readFileSync(VBO, 'latin1').split(/\r?\n/);
+/* Committed gzipped, as every recording in tools/fixtures is. latin1
+   because the file is not UTF-8 — it carries a degree sign. */
+const lines = (/\.gz$/.test(VBO)
+    ? require('zlib').gunzipSync(fs.readFileSync(VBO))
+    : fs.readFileSync(VBO)).toString('latin1').split(/\r?\n/);
 
 function section(name) {
     const out = [];

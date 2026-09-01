@@ -1,0 +1,45 @@
+{
+  "recording": "donington-driver1",
+  "file": "donington-driver1.vbo.gz",
+  "kind": "vbo",
+  "note": "Donington, Lotus Evora GTE, seven laps. The only fixture whose expected lap times do NOT come from us: they are checkable against Circuit Tools 3, which is a different program written by different people from the same raw file. That makes it the one recording here that can catch us being consistently and confidently wrong. It carries its own [laptiming] gate, so the track is built from the file rather than from anybody's library, and it is 10 Hz rather than 25 — the only committed recording at a different cadence, which is why it is also the one that would catch a hardcoded 0.04.",
+  "blessedOn": "2026-09-01",
+  "answers": {
+    "samples": 6063,
+    "hz": 10,
+    "breaks": {
+      "count": 0,
+      "atIndices": [],
+      "metres": [],
+      "clockWrongAt": []
+    },
+    "gate": {
+      "nearestM": 0.1,
+      "samplesInBand": 128,
+      "hits": 8,
+      "wrongWay": 0
+    },
+    "runs": null,
+    "laps": {
+      "by": "gate",
+      "all": 7,
+      "clean": 7,
+      "timesS": [
+        70.119,
+        69.237,
+        69.609,
+        68.493,
+        73.097,
+        68.215,
+        84.141
+      ],
+      "bestS": 68.215
+    },
+    "corners": 7,
+    "channels": {
+      "count": 1,
+      "silent": 0
+    },
+    "angle": null
+  }
+}

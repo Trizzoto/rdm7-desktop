@@ -55,16 +55,20 @@
         "min_lap_time_s": 10
       },
       "note": "The 23 August Mallala session: 25,720 samples, 12 CAN channels and the puck's gyro. This is the recording whose slip angle read +54 then -48 degrees inside one corner, wearing a confident +/-2.1, on footage showing the car tracking the racing line - the failure that started the trust panel and this whole fixture idea. It carries the track it was timed against, so the lap it advertises is reproducible from the file alone. Every change to the angle engine should be measured against this one."
+    },
+    {
+      "name": "donington-driver1",
+      "file": "donington-driver1.vbo.gz",
+      "kind": "vbo",
+      "attribution": "(c) Racelogic. The RaceRender demo dataset, publicly distributed as sample data, recorded on a VBOX VBVDHD2. The notice is in the file's own [comments] block and is preserved verbatim here — the file is committed byte for byte, only gzipped. Committed on his instruction 2026-09-01.",
+      "note": "Donington, Lotus Evora GTE, seven laps. The only fixture whose expected lap times do NOT come from us: they are checkable against Circuit Tools 3, which is a different program written by different people from the same raw file. That makes it the one recording here that can catch us being consistently and confidently wrong. It carries its own [laptiming] gate, so the track is built from the file rather than from anybody's library, and it is 10 Hz rather than 25 — the only committed recording at a different cadence, which is why it is also the one that would catch a hardcoded 0.04."
     }
   ],
   "_wanted": [
-    "One more is wanted and is not here yet:",
+    "Nothing outstanding. All three recordings that were wanted are committed.",
     "",
-    "donington-driver1 - the RaceRender demo VBO, and the only fixture whose",
-    "  expected lap times do not come from us: they can be checked against",
-    "  Circuit Tools 3. Its [comments] block carries (c) Racelogic, so whether it",
-    "  may be committed is a licence question and not a technical one. Until that",
-    "  is answered it stays outside the repo and check_laptime.js reads it from",
-    "  wherever it is, skipping with a note when it is absent."
+    "To add another: drop the file here, add an entry above, then",
+    "  node tools/make_expected.js <name>            read the numbers",
+    "  node tools/make_expected.js <name> --bless    sign them off"
   ]
 }

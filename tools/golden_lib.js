@@ -78,7 +78,8 @@ const FNS = [
     'gpDriftSeek', 'gpDriftSwitches', 'gpDriftSegments', 'gpDriftStats',
     'gpDriftForget',
     'gpVboClockMs', 'gpVboSpeedScale', 'gpVboParse',
-    'gpB64', 'gpB64Dec', 'gpRowsUnpack', 'gpSessionFileParse'
+    'gpB64', 'gpB64Dec', 'gpRowsUnpack', 'gpSessionFileParse',
+    'gpGateFromEnd', 'gpTrackFromVbo'
 ];
 
 /* A sandbox with one recording in it. `track` is the active track for the
@@ -101,6 +102,9 @@ function sandbox(track) {
         'function gpSesUid() { return "ses_golden"; }',
         'function gpRowsPack(rows) { return { n: rows.length }; }',
         'function gpTracksSave() { }',
+        'function gpTracksReady() { }',
+        'function gpTrackUid() { return "trk_golden"; }',
+        'var GP_MAX_SECTORS = 8;',
         'function gpAllChans() { return []; }',
         'function gpActiveTrack() { return ARGtrack; }'
     ].join('\n');
@@ -159,7 +163,15 @@ function readFixture(spec) {
                                  Math.round((v - defs[k].offset) / defs[k].scale)));
                      }) };
         });
-        return { rows: rows, meta: parsed.meta, track: null,
+        /* A VBO that carries its own [laptiming] gates brings its own track,
+           built exactly the way the importer builds it — so the laps this
+           fixture pins are the laps the app cuts, from the file alone. */
+        var track = null;
+        if (parsed.gates && parsed.gates.length) {
+            try { track = S.API.gpTrackFromVbo(parsed.meta.circuit || spec.name,
+                                               parsed.gates, rows); } catch (e) { }
+        }
+        return { rows: rows, meta: parsed.meta, track: track,
                  chanIds: parsed.meta.chanIds, chanDefs: defs, gates: parsed.gates };
     }
     if (spec.kind === 'rdmsession') {
