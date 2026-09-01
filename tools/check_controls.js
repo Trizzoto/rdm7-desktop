@@ -153,5 +153,45 @@ ok('found the GPS workspace controls',
        .some(function (n) { return uses.has(n); }));
 ok('found the CAN analyser controls', uses.has('caSetMode') || uses.has('caShowAll'));
 
+/* ---- the two browser dialogs that do not work here --------------------- */
+/* Same family of bug as the one above — a control that looks like it works
+   and does not — but worse, because these guard destructive things.
+ *
+ * window.confirm is remapped by Tauri's dialog plugin to something that
+ * returns a PROMISE, and a promise is always truthy, so every
+ * `if (!confirm(...)) return` guard returned nothing and the action ran
+ * anyway. Proven on the bench: "Node recording cleared." appeared BEHIND a
+ * dialog nobody had answered (ADR-0016). window.prompt is worse still — the
+ * desktop webview does not implement it at all, so Rename a recording opened
+ * nothing.
+ *
+ * The replacements are confirmAsync / _showConfirmOverlay in the firmware
+ * base, and gpConfirm / gpPrompt in the workspace. Checked against the
+ * OVERLAY source, not the built page: the firmware base has its own history
+ * with these and is guarded in its own repo. */
+{
+    const overlay = fs.readFileSync(path.join(ROOT, 'src/tauri-overlay.html'), 'utf8');
+    /* Comments talk about them by name on purpose — that is where the
+       reasoning lives — so only count calls outside a comment. */
+    const code = overlay.replace(/\/\*[\s\S]*?\*\//g, '');
+    const bad = function (re) {
+        const out = [];
+        let m;
+        while ((m = re.exec(code)))
+            out.push(code.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, ' '));
+        return out;
+    };
+    /* Bare, or spelled window.* — that is how the one this was written for
+       was actually written. Any OTHER receiver (confirmAsync, _showConfirm…,
+       obj.prompt) is somebody else's function and is left alone. */
+    const c = bad(/(?:(?<![.\w$])|window\.)confirm\s*\(/g);
+    const p = bad(/(?:(?<![.\w$])|window\.)prompt\s*\(/g);
+    ok('nothing calls the bare confirm()', c.length === 0,
+       c.join('\n         ') + '\n         use confirmAsync() or gpConfirm() — ' +
+       'the bare one returns a promise and never blocks');
+    ok('nothing calls the bare prompt()', p.length === 0,
+       p.join('\n         ') + '\n         use gpPrompt() — the desktop webview has no prompt');
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

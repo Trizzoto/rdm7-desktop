@@ -1383,6 +1383,11 @@
                           box-shadow: 0 24px 60px rgba(0,0,0,0.55); }
         .gp-confirm-box .t { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
         .gp-confirm-box .b { font-size: 11.5px; color: var(--text-muted); line-height: 1.55; margin-bottom: 16px; }
+        .gp-confirm-in { width: 100%; box-sizing: border-box; margin-bottom: 16px;
+                         background: var(--bg); border: 1px solid var(--border-light);
+                         border-radius: 6px; padding: 8px 10px; color: var(--text);
+                         font-size: 13px; font-family: inherit; outline: none; }
+        .gp-confirm-in:focus { border-color: var(--accent); }
         .gp-confirm-box .r { display: flex; gap: 8px; justify-content: flex-end; }
         .gp-confirm-box button { padding: 7px 16px; cursor: pointer; border-radius: 6px; font-size: 12px; }
         .gp-confirm-box .c { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
@@ -2950,8 +2955,11 @@
         #gpWorkspace .gp-sep { background: var(--gpb-div); }
         #gpWorkspace .gp-tbtn { background: transparent; border: 1px solid var(--gpb-div); }
         #gpWorkspace .gp-tbtn svg { fill: var(--gpb-soft); }
-        #gpWorkspace .gp-tbtn:hover { border-color: var(--gpb-ink); }
-        #gpWorkspace .gp-tbtn:hover svg { fill: var(--gpb-ink); }
+        #gpWorkspace .gp-tbtn:hover:not(:disabled) { border-color: var(--gpb-ink); }
+        #gpWorkspace .gp-tbtn:hover:not(:disabled) svg { fill: var(--gpb-ink); }
+        /* With no recording open. Greyed the same amount as the scrubber
+           beside it, which has always disabled itself here. */
+        #gpWorkspace .gp-tbtn:disabled { opacity: 0.35; cursor: default; }
         #gpWorkspace .gp-tbtn-play { background: var(--gpb-ink); border-color: var(--gpb-ink); }
         #gpWorkspace .gp-tbtn-play svg { fill: var(--gpb-bg); }
         #gpWorkspace .gp-tc { color: var(--gpb-ink); font-family: var(--gpb-body); font-variant-numeric: tabular-nums; }
@@ -3051,6 +3059,7 @@
         .gp-confirm-box button { border: 1px solid rgba(29,31,32,0.16); background: transparent; color: #1d1f20; border-radius: 0; }
         .gp-confirm-box button.c { color: rgba(29,31,32,0.55); }
         .gp-confirm-box button.o { background: #d2232a; border-color: #d2232a; color: #fff; }
+        .gp-confirm-in { border-radius: 0; }
 
         /* ---- setup ---- */
         #gpWorkspace .gp-set .l { color: var(--gpb-soft); }
@@ -9083,6 +9092,46 @@
            starts on Cancel and Enter is swallowed, because half these
            dialogs are opened by the Enter that commits a field — its keyup
            must not press OK (the same trap gpCanApply documents). */
+        /* And the same problem one door along: window.prompt is not
+           implemented in the desktop webview at all, so Rename a recording
+           opened nothing and the name never changed. Same modal as gpConfirm
+           — same class, so the workspace's light re-bind reaches it — with a
+           field in the middle. Resolves the text, or null for every way of
+           saying no. Deliberately NOT _showPromptOverlay: that one is styled
+           for the dash designer and strips everything but [A-Za-z0-9_-] from
+           what you type, which is not a name for a track day. */
+        function gpPrompt(title, value) {
+            return new Promise(function (resolve) {
+                var ov = document.createElement("div");
+                ov.className = "gp-confirm";
+                ov.innerHTML =
+                    "<div class='gp-confirm-box'>" +
+                    "<div class='t'>" + gpEsc(title) + "</div>" +
+                    "<input class='gp-confirm-in' type='text' maxlength='60' value='" +
+                    gpEsc(value == null ? "" : value) + "'>" +
+                    "<div class='r'><button class='c'>Cancel</button><button class='o'>OK</button></div></div>";
+                document.body.appendChild(ov);
+                var inp = ov.querySelector(".gp-confirm-in");
+                var done = function (v) {
+                    if (!ov.parentNode) return;
+                    ov.remove();
+                    document.removeEventListener("keydown", onKey, true);
+                    resolve(v);
+                };
+                /* Enter commits and Escape cancels, both captured so the
+                   field underneath this dialog never sees them. */
+                var onKey = function (e) {
+                    if (e.key === "Escape") { e.stopPropagation(); done(null); }
+                    else if (e.key === "Enter") { e.stopPropagation(); done(inp.value); }
+                };
+                document.addEventListener("keydown", onKey, true);
+                ov.addEventListener("mousedown", function (e) { if (e.target === ov) done(null); });
+                ov.querySelector(".c").addEventListener("click", function () { done(null); });
+                ov.querySelector(".o").addEventListener("click", function () { done(inp.value); });
+                inp.focus(); inp.select();
+            });
+        }
+
         function gpConfirm(message) {
             return new Promise(function (resolve) {
                 var lines = String(message).split("\n\n");
@@ -10042,6 +10091,20 @@
                RUN — it has no timing line behind it and must not be labelled
                as though it does. */
             var w = (gp.lapsFrom === "stops" || gpIsTrial(gpActiveTrack())) ? "run" : "lap";
+            return cap ? w.charAt(0).toUpperCase() + w.slice(1) : w;
+        }
+
+        /* The word for the LIBRARY, which lists recordings from everywhere.
+           gpRunWord answers for the recording that is open and the track that
+           is active, which is right in Analyse and wrong on a page whose rows
+           come from several circuits: opening one hillclimb relabelled the
+           Donington row's seven laps as runs, and moved the sub-tab out from
+           under the pointer while it was at it. Only when every recording
+           listed is a trial is "run" the honest word for the column. */
+        function gpLibRunWord(cap) {
+            var list = gp.sessions || [];
+            var w = (list.length && list.every(function (s) { return !!s.trial; }))
+                    ? "run" : "lap";
             return cap ? w.charAt(0).toUpperCase() + w.slice(1) : w;
         }
 
@@ -12571,13 +12634,14 @@
         window.gpSessionRename = function (id) {
             var cur = (gp.sessions || []).filter(function (s) { return s.id === id; })[0];
             if (!cur) return;
-            var v = window.prompt("Name this recording", cur.name);
-            if (v === null) return;
-            v = String(v).trim().slice(0, 60);
-            if (!v) return;
-            cur.name = v;
-            gpStore.putMeta(cur).then(function () { return gpSessionsRefresh(); })
-                   .then(function () { gpBuildRail(); });
+            gpPrompt("Name this recording", cur.name).then(function (v) {
+                if (v === null) return;
+                v = String(v).trim().slice(0, 60);
+                if (!v) return;
+                cur.name = v;
+                return gpStore.putMeta(cur).then(function () { return gpSessionsRefresh(); })
+                              .then(function () { gpBuildRail(); gpRenderSessions(); });
+            });
         };
 
         /* ---- picking several at once ---------------------------------------
@@ -13111,7 +13175,7 @@
                   var onSes = gp.view === "sessions", m = gpSesMode();
                   return [
                       { label: "Recordings", on: onSes && m === "recordings", go: "gpLibGo('recordings')" },
-                      { label: gpRunWord(true) + "s", on: onSes && m === "laps", go: "gpLibGo('laps')" },
+                      { label: gpLibRunWord(true) + "s", on: onSes && m === "laps", go: "gpLibGo('laps')" },
                       { label: "Circuits", on: gp.view === "tracks", go: "gpLibGo('circuits')" }
                   ];
               } },
@@ -13794,10 +13858,10 @@
         function gpLapTracksHtml() {
             var ts = gpLapTrackSummary();
             if (!ts.length)
-                return "<div class='ws-none' style='padding:40px 0'>No timed " + gpRunWord() +
+                return "<div class='ws-none' style='padding:40px 0'>No timed " + gpLibRunWord() +
                        "s on any track yet.</div>";
             var h = "<table class='gpb-sesstable'><thead><tr><th>Track</th>" +
-                    "<th class='n'>" + gpEsc(gpRunWord(true)) + "s</th><th class='n'>Days</th>" +
+                    "<th class='n'>" + gpEsc(gpLibRunWord(true)) + "s</th><th class='n'>Days</th>" +
                     "<th class='n'>Best</th><th></th></tr></thead><tbody>";
             ts.forEach(function (t) {
                 h += "<tr data-gp-ltrack='" + gpEsc(t.name) + "'>" +
@@ -13942,7 +14006,7 @@
                      " title='Tick every recording listed here'></th>" +
                      th("when", "Date") + th("name", "Session") + th("track", "Track") +
                      "<th>Driver</th><th>Car</th>" +
-                     th("laps", gpRunWord(true) + "s", "n") + th("best", "Best", "n") +
+                     th("laps", gpLibRunWord(true) + "s", "n") + th("best", "Best", "n") +
                      th("avg", "Average", "n") +
                      "<th>Data</th><th></th></tr></thead><tbody>";
                 var lastDay = null;
@@ -18412,21 +18476,25 @@
                         ? " <small style='color:var(--gpb-red-700)'>vs " + (gp.cmpLap + 1) + "</small>" : "") +
                      "</div></div>";
             }
+            /* Nothing loaded, nothing to press. The scrubber already went grey
+               with no recording open; the five buttons beside it stayed black
+               and fully pressable next to a row of em dashes. */
+            var dis = have ? "" : " disabled";
             h += "<div style='display:flex;align-items:center;gap:4px'>" +
-                 "<button class='gp-tbtn' title='Jump to start' onclick=\"gpTransport('start')\">" +
+                 "<button class='gp-tbtn' title='Jump to start'" + dis + " onclick=\"gpTransport('start')\">" +
                  "<svg viewBox='0 0 12 12'><path d='M1.5 1.5h1.6v9H1.5zM10.5 1.5v9L4 6z'/></svg></button>" +
-                 "<button class='gp-tbtn' title='Step back' onclick=\"gpTransport('back')\">" +
+                 "<button class='gp-tbtn' title='Step back'" + dis + " onclick=\"gpTransport('back')\">" +
                  "<svg viewBox='0 0 12 12'><path d='M9 1.5v9L3 6z'/></svg></button>" +
-                 "<button class='gp-tbtn gp-tbtn-play' title='Play / pause (Space)' onclick='gpPlayToggle()'>" +
+                 "<button class='gp-tbtn gp-tbtn-play' title='Play / pause (Space)'" + dis + " onclick='gpPlayToggle()'>" +
                  /* The same two constants gpPlayIcon swaps in, so the initial
                     render and every later state change cannot disagree. These
                     were hand-copied SVGs and had already drifted — the pause
                     bars here were a different width from GP_SVG_PAUSE. */
                  (gp.playing ? GP_SVG_PAUSE : GP_SVG_PLAY) +
                  "</button>" +
-                 "<button class='gp-tbtn' title='Step forward' onclick=\"gpTransport('fwd')\">" +
+                 "<button class='gp-tbtn' title='Step forward'" + dis + " onclick=\"gpTransport('fwd')\">" +
                  "<svg viewBox='0 0 12 12'><path d='M3 1.5v9L9 6z'/></svg></button>" +
-                 "<button class='gp-tbtn' title='Jump to end' onclick=\"gpTransport('end')\">" +
+                 "<button class='gp-tbtn' title='Jump to end'" + dis + " onclick=\"gpTransport('end')\">" +
                  "<svg viewBox='0 0 12 12'><path d='M8.9 1.5h1.6v9H8.9zM1.5 1.5v9L8 6z'/></svg></button></div>";
             if (d.pos) {
                 h += "<div style='min-width:118px'><div class='k'>Position</div>" +
@@ -44921,7 +44989,14 @@
         };
         window._revertToRestorePoint = async function () {
             if (_restorePoint === null || !_isDirty()) return;
-            if (!confirm('Discard every change since your last Save and restore that version to the dash?')) return;
+            /* confirmAsync, not confirm. Tauri's dialog plugin remaps
+               window.confirm to something that returns a PROMISE — always
+               truthy — so `if (!confirm(...)) return` never returned and
+               Cancel discarded the work anyway (ADR-0016; gpConfirm carries
+               the same note and the bench proof). */
+            if (!(await confirmAsync('Discard changes?',
+                    'Every change since your last Save is thrown away, and that version ' +
+                    'is restored to the dash.', 'Discard and restore'))) return;
             var snap = _restorePoint;
             try {
                 currentLayout = JSON.parse(snap);
@@ -45636,8 +45711,13 @@
             try {
                 const existing = await dst.listLayouts();
                 const names = existing.map(l => l.name || l);
+                /* confirmAsync — window.confirm never blocked here (ADR-0016),
+                   so a transfer overwrote the layout on the other end whether
+                   or not you said yes. */
                 if (names.includes(name) &&
-                    !confirm('"' + name + '" already exists on ' + dstName + '. Overwrite it?')) return;
+                    !(await confirmAsync('Overwrite "' + name + '"?',
+                        'A layout with that name is already on ' + dstName + '.',
+                        'Overwrite'))) return;
                 updateStatus((toDevice ? 'Uploading "' : 'Downloading "') + name + '"...');
                 const r = await _copyLayout(name, src, dst, dstName);
                 const assets = (r.imgN || r.fontN)
@@ -47115,7 +47195,9 @@
         }
 
         async function _dmReboot() {
-            if (!confirm('Reboot the device? This will interrupt any active connections.')) return;
+            /* confirmAsync — the device rebooted on Cancel too (ADR-0016). */
+            if (!(await confirmAsync('Reboot the device?',
+                    'Any connection open to it is interrupted.', 'Reboot'))) return;
             try { await RDM.reboot(); updateStatus('Device is rebooting...'); }
             catch (e) { updateStatus('Reboot command sent'); }
             closeDeviceManager();
@@ -47160,7 +47242,12 @@
                 const bytes = await RDM.readFile(path);
                 const entries = await _tauriCall('unzip_layouts', { data: Array.from(bytes) });
                 if (!entries || entries.length === 0) { showToast('Backup file contained no layouts', 'error'); return; }
-                if (!confirm('Restore ' + entries.length + ' layout(s) to the connected dash? Existing layouts with matching names will be overwritten.')) return;
+                /* confirmAsync — this one wrote every layout in the backup to
+                   the dash on Cancel (ADR-0016). */
+                if (!(await confirmAsync(
+                        'Restore ' + entries.length + ' layout' + (entries.length === 1 ? '' : 's') + '?',
+                        'They go to the connected dash. Any layout there with a matching name ' +
+                        'is overwritten.', 'Restore'))) return;
                 let restored = 0;
                 for (const e of entries) {
                     try {
