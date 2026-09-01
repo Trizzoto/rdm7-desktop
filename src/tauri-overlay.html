@@ -13764,21 +13764,40 @@
                 }
                 return bi < 0 ? null : { i: bi, v: bv };
             }
-            function add(icon, name, i, value, why) {
+            /* A moment is a POINT — one sample, which is all the panel ever
+               needed to jump to. A reel needs a stretch, so every find also
+               carries the span it is the middle of, rolled per type: a
+               braking event is mostly BEFORE its peak, a slide is centred on
+               it, a launch is a window that was already computed and thrown
+               away. Seconds, converted through gpHz, so a 10 Hz import gets
+               the same stretch of driving as a 25 Hz ring. */
+            var hz = gpHz(rows, 0, Math.max(1, end - 1));
+            function spanAround(i, beforeS, afterS) {
+                return { from: Math.max(0, Math.round(i - beforeS * hz)),
+                         to: Math.min(end - 1, Math.round(i + afterS * hz)) };
+            }
+            function add(icon, name, i, value, why, span) {
                 if (i === null || i === undefined || i < 0 || i >= end) return;
-                out.push({ icon: icon, name: name, i: i, value: value, why: why });
+                var sp = span || spanAround(i, 3, 3);
+                if (sp.to <= sp.from) sp = spanAround(i, 3, 3);
+                out.push({ icon: icon, name: name, i: i, value: value, why: why,
+                           from: Math.max(0, sp.from), to: Math.min(end - 1, sp.to) });
             }
 
             var r = best(function (i) { return rows[i].kph; });
             if (r && r.v > 30) add("⚡", "Top speed", r.i,
                 gpSpdN(r.v).toFixed(0) + " " + gpSpdU(),
-                "The fastest the car went all session.");
+                "The fastest the car went all session.",
+                /* The run UP to it is the interesting half. */
+                spanAround(r.i, 4, 2));
 
             /* Longitudinal g is negative under brakes, so the hardest stop is
                the most negative sample, not the largest one. */
             r = best(function (i) { return -rows[i].g; });
             if (r && r.v > 0.35) add("▼", "Hardest braking", r.i, r.v.toFixed(2) + " g",
-                "The biggest deceleration in the recording.");
+                "The biggest deceleration in the recording.",
+                /* The corner it was for is the point of watching it. */
+                spanAround(r.i, 3, 3));
 
             if (ch && ch.glat) {
                 r = best(function (i) { return Math.abs(ch.glat[i]); });
@@ -13790,14 +13809,24 @@
                was pointing — never derived from the path (ADR-0011). */
             if (drift && drift.beta && drift.ok) {
                 r = best(function (i) { return drift.ok[i] ? Math.abs(drift.beta[i]) : null; });
-                if (r && r.v >= 12) add("↻", "Biggest slide", r.i, Math.round(r.v) + "°",
-                    "The largest angle between where the car pointed and where it went.");
+                if (r && r.v >= 12) {
+                    /* Walk out of the slide rather than guessing at it: a
+                       drift that is held for six seconds is six seconds of
+                       reel, and a flick is not. */
+                    var a = r.i, b = r.i;
+                    while (a > 0 && drift.ok[a - 1] && Math.abs(drift.beta[a - 1]) >= 8) a--;
+                    while (b < end - 1 && drift.ok[b + 1] && Math.abs(drift.beta[b + 1]) >= 8) b++;
+                    add("↻", "Biggest slide", r.i, Math.round(r.v) + "°",
+                        "The largest angle between where the car pointed and where it went.",
+                        { from: Math.round(a - 1.5 * hz), to: Math.round(b + 1.5 * hz) });
+                }
             }
 
             /* A launch is a speed GAIN, so it is found over a window rather
                than at a sample: the best four seconds of the whole recording. */
             (function () {
-                var W = Math.max(4, Math.round(4 / 0.04)), bi = -1, bv = 0, bFrom = 0;
+                /* Four seconds of driving, not a hundred samples of it. */
+                var W = Math.max(4, Math.round(4 * hz)), bi = -1, bv = 0, bFrom = 0;
                 for (var i = 0; i + W < end; i++) {
                     var a = rows[i].kph, b = rows[i + W].kph;
                     if (a > 25) continue;                 /* a launch starts slow */
@@ -13807,7 +13836,9 @@
                     add("▶", "Best launch", bFrom,
                         gpSpdN(rows[bFrom].kph).toFixed(0) + "–" +
                         gpSpdN(rows[bi].kph).toFixed(0) + " " + gpSpdU() + " in 4 s",
-                        "The quickest the car picked up speed from near a standstill.");
+                        "The quickest the car picked up speed from near a standstill.",
+                        /* bi was computed and discarded; it is the far end. */
+                        { from: bFrom, to: bi });
             })();
 
             /* The car rotating far faster than a corner explains. Uses the
@@ -13824,7 +13855,9 @@
                 });
                 if (r2 && r2.v >= 90)
                     add("↪", "Nearly lost it", r2.i, Math.round(r2.v) + " °/s",
-                        "The car turned faster here than anywhere else — a snap or a spin.");
+                        "The car turned faster here than anywhere else — a snap or a spin.",
+                        /* The recovery is the half worth watching. */
+                        spanAround(r2.i, 2, 4));
             })();
 
             /* The fastest timed lap, which is a moment worth jumping to even
@@ -13840,7 +13873,8 @@
                     var mm = Math.floor(bt / 60);
                     add("⚑", "Fastest " + gpRunWord(), gp.traceLaps[bl].from,
                         mm + ":" + (bt - mm * 60).toFixed(3).padStart(6, "0"),
-                        "The start of the quickest one — press play and watch it.");
+                        "The start of the quickest one — press play and watch it.",
+                        { from: gp.traceLaps[bl].from, to: gp.traceLaps[bl].to });
                 }
             }
 
@@ -13849,7 +13883,9 @@
                fastest straight. Keep the first, which is the stronger signal
                because the list is built strongest-first. */
             out.sort(function (a, b) { return a.i - b.i; });
-            var gap = GP_MOMENT_GAP_S / 0.04, kept = [];
+            /* Seconds, through the recording's own cadence. A 10 Hz import was
+               being deduped over a window two and a half times too wide. */
+            var gap = GP_MOMENT_GAP_S * hz, kept = [];
             out.forEach(function (m) {
                 for (var k = 0; k < kept.length; k++)
                     if (Math.abs(kept[k].i - m.i) < gap && kept[k].name === m.name) return;
@@ -13886,6 +13922,271 @@
             gpRenderInspector();
         };
 
+        /* ---- a reel of the bits worth watching again -------------------------
+         * Moments already finds them, the exporter already burns the HUD over
+         * footage, and the queue already runs jobs in the background. This is
+         * the assembly: pick, merge, fit a budget, and hand the exporter more
+         * than one range.
+         *
+         * Deliberately ordered by TIME, not by drama. The HUD shows a lap
+         * number and a lap clock; a reel that jumps around in time makes both
+         * of them read as faults.
+         */
+        var GP_REEL_SECS = [20, 40, 60];
+
+        /* Which moments are worth more when the budget will not hold them all.
+           The fastest lap is last because it is a whole lap: it will not fit in
+           a forty-second reel, and taking a slice of it would be advertising a
+           lap time nobody watched. */
+        var GP_REEL_RANK = ["Biggest slide", "Nearly lost it", "Hardest braking",
+                            "Best launch", "Highest cornering", "Top speed"];
+
+        function gpReelPlan(opts) {
+            opts = opts || {};
+            var budget = opts.secs || 40;
+            var ms = [];
+            try { ms = gpMoments(); } catch (e) { return null; }
+            if (!ms.length || !gp.video || gp.video.t0 === null) return null;
+            var rows = gp.trace, dur = 0;
+            try { dur = (document.getElementById("gpVideo") || {}).duration || 0; } catch (e) { }
+
+            /* Only what the footage actually reaches. A moment the camera was
+               not running for is not a moment this reel can show. */
+            var segs = [];
+            ms.forEach(function (m) {
+                if (m.from === undefined || m.to === undefined) return;
+                var t0 = gpVideoTimeFor(m.from), t1 = gpVideoTimeFor(m.to);
+                if (t0 === null || t1 === null) return;
+                t0 = Math.max(0, t0);
+                if (dur) t1 = Math.min(dur, t1);
+                if (t1 - t0 < 0.4) return;
+                segs.push({ from: m.from, to: m.to, t0: t0, t1: t1,
+                            secs: t1 - t0, name: m.name, icon: m.icon,
+                            caption: m.name + " — " + m.value,
+                            rank: GP_REEL_RANK.indexOf(m.name) < 0 ? 99
+                                : GP_REEL_RANK.indexOf(m.name) });
+            });
+            if (!segs.length) return null;
+
+            /* Merge what overlaps. Moments already dedupe two finds of the SAME
+               name within a few seconds; two different names can still land on
+               the same stretch of road, and showing it twice is worse than
+               showing it once. The better-ranked one keeps its caption. */
+            segs.sort(function (a, b) { return a.t0 - b.t0; });
+            var merged = [];
+            segs.forEach(function (sg) {
+                var prev = merged[merged.length - 1];
+                if (prev && sg.t0 <= prev.t1) {
+                    prev.t1 = Math.max(prev.t1, sg.t1);
+                    prev.to = Math.max(prev.to, sg.to);
+                    prev.secs = prev.t1 - prev.t0;
+                    if (sg.rank < prev.rank) {
+                        prev.rank = sg.rank; prev.name = sg.name;
+                        prev.icon = sg.icon; prev.caption = sg.caption;
+                    }
+                    return;
+                }
+                merged.push(sg);
+            });
+
+            /* Fit the budget by rank, then put what survived back into time
+               order. A whole lap is kept out of a short reel rather than
+               sliced: half a lap advertised as the fastest one is a lie about
+               a lap time, and lap times are the thing this app is careful
+               about. */
+            var picked = [], used = 0;
+            merged.slice().sort(function (a, b) { return a.rank - b.rank; })
+                .forEach(function (sg) {
+                    if (used + sg.secs > budget + 0.001) return;
+                    picked.push(sg); used += sg.secs;
+                });
+            if (!picked.length) return null;
+            picked.sort(function (a, b) { return a.t0 - b.t0; });
+            var dropped = merged.length - picked.length;
+            return { segs: picked, secs: used, budget: budget, dropped: dropped };
+        }
+
+        /* The segment's name, bottom centre, over the wash the HUD already
+           lays down. Drawn by the export loop rather than by gpHudRender: the
+           tile and the designer call that one too, and there is exactly one of
+           it (VIDEO_HUD_EXPORT_2026-08.md). */
+        function gpReelCaption(g, W, H, text) {
+            var S = Math.min(Math.min(W, H) / 720, W / 700);
+            g.save();
+            g.font = "600 " + (20 * S) + "px " + GP_HUD_SANS;
+            g.textAlign = "center"; g.textBaseline = "middle";
+            var w = g.measureText(text).width + 34 * S, h = 40 * S;
+            var x = (W - w) / 2, y = H - 116 * S;
+            gpHudPanel(g, x, y, w, h, 8 * S, 0.62);
+            gpHudGlow(g, 10 * S);
+            g.fillStyle = GP_HUD_INK;
+            g.fillText(text, W / 2, y + h / 2);
+            gpHudGlow(g, 0);
+            g.restore();
+        }
+
+        /* Several segments, one file. gpMp4Build never cared how many ranges
+           the chunks came from — the track is arrays, and arrays concatenate.
+           The only arithmetic that matters is the sync list, whose entries are
+           FRAME INDICES and so have to be offset, and the audio, which is
+           whole AAC frames and never lands exactly on a video boundary. */
+        function gpReelMerge(parts) {
+            var v = null, a = null, frames = 0, vSecs = 0;
+            parts.forEach(function (r) {
+                if (!r || !r.vTrack) return;
+                var t = r.vTrack;
+                if (!v) v = { id: 1, video: true, timescale: t.timescale,
+                              width: t.width, height: t.height,
+                              chunks: [], durs: [], sync: [], durTicks: 0, entry: t.entry };
+                var base = v.chunks.length;
+                t.chunks.forEach(function (c) { v.chunks.push(c); });
+                t.durs.forEach(function (d) { v.durs.push(d); });
+                (t.sync || []).forEach(function (i) { v.sync.push(i + base); });
+                v.durTicks += t.durTicks;
+                frames += r.frames || 0;
+                vSecs += t.durTicks / t.timescale;
+
+                if (!r.aTrack) return;
+                var at = r.aTrack;
+                if (!a) a = { id: 2, video: false, timescale: at.timescale,
+                              chunks: [], durs: [], sync: null, durTicks: 0, entry: at.entry };
+                at.chunks.forEach(function (c) { a.chunks.push(c); });
+                at.durs.forEach(function (d) { a.durs.push(d); });
+                a.durTicks += at.durTicks;
+                /* AAC frames are ~23 ms and video frames ~33 ms, so a segment's
+                   sound is never exactly as long as its picture. Absorbed at
+                   every cut instead of allowed to accumulate: eight segments of
+                   half a frame each is a fifth of a second of lip-sync by the
+                   end of the reel. */
+                var want = Math.round(vSecs * a.timescale);
+                if (a.durs.length) {
+                    var last = a.durs.length - 1;
+                    var fix = want - a.durTicks;
+                    if (Math.abs(fix) < a.durs[last]) {
+                        a.durs[last] += fix; a.durTicks += fix;
+                    }
+                }
+            });
+            return { v: v, a: a, frames: frames };
+        }
+
+        window.gpReelExport = function (plan) {
+            if (!plan || !plan.segs || !plan.segs.length) return;
+            if (!gpFastAvailable()) {
+                if (typeof showToast === "function")
+                    showToast("A reel needs the fast exporter, and this file cannot be re-encoded " +
+                              "directly. Make a playable copy first and try again.", "error");
+                return;
+            }
+            var base = gpExportPlan(gp.exp || { range: "lap", quality: "high", maxH: 0 });
+            if (!base) return;
+            var job = { id: "r" + (gp.expSeq = (gp.expSeq || 0) + 1),
+                        plan: base, snap: gpExportSnap(),
+                        name: gpExportName("mp4").replace(/\.mp4$/, "-reel.mp4"),
+                        dest: null, state: "queued", frames: 0, reel: plan, slow: false };
+            var pick = (typeof RDM !== "undefined" && RDM && RDM.isTauri && RDM.isTauri() &&
+                        typeof RDM.saveFileDialog === "function")
+                ? RDM.saveFileDialog(job.name, [{ name: "Video", extensions: ["mp4"] }])
+                : Promise.resolve(null);
+            return pick.then(function (path) {
+                if (path === null && typeof RDM !== "undefined" && RDM && RDM.isTauri && RDM.isTauri())
+                    return;
+                job.dest = path || null;
+                gpExportQueue().push(job);
+                gpExportStrip();
+                gpReelPump(job);
+            });
+        };
+
+        function gpReelPump(job) {
+            if (gp.expRun) return;                      /* the queue will come back for it */
+            gp.expRun = job; job.state = "running"; gp.expJob = job;
+            gpExportStrip();
+            var ui = gpExportProgress(function () { job.cancelled = true; }, "Reel", job);
+            var segs = job.reel.segs, parts = [], i = 0;
+            var one = function () {
+                if (job.cancelled || i >= segs.length) return Promise.resolve();
+                var sg = segs[i++];
+                var p = {};
+                for (var k in job.plan) if (job.plan.hasOwnProperty(k)) p[k] = job.plan[k];
+                p.t0 = sg.t0; p.t1 = sg.t1; p.secs = sg.t1 - sg.t0;
+                p.raw = true; p.caption = sg.caption;
+                var seen = i - 1;
+                return gpExportFast(p, {
+                    tick: function (frac, frames) {
+                        /* One bar for the whole reel: a segment's own progress
+                           is not the job. */
+                        ui.tick((seen + Math.max(0, Math.min(1, frac))) / segs.length,
+                                (job.frames || 0) + frames);
+                    },
+                    close: function () { }
+                }, function () { return !!job.cancelled; }).then(function (res) {
+                    if (res && res.vTrack) { parts.push(res); job.frames += res.frames || 0; }
+                    return one();
+                });
+            };
+            one().then(function () {
+                gp.expJob = null;
+                ui.close();
+                if (job.cancelled || !parts.length) {
+                    gpExportDone(job, "cancelled");
+                    if (typeof showToast === "function")
+                        showToast(job.cancelled ? "Reel cancelled." : "Nothing could be read for the reel.",
+                                  job.cancelled ? "info" : "error");
+                    return;
+                }
+                var m = gpReelMerge(parts);
+                var blob = gpMp4Build(m.v, m.a);
+                gpSaveVideoBlob(blob, job.name, job.dest).then(function (where) {
+                    gpExportDone(job, where ? "done" : "cancelled",
+                                 where ? (blob.size / 1e6).toFixed(0) + " MB" : "");
+                    if (typeof showToast !== "function") return;
+                    if (!where) { showToast("Reel discarded.", "info"); return; }
+                    showToast("Saved " + job.name + " — " + parts.length + " moments, " +
+                              Math.round(m.v.durTicks / m.v.timescale) + " s" +
+                              (m.a ? ", sound copied from the original." : "."), "ok");
+                }, function (e) {
+                    gpExportDone(job, "failed", "could not be saved");
+                    showToast("The reel was made but could not be saved: " +
+                              (e && e.message ? e.message : e), "error");
+                });
+            }, function () {
+                gp.expJob = null; ui.close();
+                gpExportDone(job, "failed", "the reel could not be built");
+            });
+        }
+
+        window.gpReelAsk = function () {
+            var plan = gpReelPlan({ secs: gp.reelSecs || 40 });
+            if (!plan) {
+                if (typeof showToast === "function")
+                    showToast(gp.video
+                        ? "Nothing in this recording is long enough, or the footage does not reach it."
+                        : "Open the video for this recording first — a reel is made from the footage.",
+                        "info");
+                return;
+            }
+            var d = document.createElement("div");
+            d.className = "gp-expdlg"; d.id = "gpReelDlg";
+            var rows = plan.segs.map(function (s, k) {
+                return "<div class='gp-row'><span class='k'>" + s.icon + " " + gpEsc(s.name) +
+                       "</span><span class='v'>" + s.secs.toFixed(1) + " s</span>" +
+                       "<span class='s'>at " + gpHudClock(s.t0) + "</span></div>";
+            }).join("");
+            d.innerHTML = "<div class='gp-expbox'><div class='t'>Highlights reel</div>" +
+                "<div class='gp-expnote'>" + plan.segs.length + " moments, " +
+                plan.secs.toFixed(0) + " s of the " + plan.budget + " s budget" +
+                (plan.dropped ? " — " + plan.dropped + " did not fit." : ".") + "</div>" +
+                "<div class='gp-rows'>" + rows + "</div>" +
+                "<div class='gp-expnote'>They play in the order they were driven, each with its " +
+                "name on it, with the overlay burned in exactly as it is now.</div>" +
+                "<div class='r'><button class='c'>Cancel</button>" +
+                "<button class='go'>Make it</button></div></div>";
+            document.body.appendChild(d);
+            d.querySelector("button.c").onclick = function () { d.remove(); };
+            d.querySelector("button.go").onclick = function () { d.remove(); gpReelExport(plan); };
+        };
+
         function gpPanelMomentsHtml() {
             if (!(gp.trace && gp.trace.length))
                 return "<div class='gpb-pscroll'>" + gpPanelEmpty("No recording open.") + "</div>";
@@ -13899,7 +14200,10 @@
                below is where to look, this is what you send. */
             h += "<div class='gpb-momact'><button class='ws-btn-line' onclick='gpShareCard()' " +
                  "title='Save a picture of this session — the shape you drove, coloured by speed, " +
-                 "with the numbers on it'>Save share card…</button></div>";
+                 "with the numbers on it'>Save share card…</button>" +
+                 "<button class='ws-btn-line' onclick='gpReelAsk()' " +
+                 "title='Cut the moments below into one short video, in the order they " +
+                 "were driven, with the overlay burned in'>Make a reel…</button></div>";
             ms.forEach(function (m, k) {
                 h += "<button class='gpb-moment' onclick='gpMomentGo(" + k + ")' title='" +
                      gpEsc(m.why) + "'>" +
@@ -33522,6 +33826,11 @@
                                 var idx = gpIndexForVideoTime(tsec);
                                 if (idx !== null) { try { gpHudRender(g, p.W, p.H, idx); } catch (e) { } }
                             });
+                            /* The reel's caption for this segment. Drawn HERE,
+                               by the export loop, on the same context — not by
+                               gpHudRender, which the tile and the designer also
+                               call and which must not be forked. */
+                            if (p.caption) { try { gpReelCaption(g, p.W, p.H, p.caption); } catch (e) { } }
                             var outUs = Math.round((tsec - p.t0) * 1e6);
                             var wantKey = (outUs - lastKeyUs) >= 2e6;
                             if (wantKey) lastKeyUs = outUs;
@@ -33624,10 +33933,20 @@
                             durTicks: vdurs.reduce(function (a, b) { return a + b; }, 0),
                             entry: gpAvc1Entry(p.W, p.H, avcCOut)
                         };
+                        /* A reel is several of these, muxed once at the end
+                           (brief 04). Handing back the TRACK rather than a
+                           finished file is the whole of what multi-segment
+                           needed: gpMp4Build never cared how many ranges the
+                           chunks came from, and reusing this path per segment
+                           beats restructuring 220 lines of hand-rolled muxing
+                           that can fail by producing a file which looks fine
+                           and does not play. */
                         if (!p.audio || !mp4.audio || !mp4.audio.entry)
-                            return { blob: gpMp4Build(vTrack, null), frames: wrote, sound: false };
+                            return p.raw ? { vTrack: vTrack, aTrack: null, frames: wrote, sound: false }
+                                         : { blob: gpMp4Build(vTrack, null), frames: wrote, sound: false };
                         return gpCopyAudio(reader, mp4.audio, p).then(function (aTrack) {
-                            return { blob: gpMp4Build(vTrack, aTrack), frames: wrote, sound: !!aTrack };
+                            return p.raw ? { vTrack: vTrack, aTrack: aTrack, frames: wrote, sound: !!aTrack }
+                                         : { blob: gpMp4Build(vTrack, aTrack), frames: wrote, sound: !!aTrack };
                         });
                     })
                     .catch(function () {

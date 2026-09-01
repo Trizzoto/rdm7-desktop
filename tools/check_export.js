@@ -759,6 +759,143 @@ function reader(blob) {
         }
     }
 
+    /* ══ the reel: picking what goes in it ════════════════════════════════ */
+    console.log('\na reel is moments, merged and fitted to a budget');
+    {
+        const R = new Function('ARGgp', 'ARGms', 'ARGdur', `
+            var gp = ARGgp;
+            function gpMoments() { return ARGms; }
+            /* One second of footage per sample index keeps the arithmetic
+               readable; what is under test is the picking, not the clock. */
+            function gpVideoTimeFor(i) { return i === null ? null : i; }
+            var document = { getElementById: function () { return { duration: ARGdur }; } };
+            ${[grabVar(src, 'GP_REEL_SECS'), grabVar(src, 'GP_REEL_RANK'),
+               grabFn(src, 'gpReelPlan')].join('\n')}
+            return { plan: gpReelPlan };
+        `);
+        const gpOf = () => ({ trace: [], video: { t0: 0 } });
+        const M = (name, from, to, value) => ({ name: name, icon: 'x', value: value || '1',
+                                                i: from, from: from, to: to });
+
+        {
+            const E = R(gpOf(), [M('Top speed', 0, 5), M('Biggest slide', 20, 26)], 600);
+            const p = E.plan({ secs: 40 });
+            ok('both fit, so both are in', p.segs.length === 2, String(p.segs.length));
+            ok('…in TIME order, not in rank order',
+               p.segs[0].t0 < p.segs[1].t0, p.segs.map(s => s.t0).join(','));
+            ok('…and the total is the sum', Math.abs(p.secs - 11) < 0.01, String(p.secs));
+        }
+        {
+            /* Two different names can land on the same stretch of road.
+               Showing it twice is worse than showing it once. */
+            const E = R(gpOf(), [M('Top speed', 0, 10), M('Biggest slide', 8, 14)], 600);
+            const p = E.plan({ secs: 40 });
+            ok('overlapping moments merge into one segment', p.segs.length === 1);
+            ok('…spanning both', p.segs[0].t0 === 0 && p.segs[0].t1 === 14,
+               p.segs[0].t0 + '-' + p.segs[0].t1);
+            ok('…and the better-ranked one keeps its caption',
+               /Biggest slide/.test(p.segs[0].caption), p.segs[0].caption);
+        }
+        {
+            const E = R(gpOf(), [M('Top speed', 0, 30), M('Biggest slide', 100, 130),
+                                 M('Hardest braking', 200, 230)], 600);
+            const p = E.plan({ secs: 40 });
+            ok('the budget is never exceeded', p.secs <= 40.001, String(p.secs));
+            ok('…and rank decides what survives it',
+               p.segs.some(s => s.name === 'Biggest slide'),
+               p.segs.map(s => s.name).join(','));
+            /* Three 30 s segments into a 40 s budget: one fits, two do not,
+               and the fitter keeps considering the rest rather than stopping
+               at the first that will not go. */
+            ok('…while what was dropped is counted, not hidden', p.dropped === 2,
+               String(p.dropped));
+            ok('…and one 30 s segment is what fit', p.segs.length === 1, String(p.segs.length));
+        }
+        {
+            /* A whole lap will not fit in a forty-second reel, and slicing it
+               would advertise a lap time nobody watched. */
+            const E = R(gpOf(), [M('Fastest lap', 0, 90), M('Biggest slide', 100, 106)], 600);
+            const p = E.plan({ secs: 40 });
+            ok('a whole lap is left out rather than sliced',
+               !p.segs.some(s => s.name === 'Fastest lap'), p.segs.map(s => s.name).join(','));
+            ok('…and the reel is still made from what does fit',
+               p.segs.length === 1 && p.segs[0].name === 'Biggest slide');
+        }
+        {
+            const E = R(gpOf(), [M('Top speed', 0, 5)], 3);
+            const p = E.plan({ secs: 40 });
+            ok('a segment is clipped to the footage that exists',
+               p.segs[0].t1 === 3, String(p.segs[0].t1));
+        }
+        {
+            ok('no video, no reel',
+               R({ trace: [], video: null }, [M('Top speed', 0, 5)], 600).plan({}) === null);
+            ok('unsynced footage, no reel',
+               R({ trace: [], video: { t0: null } }, [M('Top speed', 0, 5)], 600).plan({}) === null);
+            ok('no moments, no reel', R(gpOf(), [], 600).plan({}) === null);
+            ok('a moment shorter than a blink is not a segment',
+               R(gpOf(), [M('Top speed', 0, 0.2)], 600).plan({}) === null);
+            ok('a budget nothing fits in makes no reel',
+               R(gpOf(), [M('Top speed', 0, 50)], 600).plan({ secs: 20 }) === null);
+        }
+    }
+
+    /* ══ several segments, one file ══════════════════════════════════════ */
+    console.log('\nthe reel is muxed once, out of several ranges');
+    {
+        const M = new Function(`
+            ${grabFn(src, 'gpReelMerge')}
+            return { merge: gpReelMerge };
+        `)();
+        const seg = (n, aFrames) => ({
+            frames: n,
+            vTrack: { id: 1, video: true, timescale: 90000, width: 1920, height: 1080,
+                      chunks: Array.from({ length: n }, () => new Uint8Array(10)),
+                      durs: Array.from({ length: n }, () => 3000),
+                      sync: [0], durTicks: n * 3000,
+                      entry: new Uint8Array(4) },
+            aTrack: aFrames ? { id: 2, video: false, timescale: 48000,
+                                chunks: Array.from({ length: aFrames }, () => new Uint8Array(6)),
+                                durs: Array.from({ length: aFrames }, () => 1024),
+                                sync: null, durTicks: aFrames * 1024,
+                                entry: new Uint8Array(4) } : null
+        });
+
+        const m = M.merge([seg(30), seg(20), seg(10)]);
+        ok('every frame of every segment is in the one track',
+           m.v.chunks.length === 60 && m.v.durs.length === 60, String(m.v.chunks.length));
+        ok('…and the duration is the sum', m.v.durTicks === 60 * 3000, String(m.v.durTicks));
+        /* sync entries are FRAME INDICES, so they have to be offset — a
+           keyframe list that still says 0 three times is a file that seeks to
+           the wrong place. */
+        ok('the keyframe list is offset per segment, not repeated',
+           m.v.sync.join(',') === '0,30,50', m.v.sync.join(','));
+        ok('…and there is one at the start of every cut',
+           m.v.sync.length === 3, String(m.v.sync.length));
+        ok('the frame count is carried through', m.frames === 60, String(m.frames));
+        ok('no audio in, no audio track out', m.a === null);
+
+        /* AAC frames are ~21 ms at 48 kHz and video frames 33 ms, so a
+           segment's sound is never exactly as long as its picture. What must
+           not happen is the error accumulating across cuts. */
+        const withA = M.merge([seg(30, 47), seg(30, 47), seg(30, 47)]);
+        const vSecs = withA.v.durTicks / withA.v.timescale;
+        const aSecs = withA.a.durTicks / withA.a.timescale;
+        ok('sound and picture come out the same length',
+           Math.abs(vSecs - aSecs) < 0.001, vSecs.toFixed(4) + ' vs ' + aSecs.toFixed(4));
+        ok('…which is the point: the error is absorbed at each cut, not carried',
+           Math.abs(vSecs - aSecs) < (1024 / 48000),
+           'drift ' + Math.abs(vSecs - aSecs).toFixed(5) + ' s');
+        ok('every audio frame is still there',
+           withA.a.chunks.length === 141, String(withA.a.chunks.length));
+
+        const one = M.merge([seg(12, 20)]);
+        ok('one segment merges to itself', one.v.chunks.length === 12 && one.a.chunks.length === 20);
+        ok('nothing at all merges to nothing', M.merge([]).v === null);
+        ok('a failed segment is skipped rather than breaking the reel',
+           M.merge([seg(5), null, seg(5)]).v.chunks.length === 10);
+    }
+
     console.log('\n' + pass + ' passed, ' + fail + ' failed');
     process.exit(fail ? 1 : 0);
 })();
