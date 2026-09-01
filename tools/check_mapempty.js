@@ -235,8 +235,12 @@ console.log('\nwhich circuits the map opens on');
 console.log('\nand it is only ever there when nothing is open');
 {
     const draw = grabFrom(src, 'gpDrawTrackOverview');
-    ok('it is scoped to Analyse', /gp\.view === "session"/.test(draw),
-       'Tracks has its own editor on this map and Drift is reading a recording');
+    /* Analyse AND Drift: both are views onto a recording, so with none open
+       they need the same answer, and Drift's used to be a bare world map. */
+    ok('it is scoped to the two views that read a recording',
+       /gp\.view === "session" \|\| gp\.view === "drift"/.test(draw),
+       'Tracks has its own editor on this map, and Corners reads whatever ' +
+       'Analyse has open');
     ok('and to having no recording open', /!\(gp\.trace && gp\.trace\.length\)/.test(draw));
     const wantAt = draw.indexOf('var want');
     const removeAt = draw.indexOf('removeLayer');

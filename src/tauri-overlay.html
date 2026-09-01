@@ -28366,10 +28366,16 @@
 
         function gpDrawTrackOverview() {
             if (!gp.map) return;
-            /* Analyse only, and only with nothing loaded. Tracks has its own
-               editor on this map, Drift is reading a recording, and Corners
-               is reading the same one Analyse is. */
-            var want = gp.view === "session" && !(gp.trace && gp.trace.length);
+            /* Analyse and Drift, and only with nothing loaded. Both are views
+               ONTO a recording, so with none open they are in the same
+               position — and Drift's answer to that was a bare world map with
+               a grey sentence beside it, while Analyse's was this. The
+               question either one is really asking is "which of your circuits
+               do you want", and clicking a pill answers it.
+               Tracks has its own editor on this map, and Corners is reading
+               whatever Analyse has open. */
+            var want = (gp.view === "session" || gp.view === "drift") &&
+                       !(gp.trace && gp.trace.length);
             if (!want) {
                 if (gp.ovLayer) { gp.map.removeLayer(gp.ovLayer); gp.ovLayer = null; }
                 gpMapNote(null);
