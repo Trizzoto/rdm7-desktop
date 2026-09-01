@@ -948,6 +948,80 @@ function reader(blob) {
                JSON.stringify(b.b));
         }
         {
+            /* The merge, which is the one part of a two-decoder export that can
+               deadlock or pair the wrong frame — and neither shows up until
+               somebody watches the file. */
+            const St = new Function(`
+                ${[grabFn(src, 'gpCompareNeedsFrame'), grabFn(src, 'gpCompareStep'),
+                   grabFn(src, 'gpCompareWindow')].join('\n')}
+                return { step: gpCompareStep, win: gpCompareWindow };
+            `)();
+
+            ok('a reference frame at the target is taken',
+               St.step(5, 5, null, false) === 'advance');
+            ok('…and one before it too — the newest that is not past the target wins',
+               St.step(5, 4.9, 3, false) === 'advance');
+            ok('a reference frame past the target is not taken yet',
+               St.step(5, 5.5, 4.99, false) !== 'advance', St.step(5, 5.5, 4.99, false));
+            ok('nothing decoded yet, and more coming: wait',
+               St.step(5, null, null, false) === 'wait');
+            ok('…but if B has finished, compose with what there is',
+               St.step(5, null, null, true) === 'compose');
+            ok('holding a frame at the target is enough to compose',
+               St.step(5, null, 5, false) === 'compose');
+            ok('holding one PAST the target is too — the reference lap is slower here',
+               St.step(5, null, 6, false) === 'compose');
+            /* A stretch the other day was not filming. One picture, rather than
+               an invented second one. */
+            ok('no target at all composes rather than waiting for ever',
+               St.step(NaN, null, null, false) === 'compose');
+            ok('…and so does a null target', St.step(null, null, null, false) === 'compose');
+
+            /* The deadlock the guard exists for: B done, nothing held, nothing
+               queued, must still make progress. */
+            ok('B finishing early never leaves A waiting',
+               St.step(99, null, 1, true) === 'compose');
+
+            /* Walking a whole pairing through, the way drain() does. */
+            const bFrames = [0, 1, 2, 3, 4, 5];
+            const wants = [0, 1.4, 1.4, 3.2, 9];
+            let held = null, q = bFrames.slice(), out = [], stuck = false;
+            wants.forEach(function (w) {
+                for (let guard = 0; guard < 50; guard++) {
+                    const act = St.step(w, q.length ? q[0] : null, held, q.length === 0);
+                    if (act === 'advance') { held = q.shift(); continue; }
+                    if (act === 'wait') { stuck = true; }
+                    break;
+                }
+                out.push(held);
+            });
+            ok('a whole pairing walks through without sticking', !stuck);
+            ok('…taking the newest frame at or before each target',
+               out.join(',') === '0,1,1,3,5', out.join(','));
+            /* The reference lap being slower is the interesting case: the same
+               frame is shown twice rather than the video stalling. */
+            ok('…and holding a frame when the reference lap is the slower one',
+               out[1] === out[2], out.join(','));
+        }
+        {
+            /* The decode window: a decoder cannot start anywhere but a
+               keyframe, and starting one frame late is a black opening. */
+            const W = new Function(`
+                ${grabFn(src, 'gpCompareWindow')}
+                return { win: gpCompareWindow };
+            `)();
+            const src2 = { ts: 1000, tab: { n: 10,
+                cts: [0, 100, 200, 300, 400, 500, 600, 700, 800, 900].map(v => v),
+                sync: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0] } };
+            const w = W.win(src2, 0.55, 0.75);
+            ok('the window starts at the keyframe BEFORE the range, not inside it',
+               w.key === 4, String(w.key));
+            ok('…and ends at the last sample inside it', w.last === 7, String(w.last));
+            const w2 = W.win(src2, 0.4, 0.45);
+            ok('a range that begins ON a keyframe does not back up further',
+               w2.key === 4, String(w2.key));
+        }
+        {
             /* H.264 will not take an odd dimension, and this is the one place
                a new rectangle gets invented. */
             const odd = [[1921, 1081], [1079, 1919], [641, 361]];

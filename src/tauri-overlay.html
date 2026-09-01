@@ -4348,6 +4348,8 @@
                                 title="Which gauges are drawn over the footage">HUD</button>
                         <button class="gp-mapbtn" id="gpBtnVExport" onclick="gpVideoExport()"
                                 title="Write the footage and the HUD out as one video file you can watch anywhere">Export video</button>
+                        <button class="gp-mapbtn" id="gpBtnVCompare" onclick="gpCompareAsk()"
+                                title="This lap and the reference in one video, paired by where the car was rather than by the clock, with the delta running">Compare</button>
                         <button class="gp-mapbtn" onclick="gpViewFocus('video')"
                                 title="Video full width / side by side — double-click the picture does the same">&#x26F6;</button>
                     </div>
@@ -14034,6 +14036,40 @@
             return haveTs === null || haveTs === undefined || haveTs < wantTs - 1e-6;
         }
 
+        /* What to do with the frame at the head of the analysed lap's queue,
+           given where the reference lap has got to. Pulled out of the loop
+           because it is the one piece of this that can deadlock, or pair the
+           wrong frame, and neither shows up until somebody watches the file.
+           Three answers and no fourth:
+             advance — B has a frame at or before the target; take it
+             wait    — B has not reached the target and more is coming
+             compose — B is as close as it will get, or has nothing to say
+        */
+        function gpCompareStep(wantB, bHeadTs, bHeldTs, bDone) {
+            /* That day has no footage over this stretch. One picture, rather
+               than an invented second one. */
+            if (wantB === null || wantB === undefined || !isFinite(wantB)) return "compose";
+            if (bHeadTs !== null && bHeadTs !== undefined) {
+                if (bHeadTs <= wantB + 1e-6) return "advance";
+                /* The next one is already PAST the target, so what is held is
+                   the newest frame at or before it and no amount of waiting
+                   improves on it. Waiting here deadlocked: drain stops, B's
+                   queue fills to its cap, both pumps stall on a dequeue that
+                   never comes.
+
+                   Found by walking a whole pairing through this function
+                   rather than by watching a file, and then measured against
+                   two real decoders in the browser: on forty frames with the
+                   reference lap running a quarter quicker, the version that
+                   waited here composed ONE frame and stopped. This one
+                   composes all forty. It would have hit every comparison
+                   export ever made. */
+                return "compose";
+            }
+            if (gpCompareNeedsFrame(bHeldTs, wantB) && !bDone) return "wait";
+            return "compose";
+        }
+
         /* Where the two pictures go. Inset is the default because most footage
            of this kind is portrait and two portrait frames side by side make an
            absurd letterbox; side-by-side is offered for landscape. */
@@ -14083,6 +14119,398 @@
             g.fillText(gpSigned(secs, 2, ""), box.x + box.w / 2, box.y + box.h / 2);
             gpHudGlow(g, 0);
             g.textAlign = "left"; g.textBaseline = "alphabetic";
+        }
+
+        /* ---- what the comparison needs, worked out once ----------------------
+         * Everything per-frame is a lookup into these arrays. Done here, in
+         * live state, so the frame loop never has to swap snapshots just to
+         * ask what time it is.
+         */
+        function gpComparePlan(opt) {
+            opt = opt || {};
+            if (gp.selLap < 0 || gp.cmpLap < 0 || gp.selLap === gp.cmpLap) return null;
+            var sel = gp.traceLaps[gp.selLap], ref = gp.traceLaps[gp.cmpLap];
+            if (!sel || !ref) return null;
+            if (!gp.video || gp.video.t0 === null) return null;
+            var delta = null;
+            try { delta = gpDeltaSeries(); } catch (e) { }
+            var match = gp.deltaMatch;
+            if (!delta || !match || !match.length) return null;
+
+            var base = gpExportPlan({ range: "lap", quality: (gp.exp && gp.exp.quality) || "high",
+                                      maxH: (gp.exp && gp.exp.maxH) || 0 });
+            if (!base) return null;
+
+            /* Where each frame of the analysed lap has to look for its
+               opposite number. Null where that day has no footage — the
+               comparison then shows one picture rather than an invented one. */
+            var n = sel.to - sel.from + 1;
+            var bTime = new Float64Array(n), any = 0, bLo = Infinity, bHi = -Infinity;
+            for (var k = 0; k < n; k++) {
+                var t = gpAnyVideoTimeFor(match[k]);
+                bTime[k] = (t === null || !isFinite(t)) ? NaN : t;
+                if (!isNaN(bTime[k])) {
+                    any++;
+                    if (bTime[k] < bLo) bLo = bTime[k];
+                    if (bTime[k] > bHi) bHi = bTime[k];
+                }
+            }
+            if (!any) return null;
+
+            /* Which file the reference lap's pictures are in. A ghost lap is
+               another day, and that day has its own footage. */
+            var ghost = !!ref.ghost;
+            var bPath = null;
+            if (ghost) {
+                var gm = gp.ghostSrc && gp.ghostSrc.meta;
+                bPath = (gm && gm.videoPath) || null;
+                if (!bPath) return null;
+            }
+
+            var snapA = gpExportSnap();
+            /* B's own HUD reads B's own lap — its clock, its delta. Same trace
+               either way: a ghost is appended into it behind the fence, which
+               is the whole reason every other surface works unchanged. */
+            var snapB = {};
+            for (var q in snapA) if (snapA.hasOwnProperty(q)) snapB[q] = snapA[q];
+            snapB.selLap = gp.cmpLap; snapB.cmpLap = gp.selLap;
+            snapB.delta = null; snapB.deltaKey = ""; snapB.deltaMatch = null;
+
+            var mode = opt.mode || (base.W >= base.H ? "side" : "inset");
+            return {
+                W: base.W, H: base.H, bps: base.bps, mime: base.mime, audio: true,
+                t0: base.t0, t1: base.t1, secs: base.secs,
+                bT0: Math.max(0, bLo), bT1: bHi,
+                selFrom: sel.from, match: match, delta: delta, bTime: bTime,
+                mode: mode, box: gpCompareBox(base.W, base.H, mode),
+                snapA: snapA, snapB: snapB,
+                ghost: ghost, bPath: bPath,
+                aName: gpRunWord() + " " + (gp.selLap + 1),
+                bName: (function () { try { return gpRefName(); } catch (e) { return "reference"; } })()
+            };
+        }
+
+        /* ---- two decoders, one encoder ---------------------------------------
+         * The reference decoder is PULLED along by the analysed one rather than
+         * pumped on its own clock: the pairing is monotonic (gpDeltaSeries
+         * sweeps forward), so B advances until it reaches the target and holds
+         * its last frame where the reference lap is the slower one through this
+         * bit of road. That is a merge of two sorted streams, not two
+         * independent exports.
+         *
+         * Both queues are bounded. Holding a whole lap of decoded frames is
+         * gigabytes; holding eight is nothing.
+         */
+        var GP_CMP_QUEUE = 8;
+
+        function gpCompareFast(p, ui, isCancelled) {
+            var readerA = gp.video.reader;
+            var openB = p.ghost
+                ? gpTauriCall("video_allow", { path: p.bPath }).then(function (size) {
+                    return gpVideoSrcPath(p.bPath, size);
+                  })
+                : Promise.resolve(readerA);
+
+            return openB.then(function (readerB) {
+                return Promise.all([gpMp4Demux(readerA),
+                                    readerB === readerA ? null : gpMp4Demux(readerB)])
+                    .then(function (both) {
+                        var mA = both[0], mB = both[1] || both[0];
+                        if (!mA || !mA.video || !mB || !mB.video) return null;
+                        return gpCompareRun(p, ui, isCancelled, readerA, readerB, mA, mB);
+                    });
+            });
+        }
+
+        function gpCompareSrc(mp4) {
+            var vt = mp4.video, tab = vt.tab;
+            var hev1 = vt.entry && vt.entry.type === GP_T("hev1");
+            var desc = vt.avcC || vt.hvcC;
+            var codec = vt.avcC ? gpAvcCodec(vt.avcC) : gpHevcCodec(vt.hvcC, hev1);
+            if (!codec || !desc || !tab || tab.n < 2) return null;
+            var cfg = { codec: codec, description: desc, optimizeForLatency: false };
+            if (vt.w && vt.h) { cfg.codedWidth = vt.w; cfg.codedHeight = vt.h; }
+            return { vt: vt, tab: tab, ts: vt.timescale, cfg: cfg, rot: vt.rot || 0 };
+        }
+
+        /* The window of samples covering [t0,t1], backed up to the keyframe
+           before it — a decoder cannot start anywhere else. */
+        function gpCompareWindow(src, t0, t1) {
+            var tab = src.tab, ts = src.ts, i;
+            var startT = t0 * ts, endT = t1 * ts;
+            var first = 0, last = tab.n - 1;
+            for (i = 0; i < tab.n; i++) { if (tab.cts[i] >= startT) { first = i; break; } }
+            for (i = tab.n - 1; i >= 0; i--) { if (tab.cts[i] <= endT) { last = i; break; } }
+            var key = first;
+            while (key > 0 && tab.sync && !tab.sync[key]) key--;
+            return { key: key, last: last };
+        }
+
+        function gpCompareRun(p, ui, isCancelled, readerA, readerB, mA, mB) {
+            var A = gpCompareSrc(mA), B = gpCompareSrc(mB);
+            if (!A || !B) return null;
+            var winA = gpCompareWindow(A, p.t0, p.t1);
+            var winB = gpCompareWindow(B, p.bT0, p.bT1);
+
+            var encChunks = [], encTs = [], encKey = [], avcCOut = null, failed = null;
+            var fps = Math.max(1, Math.min(240, A.tab.n / Math.max(0.001, A.tab.dur / A.ts)));
+            var bps = Math.min(80e6, Math.round(p.bps * Math.min(2, fps / 30)));
+            var tailTicks = (winA.last + 1 < A.tab.n)
+                ? (A.tab.dts[winA.last + 1] - A.tab.dts[winA.last])
+                : Math.max(0, A.tab.dur - A.tab.dts[winA.last]);
+            var tailUs = Math.round(tailTicks * 1e6 / A.ts) || Math.round(1e6 / 30);
+
+            var cv = document.createElement("canvas");
+            cv.width = p.W; cv.height = p.H;
+            var g = cv.getContext("2d", { alpha: false });
+            var lastKeyUs = -1e9, wrote = 0;
+
+            var encoder = new VideoEncoder({
+                output: function (chunk, meta) {
+                    if (meta && meta.decoderConfig && meta.decoderConfig.description && !avcCOut)
+                        avcCOut = new Uint8Array(meta.decoderConfig.description);
+                    var b = new Uint8Array(chunk.byteLength);
+                    chunk.copyTo(b);
+                    encChunks.push(b); encTs.push(chunk.timestamp);
+                    encKey.push(chunk.type === "key");
+                },
+                error: function (e) { failed = failed || e; }
+            });
+
+            var aQ = [], bQ = [], bHeld = null, bDone = false, aDone = false;
+
+            /* Cover, not stretch: a reference lap shot on a different camera
+               must not arrive squashed. */
+            function drawInto(frame, r, rot) {
+                var fw = frame.displayWidth || frame.codedWidth;
+                var fh = frame.displayHeight || frame.codedHeight;
+                if (rot === 90 || rot === 270) { var t = fw; fw = fh; fh = t; }
+                var sc = Math.max(r.w / fw, r.h / fh);
+                var dw = fw * sc, dh = fh * sc;
+                g.save();
+                g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip();
+                g.translate(r.x + r.w / 2, r.y + r.h / 2);
+                if (rot) g.rotate(rot * Math.PI / 180);
+                if (rot === 90 || rot === 270) g.drawImage(frame, -dh / 2, -dw / 2, dh, dw);
+                else g.drawImage(frame, -dw / 2, -dh / 2, dw, dh);
+                g.restore();
+            }
+
+            function compose(aFrame, bFrame, tsec) {
+                var box = p.box;
+                g.fillStyle = "#000"; g.fillRect(0, 0, p.W, p.H);
+                drawInto(aFrame, box.a, A.rot);
+                var k = null;
+                gpWithSnapshot(p.snapA, function () {
+                    var idx = gpIndexForVideoTime(tsec);
+                    if (idx === null) return;
+                    k = idx - p.selFrom;
+                    g.save(); g.translate(box.a.x, box.a.y);
+                    try { gpHudRender(g, box.a.w, box.a.h, idx); } catch (e) { }
+                    g.restore();
+                });
+                if (bFrame) {
+                    drawInto(bFrame, box.b, B.rot);
+                    /* A hairline, so an inset reads as a second picture rather
+                       than as something wrong with the first. */
+                    g.save();
+                    g.strokeStyle = "rgba(245,247,250,0.5)";
+                    g.lineWidth = Math.max(1, Math.round(p.H / 720));
+                    g.strokeRect(box.b.x, box.b.y, box.b.w, box.b.h);
+                    g.restore();
+                    /* Side by side, the reference gets its own instruments —
+                       its own lap clock, at its own size. Inset it does not:
+                       at 30% the HUD is unreadable, and an unreadable gauge is
+                       worse than no gauge. Same renderer either way. */
+                    if (p.mode === "side" && k !== null && k >= 0 && k < p.match.length) {
+                        var idxB = p.match[k];
+                        gpWithSnapshot(p.snapB, function () {
+                            g.save(); g.translate(box.b.x, box.b.y);
+                            try { gpHudRender(g, box.b.w, box.b.h, idxB); } catch (e) { }
+                            g.restore();
+                        });
+                    }
+                }
+                var d = (k !== null && k >= 0 && k < p.delta.length) ? p.delta[k] : null;
+                gpCompareBar(g, box.bar, d, p.aName, p.bName);
+            }
+
+            function bWantFor(tsec) {
+                var k = null;
+                gpWithSnapshot(p.snapA, function () {
+                    var idx = gpIndexForVideoTime(tsec);
+                    if (idx !== null) k = idx - p.selFrom;
+                });
+                if (k === null) return NaN;
+                if (k < 0) k = 0;
+                if (k >= p.bTime.length) k = p.bTime.length - 1;
+                return p.bTime[k];
+            }
+
+            function drain() {
+                while (aQ.length && !failed) {
+                    var a = aQ[0];
+                    var tsec = a.timestamp / 1e6;
+                    if (tsec < p.t0 - 1e-6 || tsec > p.t1 + 1e-6) { aQ.shift().close(); continue; }
+                    var want = bWantFor(tsec), act = "compose", guard = 0;
+                    /* The merge. No timers and no polling: either B has a
+                       frame to promote, or it is coming and we stop, or we
+                       have the best one there will be. */
+                    while (++guard < 1e6) {
+                        act = gpCompareStep(want,
+                                            bQ.length ? bQ[0].timestamp / 1e6 : null,
+                                            bHeld ? bHeld.timestamp / 1e6 : null, bDone);
+                        if (act !== "advance") break;
+                        if (bHeld) bHeld.close();
+                        bHeld = bQ.shift();
+                    }
+                    if (act === "wait") return;
+                    aQ.shift();
+                    try {
+                        compose(a, bHeld, tsec);
+                        var outUs = Math.round((tsec - p.t0) * 1e6);
+                        var wantKey = (outUs - lastKeyUs) >= 2e6;
+                        if (wantKey) lastKeyUs = outUs;
+                        var vf = new VideoFrame(cv, { timestamp: outUs, duration: Math.round(1e6 / fps) });
+                        encoder.encode(vf, { keyFrame: wantKey });
+                        vf.close();
+                        wrote++;
+                        ui.tick((tsec - p.t0) / p.secs, wrote);
+                    } catch (e) { failed = failed || e; }
+                    a.close();
+                }
+            }
+
+            var decA = new VideoDecoder({
+                output: function (f) { aQ.push(f); drain(); },
+                error: function (e) { failed = failed || e; }
+            });
+            var decB = new VideoDecoder({
+                output: function (f) { bQ.push(f); drain(); },
+                error: function (e) { failed = failed || e; }
+            });
+
+            function feeder(src, reader, win, dec, isB) {
+                var s = win.key;
+                return function pump() {
+                    if (failed || isCancelled()) return Promise.resolve();
+                    if (s > win.last) { if (isB) bDone = true; else aDone = true; return Promise.resolve(); }
+                    /* Do not run away from the other stream. */
+                    if ((isB ? bQ.length : aQ.length) >= GP_CMP_QUEUE)
+                        return gpCompareBreathe(decA, decB, encoder).then(pump);
+                    var tab = src.tab, from = s, bytes = 0;
+                    while (s <= win.last && bytes < 4 * 1024 * 1024) { bytes += tab.sizes[s]; s++; }
+                    var lo = tab.offsets[from], hi = tab.offsets[s - 1] + tab.sizes[s - 1];
+                    return reader.read(lo, hi - lo).then(function (buf) {
+                        var u8 = new Uint8Array(buf);
+                        for (var q = from; q < s; q++) {
+                            if (failed) break;
+                            var off = tab.offsets[q] - lo;
+                            dec.decode(new EncodedVideoChunk({
+                                type: (!tab.sync || tab.sync[q]) ? "key" : "delta",
+                                timestamp: Math.round(tab.cts[q] * 1e6 / src.ts),
+                                duration: 0,
+                                data: u8.subarray(off, off + tab.sizes[q])
+                            }));
+                        }
+                        return gpCompareBreathe(decA, decB, encoder).then(pump);
+                    });
+                };
+            }
+
+            var tryHw = function (cfg, Klass) {
+                var hw = {};
+                for (var kk in cfg) hw[kk] = cfg[kk];
+                hw.hardwareAcceleration = "prefer-hardware";
+                return Klass.isConfigSupported(hw)
+                    .then(function (r) { return r && r.supported ? hw : cfg; },
+                          function () { return cfg; });
+            };
+            var encCfg = {
+                codec: p.H > 1200 ? "avc1.640033" : "avc1.640028",
+                width: p.W, height: p.H, bitrate: bps,
+                framerate: Math.round(fps), avc: { format: "avc" }, latencyMode: "quality"
+            };
+
+            return Promise.all([tryHw(encCfg, VideoEncoder),
+                                tryHw(A.cfg, VideoDecoder), tryHw(B.cfg, VideoDecoder)])
+                .then(function (cfgs) {
+                    encoder.configure(cfgs[0]);
+                    decA.configure(cfgs[1]);
+                    /* B falls back on its own. One decoder without hardware
+                       must not drag the other down with it. */
+                    decB.configure(cfgs[2]);
+                    return Promise.all([feeder(A, readerA, winA, decA, false)(),
+                                        feeder(B, readerB, winB, decB, true)()]);
+                })
+                .then(function () { return Promise.all([decA.flush(), decB.flush()]); })
+                .then(function () { bDone = true; aDone = true; drain(); return encoder.flush(); })
+                .then(function () {
+                    try { decA.close(); decB.close(); encoder.close(); } catch (e) { }
+                    while (bQ.length) bQ.shift().close();
+                    while (aQ.length) aQ.shift().close();
+                    if (bHeld) { bHeld.close(); bHeld = null; }
+                    if (failed) throw failed;
+                    if (isCancelled()) return null;
+                    if (!encChunks.length || !avcCOut) return null;
+                    for (var i = 1; i < encTs.length; i++)
+                        if (encTs[i] < encTs[i - 1]) return null;
+                    var VTS = 90000, vdurs = [], sync = [];
+                    for (i = 0; i < encTs.length; i++) {
+                        var nextUs = (i + 1 < encTs.length) ? encTs[i + 1] : encTs[i] + tailUs;
+                        vdurs.push((nextUs - encTs[i]) * VTS / 1e6);
+                        if (encKey[i]) sync.push(i);
+                    }
+                    var vTrack = {
+                        id: 1, video: true, timescale: VTS, width: p.W, height: p.H,
+                        chunks: encChunks, durs: vdurs, sync: sync,
+                        durTicks: vdurs.reduce(function (x, y) { return x + y; }, 0),
+                        entry: gpAvc1Entry(p.W, p.H, avcCOut)
+                    };
+                    /* One audio track: the lap being watched. Two overlaid
+                       would need mixing and re-encoding, which throws away the
+                       byte-for-byte AAC copy that makes this path fast. */
+                    if (!mA.audio || !mA.audio.entry)
+                        return { blob: gpMp4Build(vTrack, null), frames: wrote, sound: false };
+                    return gpCopyAudio(readerA, mA.audio, p).then(function (aTrack) {
+                        return { blob: gpMp4Build(vTrack, aTrack), frames: wrote, sound: !!aTrack };
+                    });
+                })
+                .catch(function (e) {
+                    try { decA.close(); decB.close(); encoder.close(); } catch (e2) { }
+                    while (bQ.length) bQ.shift().close();
+                    while (aQ.length) aQ.shift().close();
+                    if (bHeld) { bHeld.close(); bHeld = null; }
+                    return null;
+                });
+        }
+
+        /* Both decoders and the encoder drain together, on their own dequeue
+           events rather than on a timer — a timer is clamped to one second the
+           moment the window loses focus, which is the whole reason the single
+           export learned this (ADR-0052). */
+        function gpCompareBreathe(decA, decB, enc) {
+            if (decA.decodeQueueSize < 8 && decB.decodeQueueSize < 8 && enc.encodeQueueSize < 8)
+                return Promise.resolve();
+            return new Promise(function (r) {
+                var done = false;
+                var fire = function () {
+                    if (done) return;
+                    done = true;
+                    try {
+                        decA.removeEventListener("dequeue", fire);
+                        decB.removeEventListener("dequeue", fire);
+                        enc.removeEventListener("dequeue", fire);
+                    } catch (e) { }
+                    r();
+                };
+                try {
+                    decA.addEventListener("dequeue", fire);
+                    decB.addEventListener("dequeue", fire);
+                    enc.addEventListener("dequeue", fire);
+                } catch (e) { }
+                setTimeout(fire, 250);
+            });
         }
 
         /* The segment's name, bottom centre, over the wash the HUD already
@@ -14234,6 +14662,121 @@
                 gpExportDone(job, "failed", "the reel could not be built");
             });
         }
+
+        window.gpCompareExport = function (plan) {
+            if (!plan) return;
+            var job = { id: "c" + (gp.expSeq = (gp.expSeq || 0) + 1),
+                        plan: plan, snap: plan.snapA,
+                        name: gpExportName("mp4").replace(/\.mp4$/, "-vs.mp4"),
+                        dest: null, state: "queued", frames: 0, compare: true, slow: false };
+            var pick = (typeof RDM !== "undefined" && RDM && RDM.isTauri && RDM.isTauri() &&
+                        typeof RDM.saveFileDialog === "function")
+                ? RDM.saveFileDialog(job.name, [{ name: "Video", extensions: ["mp4"] }])
+                : Promise.resolve(null);
+            return pick.then(function (path) {
+                if (path === null && typeof RDM !== "undefined" && RDM && RDM.isTauri && RDM.isTauri())
+                    return;
+                job.dest = path || null;
+                gpExportQueue().push(job);
+                gpExportStrip();
+                gpComparePump(job);
+            });
+        };
+
+        function gpComparePump(job) {
+            if (gp.expRun) return;                      /* the queue comes back for it */
+            gp.expRun = job; job.state = "running"; gp.expJob = job;
+            gpExportStrip();
+            var ui = gpExportProgress(function () { job.cancelled = true; }, "Comparison", job);
+            gpCompareFast(job.plan, ui, function () { return !!job.cancelled; })
+                .then(function (res) {
+                    gp.expJob = null;
+                    ui.close();
+                    if (!res || !res.blob) {
+                        gpExportDone(job, job.cancelled ? "cancelled" : "failed",
+                                     job.cancelled ? "" : "could not be built");
+                        if (typeof showToast === "function")
+                            showToast(job.cancelled ? "Comparison cancelled."
+                                : "That comparison could not be built — one of the two files " +
+                                  "cannot be re-encoded directly. Make a playable copy and try again.",
+                                job.cancelled ? "info" : "error");
+                        return;
+                    }
+                    gpSaveVideoBlob(res.blob, job.name, job.dest).then(function (where) {
+                        gpExportDone(job, where ? "done" : "cancelled",
+                                     where ? (res.blob.size / 1e6).toFixed(0) + " MB" : "");
+                        if (typeof showToast !== "function") return;
+                        if (!where) { showToast("Comparison discarded.", "info"); return; }
+                        showToast("Saved " + job.name + " — " + gpEsc(job.plan.aName) + " against " +
+                                  gpEsc(job.plan.bName) + ", " + res.frames + " frames" +
+                                  (res.sound ? ", sound from the lap being watched." : "."), "ok");
+                    }, function (e) {
+                        gpExportDone(job, "failed", "could not be saved");
+                        showToast("The comparison was made but could not be saved: " +
+                                  (e && e.message ? e.message : e), "error");
+                    });
+                }, function () {
+                    gp.expJob = null; ui.close();
+                    gpExportDone(job, "failed", "could not be built");
+                });
+        }
+
+        window.gpCompareAsk = function () {
+            if (!gpFastAvailable()) {
+                if (typeof showToast === "function")
+                    showToast("A comparison needs the fast exporter, and this file cannot be " +
+                              "re-encoded directly. Make a playable copy first.", "error");
+                return;
+            }
+            var plan = gpComparePlan({ mode: gp.cmpMode || null });
+            if (!plan) {
+                if (typeof showToast === "function")
+                    showToast(gp.cmpLap < 0
+                        ? "Pick a reference lap first — a comparison is two laps."
+                        : (!gp.video || gp.video.t0 === null)
+                            ? "Open the video for this recording and get it in sync first."
+                            : "The reference lap has no footage of its own to show beside this one.",
+                        "info");
+                return;
+            }
+            var d = document.createElement("div");
+            d.className = "gp-expdlg"; d.id = "gpCmpDlg";
+            var pick = function (m, label, note) {
+                return "<button class='ws-btn-line" + (plan.mode === m ? " on" : "") +
+                       "' data-m='" + m + "'>" + label +
+                       "<small style='display:block;opacity:0.7'>" + note + "</small></button>";
+            };
+            d.innerHTML = "<div class='gp-expbox'><div class='t'>Two laps, side by side</div>" +
+                "<div class='gp-expnote'>" + gpEsc(plan.aName) + " against " + gpEsc(plan.bName) +
+                ", paired by where the car was rather than by the clock — so the two pictures " +
+                "are always at the same place on the track, and the delta between them runs " +
+                "along the bottom.</div>" +
+                "<div class='field'>" +
+                pick("inset", "One over the other", "the reference in a corner — best for phone footage") +
+                pick("side", "Side by side", "half the frame each — best for landscape") +
+                "</div>" +
+                (plan.ghost ? "<div class='gp-expnote'>The reference is another day, and its own " +
+                              "footage is used for it.</div>" : "") +
+                "<div class='r'><button class='c'>Cancel</button>" +
+                "<button class='go'>Make it</button></div></div>";
+            document.body.appendChild(d);
+            var mode = plan.mode;
+            Array.prototype.forEach.call(d.querySelectorAll("[data-m]"), function (b) {
+                b.onclick = function () {
+                    mode = b.getAttribute("data-m");
+                    Array.prototype.forEach.call(d.querySelectorAll("[data-m]"), function (o) {
+                        o.classList.toggle("on", o === b);
+                    });
+                };
+            });
+            d.querySelector("button.c").onclick = function () { d.remove(); };
+            d.querySelector("button.go").onclick = function () {
+                d.remove();
+                gp.cmpMode = mode;
+                var fresh = gpComparePlan({ mode: mode });
+                if (fresh) gpCompareExport(fresh);
+            };
+        };
 
         window.gpReelAsk = function () {
             var plan = gpReelPlan({ secs: gp.reelSecs || 40 });
