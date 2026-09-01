@@ -3666,9 +3666,14 @@
         #gpWorkspace .gpb-dparts { margin-top: 8px; }
         #gpWorkspace .gpb-dpart { display: flex; align-items: center; gap: 8px; font-size: 11.5px; padding: 2px 0; }
         #gpWorkspace .gpb-dpart .k { width: 72px; flex-shrink: 0; color: var(--gpb-muted); }
-        #gpWorkspace .gpb-dpart .tr { flex: 1; height: 6px; background: var(--gpb-n100); overflow: hidden; }
+        /* .tw is the lane the track sits in; .tr is as wide as this part is
+           worth. Two elements because the track has to be able to be shorter
+           than the row without the number sliding left with it. */
+        #gpWorkspace .gpb-dpart .tw { flex: 1; display: flex; }
+        #gpWorkspace .gpb-dpart .tr { height: 6px; background: var(--gpb-n100); overflow: hidden; }
         #gpWorkspace .gpb-dpart .tr i { display: block; height: 100%; background: var(--gpb-red); }
-        #gpWorkspace .gpb-dpart .v { width: 24px; text-align: right; font-variant-numeric: tabular-nums; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-dpart .v { width: 34px; text-align: right; font-variant-numeric: tabular-nums; color: var(--gpb-muted); }
+        #gpWorkspace .gpb-dpart .v small { font-size: 9px; opacity: 0.65; margin-left: 1px; }
         /* the strip above the laps table: colour mode on the left, what the
            numbers are in on the right */
         #gpWorkspace .gpb-dbar { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--gpb-div); }
@@ -13100,7 +13105,9 @@
                         var who = [s.car, s.driver].filter(Boolean).join(" \u00b7 ");
                         h += "<button class='ws-item" + (on ? " on" : "") + "' data-gp-ghost='" + gpEsc(s.id) + "'>" +
                              "<span class='st" + (on ? " on" : "") + "'></span>" + gpEsc(gpSesDay(s.recordedAt)) +
-                             "<span class='tag'>" + (s.bestLapS ? gpLapTime(s.bestLapS) : s.lapCount + " laps") + "</span>" +
+                             "<span class='tag'>" + (s.bestLapS ? gpLapTime(s.bestLapS)
+                                 : s.lapCount + " " + gpRunWord(true) +
+                                   (s.lapCount === 1 ? "" : "s")) + "</span>" +
                              (who ? "<div class='gp-ses-n'>" + gpEsc(who) + "</div>" : "") + "</button>";
                         if (on) {
                             h += "<select class='gp-ghost-pick' data-gp-ghost-lap>";
@@ -13279,7 +13286,6 @@
                    the hero below. */
                 if (view === "drift") {
                     try {
-                        var bd = gpDriftBoard();
                         /* The same normalisation gpRenderDrift does. gpSetView
                            renders this head BEFORE gpRenderDrift runs, so on a
                            freshly opened recording gp.selLap is still -1 here
@@ -13287,16 +13293,35 @@
                            rated" over a table full of ratings. */
                         var nl = (gp.traceLaps || []).length;
                         var li = (gp.selLap >= 0 && gp.selLap < nl) ? gp.selLap : 0;
-                        var av = bd && bd.lapAvg[li];
-                        if (bd) meta += " · " + gpRunWord() + " " + (li + 1) + " of " + nl +
-                            (av ? " · " + av.stars.toFixed(1) + "★ over " + av.n + " corners"
-                                : " · no corner rated on this " + gpRunWord());
+                        if (nl) meta += " · " + gpRunWord() + " " + (li + 1) + " of " + nl;
+                        /* "No corner rated on this lap" is a fair thing to say
+                           about a lap that was driven straight. It is a lie
+                           about a recording with no angle channel at all —
+                           where NO lap could ever be rated, and the fix is a
+                           channel, not a different lap. */
+                        if (!gpDriftAngle()) meta += " · nothing here measures the angle";
+                        else {
+                            var bd = gpDriftBoard();
+                            var av = bd && bd.lapAvg[li];
+                            if (bd) meta += av
+                                ? " · " + av.stars.toFixed(1) + "★ over " + av.n +
+                                  (av.n === 1 ? " corner" : " corners")
+                                : " · no corner rated on this " + gpRunWord();
+                        }
                     } catch (e) { }
                 }
                 /* The three tags follow the name now instead of racing it for
                    room, so the spread and the ideal no longer get dropped at
                    1400 px to save the circuit's last nine letters. */
-                var laps = (gp.traceLaps || []).filter(function (l) { return !l.ghost; });
+                /* gpCleanRuns, not every non-ghost run — "everything that
+                   reports a best reads THIS". These three numbers were the
+                   exception, and on the 23 August Mallala session that read
+                   "Spread 613.59 s": the slowest lap has an 8m21s hole in it
+                   where the receiver had no fix, and 613 s is the size of the
+                   hole, not of anybody's driving. A gap cuts the other way
+                   too — time that is not measured makes a lap read FAST — so
+                   a flagged run had no business setting the Best either. */
+                var laps = gpCleanRuns();
                 var times = laps.map(function (l) { return gpSpanSecs(gp.trace, l); });
                 if (times.length) {
                     var best = Math.min.apply(null, times);
@@ -13310,10 +13335,19 @@
                         var worst = Math.max.apply(null, times);
                         tags += "<span class='gpb-tag grey'>Spread " + (worst - best).toFixed(2) + " s</span>";
                     }
+                } else if ((gp.traceLaps || []).some(function (l) { return !l.ghost; })) {
+                    /* Runs, but not one the app is willing to stand behind.
+                       Saying so beats an empty space where a time was. */
+                    tags += "<span class='gpb-tag grey'>No clean " + gpRunWord() + "</span>";
                 }
             } else if (view === "setup") {
                 name = "Setup";
-                meta = gpLinked() ? "The puck's own settings, read from the node."
+                /* Which node you are editing, by name and serial — the fact
+                   the panel's own heading used to carry. Two pucks on a bench
+                   look identical until one of them says its number. */
+                var di = gp.info || {};
+                meta = di.serial ? ((di.name || "RDM GPS") + " · " + di.serial)
+                     : gpLinked() ? "The puck's own settings, read from the node."
                                   : "This PC · no node attached.";
                 /* Setup is reached from the gear, so it needs a way back that
                    is not "guess which tab you came from". */
@@ -15686,7 +15720,10 @@
                 if (drift && drift.ok && drift.ok[i] && Math.abs(drift.beta[i]) > maxAng)
                     maxAng = Math.abs(drift.beta[i]);
             }
-            var laps = (gp.traceLaps || []).filter(function (l) { return !l.ghost; });
+            /* Clean runs only. This card is the one that leaves the building
+               — a best set by a lap the app has flagged for a lost fix is a
+               time nobody drove, published. */
+            var laps = gpCleanRuns();
             var best = null;
             if (gp.lapsFrom === "gate")
                 laps.forEach(function (l) {
@@ -15906,8 +15943,17 @@
                 gp.traceLaps.forEach(function (l, i) {
                     if (l.ghost && skipGhost) return;
                     var lbl = l.ghost ? gpEsc(gpRefName()) : word + " " + (i + 1);
-                    o += "<option value='" + i + "'" + (i === cur ? " selected" : "") + ">" +
-                         lbl + " · " + gpLapTime(gpSpanSecs(gp.trace, l)) + "</option>";
+                    /* A flagged run says so IN the option. Every corner in
+                       this table is measured against whichever two of these
+                       are picked, and one of them being 87 % lost fix is the
+                       difference between coaching and noise — it read
+                       "10.16 s available" off a lap with an 8 min hole in it
+                       and offered advice about where to brake. */
+                    var fw = gpRunFlagWord(l);
+                    o += "<option value='" + i + "'" + (i === cur ? " selected" : "") +
+                         (fw ? " title='" + gpEsc(gpRunFlagWhy(l)) + "'" : "") + ">" +
+                         lbl + " · " + gpLapTime(gpSpanSecs(gp.trace, l)) +
+                         (fw ? " · " + fw : "") + "</option>";
                 });
                 return o;
             };
@@ -17807,8 +17853,7 @@
                      /* What is wrong with it, on the row, in one word. The
                         full sentence is the row's tooltip. */
                      (r.flag ? "<span class='gpb-why' title='" + gpEsc(r.why) + "'>" +
-                               (r.flag === "gap" ? "no fix"
-                                : r.flag === "jump" ? "jumped" : "off the pace") + "</span>" : "") +
+                               gpRunFlagWord(gp.traceLaps[r.i]) + "</span>" : "") +
                      /* A flagged run cannot become the reference — the button
                         that offers it would be offering a wrong answer. */
                      (r.flag ? "" :
@@ -23594,6 +23639,17 @@
             return (gp.traceLaps || []).filter(function (l) { return !l.ghost && !l.flag; });
         }
 
+        /* The same two or three words wherever a flagged run is named — a
+           list, a dropdown, a chip. It used to be spelled out inline in the
+           Lap times panel and nowhere else, which is how the corner
+           analysis's own lap pickers came to offer "Lap 3 · 12:33.810" with
+           nothing to say that twelve of those minutes are a lost fix. */
+        function gpRunFlagWord(l) {
+            if (!l || !l.flag) return "";
+            return l.flag === "gap" ? "no fix"
+                 : l.flag === "jump" ? "jumped" : "off the pace";
+        }
+
         /* Why this run is greyed, in the words a driver would use. */
         function gpRunFlagWhy(l) {
             if (!l || !l.flag) return "";
@@ -25360,16 +25416,34 @@
         function gpDriftPartsHtml(rt) {
             if (!rt) return "";
             var P = [
-                ["Angle", rt.parts.angle, "held " + Math.round(GP_DRIFT_STAR_DEG) + "&deg; is full marks"],
-                ["Committed", rt.parts.commit, "how much of the corner was spent sideways"],
-                ["Steady", rt.parts.steady, "how much of the turn rate was not asked for — " + GP_DRIFT_STAR_SETTLE + " deg/s of it scores nothing"],
-                ["Speed", rt.parts.speed, "against your own best through this corner"]
+                ["Angle", rt.parts.angle, GP_DRIFT_STAR_W.angle,
+                 "held " + Math.round(GP_DRIFT_STAR_DEG) + "&deg; is full marks"],
+                ["Committed", rt.parts.commit, GP_DRIFT_STAR_W.commit,
+                 "how much of the corner was spent sideways"],
+                ["Steady", rt.parts.steady, GP_DRIFT_STAR_W.steady,
+                 "how much of the turn rate was not asked for — " + GP_DRIFT_STAR_SETTLE + " deg/s of it scores nothing"],
+                ["Speed", rt.parts.speed, GP_DRIFT_STAR_W.speed,
+                 "against your own best through this corner"]
             ];
+            /* The four do NOT count equally — angle is 45 % of the rating and
+               speed is 10 % — and four bars of the same length said they did,
+               so a corner that scored full marks on the smallest part looked
+               like it had scored full marks. The TRACK is now as long as the
+               part is worth (against the biggest, so the row still fills the
+               column) and the fill is how much of it was earned. The number
+               keeps its per-cent sign: a bare "100" in a column of speeds and
+               angles reads as a measurement. */
+            var maxW = 0;
+            P.forEach(function (p) { if (p[2] > maxW) maxW = p[2]; });
             return "<div class='gpb-dparts'>" + P.map(function (p) {
-                return "<div class='gpb-dpart' title='" + gpEsc(p[2]) + "'>" +
+                var pct = Math.round(p[1] * 100);
+                return "<div class='gpb-dpart' title='" + gpEsc(p[3]) +
+                       " — worth " + Math.round(p[2] * 100) + "% of the rating'>" +
                        "<span class='k'>" + p[0] + "</span>" +
-                       "<span class='tr'><i style='width:" + Math.round(p[1] * 100) + "%'></i></span>" +
-                       "<span class='v'>" + Math.round(p[1] * 100) + "</span></div>";
+                       "<span class='tw'><span class='tr' style='width:" +
+                       Math.round(p[2] / maxW * 100) + "%'><i style='width:" + pct + "%'></i>" +
+                       "</span></span>" +
+                       "<span class='v'>" + pct + "<small>%</small></span></div>";
             }).join("") + "</div>";
         }
 
@@ -26183,7 +26257,18 @@
                            (r.angle.direct ? "" : "<span class='gpb-dpm'>&plusmn;" + Math.round(r.angle.conf) + "</span>");
                     comm = Math.round(r.commit * 100) + "<span class='gpb-dpm'>%</span>";
                     area = Math.round(r.angle.area);
-                    stars = r.rating ? gpStarsHtml(r.rating.stars) : "<span class='gpb-dpm'>&mdash;</span>";
+                    /* Unrated is three different things and this column said
+                       one em dash for all of them. The lane already names
+                       them — "spin" and "not a drift" — so the table says the
+                       same words rather than inventing a second vocabulary. */
+                    stars = r.rating ? gpStarsHtml(r.rating.stars)
+                          : r.spun
+                            ? "<span class='gpb-dpm' title='The car came all the way round here. A spin takes " +
+                              "full marks on the heaviest part of the rating, so it is left unrated rather than " +
+                              "scored.'>spin</span>"
+                            : "<span class='gpb-dpm' title='The car was past " + GP_DRIFT_ON +
+                              "&deg; for " + (r.angle.secs || 0).toFixed(1) + " s, under the " + GP_DRIFT_HOLD_S +
+                              " s it takes to count. Driven round on the grip.'>not a drift</span>";
                 }
                 /* The chain mark says this row is several corners driven as one
                    drift — without it a reader would think the tool had simply
@@ -40291,7 +40376,11 @@
                         "<span class='v'>" + gpEsc(f.v(d)) + "</span></div>";
                 }).join("") + "</div></div>";
 
-            h += "<div class='ws-note'>Units, CAN bus, WiFi and Identify live in <b>Setup</b>.</div>";
+            /* Not while you are standing on it. This panel also renders in
+               the right rail OF Setup, where "these live in Setup" is an
+               instruction to go where you already are. */
+            if (gp.view !== "setup")
+                h += "<div class='ws-note'>Units, CAN bus, WiFi and Identify live in <b>Setup</b>.</div>";
             box.innerHTML = h;
             gpRenderReady();
             gpRestoreMsgs();
@@ -41975,9 +42064,10 @@
             var d = gp.info || {};
             var cam = gp.cam || gpCamLoad();
             var revA = gpN(d.hw_rev) === 0;
-            var h = "<h2>Setup</h2><div class='ws-sub'>" +
-                    gpEsc(d.serial ? (d.name || "RDM GPS") + " \u00b7 " + d.serial : "this PC \u00b7 no node attached") +
-                    "</div><div class='gp-setup-grid'>";
+            /* No title of its own. The page head above already says "Setup"
+               and who it is talking to; printing it a second time put the
+               same two lines on the screen twice, 130 px apart. */
+            var h = "<div class='gp-setup-grid'>";
 
             /* ---- column content. Each group is short rows, label left,
                     control right — the shape every professional config screen

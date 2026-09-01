@@ -79,7 +79,12 @@ const FNS = [
     'gpDriftForget',
     'gpVboClockMs', 'gpVboSpeedScale', 'gpVboParse',
     'gpB64', 'gpB64Dec', 'gpRowsUnpack', 'gpSessionFileParse',
-    'gpGateFromEnd', 'gpTrackFromVbo'
+    'gpGateFromEnd', 'gpTrackFromVbo',
+    /* How a run is NAMED once it has been graded. Nothing in the answer sheet
+       reads these — check_cleanruns does, and it has to ask the same sandbox
+       the sheet was measured in or it would be asking about a different set
+       of runs. */
+    'gpRunWord', 'gpIsTrial', 'gpRunFlagWord', 'gpRunFlagWhy'
 ];
 
 /* A sandbox with one recording in it. `track` is the active track for the
