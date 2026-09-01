@@ -89,6 +89,51 @@ function compare(exp, got, at, out) {
     return out;
 }
 
+/* Why each of these is in the repo at all. */
+const MEANS = {
+    'mountbarker-ring-2026-08-22': [
+        { what: 'the six breaks found by hand are still all six',
+          holds: g => g.breaks.count === 6,
+          detail: g => String(g.breaks.count) },
+        { what: '…and exactly one of them still has a wrong clock — the 444 m at 84,115',
+          holds: g => g.breaks.clockWrongAt.length === 1 &&
+                      g.breaks.clockWrongAt[0] === 84115 &&
+                      g.breaks.metres[5] === 444,
+          detail: g => JSON.stringify(g.breaks.clockWrongAt) + ' ' + JSON.stringify(g.breaks.metres) },
+        { what: 'a drive that never reaches its own timing line still times no laps',
+          holds: g => g.laps.by !== 'gate' && g.gate.hits === 0 && g.gate.nearestM > 1000,
+          detail: g => g.laps.by + ', nearest ' + g.gate.nearestM + ' m' },
+        { what: '…and the angle on it is still REFUSED rather than given a number',
+          holds: g => !!(g.angle && g.angle.weak),
+          detail: g => JSON.stringify(g.angle && g.angle.weak) }
+    ],
+    'mallala-2026-08-23': [
+        /* The recording the trust panel exists because of. The engine did not
+           refuse this one — the fit succeeded, 152 anchors, scale within a
+           few per cent — and it was still wrong in the middle of a leg. */
+        { what: 'the +54° corner is still in it',
+          holds: g => g.angle && g.angle.peakDeg >= 50,
+          detail: g => 'peak ' + (g.angle && g.angle.peakDeg) + '°' },
+        { what: '…and the fit still LOOKS fine, which is why nothing caught it',
+          holds: g => g.angle && g.angle.weak === false && g.angle.anchors > 100 &&
+                      g.angle.scale > 0.9 && g.angle.scale < 1.1,
+          detail: g => JSON.stringify({ weak: g.angle.weak, anchors: g.angle.anchors,
+                                        scale: g.angle.scale }) },
+        /* This is the exact shape the trust panel's angle row watches for:
+           confident nearly everywhere, far less certain somewhere. If a
+           change to the engine ever flattens it, the panel stops warning
+           about this recording and nobody would otherwise notice. */
+        { what: '…and it is still confident overall but far worse somewhere',
+          holds: g => g.angle && g.angle.worstDeg > Math.max(4, g.angle.typicalDeg * 3),
+          detail: g => '±' + (g.angle && g.angle.typicalDeg) + '° typical, ±' +
+                       (g.angle && g.angle.worstDeg) + '° worst' },
+        { what: 'the lap it advertises is still reproducible from the file alone',
+          holds: g => g.laps.by === 'gate' && g.laps.clean === 1 &&
+                      Math.abs(g.laps.bestS - 136.091) < 0.002,
+          detail: g => g.laps.by + ', ' + g.laps.clean + ' clean, best ' + g.laps.bestS }
+    ]
+};
+
 specs.forEach(function (spec) {
     console.log('\n' + spec.name);
     const sheetPath = path.join(G.FIXTURES, spec.name + '.expected.json');
@@ -121,6 +166,14 @@ specs.forEach(function (spec) {
            return m.at + ': was ' + JSON.stringify(m.was) + ', now ' + JSON.stringify(m.now) +
                   (m.tol ? '  (tolerance ' + m.tol + ')' : '');
        }).join('\n          '));
+
+    /* The comparison above catches ANY drift. These say what the drift would
+       MEAN — the property each recording was committed for. Without them a
+       re-bless could quietly walk a fixture away from the thing it is here to
+       hold still, and every number would still "match its sheet". */
+    (MEANS[spec.name] || []).forEach(function (m) {
+        ok('  ' + m.what, m.holds(got), m.detail ? m.detail(got) : '');
+    });
 
     /* Say what is actually being held still, so a green run is informative
        rather than merely quiet. */

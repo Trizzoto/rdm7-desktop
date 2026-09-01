@@ -1,0 +1,64 @@
+{
+  "recording": "mallala-2026-08-23",
+  "file": "mallala-2026-08-23.rdmsession.gz",
+  "kind": "rdmsession",
+  "note": "The 23 August Mallala session: 25,720 samples, 12 CAN channels and the puck's gyro. This is the recording whose slip angle read +54 then -48 degrees inside one corner, wearing a confident +/-2.1, on footage showing the car tracking the racing line - the failure that started the trust panel and this whole fixture idea. It carries the track it was timed against, so the lap it advertises is reproducible from the file alone. Every change to the angle engine should be measured against this one.",
+  "blessedOn": "2026-09-01",
+  "answers": {
+    "samples": 25720,
+    "hz": 25,
+    "breaks": {
+      "count": 3,
+      "atIndices": [
+        1507,
+        3901,
+        19531
+      ],
+      "metres": [
+        124,
+        226,
+        36
+      ],
+      "clockWrongAt": []
+    },
+    "gate": {
+      "nearestM": 0,
+      "samplesInBand": 334,
+      "hits": 5,
+      "wrongWay": 0
+    },
+    "runs": null,
+    "laps": {
+      "by": "gate",
+      "all": 4,
+      "clean": 1,
+      "timesS": [
+        136.091
+      ],
+      "bestS": 136.091
+    },
+    "corners": 10,
+    "channels": {
+      "count": 12,
+      "silent": 12
+    },
+    "angle": {
+      "src": {
+        "kind": "yawrate",
+        "id": "puck:gyroz",
+        "name": "the puck's own gyro",
+        "unit": "deg/s",
+        "guessed": true
+      },
+      "weak": false,
+      "anchors": 152,
+      "fitN": 16570,
+      "okSamples": 19781,
+      "scale": 0.9742,
+      "bias": -0.4145,
+      "peakDeg": 54.3,
+      "typicalDeg": 1.21,
+      "worstDeg": 10.24
+    }
+  }
+}

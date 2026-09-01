@@ -59,6 +59,9 @@ const CONSTS = ['GP_DRIFT_MIN_KPH', 'GP_DRIFT_ON', 'GP_DRIFT_OFF',
     'GP_TURN_DPS', 'GP_TURN_MIN_S', 'GP_TURN_MIN_DEG', 'GP_TURN_SAME_S',
     'GP_RUN_STOP_KPH', 'GP_RUN_STOP_S', 'GP_RUN_MIN_S'];
 
+/* Strings, so constOf's number regex cannot read them. */
+const STR_CONSTS = ['GP_SESFILE_FMT'];
+
 const FNS = [
     'gpN', 'gpMetres', 'gpMetresPerDeg', 'gpHaversineM', 'gpSecs', 'gpStep', 'gpHz',
     'gpChanDefsById', 'gpChanFixes', 'gpChanFixApply', 'gpChanFixFor', 'gpChanRawRange',
@@ -86,6 +89,11 @@ function sandbox(track) {
     const win = { localStorage: { getItem: () => null, setItem: () => { } } };
     const K = {};
     CONSTS.forEach(n => { K[n] = constOf(n); });
+    STR_CONSTS.forEach(n => {
+        const m = new RegExp('var ' + n + ' = "([^"]*)"').exec(SRC);
+        if (!m) throw new Error('not found: var ' + n);
+        K[n] = m[1];
+    });
     K.GP_DRIFT_STAR_W = eval('(' + /var GP_DRIFT_STAR_W = (\{[^}]*\})/.exec(SRC)[1] + ')');
 
     const stubs = [
