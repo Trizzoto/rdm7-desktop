@@ -25477,6 +25477,34 @@
             g.fill();
         }
 
+        /* One bracket's label, if it fits. `force` is the selected corner,
+           which is drawn whether it fits or not — losing the label of the
+           thing you are reading to make room for its neighbours would be the
+           wrong one to drop. Falls back to just the score when the full name
+           will not fit, because "3.5" in the right place still says
+           something. */
+        function gpDriftLaneLabel(g, br, X, force) {
+            var x0 = X(br.a), x1 = X(br.b), mid = (x0 + x1) / 2, room = x1 - x0;
+            var col = br.on ? "#d2232a" : "rgba(29,31,32,0.5)";
+            g.font = (br.on ? "700 " : "600 ") + "10px 'Barlow Condensed', 'Barlow', system-ui";
+            g.fillStyle = col;
+            g.textAlign = "center"; g.textBaseline = "alphabetic";
+            var full = br.rated ? br.name + "  " + br.stars.toFixed(1)
+                                : br.name + " · " + br.note;
+            var wFull = g.measureText(full).width + (br.rated ? 10 : 0);
+            if (wFull <= room - 4 || force) {
+                g.fillText(full, mid, 11);
+                if (br.rated) gpDriftLaneStar(g, mid + (g.measureText(full).width) / 2 + 2, 4, 7, col);
+                return;
+            }
+            if (!br.rated) return;
+            var shortT = br.stars.toFixed(1);
+            if (g.measureText(shortT).width + 10 <= room - 2) {
+                g.fillText(shortT, mid - 4, 11);
+                gpDriftLaneStar(g, mid + g.measureText(shortT).width / 2 - 2, 4, 7, col);
+            }
+        }
+
         function gpDrawDriftLane() {
             var cv = document.getElementById("gpDriftLane");
             if (!cv) return;
@@ -25611,15 +25639,27 @@
                 g.fillText(GP_DRIFT_STAR_DEG + "°", plotX - 6, Y(GP_DRIFT_STAR_DEG));
                 g.fillText("0°", plotX - 6, Y(0));
                 g.fillText("−" + GP_DRIFT_STAR_DEG + "°", plotX - 6, Y(-GP_DRIFT_STAR_DEG));
-                g.textAlign = "right"; g.textBaseline = "alphabetic";
+                /* Under its own line, not above it: above, it shares the top
+                   band with the bracket labels and collides with whichever
+                   corner happens to end near the right edge. */
+                g.textAlign = "right"; g.textBaseline = "top";
                 g.fillStyle = "#d2232a";
                 g.font = "700 10px 'Barlow Condensed', 'Barlow', system-ui";
                 g.fillText(GP_DRIFT_STAR_DEG + "° · FULL MARKS",
-                           plotX + plotW - 3, Y(GP_DRIFT_STAR_DEG) - 5);
+                           plotX + plotW - 3, Y(GP_DRIFT_STAR_DEG) + 3);
 
                 /* A bracket per corner, along the top edge, carrying what it
                    was worth. This is what makes the lane navigable rather
-                   than merely pretty. */
+                   than merely pretty.
+
+                   A label is drawn only where its own bracket has room for
+                   it. Six corners in a 460 px lane overlapped into an
+                   unreadable smear — and a label that has run into its
+                   neighbour is worse than no label, because the bracket
+                   underneath it still says where the corner is. The SELECTED
+                   corner keeps its label whatever happens and is drawn last,
+                   so the one you are reading is never the one that lost. */
+                var deferred = null;
                 dat.brackets.forEach(function (br) {
                     var x0 = X(br.a), x1 = X(br.b), col = br.on ? "#d2232a" : "rgba(29,31,32,0.5)";
                     g.strokeStyle = col; g.lineWidth = br.on ? 1.5 : 1;
@@ -25628,19 +25668,10 @@
                     g.moveTo(x0, 16); g.lineTo(x1, 16);
                     g.moveTo(x1, 14); g.lineTo(x1, 18);
                     g.stroke();
-                    var mid = (x0 + x1) / 2;
-                    g.font = (br.on ? "700 " : "600 ") + "10px 'Barlow Condensed', 'Barlow', system-ui";
-                    g.fillStyle = col;
-                    g.textAlign = "center"; g.textBaseline = "alphabetic";
-                    if (br.rated) {
-                        var t = br.name + "  " + br.stars.toFixed(1);
-                        var tw = g.measureText(t).width;
-                        g.fillText(t, mid, 11);
-                        gpDriftLaneStar(g, mid + tw / 2 + 2, 4, 7, col);
-                    } else {
-                        g.fillText(br.name + " · " + br.note, mid, 11);
-                    }
+                    if (br.on) { deferred = br; return; }
+                    gpDriftLaneLabel(g, br, X, false);
                 });
+                if (deferred) gpDriftLaneLabel(g, deferred, X, true);
             }   /* end of the cached static picture */
 
             /* Blit it, then draw only what moves. */
