@@ -306,5 +306,28 @@ console.log('\nand it is only ever there when nothing is open');
     ok('and it does not load a trace', !/gpSessOpen/.test(jump));
 }
 
+/* ── and framing one when you arrive at it ────────────────────────────── */
+console.log('\nframing a circuit on the way into Circuits');
+{
+    /* fitBounds fits the bounds into the container Leaflet BELIEVES it has.
+       Arriving from another view that belief is the old size, and with a
+       stale zero it hands back the map's maxZoom — Mallala's 2.55 km framed
+       at 21, which is a grey wash with the circuit entirely off screen.
+       gpSetView calls invalidateSize on a timer; the fit has to be behind
+       it, the way the trace fit already is. */
+    const setView = grabFrom(src, 'gpSetView');
+    const inval = setView.indexOf('invalidateSize');
+    const frame = setView.indexOf('gpFrameTrack(t)');
+    ok('gpSetView still fixes the map size on a timer', inval >= 0);
+    ok('and the circuit fit happens after it', frame > inval,
+       'a fit ahead of invalidateSize measures the previous view\'s container');
+    /* Ordering in the file is not enough on its own — both could be
+       synchronous with the timer in between. The fit has to be deferred too. */
+    const tail = setView.slice(inval);
+    ok('the circuit fit is deferred, not just written below',
+       /view === "tracks"[\s\S]{0,80}setTimeout/.test(tail),
+       'it ran synchronously and read the stale size, every time');
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

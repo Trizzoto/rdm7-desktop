@@ -39433,7 +39433,17 @@
                 gp.map.panTo(gp._lastLL, { animate: false });
             }
             var t = gpActiveTrack();
-            if (view === "tracks" && gp.map && t) gpFrameTrack(t);
+            /* After the invalidateSize above, not before it. fitBounds fits
+               the bounds into the container Leaflet currently BELIEVES it
+               has, and arriving from another view that belief is the old
+               size — with a stale zero it hands back the map's maxZoom.
+               Measured on Mallala: opening Circuits framed a 2.55 km circuit
+               at zoom 21, which is a featureless grey wash with the track
+               entirely off screen, and clicking the same track again fixed
+               it. The trace fit below has always waited for this reason. */
+            if (view === "tracks" && gp.map && t) setTimeout(function () {
+                if (gp.map && gp.view === "tracks" && gpActiveTrack() === t) gpFrameTrack(t);
+            }, 80);
             if ((view === "session" || view === "corners" || view === "drift") && gp.map && gp.trace && gp.trace.length) {
                 /* …unless something already framed a corner (a coach jump, a
                    corner pick): a whole-lap fit would throw that framing away. */
