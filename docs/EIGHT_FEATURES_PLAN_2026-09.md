@@ -36,6 +36,43 @@ stationary-bias estimator `imu_cal_acc_finish` in `../rdm-gps-node/main/imu/`). 
 `briefs/02-golden-recordings.md` for why that beats the repo's usual
 regenerate-don't-commit rule in this one case.
 
+## Where it got to (2026-09-01)
+
+Seven built, one half-built. Every one of them turned out to be smaller than the
+brief expected, because the thing was already there and not being said.
+
+| Feature | State | The commit |
+|---|---|---|
+| 2 · Trust panel (+ item 1) | **built** | `8549dce` |
+| 3 · Golden recordings | **built** | `0ff76ff` |
+| 8 · Session history | **built** | `c036b18` |
+| 4 · One layout format | **built** | `e8f9dad` + `RDM-7_Dash c27c3b0` |
+| 7 · Background exports | **built** | `e39dba9` |
+| 5 · Auto-highlights | **built** | `26535a5` |
+| 6 · Two-lap comparison | **foundations only** | `da9f6af` |
+
+**Item 6 is the one that is not finished.** Its two foundations are in and
+tested — the frame pairing `gpDeltaSeries` had always computed and discarded,
+and `gpGhostVideoTimeFor`, which is the single arithmetic gap in comparing
+against another day. So are the layouts, the pull-along test and the delta bar.
+What is missing is the decoder wiring: a second `VideoDecoder` driven on demand
+inside `gpExportFast`'s output callback, two HUD calls each under their own
+snapshot, and the composite. That is a new export path, and node has no
+WebCodecs — the pairing, the geometry and the muxing can be proved here, two
+concurrent decoders cannot be proved anywhere but a browser with real footage.
+
+**Two things need a decision that is not mine:**
+
+- The **Donington VBO** carries `(c) Racelogic` in its own comments, so whether
+  it may be committed is a licence question. It stays outside the repo;
+  `check_laptime.js` reads it from wherever it is and skips with a note.
+- The **23 Aug Mallala session** lives only in Studio's IndexedDB. Export it
+  from the Sessions list as `.rdmsession`, gzip it into `tools/fixtures/`, add a
+  `kind: "rdmsession"` entry to `fixtures.json` and bless it. It is the
+  recording every angle change should be measured against.
+
+Both are named in `tools/fixtures/fixtures.json` under `_wanted`.
+
 ## Order, and why
 
 Nothing here is blocked on anything else, so the order is about de-risking and about
