@@ -91,8 +91,14 @@ ok('and it no longer filters the runs itself',
 
 const share = bodyOf('gpShareStats');
 ok('the share card takes its best from gpCleanRuns',
-   /var laps = gpCleanRuns\(\)/.test(share),
+   /gpCleanRuns\(\)\.forEach/.test(share),
    'this is the card that leaves the building');
+/* But not its lap COUNT. How many laps you drove is a fact about the driving,
+   and a lap with a dropout in it was still driven. Only the time has to come
+   off a run the app will vouch for. */
+ok('and its lap count from every real run',
+   /var laps = \(gp\.traceLaps \|\| \[\]\)\.filter\(function \(l\) \{ return !l\.ghost; \}\)/.test(share),
+   'counting only the clean ones told a driver who did four laps that they did one');
 
 /* The two dropdowns live inside gpRenderCorners' lapOpts. */
 const corners = bodyOf('gpRenderCorners');

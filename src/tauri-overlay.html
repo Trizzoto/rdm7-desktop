@@ -15703,13 +15703,17 @@
                 if (drift && drift.ok && drift.ok[i] && Math.abs(drift.beta[i]) > maxAng)
                     maxAng = Math.abs(drift.beta[i]);
             }
-            /* Clean runs only. This card is the one that leaves the building
-               — a best set by a lap the app has flagged for a lost fix is a
-               time nobody drove, published. */
-            var laps = gpCleanRuns();
+            /* Two different questions, and they were sharing an answer.
+               How many laps you drove is a fact about the DRIVING, and a lap
+               with a dropout in the middle of it was still driven — so the
+               count is every real run. The BEST is a fact about MEASUREMENT,
+               and this card is the one that leaves the building, so it comes
+               off the clean runs only: a time set across a hole is a time
+               nobody drove, published. */
+            var laps = (gp.traceLaps || []).filter(function (l) { return !l.ghost; });
             var best = null;
             if (gp.lapsFrom === "gate")
-                laps.forEach(function (l) {
+                gpCleanRuns().forEach(function (l) {
                     var s = gpSpanSecs(gp.trace, l);
                     if (s > 0 && (best === null || s < best)) best = s;
                 });
