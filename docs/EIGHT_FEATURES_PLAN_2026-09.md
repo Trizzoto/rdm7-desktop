@@ -62,17 +62,19 @@ the concurrency and the merge were proved in Chromium instead.
 Still unproven, and only provable with a camera: the full comparison pipeline
 against two real files with rotation and HEVC.
 
-**Two things need a decision that is not mine:**
+**The 23 Aug Mallala session is now a fixture** (`3fea0aa`) — exported out of
+IndexedDB through the app's own writer, 25,720 samples, 353 KB gzipped, carrying
+the track it was timed against so its lap is reproducible from the file alone.
+It pins the failure in five numbers: peak 54.3°, the fit NOT refused (152
+anchors, scale 0.974), typical ±1.21° against worst ±10.24°, and the 136.091 s
+lap. Confident nearly everywhere and far less certain somewhere is exactly what
+the trust panel's angle row watches for, and now a real recording holds it still.
 
-- The **Donington VBO** carries `(c) Racelogic` in its own comments, so whether
-  it may be committed is a licence question. It stays outside the repo;
-  `check_laptime.js` reads it from wherever it is and skips with a note.
-- The **23 Aug Mallala session** lives only in Studio's IndexedDB. Export it
-  from the Sessions list as `.rdmsession`, gzip it into `tools/fixtures/`, add a
-  `kind: "rdmsession"` entry to `fixtures.json` and bless it. It is the
-  recording every angle change should be measured against.
-
-Both are named in `tools/fixtures/fixtures.json` under `_wanted`.
+**One decision is still not mine:** the **Donington VBO** carries `(c) Racelogic`
+in its own comments, so whether it may be committed is a licence question, not a
+technical one. It stays outside the repo; `check_laptime.js` reads it from
+wherever it is and skips with a note. Named in `tools/fixtures/fixtures.json`
+under `_wanted`.
 
 ## Order, and why
 
