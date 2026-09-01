@@ -1864,6 +1864,33 @@
             background: rgba(255,255,255,0.04); padding: 8px 10px;
             border-radius: var(--radius-md, 4px);
         }
+        /* The suggestion. Loud enough to be the first thing read, quiet
+           enough not to look like an error — it is an offer, and the palette
+           underneath it still works if it is wrong. */
+        #gpHudEd .gphe-sug {
+            border: 1px solid var(--accent, #2d8ceb);
+            background: rgba(45,140,235,0.10);
+            border-radius: var(--radius-md, 4px);
+            padding: 9px 10px; margin: 0 0 2px;
+        }
+        #gpHudEd .gphe-sug-t {
+            font: 600 12px 'Sora', sans-serif; color: var(--text, #e8e8e8); margin-bottom: 3px;
+        }
+        #gpHudEd .gphe-sug-w {
+            font-size: 11px; line-height: 1.45; color: var(--text-muted, #999);
+        }
+        #gpHudEd .gphe-sug-b { display: flex; gap: 6px; margin-top: 8px; }
+        #gpHudEd .gphe-sug-b button {
+            flex: 1 1 0; background: var(--bg, #303030);
+            border: 1px solid var(--border, #111); color: var(--text-muted, #999);
+            padding: 6px 8px; cursor: pointer;
+            font: 500 11px 'Sora', sans-serif; border-radius: var(--radius-md, 4px);
+        }
+        #gpHudEd .gphe-sug-b button:hover { color: var(--text, #e8e8e8); }
+        #gpHudEd .gphe-sug-b button.gphe-sug-go {
+            background: var(--accent, #2d8ceb); border-color: var(--accent, #2d8ceb);
+            color: #fff;
+        }
         #gpHudEd .gphe-swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
         #gpHudEd .gphe-swatches button {
             background: var(--bg, #303030); border: 1px solid var(--border, #111);
@@ -24005,6 +24032,80 @@
             return { line: line, laps: laps.length };
         }
 
+        /* ---- when nothing in the world is recognised ------------------------
+         * gpMatchTrack knows 117 circuits by name and every track already in
+         * the library. Drive a private test track, a skidpan, an airfield, a
+         * kart circuit or anything outside that list and it returns null — and
+         * the answer used to be "add the circuit in Tracks", which is exactly
+         * the setup this is supposed to remove.
+         *
+         * But the recording is the evidence. A drive that comes back on itself
+         * and then does it again, at the same times, IS a circuit session, and
+         * gpProposeLine already knows where to put the line. So make the track
+         * out of the drive.
+         *
+         * The bar is deliberately higher than gpAutoLine's, because that one
+         * is placing a line on a circuit somebody already named, and this one
+         * is putting a new object in his library: three laps at minimum, and
+         * tighter than the 35% scatter a known circuit gets. A 48 km road
+         * drive round the hills does not lap the same loop three times to
+         * within a quarter of its own time — and if it does, it is a circuit
+         * whatever the road is called.
+         */
+        var GP_DRIVE_MIN_LAPS = 3;   /* fewer than this is a drive, not a session */
+        var GP_DRIVE_SCATTER = 0.25; /* and they have to be the same lap each time */
+
+        /* Named so it is obviously provisional. Numbered rather than
+           overwritten, because two unnamed circuits are two places. */
+        function gpUnnamedTrackName() {
+            var used = {}, base = "Unnamed circuit";
+            ((gp.tracks && gp.tracks.tracks) || []).forEach(function (t) { used[t.name] = 1; });
+            if (!used[base]) return base;
+            for (var n = 2; ; n++) if (!used[base + " " + n]) return base + " " + n;
+        }
+
+        function gpTrackFromDrive(rows) {
+            if (!gp.tracks || !gp.tracks.tracks) return null;
+            var line = gpProposeLine(rows);
+            if (!line) return null;                     /* never came back on itself */
+
+            /* Built in memory and made active so gpSplitRows can see it, but
+               NOT written to the library until it has earned it. A rejected
+               guess must leave rdm7_tracks_v1 exactly as it found it. */
+            var keepActive = gp.tracks.active;
+            var t = { id: gpTrackUid(), name: gpUnnamedTrackName(),
+                      center: [line.lat, line.lon], zoom: 16,
+                      start_finish: line, sectors: [], min_lap_time_s: 10,
+                      note: "made from a recording" };
+            gp.tracks.tracks.push(t);
+            gp.tracks.active = t.id;
+
+            /* CLEAN laps only. gpSplitRows already grades what it returns, and
+               a run measured across a clock hole is not evidence of anything —
+               a drive with four stops in it repeats the same ground four times
+               and is still a drive, not a session. Minting a circuit off those
+               would put lap times on the board that nothing in the recording
+               can stand behind, which is the whole untrustworthy-board problem
+               the run flags were added to end. */
+            var laps = gpSplitRows(rows).filter(function (l) { return !l.flag; });
+            var times = laps.map(function (l) { return gpSpanSecs(rows, l); });
+            var ok = times.length >= GP_DRIVE_MIN_LAPS;
+            if (ok) {
+                var mean = times.reduce(function (a, b) { return a + b; }, 0) / times.length;
+                var sd = Math.sqrt(times.reduce(function (a, b) {
+                    return a + (b - mean) * (b - mean);
+                }, 0) / times.length);
+                if (!(mean > 0) || sd / mean > GP_DRIVE_SCATTER) ok = false;
+            }
+            if (!ok) {
+                gp.tracks.tracks = gp.tracks.tracks.filter(function (x) { return x.id !== t.id; });
+                gp.tracks.active = keepActive;
+                return null;                            /* nothing saved, nothing changed */
+            }
+            gpTracksSave();
+            return { track: t, km: 0, made: true, fromDrive: true, laps: laps.length };
+        }
+
         /* Run after any load that produced no laps. Returns a sentence about
            what it did, or null when it changed nothing. */
         function gpAutoSetUp(rows) {
@@ -24020,19 +24121,28 @@
                active track's start line, which on a puck that records from
                boot is a question about the driveway. */
             var m = gpMatchTrack(rows);
+            /* Nothing in the library and nothing in the world list — but the
+               recording may still prove it is a circuit all by itself. This
+               puts a NEW track where the car actually was, which is why it is
+               not the "drive's geometry onto a circuit on the other side of
+               the country" mistake: there is no other circuit involved. */
+            if (!m) m = gpTrackFromDrive(rows);
             if (!m) {
-                /* Nothing recognised. Placing a line would mean putting THIS
-                   drive's geometry onto a circuit on the other side of the
-                   country, which is worse than no laps. */
+                /* Not recognised, and not provably a circuit either. Guessing
+                   past this point means inventing a place. */
                 return trk
                     ? "This was not driven at " + trk.name + ", and no other track in the library is near it. Add the circuit in Tracks and the laps appear."
-                    : "This recording is not near any track in the library. Add one in Tracks, put the line on it, and the laps appear.";
+                    : "This recording is not near any track in the library, and it does not lap the same loop often enough to build one from. Add one in Tracks, put the line on it, and the laps appear.";
             }
             if (!trk || m.track.id !== trk.id) {
                 gp.tracks.active = m.track.id;
                 gpTracksSave();
-                said.push(m.made ? "Recognised " + m.track.name + " from where you drove"
-                                 : "Switched to " + m.track.name);
+                said.push(m.fromDrive
+                    ? "Made a circuit from this recording — " + m.laps + " " + gpRunWord() +
+                      (m.laps === 1 ? "" : "s") + " off a line on the fastest straight. " +
+                      "Name it and check the line in Tracks"
+                    : m.made ? "Recognised " + m.track.name + " from where you drove"
+                             : "Switched to " + m.track.name);
             }
             trk = m.track;
             if (trk && !trk.start_finish) {
@@ -29023,6 +29133,8 @@
             ["hudG",       "Grip circle"],
             ["hudDelta",   "Lap time and delta"],
             ["hudAngle",   "Slip angle"],
+            ["hudSteer",   "Counter-steer"],
+            ["hudRun",     "Drift run"],
             ["hudMap",     "Minimap"],
             ["hudName",    "Track and date"],
             ["hudMark",    "RDM mark"]
@@ -29031,6 +29143,42 @@
             /* Absent means on. A widget added after someone last saved their
                camera settings should appear, not stay silently off for ever. */
             return !gp.cam || gp.cam[k] !== false;
+        }
+
+        /* ---- style variants --------------------------------------------------
+         * Some instruments read better in more than one shape, and which one
+         * is better is a matter of what the footage is of: a drift run wants
+         * the slip angle as a dial you can see move from across the room, a
+         * circuit lap wants it as a small panel that stays out of the way.
+         *
+         * A variant is a DRAWING, not a widget. Same key, same data, same
+         * place in the layer order, same stored nudge — so switching style
+         * cannot lose a layout, and the Layers panel does not grow a row
+         * every time somebody tries one.
+         *
+         * The first entry of each list is the factory shape, and it is what
+         * every existing layout keeps: absent means factory, the same rule as
+         * gpHudOn and the position map. Nobody's overlay changes because this
+         * shipped.
+         */
+        var GP_HUD_STYLES = {
+            hudSpeed: [["plain",  "Plain"],  ["boxed",  "Boxed"]],
+            hudAngle: [["panel",  "Panel"],  ["dial",   "Dial"],   ["bar", "Bar"]],
+            hudG:     [["circle", "Circle"], ["radar",  "Radar"]],
+            hudMark:  [["plain",  "Plain"],  ["badge",  "Badge"]]
+        };
+        /* Lives INSIDE gp.cam.hud, beside w/z/lock/add — not in gp.cam itself,
+           because gpCamLoad rebuilds that object key by key and anything it
+           has not been told about is dropped on the next load. And not inside
+           w[key] either: gpHudEdSet deletes that entry the moment a widget is
+           back at its factory position, which would take the style with it. */
+        function gpHudStyle(key) {
+            var list = GP_HUD_STYLES[key];
+            if (!list) return null;
+            var st = gp.cam && gp.cam.hud && gp.cam.hud.st;
+            var v = st && st[key];
+            for (var i = 0; i < list.length; i++) if (list[i][0] === v) return v;
+            return list[0][0];
         }
 
         /* ---- what the recording can actually feed the HUD -------------------
@@ -29114,6 +29262,62 @@
            sample. Pulled out so the HUD can be tested without a canvas and
            without a video — and so the export path cannot possibly read a
            different number from the one on screen. */
+        /* ---- the corner the car is in, and what it was worth ----------------
+         * The Drift view already rates every corner of every lap out of five
+         * (gpDriftBoard, ADR-0013's unit of work), and that rating is the one
+         * the app shows. So the HUD reads it rather than scoring the driving a
+         * second way — two numbers for the same corner, differing by a tenth,
+         * is the tool arguing with itself in front of the customer.
+         *
+         * The board is memoised on gp.driftBoardKey; the flat span list below
+         * is memoised on the same key, so a frame costs a scan of however many
+         * corners the lap has, not a re-rate of the session.
+         */
+        function gpHudRunSpans() {
+            var b = gpDriftBoard();
+            if (!b) return null;
+            if (gp._hudRunKey === gp.driftBoardKey && gp._hudRunSpans) return gp._hudRunSpans;
+            var out = [];
+            b.cells.forEach(function (lr, li) {
+                lr.forEach(function (r, ui) {
+                    if (!r || !isFinite(r.from) || !isFinite(r.to)) return;
+                    out.push({ from: r.from, to: r.to, lap: li,
+                               name: (b.units[ui] && b.units[ui].name) || "",
+                               read: r });
+                });
+            });
+            out.sort(function (a, c) { return a.from - c.from; });
+            gp._hudRunKey = gp.driftBoardKey; gp._hudRunSpans = out;
+            return out;
+        }
+        function gpHudRunAt(i) {
+            var sp = gpHudRunSpans();
+            if (!sp || !sp.length) return null;
+            /* Spans can nest when a link is rated as one unit alongside its
+               members, so the SHORTEST match wins — the corner you are in
+               beats the complex it belongs to. */
+            var hit = null;
+            for (var n = 0; n < sp.length; n++) {
+                var s = sp[n];
+                if (s.from > i) break;
+                if (i > s.to) continue;
+                if (!hit || (s.to - s.from) < (hit.to - hit.from)) hit = s;
+            }
+            if (!hit) return null;
+            var r = hit.read, a = r.angle || null;
+            return { name: hit.name,
+                     secs: isFinite(r.secs) ? r.secs : null,
+                     held: (a && isFinite(a.held)) ? a.held : null,
+                     peak: (a && isFinite(a.peak)) ? a.peak : null,
+                     rough: !!(a && a.rough),
+                     spun: r.spun || null,
+                     /* Unrated is NOT zero. gpDriftStars returns null for a
+                        corner it will not judge — no angle, a spin, or under
+                        half a second sideways — and a nought out of five is a
+                        verdict where none was given. */
+                     stars: (r.rating && isFinite(r.rating.stars)) ? r.rating.stars : null };
+        }
+
         function gpHudData(i) {
             var rows = gp.trace;
             if (!rows || !rows.length) return null;
@@ -29123,6 +29327,7 @@
                       glon: r.g || 0, glat: 0, hdg: r.hdg || 0,
                       rpm: null, rpmMax: 0, thr: null, brk: null, gear: null,
                       thrF: null, brkF: null, beta: null, betaConf: null, betaRough: false,
+                      steer: null, yaw: null, run: null,
                       delta: null, lapNo: null, lapS: null };
             /* Where the car POINTED, as against where it went. Only ever from
                something that measured it — ADR-0011, and the same series the
@@ -29140,8 +29345,25 @@
                     d.betaConf = da.conf ? da.conf[i] : null;
                     d.betaRough = !!(da.conf && da.conf[i] > GP_DRIFT_ROUGH);
                 }
+                /* Where the fronts are pointed. The SAME function and the same
+                   trust weighting the map's car glyph steers by — a HUD that
+                   worked its own counter-steer out would be a second opinion
+                   on a number that has already been fought over twice (all-or-
+                   nothing-measured left a 43-degree car with its wheels dead
+                   ahead; no trust gate at all slammed them to full lock on a
+                   car tracking the racing line). One answer, drawn twice. */
+                if (da) d.steer = gpSteerAt(i, d.beta, gpSteerTrust(da, i));
             } catch (e) { }
-            try { var cc = gpChannels(); if (cc && cc.glat) d.glat = cc.glat[i] || 0; } catch (e) { }
+            try {
+                var cc = gpChannels();
+                if (cc && cc.glat) d.glat = cc.glat[i] || 0;
+                /* How fast the car is rotating, as against how far round it
+                   already is. The two say different things — a big steady
+                   angle is a held drift, a big rate is a transition or a spin
+                   starting — and the drift panels want both. */
+                if (cc && cc.yaw && isFinite(cc.yaw[i])) d.yaw = cc.yaw[i];
+            } catch (e) { }
+            try { d.run = gpHudRunAt(i); } catch (e) { }
             try { d.hdg = gpHeadingAt(rows, i, 6); } catch (e) { }
             if (ch) {
                 d.rpm = gpHudChan(ch, "rpm", i);
@@ -29741,6 +29963,330 @@
             if (f <= 0) return;
             gpHudRR(g, x, y + h * (1 - f), w, h * f, w / 2);
             g.fillStyle = col; g.fill();
+        }
+
+        /* ---- the slip angle, said three ways --------------------------------
+         * One measurement, one gate, three drawings. Everything below reads
+         * d.beta / d.betaConf / d.betaRough and nothing else, so the dial
+         * cannot say something the panel would not — including saying nothing
+         * at all when the engine will not stand behind the number.
+         *
+         * The scale is the recording's own (gpAngleScale), rounded out to a
+         * tidy number, floored at 30° so a grip session does not get a dial
+         * that reads full lock at eight degrees.
+         */
+        function gpHudAngleMax() {
+            var s = 30;
+            try { s = Math.max(30, gpAngleScale()); } catch (e) { }
+            return Math.ceil(s / 10) * 10;
+        }
+        /* True when there is an angle worth drawing at all. Rough readings are
+           still WORTH a widget — it says "rough" rather than a number, which
+           is the honest answer and the one the panel has always given. */
+        function gpHudAngleSay(d) { return d && d.beta !== null; }
+
+        function gpHudAngleDial(g, d, cx, cy, r) {
+            var S = r / 86, max = gpHudAngleMax();
+            /* From down-left, up over the top, round to down-right — so the
+               GAP is at the bottom, which is where the readings that will not
+               fit inside the ring go. */
+            var A0 = Math.PI * 0.75, SW = Math.PI * 1.5;
+            var ab = Math.abs(d.beta || 0);
+            var f = Math.max(0, Math.min(1, ab / max));
+
+            g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
+            g.fillStyle = "rgba(10,12,14,0.55)"; g.fill();
+
+            /* The ramp, in segments, coloured by the map's own function so a
+               glance at either says the same thing. Drawn as discrete blocks
+               rather than a gradient: a gradient looks smoother and is much
+               harder to read a value off. */
+            /* A rough reading lights NOTHING. The ring is a statement about
+               how far over the car is, and lighting three quarters of it
+               while the middle says "rough" is the tool contradicting itself
+               in the one place the contradiction gets burned into a file. */
+            var N = 40, gap = SW / N * 0.18, rw = 11 * S, rr = r - rw * 0.75;
+            for (var s2 = 0; s2 < N; s2++) {
+                var sf = s2 / (N - 1), lit = !d.betaRough && sf <= f;
+                var a0 = A0 + SW * (s2 / N), a1 = a0 + SW / N - gap;
+                g.beginPath();
+                g.arc(cx, cy, rr, a0, a1);
+                g.lineWidth = rw;
+                g.strokeStyle = lit ? gpAngleColour(sf) : "rgba(245,247,250,0.13)";
+                g.stroke();
+            }
+
+            /* Numbered ticks — what makes it a dial and not a progress bar,
+               because "most of the way round" has no value attached to it.
+               The step opens up past 60° so a session full of big angles does
+               not get a ring of touching labels.
+
+               The labels sit just INSIDE the ring. Nothing lands on the
+               horizontal — the ends are at 135° and 45° and the midpoint is
+               straight up — which is what keeps the widest part of the number
+               in the middle clear of them. */
+            var step = max > 60 ? 20 : 10;
+            g.lineWidth = 1.4 * S;
+            g.font = "600 " + (10 * S) + "px " + GP_HUD_SANS;
+            g.textAlign = "center"; g.textBaseline = "middle";
+            for (var t = 0; t <= max; t += step) {
+                var ta = A0 + SW * (t / max), ci = Math.cos(ta), si = Math.sin(ta);
+                g.beginPath();
+                g.moveTo(cx + ci * (rr - rw * 0.55), cy + si * (rr - rw * 0.55));
+                g.lineTo(cx + ci * (rr - rw * 0.85), cy + si * (rr - rw * 0.85));
+                g.strokeStyle = "rgba(245,247,250,0.34)"; g.stroke();
+                g.fillStyle = "rgba(245,247,250,0.5)";
+                g.fillText(String(t), cx + ci * (rr - rw * 1.35), cy + si * (rr - rw * 1.35));
+            }
+
+            /* The needle, and then the number under it. */
+            if (!d.betaRough) {
+                var na = A0 + SW * f;
+                g.beginPath();
+                g.moveTo(cx + Math.cos(na) * (rr - rw * 0.6), cy + Math.sin(na) * (rr - rw * 0.6));
+                g.lineTo(cx + Math.cos(na) * (rr + rw * 0.6), cy + Math.sin(na) * (rr + rw * 0.6));
+                g.lineWidth = 3 * S; g.strokeStyle = GP_HUD_INK;
+                gpHudGlow(g, 8 * S); g.stroke(); gpHudGlow(g, 0);
+            }
+
+            /* One column down the middle, laid out in units of r so the rows
+               cannot walk into each other when the dial is resized. */
+            g.fillStyle = "rgba(245,247,250,0.5)";
+            g.font = "600 " + (10 * S) + "px " + GP_HUD_SANS;
+            g.fillText("SLIP ANGLE", cx, cy - r * 0.44);
+            if (d.betaConf !== null && d.betaConf >= 1 && !d.betaRough) {
+                g.fillStyle = "rgba(245,247,250,0.4)";
+                g.font = "600 " + (10 * S) + "px " + GP_HUD_SANS;
+                g.fillText("±" + Math.round(d.betaConf) + "°", cx, cy - r * 0.22);
+            }
+            if (d.betaRough) {
+                g.fillStyle = "rgba(245,247,250,0.45)";
+                g.font = "600 " + (20 * S) + "px " + GP_HUD_SANS;
+                g.fillText("rough", cx, cy + r * 0.06);
+            } else {
+                g.fillStyle = ab >= GP_DRIFT_ON
+                    ? gpAngleColour(Math.max(-1, Math.min(1, d.beta / Math.max(12, max))))
+                    : GP_HUD_INK;
+                g.font = "700 " + (30 * S) + "px " + GP_HUD_MONO;
+                gpHudGlow(g, 10 * S);
+                g.fillText(ab.toFixed(1) + "°", cx, cy + r * 0.08);
+                gpHudGlow(g, 0);
+                if (ab >= 1) {
+                    g.fillStyle = "rgba(245,247,250,0.55)";
+                    g.font = "600 " + (11 * S) + "px " + GP_HUD_SANS;
+                    g.fillText(d.beta < 0 ? "LEFT" : "RIGHT", cx, cy + r * 0.40);
+                }
+            }
+            /* The run's own peak goes in the gap at the bottom of the ring —
+               "how far over did I get" is the question the number in the
+               middle cannot answer, because it has already gone. */
+            if (d.run && d.run.peak !== null && !d.betaRough) {
+                g.fillStyle = "rgba(245,247,250,0.45)";
+                g.font = "600 " + (10 * S) + "px " + GP_HUD_SANS;
+                g.fillText("PEAK " + Math.round(d.run.peak) + "°", cx, cy + r * 0.70);
+            }
+            g.textAlign = "left"; g.textBaseline = "alphabetic";
+        }
+
+        function gpHudAngleBar(g, d, x, y, w, h) {
+            var S = h / 44, max = gpHudAngleMax();
+            var ab = Math.abs(d.beta || 0), f = Math.max(0, Math.min(1, ab / max));
+            var bh = 15 * S, by = y + h - bh;
+
+            g.textBaseline = "middle";
+            g.textAlign = "left";
+            g.font = "600 " + (13 * S) + "px " + GP_HUD_SANS;
+            gpHudGlow(g, 10 * S);
+            g.fillStyle = "rgba(245,247,250,0.72)";
+            g.fillText("SLIP", x, y + 9 * S);
+            if (d.betaRough) {
+                g.fillStyle = "rgba(245,247,250,0.5)";
+                g.font = "600 " + (16 * S) + "px " + GP_HUD_SANS;
+                g.fillText("rough", x + 42 * S, y + 9 * S);
+            } else {
+                g.fillStyle = GP_HUD_INK;
+                g.font = "700 " + (20 * S) + "px " + GP_HUD_MONO;
+                g.fillText(Math.round(ab) + "°", x + 42 * S, y + 9 * S);
+                if (ab >= 1) {
+                    g.fillStyle = "rgba(245,247,250,0.6)";
+                    g.font = "600 " + (12 * S) + "px " + GP_HUD_SANS;
+                    g.fillText(d.beta < 0 ? "LEFT" : "RIGHT", x + 92 * S, y + 9 * S);
+                }
+            }
+            /* Yaw rate on the right of the caption line. It is the other half
+               of the story — a big angle sitting still is a held drift, a big
+               rate is a transition or the start of a spin. */
+            if (d.yaw !== null) {
+                g.textAlign = "right";
+                g.fillStyle = "rgba(245,247,250,0.55)";
+                g.font = "600 " + (11 * S) + "px " + GP_HUD_SANS;
+                g.fillText(Math.round(Math.abs(d.yaw)) + "°/s YAW", x + w, y + 9 * S);
+                g.textAlign = "left";
+            }
+            gpHudGlow(g, 0);
+
+            gpHudRR(g, x, by, w, bh, bh / 2);
+            g.fillStyle = "rgba(10,12,14,0.55)"; g.fill();
+            g.lineWidth = 1 * S; g.strokeStyle = "rgba(245,247,250,0.13)"; g.stroke();
+            if (!d.betaRough && f > 0) {
+                var N2 = 28, gp2 = 2 * S, inset = 3 * S;
+                var sw2 = (w - inset * 2 - gp2 * (N2 - 1)) / N2, lit2 = Math.round(f * N2);
+                for (var s3 = 0; s3 < lit2; s3++) {
+                    g.fillStyle = gpAngleColour(s3 / (N2 - 1));
+                    g.fillRect(x + inset + s3 * (sw2 + gp2), by + inset, sw2, bh - inset * 2);
+                }
+            }
+            g.textBaseline = "alphabetic";
+        }
+
+        /* ---- counter-steer ---------------------------------------------------
+         * The glyph turns in proportion to lock; the NUMBER is the
+         * measurement. A wheel drawn at the road-wheel angle barely moves and
+         * reads as broken, so the rim is scaled to something a person
+         * recognises as steering — but nothing is inferred that the number
+         * does not already say, and both come from gpSteerAt, the same
+         * function and the same trust weighting the map's car glyph steers by.
+         */
+        function gpHudSteerWheel(g, d, cx, cy, r) {
+            var S = r / 34, st = d.steer || 0;
+            var f = Math.max(-1, Math.min(1, st / GP_STEER_LOCK));
+            var rot = f * (Math.PI * 0.62);          /* the glyph's own travel */
+
+            g.beginPath(); g.arc(cx, cy, r + 7 * S, 0, Math.PI * 2);
+            g.fillStyle = "rgba(10,12,14,0.5)"; g.fill();
+
+            /* How far over, as an arc off top dead centre. */
+            if (Math.abs(f) > 0.02) {
+                g.beginPath();
+                g.arc(cx, cy, r + 3.5 * S, -Math.PI / 2, -Math.PI / 2 + rot, f < 0);
+                g.lineWidth = 3 * S;
+                g.strokeStyle = "hsl(190,80%,55%)";
+                g.stroke();
+            }
+
+            g.save();
+            g.translate(cx, cy); g.rotate(rot);
+            g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2);
+            g.lineWidth = 4 * S; g.strokeStyle = "rgba(245,247,250,0.85)"; g.stroke();
+            g.beginPath();
+            g.moveTo(-r * 0.94, 0); g.lineTo(-r * 0.2, 0);
+            g.moveTo(r * 0.94, 0);  g.lineTo(r * 0.2, 0);
+            g.moveTo(0, r * 0.94);  g.lineTo(0, r * 0.2);
+            g.lineWidth = 3.4 * S; g.stroke();
+            g.beginPath(); g.arc(0, 0, r * 0.2, 0, Math.PI * 2);
+            g.fillStyle = "rgba(245,247,250,0.85)"; g.fill();
+            g.restore();
+
+            g.textAlign = "center"; g.textBaseline = "middle";
+            g.font = "600 " + (10 * S) + "px " + GP_HUD_SANS;
+            gpHudGlow(g, 8 * S);
+            g.fillStyle = "rgba(245,247,250,0.6)";
+            g.fillText("COUNTER-STEER", cx, cy - r - 17 * S);
+            g.fillStyle = GP_HUD_INK;
+            g.font = "700 " + (17 * S) + "px " + GP_HUD_MONO;
+            g.fillText(Math.round(Math.abs(st)) + "°", cx, cy + r + 16 * S);
+            gpHudGlow(g, 0);
+            g.textAlign = "left"; g.textBaseline = "alphabetic";
+        }
+
+        /* ---- grip circle, radar flavour --------------------------------------
+         * The same two numbers as gpHudGrip and the same 2 g full scale, laid
+         * out the way a data screen does it: axes named, rings labelled, and
+         * the pair of readings printed under it so the picture does not have
+         * to be measured by eye.
+         */
+        function gpHudGripRadar(g, d, cx, cy, r) {
+            var S = r / 48, lim = 2.0;
+            gpHudRR(g, cx - r - 8 * S, cy - r - 8 * S, r * 2 + 16 * S, r * 2 + 34 * S, 9 * S);
+            g.fillStyle = "rgba(10,12,14,0.55)"; g.fill();
+            g.lineWidth = 1 * S; g.strokeStyle = "rgba(245,247,250,0.13)"; g.stroke();
+
+            var ring;
+            for (ring = 1; ring <= 2; ring++) {
+                g.beginPath(); g.arc(cx, cy, r * ring / 2, 0, Math.PI * 2);
+                g.lineWidth = 1 * S;
+                g.strokeStyle = "rgba(245,247,250," + (ring === 2 ? 0.22 : 0.13) + ")";
+                g.stroke();
+            }
+            g.beginPath();
+            g.moveTo(cx - r, cy); g.lineTo(cx + r, cy);
+            g.moveTo(cx, cy - r); g.lineTo(cx, cy + r);
+            g.setLineDash([2 * S, 3 * S]);
+            g.strokeStyle = "rgba(245,247,250,0.18)"; g.stroke();
+            g.setLineDash([]);
+
+            g.font = "600 " + (9 * S) + "px " + GP_HUD_SANS;
+            g.fillStyle = "rgba(245,247,250,0.38)";
+            g.textAlign = "center"; g.textBaseline = "middle";
+            g.fillText("ACC", cx, cy - r + 6 * S);
+            g.fillText("BRK", cx, cy + r - 6 * S);
+            g.fillText("L", cx - r + 6 * S, cy);
+            g.fillText("R", cx + r - 6 * S, cy);
+
+            var px = cx + Math.max(-1, Math.min(1, (d.glat || 0) / lim)) * r;
+            var py = cy - Math.max(-1, Math.min(1, (d.glon || 0) / lim)) * r;
+            g.beginPath();
+            g.moveTo(cx, cy); g.lineTo(px, py);
+            g.lineWidth = 1.4 * S; g.strokeStyle = "rgba(210,35,42,0.6)"; g.stroke();
+            gpHudGlow(g, 10 * S);
+            g.beginPath(); g.arc(px, py, 5 * S, 0, Math.PI * 2);
+            g.fillStyle = GP_HUD_RED; g.fill();
+            gpHudGlow(g, 0);
+
+            /* Anchored to the panel's two inner edges rather than centred as
+               one string: at three digits and a sign the centred version ran
+               out past both sides of its own panel. */
+            g.font = "600 " + (10 * S) + "px " + GP_HUD_MONO;
+            g.fillStyle = "rgba(245,247,250,0.78)";
+            g.textAlign = "left";
+            g.fillText("LAT " + (d.glat || 0).toFixed(1), cx - r - 2 * S, cy + r + 16 * S);
+            g.textAlign = "right";
+            g.fillText((d.glon || 0).toFixed(1) + " LON", cx + r + 2 * S, cy + r + 16 * S);
+            g.textAlign = "left"; g.textBaseline = "alphabetic";
+        }
+
+        /* ---- the run you are in ---------------------------------------------
+         * Duration, how far over it was held, its peak, and the Drift view's
+         * own rating out of five. Nothing here is scored by the HUD; every
+         * number is read off gpDriftBoard, which is what the app shows.
+         */
+        function gpHudRunCard(g, d, x, y, w, h) {
+            var S = h / 116, run = d.run;
+            gpHudPanel(g, x, y, w, h, 10 * S, 0.55);
+            var px = x + 13 * S, pw = w - 26 * S, ry = y + 20 * S;
+            g.textBaseline = "middle";
+
+            g.textAlign = "left";
+            g.font = "600 " + (10 * S) + "px " + GP_HUD_SANS;
+            g.fillStyle = "rgba(245,247,250,0.5)";
+            g.fillText(run && run.name ? run.name.toUpperCase() : "DRIFT RUN", px, ry);
+            ry += 20 * S;
+
+            var row = function (k, v, col) {
+                g.textAlign = "left";
+                g.font = "600 " + (10 * S) + "px " + GP_HUD_SANS;
+                g.fillStyle = "rgba(245,247,250,0.5)";
+                g.fillText(k, px, ry);
+                g.textAlign = "right";
+                g.font = "700 " + (15 * S) + "px " + GP_HUD_MONO;
+                g.fillStyle = col || GP_HUD_INK;
+                g.fillText(v, px + pw, ry);
+                ry += 19 * S;
+            };
+            row("DURATION", run && run.secs !== null ? run.secs.toFixed(1) + "s" : "—");
+            row("ANGLE", run && run.held !== null && !run.rough
+                    ? Math.round(run.held) + "°" : "—");
+            row("PEAK", run && run.peak !== null && !run.rough
+                    ? Math.round(run.peak) + "°" : "—");
+            /* Spun and unrated are different answers and get different words.
+               A spin is a fact about the run; unrated is the engine declining
+               to judge it, and neither is a nought out of five. */
+            if (run && run.spun) row("RATED", "spun", GP_HUD_WARN);
+            else if (run && run.stars !== null)
+                row("RATED", run.stars.toFixed(1) + "/5",
+                    run.stars >= 4 ? GP_HUD_GRN : run.stars >= 2.5 ? GP_HUD_INK : GP_HUD_WARN);
+            else row("RATED", "—", "rgba(245,247,250,0.45)");
+            g.textAlign = "left"; g.textBaseline = "alphabetic";
         }
 
         /* ---- every channel this recording actually carries -------------------
@@ -30445,6 +30991,13 @@
                             box: { x: spX, y: BY - Math.max(82 * S, hasGear ? gs : 0),
                              w: clusterW, h: Math.max(82 * S, hasGear ? gs : 0) },
                             draw: function () {
+                    /* Boxed: the same number, over a panel. On bright footage
+                       — a white pit wall, a salt lake — the drop shadow alone
+                       stops carrying the biggest text on the screen, and this
+                       is the readable answer that does not change the layout. */
+                    if (gpHudStyle("hudSpeed") === "boxed")
+                        gpHudPanel(g, spX - 14 * S, BY - 78 * S,
+                                   spw + spuW + 9 * S + 28 * S, 92 * S, 10 * S, 0.5);
                     gpHudGlow(g, 16 * S);
                     g.fillStyle = GP_HUD_INK;
                     g.font = "700 " + (82 * S) + "px " + GP_HUD_MONO;
@@ -30493,8 +31046,35 @@
                number. This is the same gate the Drift readout has always had
                (GP_DRIFT_ROUGH) — the HUD simply never asked for it, and a
                video is the one surface where being wrong is permanent. */
-            if (gpHudOn("hudAngle") && d.beta !== null) {
+            /* The left column grows upward from the tacho, and each instrument
+               that lands in it moves the ceiling for the next. Kept as a
+               running value rather than fixed offsets so that switching the
+               slip angle between a 62·S panel and a 132·S dial does not leave
+               the counter-steer sitting on top of it. */
+            var leftTop = BY - 148 * S, aSty = gpHudStyle("hudAngle");
+
+            if (gpHudOn("hudAngle") && gpHudAngleSay(d) && aSty === "dial") {
+                var adr = 86 * S, adx = M, ady = leftTop - adr * 2;
+                leftTop = ady;
+                plan.push({ key: "hudAngle",
+                            box: { x: adx, y: ady, w: adr * 2, h: adr * 2 },
+                            draw: function () {
+                    gpHudAngleDial(g, d, adx + adr, ady + adr, adr);
+                } });
+            }
+            if (gpHudOn("hudAngle") && gpHudAngleSay(d) && aSty === "bar") {
+                var abw = Math.min(300 * S, W - M * 2), abh = 44 * S,
+                    abx = M, aby = leftTop - abh;
+                leftTop = aby;
+                plan.push({ key: "hudAngle",
+                            box: { x: abx, y: aby, w: abw, h: abh },
+                            draw: function () {
+                    gpHudAngleBar(g, d, abx, aby, abw, abh);
+                } });
+            }
+            if (gpHudOn("hudAngle") && d.beta !== null && aSty === "panel") {
                 var aw = 132 * S, ah = 62 * S, ax = M, ay = BY - 128 * S - 20 * S - ah;
+                leftTop = ay;
                 plan.push({ key: "hudAngle",
                             box: { x: ax, y: ay, w: aw, h: ah },
                             draw: function () {
@@ -30544,6 +31124,32 @@
                 } });
             }
 
+            /* ---- counter-steer, above the angle it answers -----------------
+               Only where something measured the slip: gpSteerAt falls back to
+               a bicycle-model estimate off yaw and speed, and an estimate of
+               an estimate burned into a video is exactly what the trust gate
+               exists to prevent. */
+            if (gpHudOn("hudSteer") && d.steer !== null && d.beta !== null) {
+                var sr = 34 * S, sbh = sr * 2 + 34 * S;
+                var sbx = M, sby = leftTop - 16 * S - sbh;
+                leftTop = sby;
+                plan.push({ key: "hudSteer",
+                            box: { x: sbx, y: sby, w: sr * 2 + 14 * S, h: sbh },
+                            draw: function () {
+                    gpHudSteerWheel(g, d, sbx + sr + 7 * S, sby + 17 * S + sr, sr);
+                } });
+            }
+
+            /* ---- the run you are in, top right under the mark -------------- */
+            if (gpHudOn("hudRun") && d.run) {
+                var rcw = 152 * S, rch = 116 * S, rcx = W - M - rcw, rcy = M + 42 * S;
+                plan.push({ key: "hudRun",
+                            box: { x: rcx, y: rcy, w: rcw, h: rch },
+                            draw: function () {
+                    gpHudRunCard(g, d, rcx, rcy, rcw, rch);
+                } });
+            }
+
             var ms = 240 * S, mx0 = W - M - ms, my0 = BY - ms;
             if (gpHudOn("hudMap")) {
                 plan.push({ key: "hudMap",
@@ -30553,15 +31159,32 @@
                 } });
             }
             if (gpHudOn("hudG")) {
-                var gr = 46 * S;
+                var gr = 46 * S, gSty = gpHudStyle("hudG");
                 /* Stacked on the map's DEFAULT position, not its moved one:
                    the two stay a pair the person can then move as a pair. */
                 var gy = gpHudOn("hudMap") ? my0 - 14 * S - gr : BY - gr;
-                plan.push({ key: "hudG",
-                            box: { x: W - M - gr * 2, y: gy - gr, w: gr * 2, h: gr * 2 + 16 * S },
-                            draw: function () {
-                    gpHudGrip(g, d, W - M - gr, gy, gr);
-                } });
+                if (gSty === "radar") {
+                    /* The radar wears a panel, so it is both wider and TALLER
+                       than the bare circle: its centre moves in to keep the
+                       right edge on the same margin as the rest of this
+                       column, and up by the 26·S of panel that hangs below the
+                       circle — without which it sat 12·S over the top of the
+                       minimap. */
+                    if (gpHudOn("hudMap")) gy = my0 - 40 * S - gr;
+                    var gcx = W - M - gr - 8 * S;
+                    plan.push({ key: "hudG",
+                                box: { x: gcx - gr - 8 * S, y: gy - gr - 8 * S,
+                                       w: gr * 2 + 16 * S, h: gr * 2 + 34 * S },
+                                draw: function () {
+                        gpHudGripRadar(g, d, gcx, gy, gr);
+                    } });
+                } else {
+                    plan.push({ key: "hudG",
+                                box: { x: W - M - gr * 2, y: gy - gr, w: gr * 2, h: gr * 2 + 16 * S },
+                                draw: function () {
+                        gpHudGrip(g, d, W - M - gr, gy, gr);
+                    } });
+                }
             }
 
             /* ---- lap time and delta, along the top ---- */
@@ -30666,6 +31289,12 @@
                 plan.push({ key: "hudMark",
                             box: { x: lx, y: M, w: lw + lgap + wordW, h: lh },
                             draw: function () {
+                    /* Badge: the mark on its own plate, the way it sits on a
+                       broadcast bug. Same cluster, same anchor — a box behind
+                       it, so it reads over a bright sky. */
+                    if (gpHudStyle("hudMark") === "badge")
+                        gpHudPanel(g, lx - 12 * S, M - 9 * S,
+                                   lw + lgap + wordW + 24 * S, lh + 18 * S, 8 * S, 0.55);
                     if (lrec.ok) {
                         g.globalAlpha = 0.9;
                         g.drawImage(lrec.img, lx, M, lw, lh);
@@ -32424,7 +33053,8 @@
             hudPedals: "hsl(152,55%,45%)", hudG: "hsl(280,60%,55%)",
             hudDelta: "hsl(190,80%,45%)", hudMap: "hsl(210,100%,50%)",
             hudMark: "hsl(0,80%,55%)", hudAngle: "hsl(45,90%,55%)",
-            hudName: "hsl(88,50%,50%)"
+            hudName: "hsl(88,50%,50%)", hudSteer: "hsl(190,80%,55%)",
+            hudRun: "hsl(28,90%,58%)"
         };
 
         function gpHudEdStore() {
@@ -32462,6 +33092,151 @@
             gpHudEdDraw();
             if (typeof gpVideoDrawOverlay === "function") gpVideoDrawOverlay();
         }
+        /* Which shape an instrument is drawn in. Same absent-means-factory
+           rule as everything else here — picking the factory style DELETES the
+           entry rather than writing it down, so a stored layout keeps saying
+           only what has been changed. */
+        function gpHudEdStyle(key, v) {
+            var list = GP_HUD_STYLES[key];
+            if (!list) return;
+            var st = gpHudEdStore();
+            if (!st.st || typeof st.st !== "object") st.st = {};
+            if (v === list[0][0]) delete st.st[key];
+            else st.st[key] = v;
+            gpCamPut("hud", st);
+            gpHudEdDraw();
+            if (typeof gpVideoDrawOverlay === "function") gpVideoDrawOverlay();
+        }
+
+        /* ---- presets ---------------------------------------------------------
+         * Eleven instruments and four style pickers is a lot to meet at once,
+         * and the person opening this has come to make a video, not to learn a
+         * layout editor. A preset is the answer to "what should this look
+         * like" for the three kinds of footage this app gets pointed at.
+         *
+         * A preset sets WHICH instruments show and HOW they are drawn, and
+         * touches nothing else: positions, sizes, layer order, locks and any
+         * widgets you made yourself all survive it. So trying one is not a
+         * decision — it is reversible by clicking another, and by "Put this
+         * one back" for anything you had moved.
+         */
+        var GP_HUD_PRESETS = [
+            ["Drift", "The angle is the subject: a dial you can read from the "
+                    + "back of the room, the wheels, and what the run scored.",
+             { st: { hudAngle: "dial", hudG: "radar", hudMark: "badge" },
+               on:  ["hudSpeed", "hudAngle", "hudSteer", "hudRun", "hudG", "hudMap",
+                     "hudName", "hudMark"],
+               off: ["hudTacho", "hudPedals", "hudDelta"] }],
+            ["Circuit", "Lap time, delta and the pedals — what a fast lap is "
+                      + "judged on. This is the layout the HUD shipped with.",
+             { st: { hudSpeed: "plain", hudAngle: "panel", hudG: "circle", hudMark: "plain" },
+               on:  ["hudSpeed", "hudTacho", "hudPedals", "hudDelta", "hudG", "hudMap",
+                     "hudName", "hudMark"],
+               off: ["hudAngle", "hudSteer", "hudRun"] }],
+            ["Clean", "Speed, where you are, and the mark. For footage where "
+                    + "the driving is the point and the numbers are not.",
+             { st: { hudSpeed: "boxed", hudMark: "badge" },
+               on:  ["hudSpeed", "hudMap", "hudName", "hudMark"],
+               off: ["hudTacho", "hudPedals", "hudDelta", "hudG", "hudAngle",
+                     "hudSteer", "hudRun"] }]
+        ];
+        function gpHudEdPreset(n) {
+            var p = GP_HUD_PRESETS[n];
+            if (!p) return;
+            var spec = p[2], st = gpHudEdStore();
+            if (!st.st || typeof st.st !== "object") st.st = {};
+            /* Every widget that HAS styles is set, not just the ones the
+               preset names — otherwise a dial left over from Drift would come
+               through into Circuit and the preset would not be a preset. */
+            Object.keys(GP_HUD_STYLES).forEach(function (k) {
+                var want = (spec.st && spec.st[k]) || GP_HUD_STYLES[k][0][0];
+                if (want === GP_HUD_STYLES[k][0][0]) delete st.st[k];
+                else st.st[k] = want;
+            });
+            gpCamPut("hud", st);
+            (spec.on || []).forEach(function (k) { gpCamSet(k, true); });
+            (spec.off || []).forEach(function (k) { gpCamSet(k, false); });
+            gpHudEdDraw();
+            if (typeof gpVideoDrawOverlay === "function") gpVideoDrawOverlay();
+        }
+
+        /* ---- the preset finds you ------------------------------------------
+         * A preset you have to go looking for is still setup. The recording
+         * already says which one it wants — it knows whether the car spent the
+         * afternoon sideways, and it knows whether anything timed a lap — so
+         * the designer opens with an answer rather than a palette.
+         *
+         * Suggested, never applied. What the overlay shows is burned into a
+         * file; changing that on somebody's behalf is not a convenience.
+         */
+        var GP_HUD_SUG_SLIDE_S = 8;   /* this much over GP_DRIFT_ON reads as drifting */
+
+        function gpHudSlideSecs() {
+            var rows = gp.trace;
+            if (!rows || !rows.length) return 0;
+            var d = null;
+            try { d = gpDriftAngle(); } catch (e) { }
+            if (!d || !d.ok) return 0;
+            var end = gp.ghostFence !== null ? gp.ghostFence : rows.length;
+            if (end > d.ok.length) end = d.ok.length;
+            var n = 0;
+            for (var i = 0; i < end; i++) {
+                /* Only angles the engine stands behind. A session full of
+                   rough readings is not a drift session, it is a session with
+                   a bad instrument chain, and the answer to that is the
+                   trust panel and not a layout. */
+                if (!d.ok[i]) continue;
+                if (d.conf && d.conf[i] > GP_DRIFT_ROUGH) continue;
+                if (Math.abs(d.beta[i]) >= GP_DRIFT_ON) n++;
+            }
+            return n / gpHz(rows, 0, Math.max(1, end - 1));
+        }
+
+        /* Which preset this recording is asking for. First match wins, and
+           drift beats circuit deliberately: a drift session at a track has
+           gate-timed laps too, and the angle is the more specific signal. */
+        function gpHudSuggest() {
+            var rows = gp.trace;
+            if (!rows || rows.length < 50) return null;
+            var secs = gpHudSlideSecs();
+            if (secs >= GP_HUD_SUG_SLIDE_S)
+                return { n: 0, why: Math.round(secs) + " s of this recording is past " +
+                                    GP_DRIFT_ON + "° of slip angle." };
+            if (gp.lapsFrom === "gate")
+                return { n: 1, why: "Laps cut by a timing line, and nothing held sideways." };
+            return { n: 2, why: "No lap times and no slip angle, so there is little to put up." };
+        }
+
+        /* Only worth suggesting to somebody who has not already answered.
+           Anything at all having been chosen — a preset, a style, a nudge, a
+           reorder, a widget switched off, a widget made — is an answer, and
+           the banner does not come back after one. */
+        function gpHudUntouched() {
+            var st = gp.cam && gp.cam.hud;
+            if (st) {
+                if (st.sug) return false;
+                if (st.st && Object.keys(st.st).length) return false;
+                if (st.w && Object.keys(st.w).length) return false;
+                if (st.z && st.z.length) return false;
+                if (st.lock && Object.keys(st.lock).length) return false;
+                if (st.add && st.add.length) return false;
+            }
+            for (var i = 0; i < GP_HUD_WIDGETS.length; i++)
+                if (!gpHudOn(GP_HUD_WIDGETS[i][0])) return false;
+            return true;
+        }
+        function gpHudSuggested() {
+            return gpHudUntouched() ? gpHudSuggest() : null;
+        }
+        /* Answered — by taking it or by turning it down. Both are answers and
+           both are final, or "No thanks" would be a button that does nothing
+           the next time the designer opens. */
+        function gpHudEdSugDone() {
+            var st = gpHudEdStore();
+            st.sug = 1;
+            gpCamPut("hud", st);
+        }
+
         /* The layer order, written down only once somebody reorders: the
            stored list is the FULL order from that moment on, so later edits
            have something complete to move things within. */
@@ -32701,7 +33476,9 @@
             hudMap:    '<polygon points="2 6 9 3 15 6 22 3 22 18 15 21 9 18 2 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>',
             hudMark:   '<rect x="3" y="6" width="18" height="12" rx="2"/><line x1="7" y1="12" x2="17" y2="12"/>',
             hudAngle:  '<path d="M4 20L20 20"/><path d="M4 20L16 8"/><path d="M9 20a7 7 0 012-5"/>',
-            hudName:   '<path d="M12 21s7-5.6 7-11a7 7 0 10-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>'
+            hudName:   '<path d="M12 21s7-5.6 7-11a7 7 0 10-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+            hudSteer:  '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.4"/><line x1="3" y1="12" x2="9.6" y2="12"/><line x1="14.4" y1="12" x2="21" y2="12"/><line x1="12" y1="14.4" x2="12" y2="21"/>',
+            hudRun:    '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="13" x2="13" y2="13"/><line x1="7" y1="17" x2="15" y2="17"/>'
         };
         /* The DASH's own icon for a dash type, ours for the overlay-only
            instruments. Same 20x16 line drawings, same white — the palette
@@ -32981,7 +33758,40 @@
                exists, then the DASH's widget set underneath — same types,
                same names, same icons, so that building an overlay is the same
                act as building a dashboard. */
-            var h = "<div class='gphe-sec'>Overlay instruments</div>";
+            /* Presets first, because the person who has just opened this has
+               not chosen anything yet and one click is a better first move
+               than eleven. And if the recording has told us which one it
+               wants, say so above them rather than leaving three equal
+               choices to a person who has not seen any of them. */
+            var h = "";
+            var sug = gpHudSuggested();
+            if (sug) {
+                h += "<div class='gphe-sug'>" +
+                     "<div class='gphe-sug-t'>" + gpEsc(GP_HUD_PRESETS[sug.n][0]) +
+                     " layout suits this recording</div>" +
+                     "<div class='gphe-sug-w'>" + gpEsc(sug.why) + "</div>" +
+                     "<div class='gphe-sug-b'>" +
+                     "<button class='gphe-sug-go' data-sug='" + sug.n + "'>Use it</button>" +
+                     "<button data-sugno='1'>No thanks</button>" +
+                     "</div></div>";
+            }
+            h += "<div class='gphe-sec'>Start from</div>";
+            GP_HUD_PRESETS.forEach(function (p, n) {
+                h += "<div class='palette-item' data-preset='" + n + "' title='" +
+                     gpEsc(p[1]) + "'>" +
+                     "<span class='gphe-ic' style='color:var(--text)'>" +
+                     "<svg viewBox='0 0 20 16'><rect x='2' y='2.5' width='7' height='11' rx='1.2'" +
+                     " fill='none' stroke='currentColor' stroke-width='1.3'/>" +
+                     "<rect x='11' y='2.5' width='7' height='5' rx='1.2' fill='none'" +
+                     " stroke='currentColor' stroke-width='1.3'/>" +
+                     "<rect x='11' y='9.5' width='7' height='4' rx='1.2' fill='none'" +
+                     " stroke='currentColor' stroke-width='1.3'/></svg></span>" +
+                     "<span>" + gpEsc(p[0]) + "</span>" +
+                     "<span class='palette-size-hint'>preset</span></div>";
+            });
+            h += "<div class='gphe-note'>A preset sets which instruments show and how they " +
+                 "are drawn. Anything you have moved or resized stays where you put it.</div>";
+            h += "<div class='gphe-sec'>Overlay instruments</div>";
             GP_HUD_WIDGETS.forEach(function (w) {
                 var on = gpHudOn(w[0]);
                 h += "<div class='palette-item" + (on ? "" : " is-off") +
@@ -33019,6 +33829,25 @@
                  "<span class='palette-size-hint'>" +
                  (dashN ? (dashN + " widgets") : "none open") + "</span></div>";
             box.innerHTML = h;
+            Array.prototype.forEach.call(box.querySelectorAll("[data-preset]"), function (bp) {
+                bp.onclick = function () { gpHudEdPreset(parseInt(bp.getAttribute("data-preset"), 10)); };
+            });
+            Array.prototype.forEach.call(box.querySelectorAll("[data-sug]"), function (bs) {
+                bs.onclick = function () {
+                    /* Marked answered BEFORE the preset runs: gpHudEdPreset
+                       writes the same store object and redraws off it, so a
+                       flag set afterwards would not be in the copy the
+                       repainted palette reads. */
+                    gpHudEdSugDone();
+                    gpHudEdPreset(parseInt(bs.getAttribute("data-sug"), 10));
+                };
+            });
+            Array.prototype.forEach.call(box.querySelectorAll("[data-sugno]"), function (bn) {
+                bn.onclick = function () {
+                    gpHudEdSugDone();
+                    gpHudEdPalette();
+                };
+            });
             Array.prototype.forEach.call(box.querySelectorAll("[data-make]"), function (b2) {
                 b2.onclick = function () {
                     /* Addable whether or not this recording has channels:
@@ -33141,6 +33970,18 @@
                      "numbers to feed it.</div>";
             if (lock)
                 h += "<div class='gphe-note'>Locked — unlock it in the Layers panel to move it.</div>";
+            /* Style first: it is the choice that changes the picture, and the
+               nudges below it are about a shape you have already chosen. */
+            var stys = GP_HUD_STYLES[k];
+            if (stys) {
+                var curSty = gpHudStyle(k);
+                h += "<div class='field'><label>Style</label><div class='gphe-swatches'>";
+                stys.forEach(function (s) {
+                    h += "<button data-sty='" + s[0] + "'" +
+                         (curSty === s[0] ? " class='on'" : "") + ">" + gpEsc(s[1]) + "</button>";
+                });
+                h += "</div></div>";
+            }
             h += "<div class='gphe-row'>" +
                  "<div class='field'><label>Across</label>" +
                  "<input type='number' step='1' value='" + Math.round(p.dx) + "' data-p='dx'></div>" +
@@ -33293,11 +34134,19 @@
                 else b4.onchange = apply;
             });
 
-            Array.prototype.forEach.call(box.querySelectorAll("[data-p],[data-g]"), function (b) {
+            Array.prototype.forEach.call(box.querySelectorAll("[data-p],[data-g],[data-sty]"), function (b) {
                 var gsel = b.getAttribute("data-g");
                 if (gsel) {
                     b.onclick = function () { gpCamPut("hudMapStyle", gsel); gpHudEdDraw();
                         if (typeof gpVideoDrawOverlay === "function") gpVideoDrawOverlay(); };
+                    return;
+                }
+                var ssel = b.getAttribute("data-sty");
+                if (ssel) {
+                    /* gpHudEdStyle redraws, and gpHudEdDraw rebuilds this rail
+                       along with the palette and the layers — so the button
+                       that was just pressed comes back lit without any help. */
+                    b.onclick = function () { gpHudEdStyle(k, ssel); };
                     return;
                 }
                 var a = b.getAttribute("data-p");
@@ -33419,8 +34268,14 @@
                 html += "<button data-h='" + w[0] + "' class='lab " + (gpHudOn(w[0]) ? "sel" : "") +
                         "'>" + gpEsc(w[1]) + "</button>";
             });
+            /* The popover is where most people meet the HUD, so the
+               suggestion is said here too — otherwise the answer is behind a
+               door you have to already want to open. */
+            var hsug = gpHudSuggested();
             html += "<button data-ed='1' class='lab'>Customise overlay…" +
-                    "<small>move and resize what is on the picture</small></button>";
+                    "<small>" + (hsug
+                        ? gpEsc(GP_HUD_PRESETS[hsug.n][0]) + " layout suits this recording"
+                        : "move and resize what is on the picture") + "</small></button>";
             html += "<div class='gph'>Minimap ground</div>";
             GP_HUD_MAP_STYLES.forEach(function (m) {
                 html += "<button data-m='" + m[0] + "' class='" +

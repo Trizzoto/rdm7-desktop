@@ -61,13 +61,17 @@ const VARS = ['GP_HUD_WIDGETS', 'GP_HUD_ROLES', 'GP_HUD_INK', 'GP_HUD_RED', 'GP_
               'GP_HUD_WARN', 'GP_HUD_MONO', 'GP_HUD_SANS', 'GP_EXPORT_MIMES', 'GP_EXPORT_BPP',
               'GP_HUD_MAP_STYLES', 'GP_HUD_TILE_CACHE', 'GP_HUD_TILE_MAX', 'GP_WORLD_IMAGERY',
               'GP_TRACE_WHOLE', 'GP_LAP_CASE', 'GP_HUD_LOGO_AR',
-              '_gpHudLogoRec', 'GP_HUD_MADE'];
+              '_gpHudLogoRec', 'GP_HUD_MADE', 'GP_HUD_STYLES', 'GP_STEER_LOCK',
+              'GP_HUD_PRESETS', 'GP_HUD_SUG_SLIDE_S'];
 const FNS = ['gpChanValue', 'gpChanQuiet', 'gpMetresPerDeg', 'gpHeadingAt', 'gpHudOn', 'gpHudChans',
              'gpHudChan', 'gpHudData', 'gpHudRR', 'gpHudPanel', 'gpHudGlow', 'gpHudMiniWindow',
              'gpHudMinimap', 'gpHudTacho', 'gpHudGrip', 'gpHudPedal', 'gpHudRender', 'gpHudClock',
              'gpVideoPictureRect', 'gpExportMime', 'gpExportPlan', 'gpHudMapStyle',
              'gpHudNightColour', 'gpHudTile', 'gpHudTiles', 'gpExportName',
              'gpAngleColour', 'gpAngleScale',
+             'gpHudStyle', 'gpHudAngleMax', 'gpHudAngleSay', 'gpHudAngleDial',
+             'gpHudSlideSecs', 'gpHudSuggest', 'gpHudUntouched', 'gpHudSuggested', 'gpHz',
+             'gpHudAngleBar', 'gpHudSteerWheel', 'gpHudGripRadar', 'gpHudRunCard',
              'gpHudLogoLoad', 'gpHudLogoReady',
              'gpExportRunNow', 'gpHudLayout', 'gpHudPlaceOf', 'gpHudPlace',
              'gpHudOrder', 'gpHudChanList', 'gpHudChanById', 'gpHudChanAt',
@@ -138,6 +142,10 @@ function makeCtx() {
         arc(x, y, r) { at(x + this._tx[0] - r, y + this._tx[1] - r); at(x + this._tx[0] + r, y + this._tx[1] + r); },
         rect(x, y, w, h) { at(x, y); at(x + w, y + h); },
         clip() { inClip++; calls.push(['clip']); },
+        /* The radar flavour of the grip circle dashes its axes. A stub
+           without this throws, and the throw reads as "the HUD is broken"
+           rather than "the stub has not kept up". */
+        setLineDash(d) { calls.push(['dash', (d || []).length]); },
         save() { calls.push(['save']); this._stack.push(this._tx.slice()); },
         restore() {
             calls.push(['restore']);
@@ -173,7 +181,7 @@ function makeTrace(n, opt) {
             lon: 138.5 + (R * Math.sin(th)) / mLon,
             kph: 90 + 30 * Math.sin(th * 3),
             hdg: ((th * 180 / Math.PI) + 90) % 360,
-            t: 1000 + i * 40,
+            t: 1000 + i * (opt.dtMs || 40),
             g: 0.3 * Math.sin(th * 2),
             can: opt.can === false ? null
                 : [i === 7 ? STALE : Math.round(2000 + 3000 * (0.5 + 0.5 * Math.sin(th * 3))),
@@ -198,6 +206,7 @@ function env(opt) {
         traceChanIds: opt.can === false ? null : CHAN_DEFS.map(d => d.id),
         traceChanDefs: opt.can === false ? null : CHAN_DEFS,
         cam: opt.cam || { overlay: true }, ghostFence: null, video: opt.video || null,
+        lapsFrom: opt.lapsFrom === undefined ? null : opt.lapsFrom,
         exp: opt.exp || { range: 'lap', quality: 'high', maxH: 0 },
         mapMode: opt.mapMode || 'pace'
     };
@@ -206,6 +215,7 @@ function env(opt) {
         var GP_CHAN_STALE = 0xFFFF;
         var GP_DRIFT_ON = 10;   /* the same gate the map's car marker uses */
         var GP_DRIFT_ROUGH = 8; /* past this the engine will not stand behind it */
+        var GP_DT = 0.04;       /* gpHz's fallback when rows carry no clock */
         function gpN(v) { return (typeof v === 'number' && isFinite(v)) ? v : null; }
         function gpSpdN(k) { return k === null || k === undefined ? null : k; }
         function gpSpdU() { return 'km/h'; }
@@ -217,6 +227,16 @@ function env(opt) {
         function gpCurSessionMeta() { return ARGmeta; }
         function gpTrackById(id) { return ARGtrack; }
         function gpDriftAngle() { return ARGdrift; }
+        /* The steering model has its own harness — check_carglyph.js, 156
+           checks, including both the failures the trust weighting was added
+           for. What matters HERE is that the HUD asks for it and draws what it
+           is handed, so these return whatever the test set. Null is the
+           default, which is also "this recording cannot feed it": the
+           counter-steer and the run card are then absent, and every check
+           written before they existed goes on describing the same picture. */
+        function gpSteerAt(i, beta, trusted) { return ARGsteer; }
+        function gpSteerTrust() { return 1; }
+        function gpHudRunAt(i) { return ARGrun; }
         function gpImageryFor(lat, lon) { return ARGsrc; }
         function gpEsc(t) { return String(t); }
         var IMAGES = [];
@@ -271,7 +291,12 @@ function env(opt) {
                  traceWhite: GP_TRACE_WHOLE, lapCase: GP_LAP_CASE,
                  logo: gpHudLogoLoad, logoReady: gpHudLogoReady,
                  exportRun: gpExportRunNow, explog: EXPLOG,
-                 logoAR: GP_HUD_LOGO_AR, placeOf: gpHudPlaceOf };
+                 logoAR: GP_HUD_LOGO_AR, placeOf: gpHudPlaceOf,
+                 styleOf: gpHudStyle, hudStyles: GP_HUD_STYLES,
+                 angleMax: gpHudAngleMax, steerLock: GP_STEER_LOCK,
+                 suggest: gpHudSuggest, slideSecs: gpHudSlideSecs,
+                 untouched: gpHudUntouched, suggested: gpHudSuggested,
+                 presets: GP_HUD_PRESETS, sugSecs: GP_HUD_SUG_SLIDE_S };
     `;
     const lap = opt.lap || { from: 0, to: rows.length - 1 };
     const delta = opt.delta === undefined ? rows.map((r, i) => (i % 7) / 10 - 0.3) : opt.delta;
@@ -289,9 +314,13 @@ function env(opt) {
        opt.imgLoad:false exercises the fallback. */
     const imgLoad = opt.imgLoad === undefined ? true : opt.imgLoad;
     const timer = { set: setTimeout, clear: clearTimeout };
+    const steer = opt.steer === undefined ? null : opt.steer;
+    const run = opt.run === undefined ? null : opt.run;
     return new Function('ARGgp', 'ARGlap', 'ARGdelta', 'ARGdoc', 'ARGrec',
         'ARGmeta', 'ARGtrack', 'ARGdrift', 'ARGsrc', 'ARGimgLoad', 'ARGtimer',
-        shim)(gp, lap, delta, doc, rec, meta, track, drift, imgSrc, imgLoad, timer);
+        'ARGsteer', 'ARGrun',
+        shim)(gp, lap, delta, doc, rec, meta, track, drift, imgSrc, imgLoad, timer,
+              steer, run);
 }
 
 const GP_HUD_MADE_TYPES = (function () {
@@ -1423,6 +1452,295 @@ console.log('\nthe export plan');
     const doc = { getElementById: id => (id === 'gpVideo' ? vid : null) };
     const E = env({ doc: doc, video: null });
     ok('no video, no plan', E.plan({ range: 'all', quality: 'high', maxH: 0 }) === null);
+}
+
+/* ---- style variants, and the two drift instruments -------------------------
+   One measurement, more than one drawing. The rule these all have to keep is
+   the one the whole file is about: a variant is a different PICTURE of the
+   same number, never a different number, and it scales with H exactly like
+   everything else or the export and the preview drift apart. */
+console.log('\nstyle variants say the same thing in a different shape');
+
+const N_ROWS = 200;
+function driftOf(beta, conf) {
+    return { ok: new Array(N_ROWS).fill(1),
+             beta: new Array(N_ROWS).fill(beta),
+             conf: new Array(N_ROWS).fill(conf === undefined ? 1.5 : conf) };
+}
+function camSty(st) { return { overlay: true, hud: { v: 1, w: {}, st: st } }; }
+function drawRects(E, W, H, i) {
+    const g = makeCtx(), rects = [];
+    const drew = E.render(g, W, H, i === undefined ? 20 : i, { rects: rects });
+    return { g, rects, drew, texts: g.calls.filter(k => k[0] === 'text').map(k => String(k[1])) };
+}
+function rectOf(r, key) { return r.filter(q => q.key === key)[0] || null; }
+
+{
+    const E = env({ drift: driftOf(24) });
+    ok('with nothing stored every widget is on its factory style',
+       Object.keys(E.hudStyles).every(k => E.styleOf(k) === E.hudStyles[k][0][0]),
+       Object.keys(E.hudStyles).map(k => k + '=' + E.styleOf(k)).join(' '));
+    ok('every widget with variants offers at least two',
+       Object.keys(E.hudStyles).every(k => E.hudStyles[k].length >= 2));
+    ok('…and no widget lists the same style twice',
+       Object.keys(E.hudStyles).every(k => {
+           const ids = E.hudStyles[k].map(s => s[0]);
+           return new Set(ids).size === ids.length;
+       }));
+    ok('a widget with no variants has no style at all', E.styleOf('hudMap') === null);
+
+    /* A layout written by a later version, or by a finger slip. Falling back
+       is the only safe answer: refusing to draw would lose the instrument. */
+    const F = env({ drift: driftOf(24), cam: camSty({ hudAngle: 'spiral' }) });
+    ok('an unknown stored style falls back to factory', F.styleOf('hudAngle') === 'panel');
+    const G = env({ drift: driftOf(24), cam: camSty({ hudAngle: 'dial' }) });
+    ok('a stored style is honoured', G.styleOf('hudAngle') === 'dial');
+}
+
+{
+    /* The dial. Same gate, same number, different picture. */
+    const D = env({ drift: driftOf(24), cam: camSty({ hudAngle: 'dial' }) });
+    const d = drawRects(D, 1280, 720);
+    ok('the dial prints the angle it was handed',
+       d.texts.some(t => t === '24.0°'), d.texts.join('|'));
+    ok('…and says which way', d.texts.includes('RIGHT'));
+    ok('…and labels itself', d.texts.includes('SLIP ANGLE'));
+    ok('the dial is numbered, so a position has a value',
+       d.texts.includes('0') && d.texts.includes('30'), d.texts.join('|'));
+
+    /* The refusal is the important half. The panel has always said "rough"
+       rather than a number past GP_DRIFT_ROUGH, and a bigger drawing of the
+       same reading must not become a more confident one. */
+    const R = env({ drift: driftOf(24, 12), cam: camSty({ hudAngle: 'dial' }) });
+    const r = drawRects(R, 1280, 720);
+    ok('a rough reading is still refused on the dial',
+       r.texts.includes('rough') && !r.texts.some(t => /^\d+\.\d°$/.test(t)),
+       r.texts.join('|'));
+
+    const B = env({ drift: driftOf(24), cam: camSty({ hudAngle: 'bar' }) });
+    const b = drawRects(B, 1280, 720);
+    ok('the bar prints the angle', b.texts.includes('24°'), b.texts.join('|'));
+    ok('…and says which way', b.texts.includes('RIGHT'));
+    const RB = env({ drift: driftOf(24, 12), cam: camSty({ hudAngle: 'bar' }) });
+    ok('a rough reading is refused on the bar too',
+       drawRects(RB, 1280, 720).texts.includes('rough'));
+
+    /* The refusal has to reach the PICTURE, not just the text. Three quarters
+       of a lit ring beside the word "rough" is the tool contradicting itself,
+       and gpAngleColour is the only thing here that emits an rgb() — the
+       ticks, the needle and the unlit segments are all rgba or a hex. Every
+       other widget is off so the minimap's own angle-coloured car cannot
+       answer for the dial. */
+    const ONLY = ['hudSpeed', 'hudTacho', 'hudPedals', 'hudG', 'hudDelta',
+                  'hudMap', 'hudName', 'hudMark', 'hudSteer', 'hudRun'];
+    const lonely = st => { const c = camSty(st); ONLY.forEach(k => { c[k] = false; }); return c; };
+    const litOf = E => drawRects(E, 1280, 720).g.calls
+        .filter(k => k[0] === 'stroke' && /^rgb\(/.test(String(k[1]))).length;
+    ok('a rough dial lights no segment of the ring',
+       litOf(env({ drift: driftOf(24, 12), cam: lonely({ hudAngle: 'dial' }) })) === 0);
+    ok('…and a trusted one lights some',
+       litOf(env({ drift: driftOf(24), cam: lonely({ hudAngle: 'dial' }) })) > 0);
+    const filled = E => drawRects(E, 1280, 720).g.calls
+        .filter(k => k[0] === 'rect' && /^rgb\(/.test(String(k[5]))).length;
+    ok('a rough bar fills nothing either',
+       filled(env({ drift: driftOf(24, 12), cam: lonely({ hudAngle: 'bar' }) })) === 0);
+    ok('…and a trusted one fills some',
+       filled(env({ drift: driftOf(24), cam: lonely({ hudAngle: 'bar' }) })) > 0);
+}
+
+{
+    /* S-invariance, per style. This is the invariant the export depends on,
+       and a new drawing is exactly where it gets broken. */
+    const px = f => parseFloat(/([\d.]+)px/.exec(f)[1]);
+    [['dial', { hudAngle: 'dial' }], ['bar', { hudAngle: 'bar' }],
+     ['radar', { hudG: 'radar' }], ['boxed speed', { hudSpeed: 'boxed' }],
+     ['badge', { hudMark: 'badge' }]].forEach(([name, st]) => {
+        const E = env({ drift: driftOf(24), cam: camSty(st), steer: 12,
+                        run: { name: 'Turn 3', secs: 4.2, held: 22, peak: 31,
+                               rough: false, spun: null, stars: 3.5 } });
+        const ga = makeCtx(), gb = makeCtx();
+        E.render(ga, 1280, 720, 20); E.render(gb, 2560, 1440, 20);
+        const ta = ga.calls.filter(k => k[0] === 'text'), tb = gb.calls.filter(k => k[0] === 'text');
+        let worst = 0;
+        ta.forEach((t, k) => {
+            const u = tb[k];
+            if (!u) return;
+            worst = Math.max(worst, Math.abs(u[2] - t[2] * 2), Math.abs(u[3] - t[3] * 2),
+                             Math.abs(px(u[4]) - px(t[4]) * 2));
+        });
+        ok('the ' + name + ' style scales exactly with H',
+           ta.length === tb.length && worst < 0.02,
+           ta.length + ' vs ' + tb.length + ', worst drift ' + worst);
+    });
+}
+
+{
+    /* Counter-steer. It rides on the slip angle, so it appears and disappears
+       with it — a wheel drawn off a bicycle-model guess with no measured
+       angle behind it is the thing the trust weighting exists to prevent. */
+    const none = drawRects(env({ drift: driftOf(24) }), 1280, 720);
+    ok('no counter-steer when nothing measured the steering',
+       !rectOf(none.rects, 'hudSteer'));
+    const noAngle = drawRects(env({ steer: 15, drift: null }), 1280, 720);
+    ok('no counter-steer when there is no angle for it to answer',
+       !rectOf(noAngle.rects, 'hudSteer'));
+    const S = drawRects(env({ steer: -15, drift: driftOf(24) }), 1280, 720);
+    ok('counter-steer draws when both are there', !!rectOf(S.rects, 'hudSteer'));
+    ok('…printing the magnitude, unsigned — the wheel says which way',
+       S.texts.includes('15°'), S.texts.join('|'));
+    ok('…and labelling itself', S.texts.includes('COUNTER-STEER'));
+}
+
+{
+    /* The run card reads gpDriftBoard's own rating. Unrated and nought out of
+       five are different answers, and the card must never turn one into the
+       other. */
+    const none = drawRects(env({ drift: driftOf(24) }), 1280, 720);
+    ok('no run card outside a rated corner', !rectOf(none.rects, 'hudRun'));
+
+    const rated = drawRects(env({ drift: driftOf(24),
+        run: { name: 'Turn 3', secs: 4.2, held: 22, peak: 31, rough: false,
+               spun: null, stars: 3.5 } }), 1280, 720);
+    ok('the run card draws inside one', !!rectOf(rated.rects, 'hudRun'));
+    ok('…naming the corner', rated.texts.includes('TURN 3'), rated.texts.join('|'));
+    ok('…and quoting the rating out of five', rated.texts.includes('3.5/5'));
+    ok('…the duration', rated.texts.includes('4.2s'));
+    ok('…the held angle and the peak',
+       rated.texts.includes('22°') && rated.texts.includes('31°'));
+
+    const unrated = drawRects(env({ drift: driftOf(24),
+        run: { name: 'Turn 3', secs: 0.3, held: 4, peak: 6, rough: false,
+               spun: null, stars: null } }), 1280, 720);
+    ok('an unrated corner is a dash, never nought out of five',
+       unrated.texts.includes('—') && !unrated.texts.some(t => /^0\.0\/5$/.test(t)),
+       unrated.texts.join('|'));
+
+    const spun = drawRects(env({ drift: driftOf(24),
+        run: { name: 'Turn 3', secs: 3, held: 40, peak: 120, rough: false,
+               spun: { why: 'over', deg: 120 }, stars: null } }), 1280, 720);
+    ok('a spin says so rather than going unrated',
+       spun.texts.includes('spun'), spun.texts.join('|'));
+
+    const rough = drawRects(env({ drift: driftOf(24, 12),
+        run: { name: 'Turn 3', secs: 4.2, held: 22, peak: 31, rough: true,
+               spun: null, stars: null } }), 1280, 720);
+    ok('a rough run prints no angles on the card',
+       !rough.texts.includes('22°') && !rough.texts.includes('31°'),
+       rough.texts.join('|'));
+}
+
+{
+    /* The radar is the grip circle with its axes named — same two numbers,
+       same 2 g full scale. */
+    const R = drawRects(env({ cam: camSty({ hudG: 'radar' }) }), 1280, 720);
+    ok('the radar prints the pair of readings',
+       R.texts.some(t => /^LAT -?\d/.test(t)), R.texts.join('|'));
+    ok('…and names its axes', R.texts.includes('ACC') && R.texts.includes('BRK'));
+    ok('the radar stays inside the frame',
+       (function () { const q = rectOf(R.rects, 'hudG');
+                      return q && q.x >= 0 && q.x + q.w <= 1280 + 0.01; })(),
+       JSON.stringify(rectOf(R.rects, 'hudG')));
+}
+
+{
+    /* The left column is a flow, so a taller slip angle has to push the
+       counter-steer up rather than sit under it. This is the check that fails
+       if someone re-anchors one of them to a fixed offset. */
+    ['panel', 'dial', 'bar'].forEach(sty => {
+        const E = drawRects(env({ drift: driftOf(24), steer: 15,
+                                  cam: camSty({ hudAngle: sty }) }), 1280, 720);
+        const a = rectOf(E.rects, 'hudAngle'), s = rectOf(E.rects, 'hudSteer');
+        ok('with the ' + sty + ' angle the counter-steer clears it',
+           a && s && s.y + s.h <= a.y + 0.01,
+           a && s ? ('steer ends ' + (s.y + s.h).toFixed(1) + ', angle starts ' + a.y.toFixed(1))
+                  : 'one of them is missing');
+    });
+}
+
+/* ---- the preset finds you ---------------------------------------------------
+   A preset you have to go looking for is still setup. What is checked here is
+   that the recording's own answer is read off measurements and not guessed,
+   and that it is only ever OFFERED — nothing below applies anything. */
+console.log('\nthe recording says which layout it wants');
+
+function driftN(beta, conf, n) {
+    n = n || N_ROWS;
+    return { ok: new Array(n).fill(1), beta: new Array(n).fill(beta),
+             conf: new Array(n).fill(conf === undefined ? 1.5 : conf) };
+}
+{
+    const E = env();
+    ok('the threshold is stated in seconds, not samples', E.sugSecs > 0);
+
+    /* 200 samples at 40 ms is exactly 8 s — the line itself. */
+    const drifty = env({ drift: driftN(28) });
+    ok('a session held past the gate suggests Drift',
+       drifty.suggest().n === 0, JSON.stringify(drifty.suggest()));
+    ok('…and says how much, so the claim can be checked',
+       /\d+ s/.test(drifty.suggest().why), drifty.suggest().why);
+    ok('…measured to the second', Math.round(drifty.slideSecs()) === 8,
+       String(drifty.slideSecs()));
+
+    const brief = env({ n: 120, drift: driftN(28, 1.5, 120) });
+    ok('a few slides is not a drift session',
+       brief.suggest().n !== 0, JSON.stringify(brief.suggest()));
+
+    /* Under the angle gate entirely — a tidy circuit lap. */
+    const gripLaps = env({ drift: driftN(4), lapsFrom: 'gate' });
+    ok('timed laps and no angle suggests Circuit', gripLaps.suggest().n === 1);
+    const gripNone = env({ drift: driftN(4) });
+    ok('no laps and no angle suggests Clean', gripNone.suggest().n === 2);
+    const noDrift = env({ drift: null, lapsFrom: 'gate' });
+    ok('a recording with no angle series at all still suggests Circuit',
+       noDrift.suggest().n === 1);
+
+    /* The specific signal wins. A drift day at a circuit has gate-cut laps
+       too, and Circuit would be the wrong answer for it. */
+    const both = env({ drift: driftN(28), lapsFrom: 'gate' });
+    ok('drift beats circuit when a session is both', both.suggest().n === 0);
+
+    /* A session full of readings the engine will not stand behind is a
+       session with a bad instrument chain, not a drift session. */
+    const rough = env({ drift: driftN(28, 12), lapsFrom: 'gate' });
+    ok('rough angles do not count toward the slide time',
+       rough.slideSecs() === 0, String(rough.slideSecs()));
+    ok('…so a rough session is not called a drift session', rough.suggest().n === 1);
+
+    /* Seconds, not sample counts: the same drive logged at 10 Hz has to give
+       the same answer as one logged at 25 Hz. */
+    const slow = env({ n: 100, dtMs: 100, drift: driftN(28, 1.5, 100) });
+    ok('a 10 Hz recording measures the same 10 s',
+       Math.round(slow.slideSecs()) === 10, String(slow.slideSecs()));
+    ok('…and reaches the same verdict', slow.suggest().n === 0);
+    const slowBrief = env({ n: 50, dtMs: 100, drift: driftN(28, 1.5, 50) });
+    ok('…and 5 s at 10 Hz is still not a drift session',
+       slowBrief.suggest().n !== 0, String(slowBrief.slideSecs()));
+
+    ok('a recording too short to judge is not judged',
+       env({ n: 20, drift: driftN(28, 1.5, 20) }).suggest() === null);
+}
+{
+    /* Offered, never applied — and only to somebody who has not answered. */
+    const E = env({ drift: driftN(28) });
+    ok('an untouched layout gets the offer', E.untouched() && !!E.suggested());
+    ok('…and the offer is the same as the suggestion',
+       E.suggested().n === E.suggest().n);
+
+    const named = n => env({ drift: driftN(28), cam: Object.assign({ overlay: true }, n) });
+    ok('a stored style counts as an answer',
+       !named({ hud: { v: 1, w: {}, st: { hudAngle: 'dial' } } }).untouched());
+    ok('a moved widget counts as an answer',
+       !named({ hud: { v: 1, w: { hudSpeed: { dx: 4, dy: 0, k: 1 } } } }).untouched());
+    ok('a reorder counts as an answer',
+       !named({ hud: { v: 1, w: {}, z: ['hudMap'] } }).untouched());
+    ok('a widget you made counts as an answer',
+       !named({ hud: { v: 1, w: {}, add: [{ id: 'w1', type: 'bar' }] } }).untouched());
+    ok('a widget switched off counts as an answer',
+       !env({ drift: driftN(28), cam: { overlay: true, hudTacho: false } }).untouched());
+    ok('and having answered once is remembered',
+       !named({ hud: { v: 1, w: {}, sug: 1 } }).untouched());
+    ok('an answered layout is offered nothing',
+       named({ hud: { v: 1, w: {}, sug: 1 } }).suggested() === null);
 }
 
 /* The one check that cannot be synchronous: the export's wait on the mark.

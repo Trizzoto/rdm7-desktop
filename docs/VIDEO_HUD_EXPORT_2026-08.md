@@ -147,6 +147,7 @@ gp.cam.hud = { v: 1,
                w: { hudSpeed: { dx: 40, dy: -12, k: 1.25 }, … },
                z: ["hudSpeed", …],      // only once something is reordered
                lock: { hudMap: 1 },     // only once something is locked
+               st: { hudAngle: "dial" },// only once a style is off factory
                add: [ … ],              // widgets made from the recording
                seq: 7 }                 // the id counter, never the list length
 ```
@@ -161,6 +162,91 @@ scales about the widget's own centre.
   defaults DROPS its entry.
 
 **Reset all** clears positions, order and locks together.
+
+### Style variants, and two drift instruments (2026-09-01)
+
+Some instruments read better in more than one shape, and which one is better
+depends on what the footage is of. A **variant is a drawing, not a widget**:
+same key, same data, same place in the layer order, same stored nudge — so
+switching style cannot lose a layout, and the Layers panel does not grow a row
+every time somebody tries one.
+
+| widget | styles (factory first) |
+|---|---|
+| `hudSpeed` | Plain · **Boxed** — the number over a panel, for bright footage |
+| `hudAngle` | Panel · **Dial** — numbered 270° ring · **Bar** — segmented, with yaw rate |
+| `hudG` | Circle · **Radar** — axes named, both readings printed |
+| `hudMark` | Plain · **Badge** — the mark on its own plate |
+
+Registry `GP_HUD_STYLES`; `gpHudStyle(key)` validates against it, so a style
+written by a later version — or a typo — falls back to factory rather than
+refusing to draw. Stored in `st` **inside** `hud`, not beside it on `gp.cam`:
+`gpCamLoad` copies key by key and carries `hud` as one object, and not inside
+`w[key]` either, because `gpHudEdSet` deletes that entry the moment a widget is
+back at its factory position and would take the style with it. Same
+absent-means-factory rule: choosing the factory style deletes the entry.
+
+Two new instruments, both self-gating to recordings that measured an angle:
+
+- **`hudSteer` — counter-steer.** `gpSteerAt` and `gpSteerTrust`, the same
+  function and the same trust weighting the map's car glyph steers by. One
+  answer, drawn twice. The glyph turns in proportion to lock because a wheel
+  drawn at the road-wheel angle barely moves and reads as broken; the NUMBER is
+  the measurement.
+- **`hudRun` — the corner you are in.** Duration, held angle, peak, and the
+  Drift view's own rating out of five, read off `gpDriftBoard` rather than
+  scored a second way. Unrated, spun and nought out of five are three different
+  answers and it says which.
+
+A rough reading lights nothing — not the dial's ring, not the bar's fill. Three
+quarters of a lit ring beside the word "rough" is the tool contradicting itself
+in the one place the contradiction gets burned into a file.
+
+### Presets
+
+Eleven instruments and four style pickers is a lot to meet at once, and the
+person opening the designer has come to make a video. `GP_HUD_PRESETS` — Drift,
+Circuit, Clean — sit at the top of the palette under "Start from".
+
+A preset sets **which instruments show and how they are drawn, and nothing
+else**: positions, sizes, layer order, locks and any widgets you made yourself
+all survive it. So trying one is not a decision. `gpHudEdPreset` walks every
+widget that *has* styles rather than only the ones its own spec names, or a
+dial left over from Drift would come through into Circuit and the preset would
+not be a preset.
+
+### The preset finds you
+
+A preset you have to go looking for is still setup, so the recording is asked
+which one it wants. `gpHudSuggest` reads two measurements and nothing else:
+
+- **Drift** — more than `GP_HUD_SUG_SLIDE_S` = 8 seconds past `GP_DRIFT_ON`.
+  Rough readings do not count toward it: a session full of angles the engine
+  will not stand behind is a bad instrument chain, not a drift day, and the
+  answer to that is a trust panel and not a layout.
+- **Circuit** — laps cut by a timing line, nothing held sideways.
+- **Clean** — neither.
+
+Drift beats Circuit deliberately — a drift day at a circuit has gate-timed laps
+too, and the angle is the more specific signal. Measured in **seconds, not
+samples**, so a 10 Hz VBO and a 25 Hz puck ring reach the same verdict.
+
+Shown as a banner above the presets in the designer, and as the sub-line of
+"Customise overlay…" in the HUD popover — which is where most people meet the
+HUD, and putting the answer only behind the door means only the people who
+already wanted to open it ever see it.
+
+**Offered, never applied.** What the overlay shows is burned into a file, and
+changing that on somebody's behalf is not a convenience. And **asked once**:
+"No thanks" writes `hud.sug`, and so does anything else that counts as an
+answer — a style, a nudge, a reorder, a lock, a widget switched off, a widget
+made. `gpHudUntouched` is the gate, and the banner never comes back after one.
+
+Pinned by `check_hud.js` (290 checks — every style scales exactly with H, both
+refusals reach the picture, the left column's flow keeps the counter-steer
+clear of all three angle shapes, and every branch of the suggestion including
+10 Hz parity) and `check_hudedit.js` (137 — the `st` and `sug` round trips
+through `gpCamLoad`, and every promise made about what a preset does not touch).
 
 ### The refactor was proved to be nothing
 

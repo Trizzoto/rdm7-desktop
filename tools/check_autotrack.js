@@ -46,6 +46,7 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyCardHtml',
     'gpTrackById', 'gpActiveTrack', 'gpIsTrial', 'gpRunWord', 'gpTrackUid', 'gpTracksSave', 'gpSaveOwned', 'gpImportSaid',
     'gpTraceHome', 'gpKmBetween', 'gpTrackReach', 'gpMatchTrack', 'gpHeadingAt', 'gpAngleDiff',
     'gpLoopClosure', 'gpProposeLine', 'gpAutoLine', 'gpAutoSetUp', 'gpStints',
+    'gpTrackFromDrive', 'gpUnnamedTrackName',
     'gpLapRange', 'gpLaneRanges', 'gpLaneScale', 'gpScaleFor',
     'gpLogChans', 'gpRingMinutes', 'gpLaneRows', 'gpLaneRowsAll',
     'gpDeviceChanIds', 'gpChanArraysEqual', 'gpChanToDevShape',
@@ -73,6 +74,7 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyCardHtml',
     'gpSnapGateToOutline'];
 const NEEDED_VAR = ['GP_SMOOTH_LIVE', 'GP_SMOOTH_MAXW', 'GP_OUTLINE_MAX', 'GP_OUTLINE_TOL_M', 'GP_RUN_STOP_KPH', 'GP_RUN_STOP_S', 'GP_RUN_MIN_S', 'GP_LANES', 'GP_CHAN_LS', 'GP_DEVCHAN_LS', 'GP_CHAN_BYTES', 'GP_CHAN_MAX', 'GP_CHAN_COLOURS',
     'GP_TRACE_HZ', 'GP_DT', 'GP_MAX_STEP_S', 'GP_MATCH_KM', 'GP_CLOSE_M',
+    'GP_DRIVE_MIN_LAPS', 'GP_DRIVE_SCATTER',
     'GP_MIN_LOOP_M', 'GP_PLACES', 'GP_FIX_TYPES', 'GP_STINT_GAP_S', 'GP_STINT_MIN_S',
     'GP_SHOW_LS', 'GP_GRP_PUCK', 'GP_GRP_HERE', 'GP_GRP_CAR', 'GP_GRP_NONE', 'GP_UNITS',
     'GP_MYCHAN_LS', 'GP_GRP_DASH', 'GP_GRP_DBC', 'GP_GRP_MINE', 'GP_BITRATES',
@@ -84,7 +86,11 @@ NEEDED_VAR.forEach(v => { code += grabVar(v) + '\n'; });
 NEEDED_FN.forEach(f => { code += grab(f) + '\n'; });
 
 /* ---- environment the extracted code expects --------------------------- */
-const env = { gp: null, localStorage: { getItem: () => null, setItem: () => {} } };
+/* setItem counts, because "the library was left exactly as it was" is
+   the load-bearing promise when a guess is rejected — these are somebody's
+   real, hand-placed tracks. */
+const env = { gp: null, writes: 0,
+    localStorage: { getItem: () => null, setItem: () => { env.writes++; } } };
 const run = new Function('env', code + '\n; return {' + NEEDED_FN.concat(NEEDED_VAR).join(',') + '};');
 /* `gp` is a free variable inside the extracted code — give it a real global. */
 global.gp = null;
@@ -294,12 +300,92 @@ for (let i = 0; i < 25 * 300; i++)
     mbElsewhere.push({ lat: -25.0 + i * 0.00001, lon: 133.0, kph: 90, hdg: 0, t: i * 40, g: 0 });
 ok('a drive in the middle of Australia still matches nothing', !F.gpMatchTrack(mbElsewhere));
 
-console.log('\nnowhere near a known circuit');
+console.log('\nnowhere near a known circuit, but provably a circuit anyway');
+/* The library knows 117 circuits by name. A private test track, an airfield,
+   a skidpan or a kart circuit is none of them — and the recording is still
+   the evidence. Four laps of the same closed loop in the middle of Australia
+   is a circuit session whatever the place is called. */
 freshGp();
 const nowhere = drive([-25.0, 133.0], 4, {});    /* middle of Australia */
 said = F.gpAutoSetUp(nowhere);
-ok('no track is invented', global.gp.tracks.tracks.length === 0);
-ok('it says so plainly', /not near any track/.test(said || ''), JSON.stringify(said));
+ok('a track is built from the drive itself', global.gp.tracks.tracks.length === 1,
+   JSON.stringify(global.gp.tracks.tracks.map(t => t.name)));
+ok('…named so it is obviously provisional',
+   global.gp.tracks.tracks[0].name === 'Unnamed circuit', global.gp.tracks.tracks[0].name);
+ok('…and marked as coming from a recording',
+   /recording/.test(global.gp.tracks.tracks[0].note || ''));
+ok('…it is the active track now', F.gpActiveTrack() === global.gp.tracks.tracks[0]);
+ok('…it carries the line it was built on', !!F.gpActiveTrack().start_finish);
+ok('…which sits where the car actually drove',
+   Math.abs(F.gpActiveTrack().start_finish.lat - (-25.0)) < 0.02 &&
+   Math.abs(F.gpActiveTrack().start_finish.lon - 133.0) < 0.02,
+   JSON.stringify(F.gpActiveTrack().start_finish));
+ok('…and the laps time', F.gpSplitRows(nowhere).length >= 3,
+   String(F.gpSplitRows(nowhere).length));
+ok('it says what it made, and what to do about it',
+   /Made a circuit/.test(said || '') && /Name it/.test(said || ''), JSON.stringify(said));
+
+/* A second one is a second place, not a rename of the first. */
+const nowhere2 = drive([-24.0, 132.0], 4, {});
+F.gpAutoSetUp(nowhere2);
+ok('a second unnamed circuit is numbered, not collided with',
+   global.gp.tracks.tracks.length === 2 &&
+   global.gp.tracks.tracks[1].name === 'Unnamed circuit 2',
+   JSON.stringify(global.gp.tracks.tracks.map(t => t.name)));
+
+console.log('\nand a drive that is NOT a circuit still builds nothing');
+/* The bar is three consistent laps. Below it, the library must come back
+   exactly as it was — this is somebody's real, hand-placed track list. */
+{
+    freshGp();
+    const twice = drive([-25.0, 133.0], 2, {});
+    const before = env.writes || 0;
+    said = F.gpAutoSetUp(twice);
+    ok('two laps of a loop is not enough to mint a track',
+       global.gp.tracks.tracks.length === 0,
+       JSON.stringify(global.gp.tracks.tracks.map(t => t.name)));
+    ok('…the active track is left alone', global.gp.tracks.active === null);
+    ok('…nothing was written to the library', (env.writes || 0) === before);
+    ok('…and it says why', /not near any track/.test(said || ''), JSON.stringify(said));
+}
+{
+    /* Laps that are not the same lap. Same loop, but the last two are driven
+       at less than half the speed — a shakedown, or a drive that happens to
+       pass the same point, not a session. */
+    freshGp();
+    const fast = drive([-25.0, 133.0], 2, { vmax: 55 });
+    const slow = drive([-25.0, 133.0], 2, { vmax: 22 });
+    const t0 = fast[fast.length - 1].t + 40;
+    const ragged = fast.concat(slow.map(r => Object.assign({}, r, { t: r.t + t0 })));
+    const before = env.writes || 0;
+    said = F.gpAutoSetUp(ragged);
+    ok('laps that scatter are not one repeated circuit',
+       global.gp.tracks.tracks.length === 0,
+       JSON.stringify(global.gp.tracks.tracks.map(t => t.name)));
+    ok('…and that leaves the library untouched too',
+       (env.writes || 0) === before && global.gp.tracks.active === null);
+}
+{
+    /* Nowhere, and not a loop either. The oldest case, and still the answer. */
+    freshGp();
+    const line = [];
+    for (let i = 0; i < 25 * 300; i++)
+        line.push({ lat: -25.0 + i * 0.00002, lon: 133.0, kph: 90, hdg: 0, t: i * 40, g: 0 });
+    said = F.gpAutoSetUp(line);
+    ok('a straight line nowhere invents nothing', global.gp.tracks.tracks.length === 0);
+    ok('…and says so plainly', /not near any track/.test(said || ''), JSON.stringify(said));
+}
+{
+    /* And the whole thing stays off when the circuit IS known — building a
+       track from the drive must never shadow a real one. */
+    freshGp();
+    said = F.gpAutoSetUp(drive(WINTON.center, 4, {}));
+    ok('a known circuit is still recognised by name, not rebuilt',
+       global.gp.tracks.tracks.length === 1 &&
+       global.gp.tracks.tracks[0].name !== 'Unnamed circuit',
+       JSON.stringify(global.gp.tracks.tracks.map(t => t.name)));
+}
+freshGp();
 
 console.log('\na drive that never loops (a road trip, not a lap)');
 freshGp();
@@ -1614,6 +1700,15 @@ ok('it says where they came from, and what would give real laps',
 ok('and they are called RUNS, not laps', F.gpRunWord() === 'run', F.gpRunWord());
 ok('with no reference picked — there is no lap time to be quickest at',
    global.gp.cmpLap === -1, String(global.gp.cmpLap));
+/* And building a track from the drive must not reach in here and undo it.
+   Four runs over the same ground with a clock hole between each is still a
+   drive; every lap a proposed line cuts spans one of those holes and is
+   flagged, so there are no CLEAN laps to mint a circuit from. Without that
+   rule this recording came back as a minted circuit with real lap times on
+   it — the Mount Barker failure, rebuilt from the other end. */
+ok('and no circuit is minted from a drive with stops in it',
+   global.gp.tracks.tracks.length === 0,
+   JSON.stringify(global.gp.tracks.tracks.map(t => t.name)));
 
 /* A real gate still wins, and the word goes back to "lap". */
 freshGp();

@@ -50,7 +50,7 @@ function grabVar(s, name) {
     return s.slice(m.index, j) + ';';
 }
 
-const VARS = ['GP_HUD_WIDGETS', 'GP_CAM_LS', 'GP_HUD_MADE'];
+const VARS = ['GP_HUD_WIDGETS', 'GP_CAM_LS', 'GP_HUD_MADE', 'GP_HUD_STYLES', 'GP_HUD_PRESETS'];
 const FNS = ['gpHudOn', 'gpCamLoad', 'gpCamPut', 'gpCamSet', 'gpHudLayout', 'gpHudPlaceOf',
              'gpHudPlace', 'gpHudOrder', 'gpHudEdStore', 'gpHudEdSet', 'gpHudEdHit',
              'gpHudEdSize', 'gpHudEdOrderNow', 'gpHudEdMove', 'gpHudEdLocked', 'gpHudEdLock',
@@ -59,7 +59,9 @@ const FNS = ['gpHudOn', 'gpCamLoad', 'gpCamPut', 'gpCamSet', 'gpHudLayout', 'gpH
              'gpHudTrackShape', 'gpHudMadeType', 'gpHudMadeDef', 'gpHudMadeNeeds', 'gpHudDrawMade', 'gpHudMadeVal', 'gpHudMadeLo', 'gpHudMadeHi', 'gpHudMadeLit', 'gpHudMadeText', 'gpHudMadeUnit', 'gpHudMadeCap',
              'gpHudEdAdd', 'gpHudEdEdit', 'gpHudEdDelete', 'gpHudDashPlan',
              'gpHudNorm', 'gpHudWords', 'gpHudMatchChan',
-             'gpHudDashName'];
+             'gpHudDashName',
+             'gpHudStyle', 'gpHudEdStyle', 'gpHudEdPreset',
+             'gpHudUntouched', 'gpHudEdSugDone'];
 const parts = [], missing = [];
 for (const v of VARS) { try { parts.push(grabVar(src, v)); } catch (e) { missing.push(v); } }
 for (const f of FNS) { try { parts.push(grabFn(src, f)); } catch (e) { missing.push(f); } }
@@ -83,7 +85,11 @@ function env(opt) {
             return id === 'gpVideo' ? VIDEO : null; } };
         function gpVideoDrawOverlay() { PAINTS++; }
         function gpHudEdDraw() { DRAWS++; }
-        var PAINTS = 0, DRAWS = 0;
+        /* gpCamSet re-renders the Setup rail after every toggle — irrelevant
+           here, but a preset turns eight widgets on and off in a row and
+           without this the whole thing dies on the first one. */
+        function gpRenderSetup() { SETUPS++; }
+        var PAINTS = 0, DRAWS = 0, SETUPS = 0;
         var GP_HUD_ED = ARGed;
         ${parts.join('\n')}
         return {
@@ -97,6 +103,9 @@ function env(opt) {
             dashPlan: gpHudDashPlan, match: gpHudMatchChan,
             adds: gpHudAdds, addById: gpHudAddById, widgetList: gpHudWidgetList,
             madeBox: gpHudMadeBox,
+            styleOf: gpHudStyle, edStyle: gpHudEdStyle, preset: gpHudEdPreset,
+            hudStyles: GP_HUD_STYLES, presets: GP_HUD_PRESETS,
+            untouched: gpHudUntouched, sugDone: gpHudEdSugDone,
             stored: function () { return ARGstore.v; },
             counts: function () { return { paints: PAINTS, draws: DRAWS }; }
         };
@@ -738,6 +747,140 @@ console.log('\nchanging something changes the picture behind it too');
     ok('the editor redraws its own stage', c.draws >= 1, JSON.stringify(c));
     ok('…and the video tile underneath, so the two never disagree',
        c.paints >= 1, JSON.stringify(c));
+}
+
+/* ══ style variants, and the presets that set them ════════════════════════ */
+console.log('\na style is stored like a nudge: only when it is not the factory one');
+{
+    const E = env();
+    E.gp.cam = E.load();
+    ok('nothing stored means every widget is factory',
+       Object.keys(E.hudStyles).every(k => E.styleOf(k) === E.hudStyles[k][0][0]));
+
+    E.edStyle('hudAngle', 'dial');
+    const raw = E.stored();
+    ok('a chosen style reaches localStorage', /"dial"/.test(raw), raw && raw.slice(0, 120));
+
+    /* The trap this whole file exists for. `st` lives INSIDE hud, which
+       gpCamLoad carries as one object — put it beside hud on gp.cam and it
+       would be dropped on the next load with nothing to show for it. */
+    const F = env({ ls: raw });
+    F.gp.cam = F.load();
+    ok('…and gpCamLoad brings it back', F.styleOf('hudAngle') === 'dial');
+
+    F.edStyle('hudAngle', 'panel');
+    const back = env({ ls: F.stored() });
+    back.gp.cam = back.load();
+    ok('picking the factory style stores nothing rather than storing "panel"',
+       !/"panel"/.test(back.stored()), back.stored().slice(0, 140));
+    ok('…and it still reads as the factory style', back.styleOf('hudAngle') === 'panel');
+
+    /* A style is not a position. Choosing one must not disturb where the
+       widget was put, or the two controls fight each other. */
+    const G = env();
+    G.gp.cam = G.load();
+    G.edSet('hudAngle', { dx: 12, dy: -8, k: 1.5 });
+    G.edStyle('hudAngle', 'bar');
+    const gp2 = G.placeOf('hudAngle');
+    ok('choosing a style leaves the nudge alone',
+       gp2.dx === 12 && gp2.dy === -8 && near(gp2.k, 1.5), JSON.stringify(gp2));
+}
+
+console.log('\na preset sets the picture and touches nothing else');
+{
+    const E = env();
+    E.gp.cam = E.load();
+    /* Everything a preset must NOT disturb, set up first. */
+    E.edSet('hudSpeed', { dx: 30, dy: -6, k: 1.4 });
+    E.lock('hudMap', true);
+    const madeId = E.add('bar');
+    E.move('hudMap', -1);
+    const orderBefore = E.orderNow().join(',');
+
+    const drift = E.presets.findIndex(p => p[0] === 'Drift');
+    ok('there is a Drift preset', drift >= 0);
+    E.preset(drift);
+    ok('it sets the styles it names',
+       E.styleOf('hudAngle') === 'dial' && E.styleOf('hudG') === 'radar' &&
+       E.styleOf('hudMark') === 'badge',
+       [E.styleOf('hudAngle'), E.styleOf('hudG'), E.styleOf('hudMark')].join(','));
+    ok('…switches on what it wants', E.on('hudSteer') && E.on('hudRun') && E.on('hudAngle'));
+    ok('…and switches off what it does not',
+       !E.on('hudTacho') && !E.on('hudPedals') && !E.on('hudDelta'));
+
+    const p = E.placeOf('hudSpeed');
+    ok('a preset leaves a widget you had moved where you put it',
+       p.dx === 30 && p.dy === -6 && near(p.k, 1.4), JSON.stringify(p));
+    ok('…leaves the layer order alone', E.orderNow().join(',') === orderBefore);
+    ok('…leaves locks alone', E.locked('hudMap') === true);
+    ok('…and does not delete a widget you made', !!E.addById(madeId));
+
+    /* The reason gpHudEdPreset walks every styled widget rather than only the
+       ones its own spec names: a dial left over from Drift coming through
+       into Circuit would make the preset not a preset. */
+    const circuit = E.presets.findIndex(p2 => p2[0] === 'Circuit');
+    E.preset(circuit);
+    ok('switching preset clears a style the previous one set',
+       E.styleOf('hudAngle') === 'panel' && E.styleOf('hudG') === 'circle',
+       [E.styleOf('hudAngle'), E.styleOf('hudG')].join(','));
+    ok('…and switches the instruments back over',
+       E.on('hudTacho') && E.on('hudDelta') && !E.on('hudSteer'));
+
+    /* Every preset has to name a real widget and a real style, or it silently
+       does half of what it says. */
+    let bad = [];
+    E.presets.forEach(pr => {
+        Object.keys(pr[2].st || {}).forEach(k => {
+            const list = E.hudStyles[k];
+            if (!list || !list.some(s => s[0] === pr[2].st[k])) bad.push(pr[0] + ':' + k);
+        });
+        (pr[2].on || []).concat(pr[2].off || []).forEach(k => {
+            if (!E.widgets.some(w => w[0] === k)) bad.push(pr[0] + ':' + k);
+        });
+    });
+    ok('every preset names widgets and styles that exist', bad.length === 0, bad.join(' '));
+    ok('…and no preset both shows and hides the same widget',
+       E.presets.every(pr => !(pr[2].on || []).some(k => (pr[2].off || []).indexOf(k) >= 0)));
+    ok('…and between them they account for every instrument',
+       E.presets.every(pr => E.widgets.every(w =>
+           (pr[2].on || []).indexOf(w[0]) >= 0 || (pr[2].off || []).indexOf(w[0]) >= 0)),
+       'a preset that leaves one out lets the previous preset leak through');
+}
+
+console.log('\nthe suggestion is answered once, and stays answered');
+{
+    const E = env();
+    E.gp.cam = E.load();
+    ok('a fresh layout has not answered', E.untouched());
+
+    E.sugDone();
+    ok('…"No thanks" is an answer', !E.untouched());
+    const raw = E.stored();
+    ok('…and it reaches localStorage', /"sug"/.test(raw), raw && raw.slice(0, 120));
+
+    const F = env({ ls: raw });
+    F.gp.cam = F.load();
+    ok('…and survives the reload, so the banner does not come back',
+       !F.untouched());
+}
+{
+    /* Taking the offer marks it answered too — by the flag the button sets
+       and, independently, by the styles and visibility the preset writes.
+       Either alone is enough; both is belt and braces. */
+    const E = env();
+    E.gp.cam = E.load();
+    E.sugDone();
+    E.preset(0);
+    ok('taking the offer answers it', !E.untouched());
+    ok('…and the flag survives the preset writing over the same store',
+       /"sug"/.test(E.stored()), E.stored().slice(0, 160));
+
+    /* And a preset picked from the list, with no banner involved, also ends
+       the offer — otherwise it would return over a layout somebody chose. */
+    const G = env();
+    G.gp.cam = G.load();
+    G.preset(1);
+    ok('a preset chosen from the list ends the offer too', !G.untouched());
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
