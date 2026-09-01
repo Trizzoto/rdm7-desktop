@@ -49,17 +49,18 @@ brief expected, because the thing was already there and not being said.
 | 4 · One layout format | **built** | `e8f9dad` + `RDM-7_Dash c27c3b0` |
 | 7 · Background exports | **built** | `e39dba9` |
 | 5 · Auto-highlights | **built** | `26535a5` |
-| 6 · Two-lap comparison | **foundations only** | `da9f6af` |
+| 6 · Two-lap comparison | **built** | `da9f6af` + `c499dfd` |
 
-**Item 6 is the one that is not finished.** Its two foundations are in and
-tested — the frame pairing `gpDeltaSeries` had always computed and discarded,
-and `gpGhostVideoTimeFor`, which is the single arithmetic gap in comparing
-against another day. So are the layouts, the pull-along test and the delta bar.
-What is missing is the decoder wiring: a second `VideoDecoder` driven on demand
-inside `gpExportFast`'s output callback, two HUD calls each under their own
-snapshot, and the composite. That is a new export path, and node has no
-WebCodecs — the pairing, the geometry and the muxing can be proved here, two
-concurrent decoders cannot be proved anywhere but a browser with real footage.
+**All eight are built.** Item 6 landed last, and its merge — the reference
+decoder pulled along by the analysed one — is where the interesting bug was: if
+the next reference frame is already past the target, the held one is final, and
+waiting for a better one stalls both pumps. Measured against two real decoders
+in the browser, the version that waited composed ONE frame of forty. That is
+the one class of thing the harnesses cannot reach — node has no WebCodecs — so
+the concurrency and the merge were proved in Chromium instead.
+
+Still unproven, and only provable with a camera: the full comparison pipeline
+against two real files with rotation and HEVC.
 
 **Two things need a decision that is not mine:**
 
