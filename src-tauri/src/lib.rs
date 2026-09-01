@@ -1993,6 +1993,18 @@ pub fn run() {
                 });
             }
 
+            // ── Say which build this is ──────────────────────────────────
+            // The installed app and `cargo tauri dev` are both called
+            // rdm7-desktop.exe and both title their window "RDM Studio", so
+            // in tasklist and on screen they are indistinguishable — and an
+            // installed build weeks behind the tree looks exactly like a dev
+            // build that failed to pick up a change. Only the dev one says
+            // so.
+            #[cfg(debug_assertions)]
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.set_title("RDM Studio — dev");
+            }
+
             // ── Native application menu ──────────────────────────────────
             // Every custom item emits a `menu-action` event carrying its id;
             // the frontend routes it to the matching editor function. Native
