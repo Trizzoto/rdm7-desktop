@@ -70,11 +70,19 @@ anchors, scale 0.974), typical ±1.21° against worst ±10.24°, and the 136.091
 lap. Confident nearly everywhere and far less certain somewhere is exactly what
 the trust panel's angle row watches for, and now a real recording holds it still.
 
-**One decision is still not mine:** the **Donington VBO** carries `(c) Racelogic`
-in its own comments, so whether it may be committed is a licence question, not a
-technical one. It stays outside the repo; `check_laptime.js` reads it from
-wherever it is and skips with a note. Named in `tools/fixtures/fixtures.json`
-under `_wanted`.
+**The Donington VBO is in too** (`eb0e4be`), on his instruction — the licence
+question was his to answer and he answered it. It goes in byte for byte, only
+gzipped, `(c) Racelogic` notice and all, with the attribution recorded beside it
+in `fixtures.json`. It earns its place twice over: its lap times are checkable
+against **Circuit Tools 3** — a different program, written by different people,
+from the same raw file, agreeing to within 3 ms on all six flying laps — which
+is the only thing here that can catch us being consistently and confidently
+wrong. And at 10 Hz it is the only committed recording that is not 25 Hz, so it
+catches anything reading a cadence off a constant rather than off the data.
+
+**Nothing is outstanding.** All three wanted recordings are committed: 4.7 MB of
+immutable fixture against a repo whose history is already 207 MB of one HTML
+file's revisions.
 
 ## Order, and why
 
