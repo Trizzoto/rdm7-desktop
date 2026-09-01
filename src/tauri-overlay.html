@@ -1333,15 +1333,6 @@
         .gp-mapbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
         .gp-tip .k { display: inline-block; min-width: 74px; color: var(--text);
                      font-family: 'JetBrains Mono', monospace; font-size: 10px; }
-        .gp-glance { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
-        .gp-glance .t { background: var(--bg); border: 1px solid var(--border);
-                        border-radius: var(--radius-md); padding: 7px 9px; }
-        .gp-glance .t span { display: block; font-size: 9px; text-transform: uppercase;
-                             letter-spacing: 0.06em; color: var(--text-muted); }
-        .gp-glance .t b { font-family: 'JetBrains Mono', monospace; font-size: 15px;
-                          font-weight: 500; color: var(--text); }
-        .gp-glance .t i { display: block; font-style: normal; font-size: 9.5px;
-                          color: var(--text-muted); margin-top: 1px; }
         /* g legend */
         .gp-glegend { display: flex; height: 12px; border-radius: 3px; overflow: hidden; border: 1px solid var(--border); }
         .gp-glegend i { flex: 1; }
@@ -2882,14 +2873,7 @@
         #gpWorkspace .gp-seclegend { color: var(--gpb-muted); }
         #gpWorkspace .gp-seclegend b { color: var(--gpb-ink); }
 
-        /* ---- glance tiles / legends / sector chips ---- */
-        #gpWorkspace .gp-glance .t { background: transparent; border: 1px solid var(--gpb-div); }
-        #gpWorkspace .gp-glance .t span { color: var(--gpb-muted); }
-        #gpWorkspace .gp-glance .t b {
-            font-family: var(--gpb-head); font-weight: 600; color: var(--gpb-ink);
-            font-variant-numeric: tabular-nums;
-        }
-        #gpWorkspace .gp-glance .t i { color: var(--gpb-muted); }
+        /* ---- legends / sector chips ---- */
         #gpWorkspace .gp-glegend { color: var(--gpb-muted); }
         /* Three states, and they have to be three different things at a
            glance. Best-of-the-session is the broadcast screen's purple
@@ -5466,7 +5450,7 @@
             h += "</div>";
             return h;
         }
-        function _kpKey() { return kp.keys[kp.selected]; }
+
         window.kpAlertAdd = function (ki) {
             var k = kp.keys[ki]; if (!k) return; if (!k.alerts) k.alerts = [];
             k.alerts.push({ chan: "coolant_temp", op: ">", val: 100, color: "red", behavior: "fast" });
@@ -7181,7 +7165,7 @@
         /* --- bit ↔ cell mapping (mirrors _wsExtractBits' flat-index model) ---
            Cells laid MSB-left (col 0 = bit 7 of the byte). Big-endian flat index
            counts MSB0 across bytes; little-endian counts LSB0 within each byte. */
-        function caCellToFlat(byte, col, le) { return le ? (byte * 8 + (7 - col)) : (byte * 8 + col); }
+
         function caFlatToCell(flat, le) { return { byte: flat >> 3, col: le ? (7 - (flat & 7)) : (flat & 7) }; }
         function caCellsFor(start, len, le) {  /* set of "byte_col" keys a field covers */
             var set = {};
@@ -12904,96 +12888,25 @@
                    "data-gp-bulktrack>" + o + "</select>";
         }
 
-        function gpRecordingsHtml() {
-            var h = "";
-            if (gp.sessions === null) return "<div class='ws-note'>Reading\u2026</div>";
-            /* A trace on screen with nothing backing it: you deleted the saved
-               copy, or the save failed. Either way the list must not claim
-               nothing is loaded while a session is plainly showing below it. */
-            var orphan = gp.trace && gp.trace.length && !gp.sessionId
-                ? "<div class='ws-note' style='border-left-color:#FF9F0A'>The recording on screen is " +
-                  "<b>not saved</b> \u2014 it will be gone when Studio closes.</div>"
-                : "";
-            if (!gp.sessions.length) {
-                return orphan + "<div class='ws-none' style='padding:14px 6px'>Nothing saved yet.<br>" +
-                       "Downloads are kept here automatically.</div>" + gpSesImportHtml();
-            }
-            h += orphan;
-            gp.sessions.forEach(function (s) {
-                var on = s.id === gp.sessionId;
-                var bits = [];
-                if (s.dated === "gps") bits.push(gpEsc(gpSesDate(s.recordedAt)));
-                else bits.push("<span class='undated' title='the node had no fix when this was downloaded, so this is when it arrived'>" +
-                               gpEsc(gpSesDate(s.recordedAt)) + " (downloaded)</span>");
-                bits.push((s.durationS / 60).toFixed(1) + " min");
-                if (s.bestLapS) bits.push("best " + gpLapTime(s.bestLapS));
-                /* Its own lap times, shortest bar to tallest \u2014 not a
-                   cross-session trend, just enough to see "a clean run" or
-                   "a mess of outliers" before opening it. */
-                var trend = "";
-                if (s.lapTimesS && s.lapTimesS.length > 1) {
-                    var bT = Math.min.apply(null, s.lapTimesS), wT = Math.max.apply(null, s.lapTimesS);
-                    var tspan = wT - bT || 1;
-                    trend = "<span class='gp-ses-trend'>" + s.lapTimesS.map(function (t) {
-                        var bh = Math.round(5 + ((t - bT) / tspan) * 11);
-                        return "<i class='" + (t === bT ? "best" : "") + "' style='height:" + bh + "px'></i>";
-                    }).join("") + "</span>";
-                }
-                h += "<button class='ws-item" + (on ? " on" : "") + "' data-gp-ses='" + gpEsc(s.id) + "'>" +
-                     "<span class='st" + (on ? " on" : "") + "'></span>" + gpEsc(s.name) +
-                     "<span class='tag'>" + (s.lapCount || 0) + (s.trial ? " run" : " lap") + (s.lapCount === 1 ? "" : "s") + "</span>" +
-                     trend +
-                     "<div class='gp-ses-n'>" + bits.join(" \u00b7 ") + "</div></button>";
-                if (on) {
-                    h += "<div class='gp-ses-act'>" +
-                         "<input type='text' class='gp-ses-field' placeholder='Car' maxlength='24' value='" +
-                         gpEsc(s.car || "") + "' data-gp-ses-car='" + gpEsc(s.id) + "'>" +
-                         "<input type='text' class='gp-ses-field' placeholder='Driver' maxlength='24' value='" +
-                         gpEsc(s.driver || "") + "' data-gp-ses-driver='" + gpEsc(s.id) + "'></div>";
-                    h += "<div class='gp-ses-act'>" +
-                         "<button class='ws-btn-line' data-gp-ses-ren='" + gpEsc(s.id) + "'>Rename</button>" +
-                         "<button class='ws-btn-line' data-gp-ses-vbo='" + gpEsc(s.id) + "' title='Racelogic VBO — opens in Circuit Tools, Track Attack and DataSpeed, with this track&#39;s start/finish and splits already in it'>VBO</button>" +
-                         "<button class='ws-btn-line' data-gp-ses-csv='" + gpEsc(s.id) + "' title='one row per sample, for Excel / i2 / RaceRender'>CSV</button>" +
-                         "<button class='ws-btn-line' data-gp-ses-file='" + gpEsc(s.id) + "' title='the whole recording as one file, for another PC running Studio'>Export</button>" +
-                         "<button class='ws-btn-line' data-gp-ses-del='" + gpEsc(s.id) + "'>Delete</button></div>";
-                }
-            });
-            h += gpSesImportHtml();
-            return h;
-        }
-
         function gpBindSessionRail(rail) {
             var bind = function (attr, fn) {
                 Array.prototype.forEach.call(rail.querySelectorAll("[" + attr + "]"), function (b) {
                     b.addEventListener("click", function (e) { e.stopPropagation(); fn(b.getAttribute(attr)); });
                 });
             };
-            bind("data-gp-tab", function (v) { window.gpRailTabSet(v); });
+            /* Laps and ghosts, which is all the rail holds. The eight
+               session-row bindings that used to be here — open, rename,
+               delete, car, driver, VBO, CSV, .rdmsession — were for rows the
+               rail stopped rendering when Sessions became a table on the
+               stage. gpRenderSessions emits that markup now and binds it
+               itself; querySelectorAll finding nothing is silent, so the pair
+               sat here looking like working code. */
             bind("data-gp-lap", function (v) { window.gpSelectLap(v); });
             bind("data-gp-cmp", function (v) { window.gpCompareLap(v); });
             bind("data-gp-ghost", function (v) { window.gpCompareGhost(v); });
             Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-ghost-lap]"), function (sel) {
                 sel.addEventListener("change", function () { window.gpGhostLap(sel.value); });
             });
-            bind("data-gp-ses-ren", function (v) { window.gpSessionRename(v); });
-            var field = function (attr, key) {
-                Array.prototype.forEach.call(rail.querySelectorAll("[" + attr + "]"), function (inp) {
-                    inp.addEventListener("click", function (e) { e.stopPropagation(); });
-                    inp.addEventListener("change", function () {
-                        var cur = (gp.sessions || []).filter(function (s) { return s.id === inp.getAttribute(attr); })[0];
-                        if (!cur) return;
-                        cur[key] = String(inp.value || "").trim().slice(0, 24);
-                        gpStore.putMeta(cur);
-                    });
-                });
-            };
-            field("data-gp-ses-car", "car");
-            field("data-gp-ses-driver", "driver");
-            bind("data-gp-ses-vbo", function (v) { window.gpSessionExportVbo(v); });
-            bind("data-gp-ses-csv", function (v) { window.gpSessionExportCsv(v); });
-            bind("data-gp-ses-file", function (v) { window.gpSessionExportFile(v); });
-            bind("data-gp-ses-del", function (v) { window.gpSessionDelete(v); });
-            bind("data-gp-ses", function (v) { if (v !== gp.sessionId) window.gpSessionLoad(v); });
         }
 
         /* ---- Laps pane: everything about the recording that's loaded ------
@@ -13123,28 +13036,6 @@
             }
             return h;
         }
-
-        /* Which pane is showing — in memory only (resets with the app, like
-           plotMode does), defaulting to whichever answers the question
-           you're more likely to be asking: browse recordings with nothing
-           loaded, dig into laps once something is. */
-        function gpRailTab() {
-            if (gp.railTab !== "sessions" && gp.railTab !== "laps")
-                gp.railTab = (gp.trace && gp.trace.length) ? "laps" : "sessions";
-            return gp.railTab;
-        }
-        window.gpRailTabSet = function (t) {
-            if (t !== "sessions" && t !== "laps") return;
-            gp.railTab = t;
-            var rail = document.getElementById("gpRail");
-            if (!rail) return;
-            Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-tab]"), function (b) {
-                b.classList.toggle("on", b.getAttribute("data-gp-tab") === t);
-            });
-            Array.prototype.forEach.call(rail.querySelectorAll("[data-gp-pane]"), function (p) {
-                p.classList.toggle("on", p.getAttribute("data-gp-pane") === t);
-            });
-        };
 
         /* ---- Session rail: two panes, Sessions and Laps -------------------
            Used to be one long stack — every saved recording, then the whole
@@ -19871,35 +19762,11 @@
             return { cls: "on", say: "Live." };
         }
 
-        /* ---- Mode control, glance, keyboard --------------------------------
-           The paddock questions, answered before any clicking: which lap was
-           best, how consistent the session was, and how much the ideal-sector
-           lap says is still on the table. */
-        function gpGlanceHtml() {
-            var laps = (gp.traceLaps || []).filter(function (l) { return !l.ghost; });
-            if (laps.length < 2) return "";
-            var n = laps.length, best = Infinity, bi = 0, sum = 0, worst = 0, i, tl;
-            for (i = 0; i < n; i++) {
-                tl = gpSecs(gp.trace, laps[i].from, laps[i].to);
-                sum += tl;
-                if (tl < best) { best = tl; bi = i; }
-                if (tl > worst) worst = tl;
-            }
-            var S = gpSessionSectors();
-            var ideal = (S && S.best && S.best.length > 1)
-                ? S.best.reduce(function (a, b) { return a + b; }, 0) : null;
-            var h = "<div class='gp-glance'>";
-            h += "<div class='t'><span>best</span><b>" + gpLapTime(best) +
-                 "</b><i>lap " + (bi + 1) + "</i></div>";
-            h += "<div class='t'><span>average</span><b>" + gpLapTime(sum / n) +
-                 "</b><i>" + n + " laps</i></div>";
-            h += "<div class='t'><span>spread</span><b>" + (worst - best).toFixed(2) +
-                 " s</b><i>best to worst</i></div>";
-            if (ideal !== null && best - ideal > 0.005)
-                h += "<div class='t'><span>on the table</span><b>" + (best - ideal).toFixed(2) +
-                     " s</b><i>vs ideal sectors</i></div>";
-            return h + "</div>";
-        }
+        /* ---- Mode control, keyboard ---------------------------------------
+           The paddock questions — which lap was best, how consistent the
+           session was, what the ideal sectors say is still on the table —
+           are the Lap report and Where the time went panels now (ADR-0025).
+           The glance strip that used to answer them here is gone. */
 
         /* The button over the rack opens the channel list rather than toggling
            one preset view of it. It says how many of how many are drawn,
@@ -22507,19 +22374,8 @@
            called Record — which made the app say a drive needed Record pressed
            first. It does not: the node boots logging (trace_log.c) and writes
            above 8 km/h whether or not a laptop is attached. The two jobs are
-           now two buttons, and only one of them touches the node. */
-        window.gpTraceRecord = function (on) {
-            var dev = gpDev();
-            if (!dev || !dev.traceRecord) return;
-            dev.traceRecord(on).then(function () {
-                gpDrawStrip();
-                gpSetMsg("gpTraceMsg", on
-                    ? "Logging resumed — it writes above 8 km/h."
-                    : "Logging paused. A power cycle turns it back on.", on ? "ok" : "warn");
-                return dev.traceInfo();
-            }).then(function (i) { gp.traceInfo = i; gpRenderInspector(); })
-              .catch(function (e) { gpSetMsg("gpTraceMsg", "Failed: " + (e && e.message ? e.message : e), "bad"); });
-        };
+           two buttons below, gpRecToggle and gpLiveWatch, and only one of them
+           touches the node. */
 
         /* The topbar ● REC button. One press, no dialog: it flips a flag on
            the node and destroys nothing, and the button's own colour is the
@@ -26449,11 +26305,9 @@
                     window.gpDriftGoto(tr.getAttribute("data-gp-dgo"));
                 });
             });
-            Array.prototype.forEach.call(el.querySelectorAll("[data-gp-dsw]"), function (tr) {
-                tr.addEventListener("click", function () {
-                    window.gpDriftGoto(tr.getAttribute("data-gp-dsw"));
-                });
-            });
+            /* No [data-gp-dsw] listener: gpb-dsw is the swatch's CLASS, and
+               the attribute on it is data-gp-dshow, bound above. The query
+               here matched nothing from the day it was written. */
             Array.prototype.forEach.call(el.querySelectorAll("[data-gp-dstep]"), function (b) {
                 b.addEventListener("click", function () {
                     window.gpDriftCornerStep(parseInt(b.getAttribute("data-gp-dstep"), 10));
@@ -27460,16 +27314,6 @@
             return { why: worst.name.toLowerCase() + " phase",
                      try: "Watch this corner back against the reference lap and compare your " +
                           "line — the loss is in the " + worst.name.toLowerCase() + "." };
-        }
-
-        /* The paddock question is never "show me everything". It is "what are
-           the three things". */
-        function gpTopOpportunities(ops, n) {
-            var sorted = ops.slice().sort(function (a, b) { return b.total_s - a.total_s; });
-            var out = [];
-            for (var i = 0; i < sorted.length && out.length < n; i++)
-                if (sorted[i].total_s > 0.02) out.push(sorted[i]);
-            return out;
         }
 
         /* ---- draw ---------------------------------------------------------- */
@@ -32657,6 +32501,15 @@
            amber where it was quick. Chosen to sit on the violet ground the way
            a lit road sits on a dark city — the same reason those maps are dark
            in the first place. */
+
+        /* The night ramp: deep violet where it was slow, through magenta, to
+           amber where it was quick. Chosen to sit on the violet ground the way
+           a lit road sits on a dark city — the same reason those maps are dark
+           in the first place.
+
+           Nothing in the overlay calls it — the minimap route is a constant
+           neutral line by decision, see gpHudMinimap — but check_hud pins its
+           shape, so it is kept deliberately rather than left lying about. */
         function gpHudNightColour(x) {
             var t = Math.max(0, Math.min(1, x));
             var stops = [[0.00, 108, 76, 220], [0.45, 214, 76, 190],
@@ -37714,7 +37567,6 @@
             if (n === null) return "—";
             return (n >= 0 ? "+" : "") + n.toFixed(2);
         }
-        function gpLapTiming() { return (gp.lap && gp.lap.timing) || {}; }
 
         /* ---- who is doing the timing? -------------------------------------
          * The node, and only the node (ADR-0008, 2026-07-30): it holds the
@@ -39614,11 +39466,6 @@
             return t || null;
         }
 
-        function gpPlaceName(placeId) {
-            var p = GP_PLACES.filter(function (x) { return x.id === placeId; })[0];
-            return p ? p.name : null;
-        }
-
         window.gpTrackNew = function (placeId) {
             var place = GP_PLACES.filter(function (p) { return p.id === placeId; })[0];
             /* Already opened once: select it, do not make another. */
@@ -39747,9 +39594,6 @@
         /* How far a point is from the drawn shape. Null when there is no shape
            — which is not the same as "far", and the caller has to tell them
            apart. */
-        function gpOutlineDistM(t, lat, lon) {
-            return gpPtsDistM(t && t.outline && t.outline.pts, lat, lon);
-        }
 
         function gpPtsDistM(pts, lat, lon) {
             if (!pts || pts.length < 2) return null;
