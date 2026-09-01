@@ -20,9 +20,12 @@ const zlib = require('zlib');
 
 const ROOT = path.join(__dirname, '..');
 const SRC = fs.readFileSync(path.join(ROOT, 'src/tauri-overlay.html'), 'utf8');
-const RING = process.argv[2] || path.join(
-    process.env.USERPROFILE || process.env.HOME || '',
-    'Documents', 'RDM sessions', 'puck-ring-2026-08-22.jsonl.gz');
+/* Committed, since ADR-0050: a real drive cannot be regenerated from a seed,
+   so it is the one class of fixture the repo's regenerate-don't-commit rule
+   does not cover. The old home-directory path still wins when given, for
+   working against a different ring. */
+const RING = process.argv[2] ||
+    path.join(__dirname, 'fixtures', 'mountbarker-ring-2026-08-22.jsonl.gz');
 
 /* ---- pull the real code out of the app -------------------------------- */
 function grab(name) {

@@ -1,0 +1,212 @@
+{
+  "info": {
+    "recording": true,
+    "capacity_samples": 172992,
+    "used_samples": 172992,
+    "session": 2,
+    "wrapped": true,
+    "dropped": 0,
+    "sample_hz": 25,
+    "page_samples": 200,
+    "n_channels": 12,
+    "record_bytes": 38
+  },
+  "channels": {
+    "channels": [
+      {
+        "can_id": 1312,
+        "start_bit": 0,
+        "bit_len": 16,
+        "is_signed": true,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      },
+      {
+        "can_id": 1312,
+        "start_bit": 16,
+        "bit_len": 16,
+        "is_signed": false,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      },
+      {
+        "can_id": 1314,
+        "start_bit": 48,
+        "bit_len": 16,
+        "is_signed": false,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      },
+      {
+        "can_id": 1334,
+        "start_bit": 0,
+        "bit_len": 16,
+        "is_signed": false,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      },
+      {
+        "can_id": 1312,
+        "start_bit": 32,
+        "bit_len": 16,
+        "is_signed": false,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      },
+      {
+        "can_id": 1312,
+        "start_bit": 48,
+        "bit_len": 16,
+        "is_signed": false,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      },
+      {
+        "can_id": 1319,
+        "start_bit": 48,
+        "bit_len": 16,
+        "is_signed": false,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      },
+      {
+        "can_id": 1313,
+        "start_bit": 32,
+        "bit_len": 16,
+        "is_signed": true,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      },
+      {
+        "can_id": 1328,
+        "start_bit": 48,
+        "bit_len": 16,
+        "is_signed": false,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      },
+      {
+        "can_id": 1328,
+        "start_bit": 32,
+        "bit_len": 16,
+        "is_signed": false,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      },
+      {
+        "can_id": 1335,
+        "start_bit": 0,
+        "bit_len": 16,
+        "is_signed": false,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      },
+      {
+        "can_id": 1328,
+        "start_bit": 0,
+        "bit_len": 16,
+        "is_signed": false,
+        "ext_id": false,
+        "big_endian": false,
+        "fresh": false
+      }
+    ]
+  },
+  "lap_status": {
+    "has_track": true,
+    "track_name": "Mount Barker Time Trial",
+    "point_to_point": true,
+    "timing": {
+      "armed": false,
+      "lap_number": 0,
+      "lap_time_current": 0,
+      "lap_time_last": 0,
+      "lap_time_best": 0,
+      "lap_time_theoretical": 0,
+      "sector_number": 0,
+      "sector_time_current": 0,
+      "sector_time_last": 0,
+      "distance_m": 0,
+      "fixes_seen": 1690,
+      "rejected_width": 0,
+      "rejected_mintime": 0,
+      "dropped_gap": 0,
+      "dropped_stopped": 0,
+      "dropped_long": 0
+    }
+  },
+  "device": {
+    "device_type": "gps",
+    "device_class": 2,
+    "name": "RDM GPS",
+    "serial": "1CDBD4880D18",
+    "firmware": "0.1.0",
+    "hw_rev": 0,
+    "base_id": 1024,
+    "bitrate_idx": 2,
+    "bitrate": "500 kbps",
+    "fast_hz": 25,
+    "slow_hz": 5,
+    "imu_present": true,
+    "tz_offset_min": 570
+  },
+  "history": {
+    "laps": [],
+    "returned": 0,
+    "total": 0
+  },
+  "track": {
+    "name": "Mount Barker Time Trial",
+    "min_lap_time_s": 10,
+    "start_finish": {
+      "lat": -35.0922136,
+      "lon": 138.8391329,
+      "heading": 194.10000610351562,
+      "half_width_m": 5.099999904632568
+    },
+    "sectors": [
+      {
+        "lat": -35.0927628,
+        "lon": 138.8270726,
+        "heading": 268.6199951171875,
+        "half_width_m": 11.600000381469727
+      },
+      {
+        "lat": -35.0941719,
+        "lon": 138.8205443,
+        "heading": 239.14999389648438,
+        "half_width_m": 15
+      },
+      {
+        "lat": -35.0989044,
+        "lon": 138.8152073,
+        "heading": 217.5890655517578,
+        "half_width_m": 9.399999618530273
+      },
+      {
+        "lat": -35.1022115,
+        "lon": 138.8089207,
+        "heading": 249.6287384033203,
+        "half_width_m": 6.400000095367432
+      }
+    ],
+    "point_to_point": true,
+    "finish": {
+      "lat": -35.1048439,
+      "lon": 138.8063175,
+      "heading": 185.58999633789062,
+      "half_width_m": 15
+    }
+  }
+}

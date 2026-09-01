@@ -2,24 +2,25 @@ name: Frontend Merge Check
 
 # The desktop frontend is BUILT, not edited: tools/merge_overlay.py applies
 # src/tauri-overlay.html onto src/firmware-base.html (ADR-0007). This check
-# fails when an overlay anchor no longer matches the base (drift) or the
-# merged output contains a script syntax error.
+# fails when an overlay anchor no longer matches the base (drift), or when any
+# harness in tools/ fails.
+#
+# It runs the harnesses now (ADR-0050). It used to re-implement
+# tools/check_syntax.js as an inline one-liner and stop there, which meant the
+# 35 harnesses — including the ones pinned against real recordings — only ever
+# ran on one person's machine.
 
 on:
   push:
     branches: ["**"]
     paths:
-      - "src/firmware-base.html"
-      - "src/tauri-overlay.html"
-      - "src/transport.js"
-      - "tools/merge_overlay.py"
+      - "src/**"
+      - "tools/**"
       - ".github/workflows/frontend-merge-check.yml"
   pull_request:
     paths:
-      - "src/firmware-base.html"
-      - "src/tauri-overlay.html"
-      - "src/transport.js"
-      - "tools/merge_overlay.py"
+      - "src/**"
+      - "tools/**"
       - ".github/workflows/frontend-merge-check.yml"
 
 jobs:
@@ -33,26 +34,23 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Pinned. The harnesses are developed on 22.x and the runner's default
+      # moves; a suite that passes here and fails at the desk (or the reverse)
+      # is worse than no suite.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Merge overlay onto firmware base
         run: python tools/merge_overlay.py
 
-      - name: Syntax-check merged inline scripts
-        run: |
-          node -e '
-            const fs = require("fs");
-            const { execFileSync } = require("child_process");
-            const html = fs.readFileSync("src/dist/index.html", "utf8");
-            const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
-            let m, i = 0, fail = 0;
-            while ((m = re.exec(html)) !== null) {
-              i++;
-              fs.writeFileSync(`/tmp/blk${i}.js`, m[1]);
-              try { execFileSync(process.execPath, ["--check", `/tmp/blk${i}.js`], { stdio: "pipe" }); }
-              catch (e) { fail++; console.log(`script #${i}: SYNTAX ERROR\n` + e.stderr.toString()); }
-            }
-            console.log(fail ? `FAILED: ${fail}/${i}` : `all ${i} script blocks parse clean`);
-            process.exit(fail ? 1 : 0);
-          '
+      # check_syntax.js parses every inline <script> in BOTH the merged
+      # dist/index.html and src/tauri-overlay.html — the only check that
+      # catches a broken string literal between two functions, which every
+      # function-lifting harness sails straight past.
+      - name: Run the harnesses
+        run: node tools/check_all.js
 
       - name: Syntax-check transport.js
         run: node --check src/transport.js

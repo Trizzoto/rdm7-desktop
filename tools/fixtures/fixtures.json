@@ -1,0 +1,43 @@
+{
+  "_": [
+    "The recordings the analysis engine is pinned against (ADR-0050).",
+    "",
+    "Real drives, committed on purpose. The .gitignore rule in this repo is",
+    "regenerate-don't-commit, and it is right for make_fixture.js and",
+    "make_drift_fixture.js output — nearly a megabyte of synthetic drive that",
+    "any checkout rebuilds byte-identically from a fixed seed. A real drive",
+    "cannot be rebuilt from a seed, which is the whole exception.",
+    "",
+    "These files are IMMUTABLE. Never regenerate one to make a test pass. A",
+    "recording that needs replacing is a new file, a new name and a new sheet.",
+    "",
+    "To add one: drop the file here, add an entry below, then",
+    "  node tools/make_expected.js <name>            read the numbers",
+    "  node tools/make_expected.js <name> --bless    sign them off"
+  ],
+  "fixtures": [
+    {
+      "name": "mountbarker-ring-2026-08-22",
+      "file": "mountbarker-ring-2026-08-22.jsonl.gz",
+      "meta": "mountbarker-ring-2026-08-22.meta.json",
+      "kind": "ring",
+      "note": "The 22 Aug puck ring, off the node whole: 168,105 samples, 12 CAN channels, the gyro, and six real GNSS breaks that were found by hand and written up in docs/IN_THE_CAR_2026-08-22.md before any of the detecting code existed. Carries its own track (Mount Barker Time Trial) and the trace.info the recorder reported, so nothing here depends on what is in anybody's library."
+    }
+  ],
+  "_wanted": [
+    "Two more are wanted and are not here yet:",
+    "",
+    "mallala-2026-08-23 — the session whose slip angle read +54 then -48 degrees",
+    "  inside one corner. It is the recording every angle change should be",
+    "  measured against, and it lives only in Studio's IndexedDB. Export it from",
+    "  the Sessions list (.rdmsession), gzip it in here, add a kind:rdmsession",
+    "  entry, and bless it.",
+    "",
+    "donington-driver1 — the RaceRender demo VBO, and the only fixture whose",
+    "  expected lap times do not come from us: they can be checked against",
+    "  Circuit Tools 3. Its [comments] block carries (c) Racelogic, so whether it",
+    "  may be committed is a licence question and not a technical one. Until that",
+    "  is answered it stays outside the repo and check_laptime.js reads it from",
+    "  wherever it is, skipping with a note when it is absent."
+  ]
+}
