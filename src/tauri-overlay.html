@@ -11688,6 +11688,175 @@
             return h;
         }
 
+        /* ---- filling the trend in ------------------------------------------
+         * "History at this track" reads session METADATA only, and filters on
+         * trackId. But trackId is assigned ONCE, at save, from whatever track
+         * happened to be active — and only when the car came within 300 m of
+         * that track's line. So every recording saved before its circuit was
+         * added, every .rdmsession imported from another PC, and every sim
+         * stint carries trackId: null, and stays invisible to the trend no
+         * matter how many days are saved.
+         *
+         * There is already a heal for this, and it is thorough — but it only
+         * runs when you OPEN a session. A library of thirty recordings where
+         * twenty-five have not been opened since the track was added still
+         * trends five.
+         *
+         * So: walk the library once, and file the ones that can be filed.
+         * Against tracks that are ALREADY in the library and nothing else —
+         * gpMatchTrack would happily mint a new one from its world list, and a
+         * bulk sweep that grows somebody's track library without being asked
+         * is a different feature from the one this is.
+         */
+        function gpHistoryBackfillable() {
+            var nT = ((gp.tracks && gp.tracks.tracks) || []).length;
+            if (!nT) return [];
+            return (gp.sessions || []).filter(function (m) {
+                if (m.trackId || m.noTrack) return false;
+                /* Tried already, against a library that has not grown since.
+                   Adding a circuit is exactly what makes a second sweep worth
+                   running, and nothing else is. */
+                return !(gpN(m.trackTried) !== null && m.trackTried >= nT);
+            });
+        }
+
+        window.gpHistoryBackfill = function () {
+            if (gp.backfilling) { gp.backfillStop = true; return; }
+            var todo = gpHistoryBackfillable();
+            var tracks = ((gp.tracks && gp.tracks.tracks) || []).filter(function (t) {
+                return !!gpTrackReach(t);
+            });
+            if (!todo.length || !tracks.length) {
+                gpSetMsg("gpTrackMsg", todo.length
+                    ? "No tracks in the library to match these against."
+                    : "Nothing to fill in — every saved recording has already been filed.", "ok");
+                return;
+            }
+            gp.backfilling = true; gp.backfillStop = false;
+            var nT = tracks.length, placed = 0, missed = 0, i = 0;
+            var keepActive = gp.tracks.active;
+
+            var step = function () {
+                if (gp.backfillStop || i >= todo.length) return Promise.resolve();
+                var m = todo[i++];
+                gpSetMsg("gpTrackMsg", "Looking at " + gpEsc(m.name || "a recording") +
+                         " (" + i + " of " + todo.length + ")…", "wait");
+                return gpStore.rows(m.id).then(function (pk) {
+                    /* Tried, and against how big a library — so a second sweep
+                       after adding a circuit reconsiders it, and one before
+                       does no work at all. Set BEFORE anything can bail out:
+                       a recording whose samples will not read is exactly the
+                       one that would otherwise be re-read on every sweep for
+                       ever, and it is the slowest kind to re-read. */
+                    m.trackTried = nT;
+                    var rows = pk ? gpRowsUnpack(pk) : null;
+                    if (!rows || !rows.length) { missed++; gpStore.putMeta(m); return; }
+                    var hit = null;
+                    for (var k = 0; k < tracks.length && !hit; k++)
+                        if (gpRowsAtTrack(rows, tracks[k]) && gpNearTrack(rows, tracks[k]))
+                            hit = tracks[k];
+                    if (!hit) { missed++; gpStore.putMeta(m); return; }
+
+                    /* Split against the matched track the way the app would.
+                       gpSplitRows reads gpActiveTrack, so the active id is
+                       borrowed and given straight back — the same borrow
+                       gpAutoLine makes. */
+                    gp.tracks.active = hit.id;
+                    var laps = [];
+                    try { laps = gpSplitRows(rows); } catch (e) { laps = []; }
+                    gp.tracks.active = keepActive;
+                    var clean = laps.filter(function (l) { return !l.ghost && !l.flag; });
+                    var times = clean.map(function (l) { return gpSpanSecs(rows, l); });
+                    /* Never demote: a match that cuts no clean lap tells us
+                        where the car was and nothing about its times, and
+                        writing "0 laps" over a card that never claimed any is
+                        churn. File it and leave the numbers alone. */
+                    m.trackId = hit.id; m.trackName = hit.name; m.trial = gpIsTrial(hit);
+                    if (times.length) {
+                        var best = Math.min.apply(null, times);
+                        var bi = times.indexOf(best);
+                        m.lapsBy = "gate";
+                        m.lapCount = times.length;
+                        m.bestLapS = best;
+                        m.lapTimesS = times.map(function (t) { return Math.round(t * 1000) / 1000; });
+                        m.corners = gpFindCorners(rows, clean[bi].from, clean[bi].to)
+                            .map(function (c) {
+                                var apex = rows[c.apex];
+                                return { lat: apex.lat, lon: apex.lon,
+                                         kph: Math.round(apex.kph * 10) / 10,
+                                         s: Math.round(gpSecs(rows, c.entry, c.exit) * 1000) / 1000 };
+                            });
+                    }
+                    placed++;
+                    return gpStore.putMeta(m);
+                }).catch(function () { missed++; })
+                  .then(function () {
+                    /* Yield. Unpacking and re-splitting a 170,000-sample
+                       recording is not a frame's work, and thirty of them is
+                       not a frame's work thirty times. */
+                    return new Promise(function (r) { setTimeout(r, 0); });
+                }).then(step);
+            };
+
+            return step().then(function () {
+                gp.tracks.active = keepActive;
+                gp.backfilling = false;
+                var said = placed
+                    ? "Filed " + placed + " recording" + (placed === 1 ? "" : "s") +
+                      " against " + (placed === 1 ? "its track" : "their tracks") + "."
+                    : "Nothing matched a track in the library.";
+                if (missed) said += " " + missed + " could not be placed — open one and " +
+                                    "Studio will recognise it from where you drove.";
+                gpSetMsg("gpTrackMsg", said, placed ? "ok" : "warn");
+                gpBuildRail(); gpRenderInspector();
+                if (gp.view === "sessions") gpRenderSessions();
+            });
+        };
+
+        /* The trend as a question about the TRACK, not about a session. In
+           Analyse the same numbers answer "where does today sit"; here they
+           answer "how has this place gone", which is the one you ask between
+           track days with nothing open. */
+        function gpTrackHistoryHtml(trackId, name) {
+            var hist = gpHistoryFor(trackId);
+            var pend = gpHistoryBackfillable().length;
+            var here = gpEsc(name || "this track");
+            var h = "<div class='ws-grp'><div class='ws-gt'>History at " + here + "</div>";
+            if (!hist.length) {
+                h += "<div class='ws-note'>No saved recording here has a lap time yet. " +
+                     "The trend builds as you save days at " + here + ".</div>";
+            } else {
+                var pb = hist.reduce(function (a, b) { return b.bestLapS < a.bestLapS ? b : a; });
+                var days = {};
+                hist.forEach(function (s) { days[gpSesDay(s.recordedAt)] = 1; });
+                var nDays = Object.keys(days).length;
+                h += gpHistSpark(hist, null);
+                h += "<div class='gp-rows'>";
+                h += "<div class='gp-row'><span class='k'>Personal best</span><span class='v'>" +
+                     gpLapTime(pb.bestLapS) + "</span><span class='s'>" +
+                     gpEsc(gpSesDay(pb.recordedAt)) + "</span></div>";
+                h += "<div class='gp-row'><span class='k'>Sessions</span><span class='v'>" +
+                     hist.length + "</span><span class='s'>over " + nDays +
+                     (nDays === 1 ? " day" : " days") + "</span></div>";
+                var last = hist[hist.length - 1];
+                if (last.id !== pb.id)
+                    h += "<div class='gp-row'><span class='k'>Last visit</span><span class='v'>" +
+                         gpLapTime(last.bestLapS) + "</span><span class='s'>" +
+                         gpEsc(gpSesDay(last.recordedAt)) + "</span></div>";
+                h += "</div>";
+            }
+            /* The offer to go and find the rest of them. Only when there IS a
+               rest of them — a button that always says "0 filed" teaches
+               people to stop pressing it. */
+            if (pend)
+                h += "<div class='ws-note'>" + pend + " saved recording" +
+                     (pend === 1 ? " is" : "s are") + " not filed against any track, so " +
+                     (pend === 1 ? "it is" : "they are") + " missing from every trend.</div>" +
+                     "<button class='ws-btn-line' onclick='gpHistoryBackfill()'>" +
+                     (gp.backfilling ? "Stop" : "Match them to tracks") + "</button>";
+            return h + "</div>";
+        }
+
         /* A recording cannot have been made AFTER it was saved. Anything
            downloaded before the week clamp landed in gpSampleDate carries an
            iTOW dated into the CURRENT GPS week, so a block left in the ring
@@ -40614,6 +40783,12 @@
                  "<div class='gp-msg' id='gpTrackMsg'></div>";
             h += "<div class='ws-note'>A device holds one track at a time, so sending replaces what is on it — and <b>resets the session</b>. The RDM GPS keeps its track through a power cycle, so once it is set the node is good to go on its own.</div>";
             h += "</div>";
+
+            /* "Am I quicker here than I was in March?" is asked BETWEEN track
+               days, with nothing open — and until now it could only be
+               answered from inside a session, which is a different question.
+               Same numbers, asked about the place. */
+            h += gpTrackHistoryHtml(t.id, t.name);
 
             /* Library */
             h += "<div class='ws-grp'><div class='ws-gt'>Library</div>" +
