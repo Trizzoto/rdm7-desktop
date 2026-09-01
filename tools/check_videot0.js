@@ -215,5 +215,78 @@ if (!restoreMatch) {
     }
 }
 
+/* ══ a lap from another day asks the same question ════════════════════════ */
+console.log('\nand a ghost lap carries its own clock');
+{
+    /* "Compare against another day" appends the other session's chosen lap
+       into THIS trace behind gp.ghostFence, and every surface then works
+       unchanged. The one thing that does not is the video clock: gpSampleUtc
+       reads the CURRENT session's recordedAt and first sample, and a ghost row
+       carries the other day's. gpGhostShow pushes the SAME row objects
+       starting at the fence, so mapping back is exact. */
+    const G = new Function('ARGgp', `
+        var gp = ARGgp;
+        function gpN(v) { return (typeof v === 'number' && isFinite(v)) ? v : null; }
+        function gpCurSessionMeta() { return gp.sessionMeta; }
+        ${[grabFn(src, 'gpSampleUtc'), grabFn(src, 'gpVideoTimeFor'),
+           grabFn(src, 'gpGhostVideoTimeFor'), grabFn(src, 'gpAnyVideoTimeFor')].join('\n')}
+        return { here: gpVideoTimeFor, ghost: gpGhostVideoTimeFor, any: gpAnyVideoTimeFor };
+    `);
+    const DAY = 86400000;
+    const mk = (over) => {
+        const own = [{ t: 1000 }, { t: 2000 }, { t: 3000 }];
+        const ghostRows = [{ t: 500 }, { t: 1500 }, { t: 2500 }, { t: 3500 }];
+        const gp = {
+            trace: own.concat([ghostRows[1], ghostRows[2]]),
+            ghostFence: 3,
+            sessionMeta: { recordedAt: 10 * DAY },
+            video: { t0: 10 * DAY, offsetMs: 0 },
+            ghostSrc: Object.assign({
+                sesId: 'g', rows: ghostRows, cur: 0,
+                laps: [{ from: 1, to: 2 }],
+                meta: { recordedAt: 3 * DAY, videoAnchorMs: 0, videoOffsetMs: 0 }
+            }, over || {})
+        };
+        return { E: G(gp), gp };
+    };
+    {
+        const { E } = mk();
+        ok('a sample of THIS session still maps through this session',
+           Math.abs(E.here(1) - 1) < 1e-6, String(E.here(1)));
+        /* Fence is 3, lap.from is 1 — so trace[3] is ghostRows[1], whose own
+           elapsed time is 1500-500 = 1 s into that day's footage. */
+        ok('the first ghost sample maps to its own day, not this one',
+           Math.abs(E.ghost(3) - 1) < 1e-6, String(E.ghost(3)));
+        ok('…and the next one carries on in that day',
+           Math.abs(E.ghost(4) - 2) < 1e-6, String(E.ghost(4)));
+        ok('a sample before the fence is not a ghost', E.ghost(2) === null);
+    }
+    {
+        const { E } = mk();
+        ok('one question answers for either side of the fence',
+           Math.abs(E.any(1) - 1) < 1e-6 && Math.abs(E.any(3) - 1) < 1e-6,
+           E.any(1) + ' / ' + E.any(3));
+    }
+    {
+        /* That day's own manual nudge travels with it. */
+        const { E } = mk({ meta: { recordedAt: 3 * DAY, videoAnchorMs: 0, videoOffsetMs: 2000 } });
+        ok('the ghost session’s own offset is applied, not this one’s',
+           Math.abs(E.ghost(3) - (-1)) < 1e-6, String(E.ghost(3)));
+    }
+    {
+        /* A ghost session with no video linked has no answer here, and must
+           say so rather than borrowing this session's clock — which would put
+           the other day's lap at this day's timestamps and look plausible. */
+        const { E } = mk({ meta: { recordedAt: 3 * DAY } });
+        ok('a ghost day with no footage returns null rather than guessing',
+           E.ghost(3) === null, String(E.ghost(3)));
+    }
+    {
+        const { E, gp } = mk();
+        gp.ghostSrc = null;
+        ok('no ghost loaded, no ghost time', E.ghost(3) === null);
+    }
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

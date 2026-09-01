@@ -14006,6 +14006,85 @@
             return { segs: picked, secs: used, budget: budget, dropped: dropped };
         }
 
+        /* ---- two laps, side by side ------------------------------------------
+         * The frame pairing and the geometry, as plain functions, because they
+         * are the parts that can be wrong in a way nobody sees until the file
+         * is watched. The decoder wiring that uses them is the remaining piece.
+         *
+         * The pairing is not by time. Two laps of the same circuit are the same
+         * ROAD at different speeds, so the reference frame that belongs beside
+         * lap A at this instant is the one at the same PLACE — which is exactly
+         * what gpDeltaSeries has always worked out and, until now, discarded.
+         */
+        function gpCompareAt(match, selFrom, idxA) {
+            if (!match || !match.length) return null;
+            var k = idxA - selFrom;
+            if (k < 0) k = 0;
+            if (k >= match.length) k = match.length - 1;
+            return match[k];
+        }
+
+        /* Monotonic by construction — gpDeltaSeries sweeps forward with a
+           sliding window, so the reference index never goes backwards. That is
+           what lets the second decoder be PULLED along by the first instead of
+           needing a pump and a backpressure loop of its own: it advances until
+           its timestamp reaches the target, and holds its last frame when the
+           reference lap is the slower one through this bit of road. */
+        function gpCompareNeedsFrame(haveTs, wantTs) {
+            return haveTs === null || haveTs === undefined || haveTs < wantTs - 1e-6;
+        }
+
+        /* Where the two pictures go. Inset is the default because most footage
+           of this kind is portrait and two portrait frames side by side make an
+           absurd letterbox; side-by-side is offered for landscape. */
+        function gpCompareBox(W, H, mode) {
+            /* H.264 will not take an odd dimension, and this is the one place a
+               new rectangle is invented. gpExportPlan already evens the frame
+               it hands over, so in practice these are already even — but a
+               function that can hand back an odd rectangle will eventually be
+               called by something that does not. */
+            var ev = function (n) { return Math.max(2, Math.floor(n / 2) * 2); };
+            if (mode === "side") {
+                var hw = ev(W / 2), hh = ev(H);
+                return { a: { x: 0, y: 0, w: hw, h: hh },
+                         b: { x: W - hw, y: 0, w: hw, h: hh },
+                         bar: { x: 0, y: H - Math.round(64 * Math.min(W, H) / 720),
+                                w: W, h: Math.round(64 * Math.min(W, H) / 720) } };
+            }
+            var S = Math.min(Math.min(W, H) / 720, W / 700);
+            var iw = ev(W * 0.30), ih = ev(iw * H / W);
+            return { a: { x: 0, y: 0, w: ev(W), h: ev(H) },
+                     b: { x: W - iw - Math.round(26 * S), y: Math.round(26 * S), w: iw, h: ih },
+                     bar: { x: 0, y: H - Math.round(64 * S), w: W, h: Math.round(64 * S) } };
+        }
+
+        /* The delta bar. Drawn by the comparison compositor, not as a HUD
+           widget: hudDelta already exists and means something else — this lap
+           against the session's reference, which is a different question from
+           this lap against the one beside it. */
+        function gpCompareBar(g, box, secs, aName, bName) {
+            var S = box.h / 64;
+            gpHudPanel(g, box.x, box.y, box.w, box.h, 0, 0.62);
+            g.textBaseline = "middle";
+            g.font = "600 " + (13 * S) + "px " + GP_HUD_SANS;
+            g.textAlign = "left";
+            g.fillStyle = "rgba(245,247,250,0.72)";
+            g.fillText(aName || "this lap", box.x + 18 * S, box.y + box.h / 2);
+            g.textAlign = "right";
+            g.fillText(bName || "reference", box.x + box.w - 18 * S, box.y + box.h / 2);
+            if (secs === null || secs === undefined || !isFinite(secs)) {
+                g.textAlign = "left"; g.textBaseline = "alphabetic";
+                return;
+            }
+            g.textAlign = "center";
+            g.font = "700 " + (26 * S) + "px " + GP_HUD_MONO;
+            g.fillStyle = secs <= 0 ? GP_HUD_GRN : GP_HUD_WARN;
+            gpHudGlow(g, 10 * S);
+            g.fillText(gpSigned(secs, 2, ""), box.x + box.w / 2, box.y + box.h / 2);
+            gpHudGlow(g, 0);
+            g.textAlign = "left"; g.textBaseline = "alphabetic";
+        }
+
         /* The segment's name, bottom centre, over the wash the HUD already
            lays down. Drawn by the export loop rather than by gpHudRender: the
            tile and the designer call that one too, and there is exactly one of
@@ -19513,10 +19592,18 @@
             if (gp.selLap < 0 || gp.cmpLap < 0 || gp.selLap === gp.cmpLap) return null;
             var key = gp.selLap + ":" + gp.cmpLap;
             if (gp.deltaKey === key) return gp.delta;
+            gp.deltaMatch = null;
 
             var sel = gp.traceLaps[gp.selLap], ref = gp.traceLaps[gp.cmpLap];
             if (!sel || !ref) return null;
             var n = sel.to - sel.from + 1, out = new Float32Array(n);
+            /* WHICH reference sample each one matched. The sweep below has
+               always worked this out and thrown it away, keeping only the time
+               difference — and it is exactly the frame pairing a two-lap video
+               needs. Kept in a parallel cached slot rather than changed into
+               the return value, because every caller of gpDeltaSeries indexes
+               the result as an array. */
+            var match = new Int32Array(n);
             var j = ref.from, i, k;
 
             for (i = 0; i < n; i++) {
@@ -19531,9 +19618,10 @@
                     if (d < bd) { bd = d; best = k; }
                 }
                 j = best;
+                match[i] = best;
                 out[i] = gpSecs(gp.trace, sel.from, sel.from + i) - gpSecs(gp.trace, ref.from, best);
             }
-            gp.deltaKey = key; gp.delta = out;
+            gp.deltaKey = key; gp.delta = out; gp.deltaMatch = match;
             return out;
         }
 
@@ -21574,6 +21662,13 @@
             var sel = gp.traceLaps[gp.selLap], ref = gp.traceLaps[gp.cmpLap];
             if (!sel || !ref) return null;
             var n = sel.to - sel.from + 1, out = new Float32Array(n);
+            /* WHICH reference sample each one matched. The sweep below has
+               always worked this out and thrown it away, keeping only the time
+               difference — and it is exactly the frame pairing a two-lap video
+               needs. Kept in a parallel cached slot rather than changed into
+               the return value, because every caller of gpDeltaSeries indexes
+               the result as an array. */
+            var match = new Int32Array(n);
             var j = ref.from, i, k;
 
             for (i = 0; i < n; i++) {
@@ -22513,7 +22608,7 @@
             /* Everything derived from lap indices is stale the moment the lap
                set changes — the caches are keyed on (selLap, cmpLap), and those
                indices mean different laps after a re-download or track change. */
-            gp.coach = null; gp.delta = null; gp.deltaKey = "";
+            gp.coach = null; gp.delta = null; gp.deltaKey = ""; gp.deltaMatch = null;
             gp.stripCache = null; gp.stripZoom = null; gp.sectors = null; gp.secKey = "";
             gp.scaleCache = null;
             gp.rate = null; gp.rateKey = ""; gp.lineOff = null; gp.lineKey = ""; gp.insightCursor = -1;
@@ -29225,6 +29320,45 @@
             return u === null ? null : (u - v.t0 - v.offsetMs) / 1000;
         }
 
+        /* ---- and the same question about a lap from another day -------------
+         * "Compare against another day" appends the other session's chosen lap
+         * into THIS trace behind gp.ghostFence, and every surface then works
+         * unchanged — the delta, the coach, the phases, the lanes. The one
+         * thing that does not is this: gpSampleUtc reads the CURRENT session's
+         * recordedAt and the CURRENT session's first sample, and a ghost row
+         * carries the other day's clock. The arithmetic is nonsense for it.
+         *
+         * gpGhostShow pushes the SAME row objects starting at the fence, so
+         * mapping a ghost index back to its own recording is exact.
+         */
+        function gpGhostVideoTimeFor(i) {
+            var src = gp.ghostSrc;
+            if (!src || gp.ghostFence === null || i < gp.ghostFence) return null;
+            var lap = src.laps && src.laps[src.cur];
+            if (!lap || !src.rows || !src.rows.length || !src.meta) return null;
+            var k = lap.from + (i - gp.ghostFence);
+            var r = src.rows[k], r0 = src.rows[0];
+            if (!r) return null;
+            var el = (r.t !== undefined && r0.t !== undefined) ? r.t - r0.t : k * 40;
+            var utc = src.meta.recordedAt + el;
+            /* That day's own footage, synced its own way. A ghost session with
+               no video linked has no answer here, and says so rather than
+               borrowing this session's clock. */
+            var t0 = null;
+            if (gpN(src.meta.videoAnchorMs) !== null)
+                t0 = src.meta.recordedAt - src.meta.videoAnchorMs;
+            else if (src.meta.videoSrc === "start")
+                t0 = src.meta.recordedAt;
+            if (t0 === null) return null;
+            return (utc - t0 - (gpN(src.meta.videoOffsetMs) || 0)) / 1000;
+        }
+
+        /* One question, whichever side of the fence the sample is on. */
+        function gpAnyVideoTimeFor(i) {
+            return (gp.ghostFence !== null && i >= gp.ghostFence)
+                ? gpGhostVideoTimeFor(i) : gpVideoTimeFor(i);
+        }
+
         /* The inverse: which sample a video position lands on. Bounded by the
            fence — footage never maps onto a ghost. */
         function gpIndexForVideoTime(ct) {
@@ -35613,7 +35747,7 @@
          * SESSION laps skips the tag. The fence comes down (and the samples
          * with it) the moment anything re-splits. */
         function gpGhostCaches() {
-            gp.delta = null; gp.deltaKey = ""; gp.coach = null;
+            gp.delta = null; gp.deltaKey = ""; gp.deltaMatch = null; gp.coach = null;
             gp.chan = null; gp.chanKey = "";
             gp.sectors = null; gp.secKey = "";
             /* The map's two comparison colourings cache on `selLap:cmpLap`

@@ -896,6 +896,76 @@ function reader(blob) {
            M.merge([seg(5), null, seg(5)]).v.chunks.length === 10);
     }
 
+    /* ══ two laps, side by side ══════════════════════════════════════════ */
+    console.log('\nthe frame beside this one is the one at the same PLACE');
+    {
+        const C = new Function(`
+            ${[grabFn(src, 'gpCompareAt'), grabFn(src, 'gpCompareNeedsFrame'),
+               grabFn(src, 'gpCompareBox')].join('\n')}
+            return { at: gpCompareAt, needs: gpCompareNeedsFrame, box: gpCompareBox };
+        `)();
+
+        /* What gpDeltaSeries hands back: for each sample of the analysed lap,
+           the reference sample at the same place. Forward-only by
+           construction, and here the reference lap is the slower one through
+           the middle, so it repeats. */
+        const match = Int32Array.from([500, 500, 501, 503, 503, 503, 506, 510]);
+        ok('the pairing is by place, not by time',
+           C.at(match, 100, 103) === 503, String(C.at(match, 100, 103)));
+        ok('…and it is read relative to the lap, not the trace',
+           C.at(match, 100, 100) === 500, String(C.at(match, 100, 100)));
+        ok('before the lap starts, the first pairing holds',
+           C.at(match, 100, 90) === 500, String(C.at(match, 100, 90)));
+        ok('past the end, the last one does', C.at(match, 100, 999) === 510,
+           String(C.at(match, 100, 999)));
+        ok('no pairing at all is null, not a guess', C.at(null, 0, 0) === null);
+
+        /* Monotonic, which is what lets the second decoder be pulled along by
+           the first rather than needing a pump of its own. */
+        let backwards = false;
+        for (let i = 1; i < match.length; i++) if (match[i] < match[i - 1]) backwards = true;
+        ok('the pairing never goes backwards', !backwards);
+
+        ok('a decoder with nothing yet needs a frame', C.needs(null, 5) === true);
+        ok('…one behind the target needs another', C.needs(4.9, 5) === true);
+        ok('…and one that has reached it holds what it has', C.needs(5, 5) === false);
+        ok('…as does one past it — the reference lap is slower here',
+           C.needs(6, 5) === false);
+
+        {
+            const b = C.box(1920, 1080, 'side');
+            ok('side by side splits the frame in two', b.a.w === 960 && b.b.w === 960);
+            ok('…meeting in the middle with nothing over', b.a.w + b.b.w === 1920);
+            ok('…both full height', b.a.h === 1080 && b.b.h === 1080);
+        }
+        {
+            const b = C.box(1080, 1920, 'inset');
+            ok('inset gives the whole frame to the lap being watched',
+               b.a.w === 1080 && b.a.h === 1920);
+            ok('…and the reference a corner of it', b.b.w < b.a.w / 2 && b.b.x > b.a.w / 2,
+               JSON.stringify(b.b));
+            ok('…inside the frame', b.b.x + b.b.w <= 1080 && b.b.y + b.b.h <= 1920,
+               JSON.stringify(b.b));
+        }
+        {
+            /* H.264 will not take an odd dimension, and this is the one place
+               a new rectangle gets invented. */
+            const odd = [[1921, 1081], [1079, 1919], [641, 361]];
+            let bad = [];
+            odd.forEach(function (wh) {
+                ['side', 'inset'].forEach(function (mode) {
+                    const b = C.box(wh[0], wh[1], mode);
+                    [b.a, b.b].forEach(function (r) {
+                        if (r.w % 2 || r.h % 2) bad.push(mode + ' ' + wh.join('x') +
+                            ' -> ' + r.w + 'x' + r.h);
+                    });
+                });
+            });
+            ok('every picture rectangle comes out even, whatever the source',
+               bad.length === 0, bad.join(' '));
+        }
+    }
+
     console.log('\n' + pass + ' passed, ' + fail + ' failed');
     process.exit(fail ? 1 : 0);
 })();
