@@ -2530,57 +2530,163 @@
             /* the arrangement popover hangs off this bar */
             position: relative;
         }
-        #gpWorkspace .ws-topbar > .btn:first-child {
-            background: transparent; border: none; color: var(--gpb-bar-muted);
-            font-size: 15px; height: 30px;
+        /* ---- band one: the black bar -------------------------------------
+           Who you are and what hardware you are talking to. It carries FOUR
+           things and never more, so nothing in it can be pushed out by a long
+           circuit name — which is what the two media queries deleted below
+           used to do, and why the one fact worth reading (which circuit, whose
+           drive) was invisible at 1440 px. Identity moved to .gpb-page, where
+           it is a headline the page owns rather than a chip the chrome lends
+           it. */
+        #gpWorkspace .ws-topbar { min-height: 44px; padding: 0 12px; gap: 12px; }
+        #gpWorkspace .gpb-home {
+            display: inline-flex; align-items: center; gap: 9px; height: 30px;
+            background: transparent; border: none; padding: 0; cursor: pointer;
         }
-        #gpWorkspace .ws-topbar > .btn:first-child:hover { color: #fff; }
-        /* The bar is nowrap, but its BUTTONS were not: squeezed by a long
-           circuit name, "Connect over USB" broke onto three lines inside a
-           30 px box and spilled out under the bar. The session line is the
-           one thing here built to lose its tail (it ellipsises); everything
-           else keeps its width. */
-        #gpWorkspace .ws-topbar > .btn,
-        #gpWorkspace .ws-topbar > .ws-chip,
-        #gpWorkspace .ws-topbar > .gpb-export { flex: none; white-space: nowrap; }
-        /* Which is only half an answer: the bar still has more in it than
-           1280 px holds, and the half that gets clipped is the session line.
-           So drop things in the order they are worth, rather than letting the
-           circuit name lose its own last nine letters. GPS & LAP TIMING is a
-           label for a screen that already says ANALYSE across the middle of
-           it; the spread and the ideal are both a click away in the panels. */
-        @media (max-width: 1579px) { #gpWorkspace .ws-brand { display: none; } }
-        @media (max-width: 1399px) {
-            #gpWorkspace .gpb-sesbar .gpb-tag.grey,
-            #gpWorkspace .gpb-sesbar .gpb-tag.line,
-            /* Ellipsising only reads as ellipsising while a word survives it.
-               Down here the date/driver/car line gets about ten pixels and
-               renders as the two characters "8." next to the circuit name,
-               which looks like a bug rather than a truncation. It is on the
-               session in Sessions and at the top of the report either way. */
-            #gpWorkspace .gpb-sesbar .m { display: none; }
+        #gpWorkspace .gpb-home .ws-brand { gap: 9px; }
+        #gpWorkspace .gpb-home .ws-brand span {
+            font-family: var(--gpb-head); font-weight: 700; font-size: 16px;
+            letter-spacing: 0.07em; text-transform: uppercase; color: #fff;
         }
-        #gpWorkspace .ws-brand span {
-            font-family: var(--gpb-head); font-weight: 600; font-size: 13px;
-            letter-spacing: 0.14em; text-transform: uppercase; color: var(--gpb-bar-muted);
+        #gpWorkspace .gpb-home:hover .ws-brand span { color: var(--gpb-red-400); }
+        #gpWorkspace .gpb-vr { width: 1px; height: 20px; background: var(--gpb-bar-div); flex: none; }
+        #gpWorkspace .gpb-wsname {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 15px;
+            letter-spacing: 0.14em; text-transform: uppercase; color: #cfcfd2;
+            white-space: nowrap;
         }
-        #gpWorkspace .ws-modes {
-            background: transparent; border: none; height: 50px; overflow: visible;
-            /* No auto margin: the session bar next to it is what takes the
-               slack now, so a long circuit name grows into the gap rather
-               than shoving the chips off the end. */
-            margin: 0 0 0 4px; flex: none; align-self: stretch; align-items: stretch; gap: 2px;
+        #gpWorkspace .gpb-barsp { margin-left: auto; }
+        /* The device pill: one control where there were four. Red only while
+           the puck is actually recording, so red on this bar means one thing. */
+        #gpWorkspace .gpb-dev {
+            display: inline-flex; align-items: center; gap: 8px; height: 28px;
+            padding: 0 12px; background: transparent; border: 1px solid var(--gpb-bar-div);
+            color: var(--gpb-bar-muted); font-family: var(--gpb-body); font-size: 12px;
+            font-variant-numeric: tabular-nums; cursor: pointer; white-space: nowrap;
         }
-        #gpWorkspace .ws-modes button {
-            font-family: var(--gpb-head); font-weight: 600; font-size: 13px;
+        #gpWorkspace .gpb-dev:hover { border-color: #4a4e52; color: #e6e6e8; }
+        #gpWorkspace .gpb-dev b { color: #e6e6e8; font-weight: 600; }
+        #gpWorkspace .gpb-dev i.d {
+            width: 8px; height: 8px; border-radius: 50%; background: #6a6d72;
+            flex: none; display: block;
+        }
+        #gpWorkspace .gpb-dev.ok i.d { background: #4fae6b; }
+        #gpWorkspace .gpb-dev.rec { border-color: var(--gpb-red); color: #ff8d87; }
+        #gpWorkspace .gpb-dev.rec i.d { background: var(--gpb-red); animation: gpbPulse 1.1s ease-in-out infinite; }
+        @keyframes gpbPulse { 0%,100% { opacity: 1 } 50% { opacity: 0.25 } }
+        @media (prefers-reduced-motion: reduce) {
+            #gpWorkspace .gpb-dev.rec i.d { animation: none; }
+        }
+        #gpWorkspace .gpb-gear {
+            width: 28px; height: 28px; display: inline-grid; place-items: center;
+            background: transparent; border: 1px solid var(--gpb-bar-div);
+            color: var(--gpb-bar-muted); cursor: pointer; flex: none;
+        }
+        #gpWorkspace .gpb-gear:hover { border-color: #4a4e52; color: #fff; }
+        /* The four device controls are PARKED here, not duplicated: the
+           popover re-parents this holder into itself and hands it back on
+           close, so gpUpdateChips keeps writing to the same four elements it
+           always did. Same trick #gpHold plays with the map and the video —
+           re-parenting keeps getElementById working, a copy would not. */
+        #gpWorkspace .gpb-devhold { display: none; }
+        #gpWorkspace .gpb-devpop {
+            position: fixed; z-index: 16200; background: #16181a;
+            border: 1px solid #2e3134; padding: 12px 13px; min-width: 232px;
+            display: flex; flex-direction: column; gap: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        #gpWorkspace .gpb-devpop .hd {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 11px;
+            letter-spacing: 0.2em; text-transform: uppercase; color: #7d8085;
+            display: flex; align-items: baseline;
+        }
+        #gpWorkspace .gpb-devpop .hd .st { margin-left: auto; color: #4fae6b; }
+        #gpWorkspace .gpb-devpop .hd .st.off { color: #7d8085; }
+        #gpWorkspace .gpb-devpop .gpb-devhold {
+            display: flex; flex-direction: column; align-items: stretch; gap: 7px;
+        }
+        #gpWorkspace .gpb-devpop .ws-chip { height: 26px; justify-content: flex-start; }
+        #gpWorkspace .gpb-devpop #gpConnectBtn { width: 100%; justify-content: center; }
+        #gpWorkspace .gpb-devpop hr { border: 0; border-top: 1px solid #2e3134; margin: 0; }
+        #gpWorkspace .gpb-devpop .it {
+            background: transparent; border: none; padding: 5px 0; text-align: left;
+            font-family: var(--gpb-body); font-size: 13px; font-weight: 500;
+            color: #e6e6e8; cursor: pointer;
+        }
+        #gpWorkspace .gpb-devpop .it:hover { color: var(--gpb-red-400); }
+        #gpWorkspace .gpb-devpop .it:disabled { color: #55585c; cursor: default; }
+
+        /* ---- band two: where you are, and what you can do here ------------ */
+        #gpWorkspace .gpb-nav {
+            flex: none; display: flex; align-items: stretch; gap: 4px;
+            height: 50px; padding: 0 12px; background: var(--gpb-surface);
+            border-bottom: 1px solid var(--gpb-div); position: relative;
+        }
+        #gpWorkspace .gpb-secs { display: flex; align-items: stretch; gap: 2px; }
+        #gpWorkspace .gpb-secs button {
+            background: transparent; border: none; cursor: pointer;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 16px;
             letter-spacing: 0.1em; text-transform: uppercase;
-            color: var(--gpb-bar-muted); padding: 0 15px; height: 100%;
+            color: var(--gpb-muted); padding: 0 16px;
+            border-bottom: 3px solid transparent; margin-bottom: -1px;
         }
-        #gpWorkspace .ws-modes button:hover { color: #d8d8db; background: transparent; }
-        #gpWorkspace .ws-modes button.on {
-            background: transparent; color: #fff;
-            box-shadow: inset 0 -3px 0 var(--gpb-red);
+        #gpWorkspace .gpb-secs button:hover { color: var(--gpb-ink); }
+        #gpWorkspace .gpb-secs button.on {
+            color: var(--gpb-ink); border-bottom-color: var(--gpb-red);
         }
+        #gpWorkspace .gpb-secs button:focus-visible {
+            outline: 2px solid var(--gpb-red); outline-offset: -3px;
+        }
+        #gpWorkspace .gpb-navacts {
+            margin-left: auto; display: flex; align-items: center; gap: 8px;
+        }
+
+        /* ---- band three: the page's own name ------------------------------
+           Not chrome. A headline the page owns, at a size that says what you
+           are looking at from across the room — and one that can wrap rather
+           than being deleted by a media query when the window narrows. */
+        /* display is stated, not left to inherit: as a flex item of .ws this
+           box came out `display:flex` from the cascade and laid the name, the
+           meta line and the sub-tabs out side by side in one 48 px strip. */
+        #gpWorkspace .gpb-page {
+            flex: none; display: block; padding: 16px 18px 0; background: var(--gpb-bg);
+        }
+        #gpWorkspace .gpb-page.empty { display: none; }
+        #gpWorkspace .gpb-page .row { display: flex; align-items: flex-end; gap: 16px; }
+        #gpWorkspace .gpb-page .nm {
+            font-family: var(--gpb-head); font-weight: 700; font-size: 30px;
+            line-height: 1; letter-spacing: 0.01em; text-transform: uppercase;
+            color: var(--gpb-ink);
+        }
+        #gpWorkspace .gpb-page .tags { display: flex; gap: 6px; padding-bottom: 3px; }
+        #gpWorkspace .gpb-page .pact { margin-left: auto; padding-bottom: 2px; }
+        #gpWorkspace .gpb-page .m {
+            font-size: 13px; color: var(--gpb-muted); margin-top: 6px;
+        }
+        #gpWorkspace .gpb-subnav {
+            display: flex; gap: 20px; margin-top: 12px;
+            border-bottom: 1px solid var(--gpb-div);
+        }
+        #gpWorkspace .gpb-subnav button {
+            background: transparent; border: none; cursor: pointer; padding: 0 0 8px;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 14px;
+            letter-spacing: 0.11em; text-transform: uppercase; color: var(--gpb-muted);
+            border-bottom: 2px solid transparent; margin-bottom: -1px;
+        }
+        #gpWorkspace .gpb-subnav button:hover { color: var(--gpb-ink); }
+        #gpWorkspace .gpb-subnav button.on {
+            color: var(--gpb-ink); border-bottom-color: var(--gpb-ink);
+        }
+        #gpWorkspace .gpb-subnav button:focus-visible {
+            outline: 2px solid var(--gpb-red); outline-offset: -2px;
+        }
+        #gpWorkspace .gpb-done {
+            height: 28px; padding: 0 15px; background: var(--gpb-ink);
+            border: 1px solid var(--gpb-ink); color: #fff; cursor: pointer;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 12.5px;
+            letter-spacing: 0.09em; text-transform: uppercase;
+        }
+        #gpWorkspace .gpb-done:hover { background: var(--gpb-n800); }
         #gpWorkspace .ws-chip {
             background: transparent; border: 1px solid var(--gpb-bar-div);
             color: var(--gpb-bar-muted); font-family: var(--gpb-body);
@@ -2975,42 +3081,24 @@
         /* ================================================================
            New design-language components (gpb-*)
            ================================================================ */
-        /* ---- the Analyse context, IN the brand bar ------------------------
-           This was a 41 px band of its own under the black bar, carrying a
-           22 px track name, the session line, the tags and every arrangement
-           control. Together with the connection hint above it, a fifth of a
-           1000 px window was chrome describing the panels rather than panels.
-           The facts move into the bar's own slack — which was empty — the
-           arrangement controls move behind one button, and the band is gone. */
-        #gpWorkspace .gpb-sesbar {
-            flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 9px;
-            overflow: hidden;
-        }
-        #gpWorkspace .gpb-sesbar .nm {
-            font-family: var(--gpb-head); font-weight: 600; font-size: 16px;
-            letter-spacing: 0.01em; color: #fff; white-space: nowrap; flex: none;
-        }
-        /* The one thing allowed to lose its tail: a long circuit name and the
-           session best must survive a narrow window, the driver's name need
-           not. */
-        #gpWorkspace .gpb-sesbar .m {
-            font-size: 11.5px; color: var(--gpb-bar-muted); font-variant-numeric: tabular-nums;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-        }
-        #gpWorkspace .gpb-sesbar .gpb-tag { flex: none; height: 22px; }
-        #gpWorkspace .gpb-sesbar .gpb-tag.red { background: rgba(210,35,42,0.20); color: #ff8a84; }
-        #gpWorkspace .gpb-sesbar .gpb-tag.line { border-color: #7a3134; color: #ff8a84; }
-        #gpWorkspace .gpb-sesbar .gpb-tag.grey { background: rgba(255,255,255,0.09); color: var(--gpb-bar-muted); }
+        /* The session context — the circuit, the driver, the session best —
+           used to live in the black bar's slack. It is a headline in
+           .gpb-page now: a bar that has to choose between a control and a
+           name will always keep the control, and the name is the thing worth
+           reading. The tags below inherit the light .gpb-tag styling, which
+           is what they were designed for in the first place. */
         #gpWorkspace .gpb-arr {
-            flex: none; background: transparent; border: 1px solid var(--gpb-bar-div);
-            color: var(--gpb-bar-muted); font-family: var(--gpb-head); font-weight: 600;
+            flex: none; background: var(--gpb-surface); border: 1px solid var(--gpb-div);
+            color: var(--gpb-soft); font-family: var(--gpb-head); font-weight: 600;
             font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
             height: 28px; padding: 0 12px; cursor: pointer; display: inline-flex;
             align-items: center; gap: 7px;
         }
-        #gpWorkspace .gpb-arr:hover, #gpWorkspace .gpb-arr.on { border-color: #6a6e72; color: #fff; }
+        #gpWorkspace .gpb-arr:hover, #gpWorkspace .gpb-arr.on {
+            border-color: var(--gpb-ink); color: var(--gpb-ink);
+        }
         #gpWorkspace .gpb-arrpop {
-            position: absolute; top: 46px; right: 14px; z-index: 40; width: 290px;
+            position: absolute; top: 52px; right: 12px; z-index: 40; width: 290px;
             background: var(--gpb-surface); border: 1px solid var(--gpb-div);
             box-shadow: 0 14px 36px rgba(0,0,0,0.28); padding: 11px;
             display: flex; flex-direction: column; gap: 9px; color: var(--gpb-ink);
@@ -4274,31 +4362,50 @@
 
     <!-- ═══ RDM GPS node ═══ -->
     <div id="gpWorkspace" class="ws">
+        <!-- Three bands, one job each. One bar doing navigation, identity,
+             device status and actions at once is what made this feel crowded:
+             at 1440 px it held twelve controls and had already deleted the
+             circuit name to fit them. -->
         <div class="ws-topbar">
-            <button class="btn btn-secondary" style="font-size:13px; padding:0 10px;" onclick="_gpClose()" title="Home (Esc)">&#8962;</button>
-            <span class="ws-brand" id="gpBrand"></span>
-            <div class="ws-modes" role="group" aria-label="View">
-                <button id="gpBtnSessions" onclick="gpSetView('sessions')">Sessions</button>
-                <button id="gpBtnMonitor" class="on" onclick="gpSetView('monitor')">Live</button>
-                <button id="gpBtnSession" onclick="gpSetView('session')">Analyse</button>
-                <button id="gpBtnCorners" onclick="gpSetView('corners')">Corners</button>
-                <button id="gpBtnDrift" onclick="gpSetView('drift')">Drift</button>
-                <button id="gpBtnTracks" onclick="gpSetView('tracks')">Tracks</button>
-                <button id="gpBtnSetup" onclick="gpSetView('setup')">Setup</button>
+            <!-- Written out rather than injected by _populateLogos: this is
+                 the first thing in the workspace and it must not depend on
+                 whether a suite init has run yet. It was blank when it did
+                 not. -->
+            <button class="gpb-home" onclick="_gpClose()" title="Home (Esc)">
+                <span class="ws-brand" id="gpBrand"><img class="rdm-logo" src="rdm_logo.png"
+                     alt="RDM" draggable="false" style="height:19px;width:auto"><span>Studio</span></span>
+            </button>
+            <span class="gpb-vr"></span>
+            <span class="gpb-wsname">Lap Timer</span>
+            <span class="gpb-barsp"></span>
+            <button class="gpb-dev" id="gpDevPill" onclick="gpDevPop(event)"
+                    title="The puck: connection, fix, storage and recording"><i class="d"></i>&#8212;</button>
+            <button class="gpb-gear" id="gpGearBtn" onclick="gpGearPop(event)" title="Setup and settings">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.1"></circle><path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"></path></svg>
+            </button>
+            <!-- Parked, not duplicated. gpDevPop re-parents this holder into
+                 the popover and hands it back on close, so gpUpdateChips goes
+                 on writing to the same four elements it always has. -->
+            <div class="gpb-devhold" id="gpDevHold">
+                <span class="ws-chip" id="gpChipDev">no node linked</span>
+                <span class="ws-chip" id="gpChipFix">&#8212;</span>
+                <button class="ws-chip" id="gpChipRec" style="display:none" onclick="gpRecToggle()"></button>
+                <button class="btn" id="gpConnectBtn" style="display:none;" onclick="gpConnect()">Connect over USB</button>
             </div>
-            <!-- Whose drive this is, in the bar's own slack (ADR-0026). This
-                 was a band of its own under the bar until the panels it was
-                 labelling ran out of room. -->
-            <span class="gpb-sesbar" id="gpCtx"></span>
-            <button class="gpb-arr" id="gpArrBtn" style="display:none" onclick="gpLayoutsToggle()"
-                    title="Presets, saved arrangements, and how the panels fill the window"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18"></rect><path d="M3 12h18M12 3v9"></path></svg>Arrange</button>
-            <div class="gpb-arrpop" id="gpArrPop" style="display:none"></div>
-            <span class="ws-chip" id="gpChipDev">no node linked</span>
-            <span class="ws-chip" id="gpChipFix">&#8212;</span>
-            <button class="ws-chip" id="gpChipRec" style="display:none" onclick="gpRecToggle()"></button>
-            <button class="btn" id="gpConnectBtn" style="display:none;" onclick="gpConnect()">Connect over USB</button>
-            <button class="gpb-export" id="gpExportBtn" style="display:none;" onclick="gpExportPop(event)">Export</button>
         </div>
+        <div class="gpb-nav">
+            <div class="gpb-secs" id="gpSecs" role="tablist" aria-label="Section"></div>
+            <div class="gpb-navacts">
+                <button class="gpb-arr" id="gpArrBtn" style="display:none" onclick="gpLayoutsToggle()"
+                        title="Presets, saved arrangements, and how the panels fill the window"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18"></rect><path d="M3 12h18M12 3v9"></path></svg>Arrange</button>
+                <button class="gpb-export" id="gpExportBtn" style="display:none;" onclick="gpExportPop(event)">Export</button>
+            </div>
+            <div class="gpb-arrpop" id="gpArrPop" style="display:none"></div>
+        </div>
+        <!-- Whose drive this is (ADR-0026), promoted out of the chrome. It was
+             a chip in a nowrap bar, which is why a media query had to delete
+             it; as a headline it can wrap and nothing can evict it. -->
+        <div class="gpb-page empty" id="gpPageHead"></div>
         <div class="ws-body">
             <div class="ws-rail" id="gpRail"></div>
             <div class="ws-stage" id="gpStageCol">
@@ -4452,11 +4559,15 @@
                     RDM_LOGO_IMG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:19px;width:auto"') +
                     '<span>Keypad Configurator</span>';
             }
+            /* The lap timer's bar names the SUITE here and the workspace next
+               to it ("Studio | Lap Timer"), so this one says Studio. The other
+               workspaces still name themselves, because their bar has no
+               second slot. */
             var gpb = document.getElementById('gpBrand');
             if (gpb && !gpb.firstChild) {
                 gpb.innerHTML =
                     RDM_LOGO_IMG.replace('class="rdm-logo"', 'class="rdm-logo" style="height:19px;width:auto"') +
-                    '<span>GPS &amp; Lap Timing</span>';
+                    '<span>Studio</span>';
             }
             [['caBrand', 'CAN Bus Analyzer'], ['ioBrand', 'IO Expander']].forEach(function (p) {
                 var el = document.getElementById(p[0]);
@@ -12957,55 +13068,266 @@
            The facts move into the bar's slack, which was empty; the
            arrangement controls move behind one button, because they are used
            when you set the view up and never again while reading it. */
-        function gpRenderCtx() {
-            var el = document.getElementById("gpCtx");
+        /* ---- the four sections ----------------------------------------------
+         * Seven top-level tabs were never seven peers. Two of them are
+         * libraries (Sessions, Tracks), two are readings of one open recording
+         * (Analyse, Corners), one is a live mode and one is a 62-control
+         * settings page sitting as a sibling of the analysis. Grouped into
+         * four, with each pair becoming sub-tabs of the section it belongs to
+         * and Setup moving behind the gear on the black bar.
+         *
+         * The VIEW names are deliberately untouched: gpSetView still knows all
+         * seven, so every programmatic gpSetView("session") in the app, every
+         * deep link into Corners and every saved bit of state keeps working.
+         * This table only decides what the two bars draw.
+         *
+         * Drift keeps a top-level seat on his instruction. It needs an open
+         * recording exactly the way Corners does, so by structure it belongs
+         * under Analyse — but it is a whole product for a whole audience, and
+         * one level down would read as a footnote to circuit lap timing.
+         */
+        var GP_SECTIONS = [
+            /* The library's three questions in ONE row. Recordings and Laps
+               were a segmented bar inside the Sessions view and Circuits was a
+               separate tab, so promoting the tab pair put two controls on the
+               screen both starting with the word "Recordings". They are three
+               ways of asking about the same library, so they are one row. */
+            { id: "library", label: "Library", views: ["sessions", "tracks"],
+              subsFn: function () {
+                  var onSes = gp.view === "sessions", m = gpSesMode();
+                  return [
+                      { label: "Recordings", on: onSes && m === "recordings", go: "gpLibGo('recordings')" },
+                      { label: gpRunWord(true) + "s", on: onSes && m === "laps", go: "gpLibGo('laps')" },
+                      { label: "Circuits", on: gp.view === "tracks", go: "gpLibGo('circuits')" }
+                  ];
+              } },
+            { id: "live", label: "Live", views: ["monitor"] },
+            { id: "analyse", label: "Analyse", views: ["session", "corners"],
+              subs: [["session", "Overview"], ["corners", "Corners"]] },
+            { id: "drift", label: "Drift", views: ["drift"] }
+        ];
+        window.gpLibGo = function (what) {
+            if (what === "circuits") { gpSetView("tracks"); return; }
+            /* Coming back from Circuits has to change the view first, or
+               gpSesModeSet renders a list nobody is looking at. */
+            if (gp.view !== "sessions") { gp.sesMode = what; gpSetView("sessions"); return; }
+            gpSesModeSet(what);
+            gpRenderCtx();                 /* the row has to light the new mode */
+        };
+        function gpSectionOf(v) {
+            for (var i = 0; i < GP_SECTIONS.length; i++)
+                if (GP_SECTIONS[i].views.indexOf(v) >= 0) return GP_SECTIONS[i];
+            return null;                       /* Setup answers to no section */
+        }
+        /* Coming back to a section returns you to the view you left it on —
+           going to Circuits, wandering off to Analyse and coming back to
+           Recordings would be the app forgetting what you were doing. */
+        window.gpSectionGo = function (id) {
+            var s = null;
+            for (var i = 0; i < GP_SECTIONS.length; i++)
+                if (GP_SECTIONS[i].id === id) s = GP_SECTIONS[i];
+            if (!s) return;
+            var want = (gp.secLast && gp.secLast[id]) || s.views[0];
+            if (s.views.indexOf(want) < 0) want = s.views[0];
+            gpSetView(want);
+        };
+        function gpRenderNav() {
+            var el = document.getElementById("gpSecs");
             if (!el) return;
-            var show = gp.view === "session" && gp.trace && gp.trace.length;
-            el.style.display = show ? "flex" : "none";
-            /* Arrange is a sibling of the bar, not a child of it. Inside, it
-               was the last item in a box that shrinks — at 1400 px the name
-               and the tags alone overran it and the button was clipped clean
-               off the end, which is a control you cannot reach at all. */
+            var cur = gpSectionOf(gp.view);
+            el.innerHTML = GP_SECTIONS.map(function (s) {
+                var on = (cur === s);
+                return "<button role='tab' aria-selected='" + (on ? "true" : "false") + "'" +
+                       (on ? " class='on'" : "") + " onclick=\"gpSectionGo('" + s.id + "')\">" +
+                       s.label + "</button>";
+            }).join("");
+        }
+
+        /* ---- the page's own name --------------------------------------------
+         * This used to be #gpCtx, a chip in the black bar competing with twelve
+         * controls for a 50 px strip — which is why a media query had to delete
+         * it at 1579 px, taking the one fact worth reading off the screen. It is
+         * a headline belonging to the page now: it can wrap, and nothing in the
+         * chrome can evict it.
+         */
+        function gpRenderCtx() {
+            var view = gp.view;
+            var haveTrace = !!(gp.trace && gp.trace.length);
+            var onRec = haveTrace &&
+                (view === "session" || view === "corners" || view === "drift");
+            /* Arrange belongs to the Analyse mosaic and to nothing else — same
+               rule it always had, just read from the nav band now. */
             var arr = document.getElementById("gpArrBtn");
             if (arr) {
-                arr.style.display = show ? "inline-flex" : "none";
+                arr.style.display = (view === "session" && haveTrace) ? "inline-flex" : "none";
                 arr.classList.toggle("on", !!gp.layoutsOpen);
             }
-            if (!show) { el.innerHTML = ""; gpArrPopRender(); return; }
-            var meNow = (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0];
-            var trk = gpActiveTrack();
-            var bits = [];
-            if (meNow) {
-                bits.push(gpSesDate(meNow.recordedAt));
-                if (meNow.driver) bits.push(meNow.driver);
-                if (meNow.car) bits.push(meNow.car);
-                bits.push("GPS 25 Hz" + (meNow.chanIds && meNow.chanIds.length
-                    ? " + " + meNow.chanIds.length + " CAN channel" + (meNow.chanIds.length === 1 ? "" : "s") : ""));
-            }
-            var laps = (gp.traceLaps || []).filter(function (l) { return !l.ghost; });
-            var times = laps.map(function (l) { return gpSpanSecs(gp.trace, l); });
-            var tags = "";
-            if (times.length) {
-                var best = Math.min.apply(null, times);
-                tags += "<span class='gpb-tag red'>Best " + gpLapTime(best) + "</span>";
-                var S = gpSessionSectors();
-                if (S && S.best && S.best.length > 1 && times.length > 1) {
-                    var ideal = S.best.reduce(function (a, b) { return a + b; }, 0);
-                    tags += "<span class='gpb-tag line'>Ideal " + gpLapTime(ideal) + "</span>";
+            var el = document.getElementById("gpPageHead");
+            if (!el) { gpArrPopRender(); return; }
+
+            var name = "", meta = "", tags = "", act = "";
+            if (onRec) {
+                var meNow = (gp.sessions || []).filter(function (s) { return s.id === gp.sessionId; })[0];
+                var trk = gpActiveTrack();
+                name = trk ? trk.name : (meNow ? meNow.name : "Recording");
+                var bits = [];
+                if (meNow) {
+                    bits.push(gpSesDate(meNow.recordedAt));
+                    if (meNow.driver) bits.push(meNow.driver);
+                    if (meNow.car) bits.push(meNow.car);
+                    /* The rate the recording actually has, not the puck's 25.
+                       This line was hidden below 1400 px, so a 10 Hz VBO has
+                       been claiming "GPS 25 Hz" where nobody could read it;
+                       promoting it to a headline made that visible. */
+                    var hz = Math.round(gpHz(gp.trace, 0, Math.min(200, gp.trace.length - 1)));
+                    bits.push("GPS " + (isFinite(hz) && hz > 0 ? hz : 25) + " Hz" +
+                        (meNow.chanIds && meNow.chanIds.length
+                        ? " + " + meNow.chanIds.length + " CAN channel" +
+                          (meNow.chanIds.length === 1 ? "" : "s") : ""));
                 }
-                if (times.length > 1) {
-                    var worst = Math.max.apply(null, times);
-                    tags += "<span class='gpb-tag grey'>Spread " + (worst - best).toFixed(2) + " s</span>";
+                meta = bits.join(" · ");
+                /* The three tags follow the name now instead of racing it for
+                   room, so the spread and the ideal no longer get dropped at
+                   1400 px to save the circuit's last nine letters. */
+                var laps = (gp.traceLaps || []).filter(function (l) { return !l.ghost; });
+                var times = laps.map(function (l) { return gpSpanSecs(gp.trace, l); });
+                if (times.length) {
+                    var best = Math.min.apply(null, times);
+                    tags += "<span class='gpb-tag red'>Best " + gpLapTime(best) + "</span>";
+                    var S = gpSessionSectors();
+                    if (S && S.best && S.best.length > 1 && times.length > 1) {
+                        var ideal = S.best.reduce(function (a, b) { return a + b; }, 0);
+                        tags += "<span class='gpb-tag line'>Ideal " + gpLapTime(ideal) + "</span>";
+                    }
+                    if (times.length > 1) {
+                        var worst = Math.max.apply(null, times);
+                        tags += "<span class='gpb-tag grey'>Spread " + (worst - best).toFixed(2) + " s</span>";
+                    }
                 }
+            } else if (view === "setup") {
+                name = "Setup";
+                meta = gpLinked() ? "The puck's own settings, read from the node."
+                                  : "This PC · no node attached.";
+                /* Setup is reached from the gear, so it needs a way back that
+                   is not "guess which tab you came from". */
+                act = "<button class='gpb-done' onclick=\"gpSetupDone()\">Done</button>";
+            } else if (view === "sessions" || view === "tracks") {
+                name = "Library";
+                meta = view === "sessions"
+                    ? "Every recording on this PC."
+                    : "Every circuit you have added, and the timing lines on them.";
+            } else if (view === "monitor") {
+                name = "Live";
+                meta = "What the puck is doing right now.";
+            } else {
+                /* Analyse and Drift with nothing loaded. Analyse's empty state
+                   is a designed thing — it draws every circuit you have ever
+                   driven — so it is named, not scolded at. */
+                name = (view === "drift") ? "Drift" : "Analyse";
+                meta = "Nothing open yet. Pick a recording from the Library.";
             }
-            /* Name and tags first and unshrinkable, then the meta line, which
-               is the one thing here that can afford to lose its tail. */
+
+            var sec = gpSectionOf(view);
+            var items = null;
+            if (sec && sec.subsFn) items = sec.subsFn();
+            else if (sec && sec.subs) items = sec.subs.map(function (s) {
+                return { label: s[1], on: view === s[0], go: "gpSetView('" + s[0] + "')" };
+            });
+            var sub = items ? "<div class='gpb-subnav'>" + items.map(function (s) {
+                return "<button" + (s.on ? " class='on'" : "") +
+                       " onclick=\"" + s.go + "\">" + s.label + "</button>";
+            }).join("") + "</div>" : "";
+            el.className = "gpb-page";
             el.innerHTML =
-                "<span class='nm'>" + gpEsc(trk ? trk.name : (meNow ? meNow.name : "Recording")) + "</span>" +
-                tags +
-                "<span class='m'>" + gpEsc(bits.join(" · ")) + "</span>";
+                "<div class='row'><span class='nm'>" + gpEsc(name) + "</span>" +
+                (tags ? "<span class='tags'>" + tags + "</span>" : "") +
+                (act ? "<span class='pact'>" + act + "</span>" : "") + "</div>" +
+                (meta ? "<div class='m'>" + gpEsc(meta) + "</div>" : "") + sub;
             gpArrPopRender();
         }
+
+        /* ---- the device, in one control -------------------------------------
+         * Four things in the black bar — the node chip, the fix chip, the REC
+         * button and Connect over USB — were all describing one object. They
+         * are one pill now, and the four originals live inside its popover:
+         * gpDevPop re-parents #gpDevHold rather than rebuilding it, so
+         * gpUpdateChips goes on writing to the same elements. Detaching them
+         * would break getElementById for every one of its branches; the map
+         * and the video singletons are parked the same way in #gpHold.
+         */
+        function gpDevPillSync() {
+            var p = document.getElementById("gpDevPill");
+            if (!p) return;
+            var linked = gpLinked();
+            var s = gp.status, inf = gp.traceInfo;
+            var recOn = !!(linked && inf && inf.recording !== false);
+            var txt;
+            if (!linked) txt = (gp.connecting || gp.relinking) ? "Searching&#8230;" : "No puck";
+            else if (s && s.link === false) txt = "receiver quiet";
+            else if (s && s.fix) txt = "<b>" + gpInt(s.sats) + "</b> sats";
+            else txt = s ? "no fix" : "linked";
+            if (recOn) txt += " &middot; REC";
+            p.classList.toggle("ok", linked && !recOn);
+            p.classList.toggle("rec", recOn);
+            /* Write the TEXT only. Replacing the whole pill every poll tick
+               would restart the dot's pulse animation before it ever finished
+               a cycle — the same flicker the REC chip was fixed for. */
+            var t = p.querySelector("span.t");
+            if (!t) {
+                p.innerHTML = "<i class='d'></i><span class='t'></span>";
+                t = p.querySelector("span.t");
+            }
+            if (t.innerHTML !== txt) t.innerHTML = txt;
+        }
+        function gpDevPopClose() {
+            var pop = document.getElementById("gpDevPopEl");
+            if (!pop) return;
+            /* Hand the four controls back to the bar before the popover goes,
+               or they leave the document with it. */
+            var hold = document.getElementById("gpDevHold");
+            var bar = document.querySelector("#gpWorkspace .ws-topbar");
+            if (hold && bar) bar.appendChild(hold);
+            pop.remove();
+            if (gp._devDismiss) {
+                document.removeEventListener("pointerdown", gp._devDismiss, true);
+                gp._devDismiss = null;
+            }
+        }
+        window.gpDevPop = function (ev) {
+            if (document.getElementById("gpDevPopEl")) { gpDevPopClose(); return; }
+            var hold = document.getElementById("gpDevHold");
+            if (!hold) return;
+            var pop = document.createElement("div");
+            pop.className = "gpb-devpop";
+            pop.id = "gpDevPopEl";
+            var linked = gpLinked();
+            pop.innerHTML = "<div class='hd'>The puck<span class='st" +
+                (linked ? "" : " off") + "'>" +
+                (linked ? "connected" : "not connected") + "</span></div>";
+            var ws = document.getElementById("gpWorkspace");
+            ws.appendChild(pop);
+            pop.appendChild(hold);
+            var r = ev.currentTarget.getBoundingClientRect();
+            pop.style.top = (r.bottom + 6) + "px";
+            pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+            gp._devDismiss = function (e) {
+                var t = e.target;
+                if (t.closest && (t.closest("#gpDevPopEl") || t.closest("#gpDevPill"))) return;
+                gpDevPopClose();
+            };
+            document.addEventListener("pointerdown", gp._devDismiss, true);
+        };
+
+        /* The gear goes straight to Setup rather than opening a menu with one
+           item in it, and Setup remembers where you were so Done can undo the
+           trip. */
+        window.gpGearPop = function () {
+            if (gp.view !== "setup") gp.setupFrom = gp.view;
+            gpSetView("setup");
+        };
+        window.gpSetupDone = function () {
+            gpSetView(gp.setupFrom || "sessions");
+        };
 
         /* The arrangement popover: presets, the fill rule, saved layouts. */
         function gpArrPopRender() {
@@ -13443,6 +13765,9 @@
         window.gpSesModeSet = function (m) {
             gp.sesMode = m;
             gpRenderSessions();
+            /* The Library's sub-tab row lights the current mode, so anything
+               that moves the mode has to relight it. */
+            gpRenderCtx();
         };
 
         /* Rail track -> laps at that track. Separate from gpSesModeSet so the
@@ -13482,6 +13807,7 @@
             gp.sesMode = "laps";
             gpBuildRail();
             gpRenderSessions();
+            gpRenderCtx();
         };
 
         function gpRenderSessions() {
@@ -13495,23 +13821,30 @@
                different enough that one table cannot answer both: a lap list
                has to cross recordings to be worth anything, and a recording
                list has to stay one row per file to be renameable. */
-            var h = "<h3>" + (mode === "laps" ? (onTrack ? gpEsc(onTrack) : "Laps") : "Sessions") + "</h3>" +
+            /* No heading in recordings mode: the page head above already says
+               Library and says what is in it, and printing "Sessions · every
+               recording on this PC" underneath it was the same sentence twice
+               on one screen. Laps mode keeps its heading because there it
+               names the TRACK, which is information the page head does not
+               carry. */
+            var h = "";
+            if (mode === "laps") {
+                h = "<h3>" + (onTrack ? gpEsc(onTrack) : "Laps") + "</h3>" +
                     "<div class='sub'>" +
-                    (mode === "laps"
-                        ? (onTrack
-                            ? "every " + gpRunWord() + " you have driven here, quickest first, across every recording"
-                            : "where you have driven — pick a track for its " + gpRunWord() + "s")
-                        : "every recording on this PC · open one, or plug the node in and download the latest drive") +
+                    (onTrack
+                        ? "every " + gpRunWord() + " you have driven here, quickest first, across every recording"
+                        : "where you have driven — pick a track for its " + gpRunWord() + "s") +
                     "</div>";
-            h += "<div class='gpb-segbar' style='margin:0 0 12px'>" +
-                 "<button class='ws-btn-line" + (mode === "recordings" ? " on" : "") +
-                 "' onclick='gpSesModeSet(\"recordings\")'>Recordings</button>" +
-                 "<button class='ws-btn-line" + (mode === "laps" ? " on" : "") +
-                 "' onclick='gpSesModeSet(\"laps\")'>" + gpRunWord(true) + "s</button>" +
-                 (mode === "laps" && onTrack
-                    ? "<button class='ws-btn-line' onclick='gpLapsForTrack(\"\")' " +
-                      "title='every track'>All tracks</button>" : "") +
-                 "</div>";
+            }
+            /* Recordings / Laps moved up into the Library's sub-tab row, where
+               they sit beside Circuits as the third way of asking about the
+               same library. What is left here is not a mode, it is a filter
+               being cleared, so it stays with the list it filters. */
+            if (mode === "laps" && onTrack) {
+                h += "<div class='gpb-segbar' style='margin:0 0 12px'>" +
+                     "<button class='ws-btn-line' onclick='gpLapsForTrack(\"\")' " +
+                     "title='every track'>All tracks</button></div>";
+            }
             if (gp.sessions === null) {
                 h += "<div class='ws-note'>Reading…</div>";
                 wrap.innerHTML = h; return;
@@ -16452,6 +16785,9 @@
                the list down with it. Claimed here instead, where the GPS
                workspace already gets first refusal. */
             if (gp.chanPop) { window.gpChanPopToggle(); return true; }
+            /* The device popover floats over everything in the bar, so it is
+               the innermost thing Escape can mean after the channel list. */
+            if (document.getElementById("gpDevPopEl")) { gpDevPopClose(); return true; }
             if (gp.layoutsOpen || gp.splitMenu) {
                 var wasMenu = !!gp.splitMenu;
                 gp.layoutsOpen = false; gp.splitMenu = null;
@@ -38157,14 +38493,15 @@
             var view = gp.view;
             var big = (view === "tracks");                 /* full-height map view */
             var mapless = (view === "setup" || view === "sessions");
-            [["gpBtnSessions", "sessions"], ["gpBtnMonitor", "monitor"],
-             ["gpBtnSession", "session"], ["gpBtnCorners", "corners"],
-             ["gpBtnDrift", "drift"],
-             ["gpBtnTracks", "tracks"], ["gpBtnSetup", "setup"]]
-                .forEach(function (b) {
-                    var el = document.getElementById(b[0]);
-                    if (el) el.classList.toggle("on", view === b[1]);
-                });
+            /* Which of the four sections is lit, and where coming back to this
+               one should land. The seven views survive underneath — only the
+               bars were folded. */
+            var secNow = gpSectionOf(view);
+            if (secNow) { gp.secLast = gp.secLast || {}; gp.secLast[secNow.id] = view; }
+            gpRenderNav();
+            /* A section change closes the device popover: it is anchored to a
+               fixed position and would otherwise sit over the new view. */
+            if (document.getElementById("gpDevPopEl")) gpDevPopClose();
             var wrap = document.getElementById("gpMapWrap");
             var grid = document.getElementById("gpStage");
             var fb = document.getElementById("gpBtnFollow");
@@ -42741,6 +43078,9 @@
                switched tabs — off in one view and on in the next, about a
                state that had not changed. */
             if (hint) hint.textContent = gpReadingRecording() ? "" : gpHintText();
+            /* The pill on the black bar says the same four facts in one line,
+               in every view, whether or not its popover is open. */
+            gpDevPillSync();
             /* The link can drop mid-session, so re-assert this every tick
                rather than only when the inspector is rebuilt. */
             gpSyncEnabled();

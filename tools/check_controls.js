@@ -142,7 +142,15 @@ ok('none is undefined everywhere',
    assert it is still looking at a real page with real controls in it. */
 console.log('\nthe harness is still looking at something');
 ok('found a workable number of handlers', uses.size > 300, String(uses.size));
-ok('found the GPS workspace controls', uses.has('gpSetView'));
+/* gpSetView used to be the canary here, as the onclick on seven tab buttons.
+   The lap timer's bar was split in two and its navigation is generated now
+   (gpRenderNav / the sub-tab row), so gpSetView appears in a JS template
+   rather than in an attribute — which this scanner is right not to see. Any
+   of the bar's remaining hand-written handlers will do; several, so one more
+   move does not silently blind the harness. */
+ok('found the GPS workspace controls',
+   ['_gpClose', 'gpDevPop', 'gpGearPop', 'gpExportPop', 'gpLayoutsToggle']
+       .some(function (n) { return uses.has(n); }));
 ok('found the CAN analyser controls', uses.has('caSetMode') || uses.has('caShowAll'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
