@@ -161,19 +161,28 @@ ok('found the CAN analyser controls', uses.has('caSetMode') || uses.has('caShowA
  * returns a PROMISE, and a promise is always truthy, so every
  * `if (!confirm(...)) return` guard returned nothing and the action ran
  * anyway. Proven on the bench: "Node recording cleared." appeared BEHIND a
- * dialog nobody had answered (ADR-0016). window.prompt is worse still — the
- * desktop webview does not implement it at all, so Rename a recording opened
- * nothing.
+ * dialog nobody had answered (ADR-0016).
  *
- * The replacements are confirmAsync / _showConfirmOverlay in the firmware
- * base, and gpConfirm / gpPrompt in the workspace. Checked against the
- * OVERLAY source, not the built page: the firmware base has its own history
- * with these and is guarded in its own repo. */
+ * window.prompt is worse still, and worse than ADR-0016 knew. It is not
+ * remapped at all — it is the webview's own, and the webview does not
+ * implement it: no dialog is created and the call NEVER RETURNS. Measured
+ * 2026-09-02 over CDP against the dev build — after prompt() the page would
+ * not evaluate `1+1` again, and the process owned no dialog window. The
+ * editor freezes where it stands. Two shipped call sites did this: New
+ * dashboard… in the layout menu, and Custom… in a channel's unit list.
+ *
+ * The replacements are promptAsync / confirmAsync (firmware base) and
+ * gpPrompt / gpConfirm (workspace).
+ *
+ * This reads the BUILT PAGE, not just the overlay. The firmware base is
+ * guarded in its own repo, but it is guarded there for the DEVICE, where
+ * both dialogs work fine — the freeze only exists on the desktop, so the
+ * desktop is where it has to be noticed. Whatever ships in dist is what is
+ * checked. */
 {
-    const overlay = fs.readFileSync(path.join(ROOT, 'src/tauri-overlay.html'), 'utf8');
     /* Comments talk about them by name on purpose — that is where the
        reasoning lives — so only count calls outside a comment. */
-    const code = overlay.replace(/\/\*[\s\S]*?\*\//g, '');
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     const bad = function (re) {
         const out = [];
         let m;
@@ -181,16 +190,20 @@ ok('found the CAN analyser controls', uses.has('caSetMode') || uses.has('caShowA
             out.push(code.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, ' '));
         return out;
     };
-    /* Bare, or spelled window.* — that is how the one this was written for
-       was actually written. Any OTHER receiver (confirmAsync, _showConfirm…,
-       obj.prompt) is somebody else's function and is left alone. */
+    /* Bare, or spelled window.* — that is how the ones this was written for
+       were actually written. Any OTHER receiver (confirmAsync, promptAsync,
+       _showConfirm…, obj.prompt) is somebody else's function, left alone. */
     const c = bad(/(?:(?<![.\w$])|window\.)confirm\s*\(/g);
     const p = bad(/(?:(?<![.\w$])|window\.)prompt\s*\(/g);
-    ok('nothing calls the bare confirm()', c.length === 0,
+    ok('nothing in the built page calls the bare confirm()', c.length === 0,
        c.join('\n         ') + '\n         use confirmAsync() or gpConfirm() — ' +
        'the bare one returns a promise and never blocks');
-    ok('nothing calls the bare prompt()', p.length === 0,
-       p.join('\n         ') + '\n         use gpPrompt() — the desktop webview has no prompt');
+    ok('nothing in the built page calls the bare prompt()', p.length === 0,
+       p.join('\n         ') + '\n         use promptAsync() or gpPrompt() — ' +
+       'the bare one hangs the desktop webview outright');
+    /* And the replacement has to exist to be used. */
+    ok('the editor ships a prompt of its own', /function promptAsync\s*\(/.test(src) &&
+       /function _showPromptOverlay\s*\(/.test(src));
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
