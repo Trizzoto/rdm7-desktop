@@ -57,7 +57,7 @@ const CONSTS = ['GP_DRIFT_MIN_KPH', 'GP_DRIFT_ON', 'GP_DRIFT_OFF',
     'GP_BREAK_QUIET_K', 'GP_BREAK_MAX_FRAC',
     'GP_COAST_G', 'GP_BRAKE_G', 'GP_CORNER_PAD',
     'GP_TURN_DPS', 'GP_TURN_MIN_S', 'GP_TURN_MIN_DEG', 'GP_TURN_SAME_S',
-    'GP_RUN_STOP_KPH', 'GP_RUN_STOP_S', 'GP_RUN_MIN_S'];
+    'GP_RUN_STOP_KPH', 'GP_RUN_STOP_S', 'GP_RUN_MIN_S', 'GP_MATCH_KM'];
 
 /* Strings, so constOf's number regex cannot read them. */
 const STR_CONSTS = ['GP_SESFILE_FMT'];
@@ -80,6 +80,10 @@ const FNS = [
     'gpVboClockMs', 'gpVboSpeedScale', 'gpVboParse',
     'gpB64', 'gpB64Dec', 'gpRowsUnpack', 'gpSessionFileParse',
     'gpGateFromEnd', 'gpTrackFromVbo',
+    /* Which circuit a recording was driven at. gpTraceHome/gpKmBetween/
+       gpTrackReach come with it; check_borrowedtrack asks gpTrackForRows the
+       question gpSessionLoad now asks. */
+    'gpTraceHome', 'gpKmBetween', 'gpTrackReach', 'gpTrackForRows',
     /* How a run is NAMED once it has been graded. Nothing in the answer sheet
        reads these — check_cleanruns does, and it has to ask the same sandbox
        the sheet was measured in or it would be asking about a different set

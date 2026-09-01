@@ -12302,6 +12302,34 @@
                     gp.tracks.active = null;
                 else if (meta.trackId && gp.tracks && gpTrackById(meta.trackId))
                     gp.tracks.active = meta.trackId;
+                else if (meta.trackId && gp.tracks) {
+                    /* It NAMED a track, and this library has never seen it —
+                       which is every .rdmsession that came from another PC,
+                       because the ids in it are that PC's. This fell through
+                       to neither branch and left active on whatever was open
+                       before, so the recording was timed against a stranger's
+                       start/finish line with nothing on screen saying so: the
+                       23 August Mallala golden read 2:20.220 against a
+                       borrowed Mallala instead of its own 2:16.091, and had
+                       the borrowed track been a different circuit entirely it
+                       would have read nothing at all.
+
+                       Match it to a track that IS here by where it was
+                       driven — the same question gpMatchTrack asks — and if
+                       nothing here fits, time it against nothing rather than
+                       against the wrong thing. gpTrackForRows, not
+                       gpMatchTrack: opening a recording must not add a track
+                       to the library. */
+                    var lib = rows.length ? gpTrackForRows(rows) : null;
+                    gp.tracks.active = lib ? lib.track.id : null;
+                    gpImportSaid(lib
+                        ? "This recording was made against a circuit that is not on this PC. " +
+                          "It is timed against your " + lib.track.name + " instead — check the " +
+                          "start/finish line before trusting the times."
+                        : "This recording was made against a circuit that is not on this PC, and " +
+                          "nothing here matches where it was driven. Add the circuit in Library → " +
+                          "Circuits to get lap times.", "warn");
+                }
                 gp.trace = rows; gp.framed = false;
                 /* The fence is an INDEX INTO THE PREVIOUS session's array —
                    the length it had before a ghost lap was appended. The line
@@ -26432,9 +26460,12 @@
            back "not near any track in the library", and the drive then
            borrowed whatever track happened to be active. The track a
            recording belongs to is the one it spent its time at. */
-        function gpMatchTrack(rows) {
-            var home = gpTraceHome(rows);
-            if (!home) return null;
+        /* The library half of the match, on its own and guaranteed not to
+           mint. gpMatchTrack invents a track from the built-in list when
+           nothing in the library fits, which is right when the user has asked
+           to file a recording — and wrong for the one caller that must not
+           touch the library at all: opening a recording. */
+        function gpTrackForRows(rows) {
             /* Every ~200th sample: at 25 Hz that is one every 8 s, enough to
                tell a lapping session from a drive past, and cheap on a file
                with 150,000 rows in it. */
@@ -26458,7 +26489,14 @@
                     (Math.abs(share - best.share) <= 0.05 && closest < best.km))
                     best = { km: closest, share: share, track: t };
             });
-            if (best) return { track: best.track, km: best.km, made: false };
+            return best ? { track: best.track, km: best.km, made: false } : null;
+        }
+
+        function gpMatchTrack(rows) {
+            var home = gpTraceHome(rows);
+            if (!home) return null;
+            var lib = gpTrackForRows(rows);
+            if (lib) return lib;
 
             var place = null;
             GP_PLACES.forEach(function (p) {

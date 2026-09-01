@@ -43,7 +43,7 @@ function grabVar(name) {
 
 const FN = ['gpN', 'gpB64', 'gpB64Dec', 'gpSesUid', 'gpRowsUnpack',
             'gpSessionFileParse', 'gpMetres', 'gpKmBetween', 'gpTraceHome',
-            'gpMatchTrack'];
+            'gpTrackForRows', 'gpMatchTrack'];
 const VAR = ['GP_NO_T', 'GP_CHAN_STALE', 'GP_SESFILE_FMT', 'GP_PLACES',
              'GP_MATCH_KM'];
 
