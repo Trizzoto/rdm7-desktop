@@ -3331,10 +3331,91 @@
         }
         #gpWorkspace .gpb-driftmap .gp-viewer { flex: 1; min-height: 0; margin: 0; }
         #gpWorkspace .gpb-drift {
-            width: 460px; flex-shrink: 0; padding: 12px 16px 16px;
+            width: 500px; flex-shrink: 0; padding: 12px 16px 16px;
             border-left: 1px solid var(--gpb-div);
         }
-        @media (min-width: 1700px) { #gpWorkspace .gpb-drift { width: 540px; } }
+        @media (min-width: 1700px) { #gpWorkspace .gpb-drift { width: 560px; } }
+
+        /* ---- the angle lane ----------------------------------------------
+           Under the map and inside its sticky column, because the coloured
+           line on the map and the angle under it are two views of the same
+           corner — scrolling the readout must not separate them. Height is
+           fixed and matches GP_DLANE_H; the canvas sizes its own backing
+           store to the device pixel ratio. */
+        #gpWorkspace .gpb-dlane {
+            /* The map is docked into this column by gpDockViewer AFTER this
+               canvas exists in the markup, so it lands second and the lane
+               would draw above it. Source order cannot settle it; order does. */
+            order: 2;
+            display: block; width: 100%; height: 132px; flex: none;
+            background: var(--gpb-surface); border: 1px solid var(--gpb-div);
+            cursor: col-resize; touch-action: none;
+        }
+        #gpWorkspace .gpb-dlane.dragging { cursor: grabbing; }
+
+        /* ---- the corner, at the size of the thing being talked about ---- */
+        #gpWorkspace .gpb-dhead { padding-bottom: 8px; }
+        #gpWorkspace .gpb-dhead .nm {
+            font-family: var(--gpb-head); font-weight: 700; font-size: 20px;
+            line-height: 1; letter-spacing: 0.02em; text-transform: uppercase;
+            color: var(--gpb-ink);
+        }
+        #gpWorkspace .gpb-dhead .sub {
+            font-size: 11.5px; color: var(--gpb-muted); margin-top: 3px;
+        }
+        #gpWorkspace .gpb-dtools { display: flex; gap: 5px; margin-top: 9px; }
+        #gpWorkspace .gpb-dtools button {
+            height: 26px; padding: 0 10px; background: var(--gpb-surface);
+            border: 1px solid var(--gpb-div); color: var(--gpb-ink); cursor: pointer;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 12px;
+            letter-spacing: 0.06em; text-transform: uppercase;
+            display: inline-flex; align-items: center; gap: 5px;
+        }
+        #gpWorkspace .gpb-dtools button:hover:not(:disabled) { border-color: var(--gpb-ink); }
+        #gpWorkspace .gpb-dtools button.pri {
+            background: var(--gpb-red); border-color: var(--gpb-red); color: #fff;
+        }
+        #gpWorkspace .gpb-dtools button.pri:hover:not(:disabled) { background: var(--gpb-red-600); }
+        #gpWorkspace .gpb-dtools button.on {
+            background: var(--gpb-ink); border-color: var(--gpb-ink); color: #fff;
+        }
+        #gpWorkspace .gpb-dtools button:disabled { opacity: 0.35; cursor: default; }
+        #gpWorkspace .gpb-dtools button:focus-visible {
+            outline: 2px solid var(--gpb-red); outline-offset: 1px;
+        }
+
+        /* ---- what the car is doing right now ----------------------------
+           Written into by the 20 Hz playhead path, never rebuilt. */
+        #gpWorkspace .gpb-dlive {
+            display: flex; align-items: center; gap: 9px; margin-top: 10px;
+            padding: 7px 10px; background: var(--gpb-surface);
+            border: 1px solid var(--gpb-div); font-size: 12.5px;
+            font-variant-numeric: tabular-nums;
+        }
+        #gpWorkspace .gpb-dlive .k {
+            font-family: var(--gpb-head); font-weight: 700; font-size: 10.5px;
+            letter-spacing: 0.16em; text-transform: uppercase; color: var(--gpb-red);
+        }
+        #gpWorkspace .gpb-dlive b {
+            font-family: var(--gpb-head); font-weight: 700; font-size: 18px;
+            line-height: 1; color: var(--gpb-ink);
+        }
+        #gpWorkspace .gpb-dlive b small { font-size: 10.5px; font-weight: 500; color: var(--gpb-muted); }
+        /* Which side, in the MAP's own colour. Not a word: nothing in the
+           code establishes which sign of the puck's gyro is left and which is
+           right, so a label would be a guess. */
+        #gpWorkspace .gpb-dlive .sw { width: 11px; height: 11px; flex: none; display: block; }
+        #gpWorkspace .gpb-dlive .wh { color: var(--gpb-soft); }
+        #gpWorkspace .gpb-dlive .sep { color: var(--gpb-n300); }
+        #gpWorkspace .gpb-dlive .sp2 { margin-left: auto; color: var(--gpb-soft); }
+
+        #gpWorkspace .gpb-dspark { display: block; width: 84px; height: 20px; }
+        #gpWorkspace .gpb-dcorn td:nth-child(2) { width: 88px; }
+        #gpWorkspace .gpb-dhow {
+            color: var(--gpb-muted); text-decoration: none; text-transform: uppercase;
+            letter-spacing: 0.1em; font-family: var(--gpb-head); font-weight: 700;
+        }
+        #gpWorkspace .gpb-dhow:hover { color: var(--gpb-red); }
         #gpWorkspace .gpb-dsect { margin-top: 14px; }
         #gpWorkspace .gpb-dsect:first-child { margin-top: 0; }
         #gpWorkspace .gpb-dsect > h4 {
@@ -4526,7 +4607,14 @@
                      laps; the map takes the room because reading one line
                      against another IS the analysis. -->
                 <div class="gpb-driftwrap" id="gpDriftWrap" style="display:none">
-                    <div class="gpb-driftmap" id="gpDriftMapCell"></div>
+                    <div class="gpb-driftmap" id="gpDriftMapCell">
+                        <!-- The angle, drawn. Inside the sticky column so it
+                             stays with the map: the line on the map and the
+                             angle under it are two views of one corner, and
+                             scrolling the readout must not separate them. -->
+                        <canvas class="gpb-dlane" id="gpDriftLane"
+                                title="Slip angle over the lap. Drag to scrub, click a corner to select it, double-click to play it."></canvas>
+                    </div>
                     <div class="gpb-drift" id="gpDrift"></div>
                 </div>
             </div>
@@ -13186,6 +13274,25 @@
                           (meNow.chanIds.length === 1 ? "" : "s") : ""));
                 }
                 meta = bits.join(" · ");
+                /* Drift is read a corner at a time, so the LAP's own number
+                   belongs up here rather than competing with the corner in
+                   the hero below. */
+                if (view === "drift") {
+                    try {
+                        var bd = gpDriftBoard();
+                        /* The same normalisation gpRenderDrift does. gpSetView
+                           renders this head BEFORE gpRenderDrift runs, so on a
+                           freshly opened recording gp.selLap is still -1 here
+                           and this line read lapAvg[-1]: "lap 0 of 5, no corner
+                           rated" over a table full of ratings. */
+                        var nl = (gp.traceLaps || []).length;
+                        var li = (gp.selLap >= 0 && gp.selLap < nl) ? gp.selLap : 0;
+                        var av = bd && bd.lapAvg[li];
+                        if (bd) meta += " · " + gpRunWord() + " " + (li + 1) + " of " + nl +
+                            (av ? " · " + av.stars.toFixed(1) + "★ over " + av.n + " corners"
+                                : " · no corner rated on this " + gpRunWord());
+                    } catch (e) { }
+                }
                 /* The three tags follow the name now instead of racing it for
                    room, so the spread and the ideal no longer get dropped at
                    1400 px to save the circuit's last nine letters. */
@@ -19854,6 +19961,17 @@
            shift-arrows one second, up/down walk the coach findings. */
         function gpSessionKey(key, shift) {
             var r = gpLapRange();
+            /* Drift-only keys, ahead of the shared ones: a drifter moves
+               between corners far more than between laps. Deliberately not
+               J or L, which are the rate keys everywhere else. */
+            if (gp.view === "drift") {
+                if (key === "[") { window.gpDriftCornerStep(-1); return "corner"; }
+                if (key === "]") { window.gpDriftCornerStep(1); return "corner"; }
+                if (key === "Enter") {
+                    window.gpDriftCornerPlay(gp.driftUnit, !!shift);
+                    return "corner";
+                }
+            }
             if (key === " " || key === "k" || key === "K") { window.gpPlayToggle(); return "play"; }
             if (key === "Home") { window.gpTransport("start"); return "jump"; }
             if (key === "End") { window.gpTransport("end"); return "jump"; }
@@ -22307,6 +22425,18 @@
             return i;
         }
 
+        /* The mirror, for a stop point: the sample roughly `secs` AFTER idx.
+           Walked for the same reason — 10 Hz import, 25 Hz puck, and the puck
+           skips samples while the car is stopped, so no arithmetic on the
+           index is right on all three. */
+        function gpIdxSecondsAfter(idx, secs) {
+            var rows = gp.trace, r = gpLapRange();
+            if (!rows || !rows.length) return idx;
+            var i = Math.max(r.from, Math.min(r.to, idx));
+            while (i < r.to && gpSecs(rows, idx, i) < secs) i++;
+            return i;
+        }
+
         var GP_CORNER_RUNUP = 2.0;      /* seconds of approach before a corner */
 
         /* Clicking a corner sets you up to WATCH it, and nothing else.
@@ -22600,7 +22730,11 @@
                 /* vs Ref and Line are built on lap indices and a delta series
                    that runs do not have. */
                 if (m === "ref" || m === "line") return gpDriftAngle() ? "angle" : "speed";
-                return (m === "speed" || m === "lap" || m === "angle" || m === "pace") ? m : "speed";
+                /* Angle is the subject of this view, so it is what the line
+                   is coloured by unless you ask for something else. `pace` is
+                   Analyse's default carried across, not a choice made here. */
+                if (m === "pace" || !m) return gpDriftAngle() ? "angle" : "speed";
+                return (m === "speed" || m === "lap" || m === "angle") ? m : "speed";
             }
             if ((m === "ref" || m === "line") &&
                 !(gp.selLap >= 0 && gp.cmpLap >= 0 && gp.cmpLap !== gp.selLap)) return "pace";
@@ -25239,6 +25373,553 @@
             }).join("") + "</div>";
         }
 
+        /* ====================================================================
+           The angle lane
+           ====================================================================
+           The engine has a signed slip angle with an error bar on every
+           sample, and until now the view printed three of them as numbers.
+           This draws it: the drift building, holding and dropping, against
+           the standard it is rated on.
+
+           X is TIME from the start of the lap, not sample index — a 10 Hz
+           import and a 25 Hz puck download then plot identically. Y is
+           signed, symmetric about zero, so a left-hand and a right-hand
+           drift read as mirror images of each other.
+
+           The data is separated from the drawing on purpose: gpDriftLaneData
+           has no canvas in it, so the harness can check the brackets and the
+           scale against a real recording without a DOM.
+           ==================================================================== */
+        var GP_DLANE_H = 132;           /* css px, matches .gpb-dlane */
+        var GP_DLANE_PAD = 34;          /* left gutter for the axis labels */
+
+        function gpDriftLaneData(r) {
+            var rows = gp.trace, d = gpDriftAngle();
+            if (!rows || !rows.length || !d) return null;
+            r = r || gpLapRange();
+            var n = r.to - r.from + 1, i, k;
+            if (n < 4) return null;
+            var secs = new Float32Array(n);
+            for (i = 0; i < n; i++) secs[i] = gpSecs(rows, r.from, r.from + i);
+            var span = secs[n - 1] || 1;
+
+            /* The full-marks line must always be inside the plot, or the one
+               standard the rating is built on is off the top of the picture.
+               And a session that never went past 20 degrees must not draw its
+               drifts as a flat line against a 100 degree axis. */
+            var a = [];
+            for (i = 0; i < n; i += 2) {
+                k = r.from + i;
+                if (d.ok[k]) a.push(Math.abs(d.beta[k]));
+            }
+            a.sort(function (x, y) { return x - y; });
+            var p95 = a.length ? a[Math.floor(a.length * 0.95)] : 0;
+            var yMax = Math.max(46, Math.min(100,
+                Math.max(GP_DRIFT_STAR_DEG * 1.15, p95 * 1.1)));
+
+            /* The sideways stretches, clipped to this lap. */
+            var segs = [];
+            (gpDriftSegments() || []).forEach(function (s) {
+                var f = Math.max(s.from, r.from), t = Math.min(s.to, r.to);
+                if (t > f) segs.push({ a: secs[f - r.from], b: secs[t - r.from] });
+            });
+
+            /* One bracket per unit this lap actually drove. A unit the lap
+               missed gets nothing rather than an empty bracket — the lap did
+               not go there, and a bracket would say it did. */
+            var b = gpDriftBoard(), brackets = [];
+            if (b) {
+                b.units.forEach(function (u, ui) {
+                    var cell = (b.cells[gp.selLap] || [])[ui];
+                    if (!cell) return;
+                    var f = Math.max(cell.from, r.from), t = Math.min(cell.to, r.to);
+                    if (t <= f) return;
+                    var rated = !!cell.rating, spun = !!cell.spun;
+                    brackets.push({
+                        unit: ui, a: secs[f - r.from], b: secs[t - r.from],
+                        name: u.name, linked: !!u.linked, spun: spun, rated: rated,
+                        stars: rated ? cell.rating.stars : null,
+                        note: rated ? null : (spun ? "spin" : "not a drift"),
+                        on: ui === gp.driftUnit
+                    });
+                });
+            }
+            return { from: r.from, to: r.to, secs: secs, span: span, yMax: yMax,
+                     segs: segs, brackets: brackets, direct: !!d.direct };
+        }
+
+        /* The sample nearest a time offset into the lane, by bisection. */
+        function gpDriftLaneIdxAt(t) {
+            var L = gp._dlane;
+            if (!L) return null;
+            var lo = 0, hi = L.secs.length - 1, mid;
+            t = Math.max(0, Math.min(L.span, t));
+            while (hi - lo > 1) {
+                mid = (lo + hi) >> 1;
+                if (L.secs[mid] < t) lo = mid; else hi = mid;
+            }
+            var pick = (t - L.secs[lo] <= L.secs[hi] - t) ? lo : hi;
+            return L.from + pick;
+        }
+
+        /* A small filled star, the same shape .gpb-star clips to, so a
+           bracket label and a table row are marked the same way. */
+        function gpDriftLaneStar(g, x, y, s, col) {
+            var pts = [[50, 0], [61, 35], [98, 35], [68, 57], [79, 91],
+                       [50, 70], [21, 91], [32, 57], [2, 35], [39, 35]];
+            g.beginPath();
+            pts.forEach(function (p, i) {
+                var px = x + (p[0] / 100) * s, py = y + (p[1] / 100) * s;
+                if (i) g.lineTo(px, py); else g.moveTo(px, py);
+            });
+            g.closePath();
+            g.fillStyle = col;
+            g.fill();
+        }
+
+        function gpDrawDriftLane() {
+            var cv = document.getElementById("gpDriftLane");
+            if (!cv) return;
+            var show = gp.view === "drift" && gp.trace && gp.trace.length && !!gpDriftAngle();
+            cv.style.display = show ? "block" : "none";
+            if (!show) { gp._dlane = null; return; }
+            var r = gpLapRange();
+            var dat = gpDriftLaneData(r);
+            if (!dat) { cv.style.display = "none"; gp._dlane = null; return; }
+            var d = gpDriftAngle();
+            var dpr = window.devicePixelRatio || 1;
+            var w = cv.getBoundingClientRect().width || cv.clientWidth || 600;
+            if (w < 2) return;
+            var wDev = Math.round(w * dpr), hDev = Math.round(GP_DLANE_H * dpr);
+            if (cv.width !== wDev || cv.height !== hDev) { cv.width = wDev; cv.height = hDev; }
+            var g = cv.getContext("2d");
+            var sx = wDev / w, sy = hDev / GP_DLANE_H;
+            g.setTransform(sx, 0, 0, sy, 0, 0);
+
+            /* ---- OUTSIDE the cache branch -----------------------------------
+               Everything the per-frame path reads is computed here, every
+               frame. Hoisting any of it into the `if (stale)` below leaves it
+               undefined on a cached frame; every coordinate then goes NaN,
+               and a canvas discards NaN in silence — the picture stays and
+               the cursor quietly stops moving. The navigator strip shipped
+               exactly that bug once. */
+            var plotX = GP_DLANE_PAD, plotW = w - GP_DLANE_PAD - 8;
+            var top = 22, bot = GP_DLANE_H - 15;
+            var midY = (top + bot) / 2, halfH = (bot - top) / 2;
+            var X = function (t) { return plotX + (t / dat.span) * plotW; };
+            var Y = function (v) { return midY - Math.max(-1, Math.min(1, v / dat.yMax)) * halfH; };
+            var ascale = gpAngleScale();
+            gp._dlane = { secs: dat.secs, span: dat.span, from: dat.from, to: dat.to,
+                          plotX: plotX, plotW: plotW, brackets: dat.brackets, w: w };
+
+            var key = [gp.sessionId, dat.from, dat.to, wDev, hDev,
+                       gp.driftKey || "", gp.driftSegKey || "",
+                       gp.selLap, gp.driftUnit, Math.round(dat.yMax),
+                       Math.round(ascale)].join("|");
+            var bg = gp._dlaneBg || (gp._dlaneBg = document.createElement("canvas"));
+            var stale = gp._dlaneKey !== key;
+            var gLive = g;
+            if (stale) {
+                if (bg.width !== wDev || bg.height !== hDev) { bg.width = wDev; bg.height = hDev; }
+                g = bg.getContext("2d");
+                g.setTransform(sx, 0, 0, sy, 0, 0);
+                g.clearRect(0, 0, w, GP_DLANE_H);
+                gp._dlaneKey = key;
+
+                g.fillStyle = "#ffffff";
+                g.fillRect(plotX, top - 4, plotW, bot - top + 8);
+
+                /* Where the car was sideways at all, behind everything. */
+                g.fillStyle = "rgba(210,35,42,0.07)";
+                dat.segs.forEach(function (s) {
+                    g.fillRect(X(s.a), top - 4, Math.max(1, X(s.b) - X(s.a)), bot - top + 8);
+                });
+
+                /* The threshold the segments are cut at, then zero. */
+                g.strokeStyle = "rgba(29,31,32,0.08)";
+                g.lineWidth = 1;
+                [GP_DRIFT_ON, -GP_DRIFT_ON].forEach(function (v) {
+                    g.beginPath(); g.moveTo(plotX, Y(v)); g.lineTo(plotX + plotW, Y(v)); g.stroke();
+                });
+                g.strokeStyle = "#1d1f20"; g.lineWidth = 2;
+                g.beginPath(); g.moveTo(plotX, Y(0)); g.lineTo(plotX + plotW, Y(0)); g.stroke();
+
+                /* Full marks, both ways round — the standard the rating is
+                   graded against, drawn where the rating can see it. */
+                g.strokeStyle = "#d2232a"; g.lineWidth = 1.5;
+                g.setLineDash([6, 4]);
+                [GP_DRIFT_STAR_DEG, -GP_DRIFT_STAR_DEG].forEach(function (v) {
+                    g.beginPath(); g.moveTo(plotX, Y(v)); g.lineTo(plotX + plotW, Y(v)); g.stroke();
+                });
+                g.setLineDash([]);
+
+                /* The error bar, as a band around the line. A measured angle
+                   has none — printing one would invent a doubt the
+                   instrument never expressed. */
+                if (!dat.direct) {
+                    g.fillStyle = "rgba(29,31,32,0.12)";
+                    g.beginPath();
+                    var started = false, i2, k2;
+                    for (i2 = 0; i2 < dat.secs.length; i2++) {
+                        k2 = dat.from + i2;
+                        if (!d.ok[k2]) continue;
+                        var yh = Y(d.beta[k2] + d.conf[k2]);
+                        if (!started) { g.moveTo(X(dat.secs[i2]), yh); started = true; }
+                        else g.lineTo(X(dat.secs[i2]), yh);
+                    }
+                    for (i2 = dat.secs.length - 1; i2 >= 0; i2--) {
+                        k2 = dat.from + i2;
+                        if (!d.ok[k2]) continue;
+                        g.lineTo(X(dat.secs[i2]), Y(d.beta[k2] - d.conf[k2]));
+                    }
+                    if (started) { g.closePath(); g.fill(); }
+                }
+
+                /* The line itself, coloured the way the MAP colours it, so
+                   the two pictures of the same corner agree. */
+                g.lineWidth = 2; g.lineCap = "round"; g.lineJoin = "round";
+                var i3, k3, kPrev = null;
+                for (i3 = 1; i3 < dat.secs.length; i3++) {
+                    k3 = dat.from + i3;
+                    kPrev = k3 - 1;
+                    var okBoth = d.ok[k3] && d.ok[kPrev];
+                    var rough = okBoth && (d.conf[k3] > GP_DRIFT_ROUGH);
+                    g.beginPath();
+                    g.moveTo(X(dat.secs[i3 - 1]), okBoth ? Y(d.beta[kPrev]) : Y(0));
+                    g.lineTo(X(dat.secs[i3]), okBoth ? Y(d.beta[k3]) : Y(0));
+                    if (!okBoth) {
+                        /* Below 25 km/h the angle is not knowable. A flat grey
+                           hairline says "no reading here"; a zero would say
+                           the car was straight, which is a different claim. */
+                        g.strokeStyle = "rgba(29,31,32,0.30)"; g.lineWidth = 1;
+                        g.setLineDash([]);
+                    } else if (rough) {
+                        g.strokeStyle = "rgba(29,31,32,0.45)"; g.lineWidth = 1.6;
+                        g.setLineDash([3, 3]);
+                    } else {
+                        g.strokeStyle = gpAngleColour((d.beta[k3] + d.beta[kPrev]) / 2 / ascale);
+                        g.lineWidth = 2; g.setLineDash([]);
+                    }
+                    g.stroke();
+                }
+                g.setLineDash([]);
+
+                /* The axis, in the gutter the plot leaves for it. */
+                g.font = "600 10px 'Barlow Condensed', 'Barlow', system-ui";
+                g.textAlign = "right"; g.textBaseline = "middle";
+                g.fillStyle = "rgba(29,31,32,0.5)";
+                g.fillText(GP_DRIFT_STAR_DEG + "°", plotX - 6, Y(GP_DRIFT_STAR_DEG));
+                g.fillText("0°", plotX - 6, Y(0));
+                g.fillText("−" + GP_DRIFT_STAR_DEG + "°", plotX - 6, Y(-GP_DRIFT_STAR_DEG));
+                g.textAlign = "right"; g.textBaseline = "alphabetic";
+                g.fillStyle = "#d2232a";
+                g.font = "700 10px 'Barlow Condensed', 'Barlow', system-ui";
+                g.fillText(GP_DRIFT_STAR_DEG + "° · FULL MARKS",
+                           plotX + plotW - 3, Y(GP_DRIFT_STAR_DEG) - 5);
+
+                /* A bracket per corner, along the top edge, carrying what it
+                   was worth. This is what makes the lane navigable rather
+                   than merely pretty. */
+                dat.brackets.forEach(function (br) {
+                    var x0 = X(br.a), x1 = X(br.b), col = br.on ? "#d2232a" : "rgba(29,31,32,0.5)";
+                    g.strokeStyle = col; g.lineWidth = br.on ? 1.5 : 1;
+                    g.beginPath();
+                    g.moveTo(x0, 14); g.lineTo(x0, 18);
+                    g.moveTo(x0, 16); g.lineTo(x1, 16);
+                    g.moveTo(x1, 14); g.lineTo(x1, 18);
+                    g.stroke();
+                    var mid = (x0 + x1) / 2;
+                    g.font = (br.on ? "700 " : "600 ") + "10px 'Barlow Condensed', 'Barlow', system-ui";
+                    g.fillStyle = col;
+                    g.textAlign = "center"; g.textBaseline = "alphabetic";
+                    if (br.rated) {
+                        var t = br.name + "  " + br.stars.toFixed(1);
+                        var tw = g.measureText(t).width;
+                        g.fillText(t, mid, 11);
+                        gpDriftLaneStar(g, mid + tw / 2 + 2, 4, 7, col);
+                    } else {
+                        g.fillText(br.name + " · " + br.note, mid, 11);
+                    }
+                });
+            }   /* end of the cached static picture */
+
+            /* Blit it, then draw only what moves. */
+            g = gLive;
+            g.setTransform(1, 0, 0, 1, 0, 0);
+            g.clearRect(0, 0, wDev, hDev);
+            g.drawImage(bg, 0, 0);
+            g.setTransform(sx, 0, 0, sy, 0, 0);
+
+            /* the hover guide, and its reading */
+            if (gp._dlaneHoverT !== null && gp._dlaneHoverT !== undefined) {
+                var hx = X(gp._dlaneHoverT);
+                g.strokeStyle = "rgba(29,31,32,0.32)"; g.lineWidth = 1;
+                g.beginPath(); g.moveTo(hx, top - 4); g.lineTo(hx, bot + 4); g.stroke();
+                var hi2 = gpDriftLaneIdxAt(gp._dlaneHoverT);
+                if (hi2 !== null && d.ok[hi2]) {
+                    g.font = "700 10px 'Barlow Condensed', 'Barlow', system-ui";
+                    g.fillStyle = "rgba(29,31,32,0.72)";
+                    g.textAlign = hx > plotX + plotW - 40 ? "right" : "left";
+                    g.textBaseline = "alphabetic";
+                    g.fillText(Math.round(Math.abs(d.beta[hi2])) + "°",
+                               hx + (hx > plotX + plotW - 40 ? -4 : 4), top + 8);
+                }
+            }
+
+            /* the playhead */
+            var pi = Math.max(dat.from, Math.min(dat.to, gp.playIdx));
+            var px = X(dat.secs[pi - dat.from] || 0);
+            g.strokeStyle = "#d2232a"; g.lineWidth = 1.5;
+            g.beginPath(); g.moveTo(px, top - 4); g.lineTo(px, bot + 4); g.stroke();
+            if (d.ok[pi]) {
+                g.beginPath();
+                g.arc(px, Y(d.beta[pi]), 4.5, 0, Math.PI * 2);
+                g.fillStyle = "#d2232a"; g.fill();
+                g.strokeStyle = "#fff"; g.lineWidth = 1.5; g.stroke();
+            }
+        }
+
+        /* Drag to scrub, click a bracket to select it, double-click one to
+           play it. Bound once, the way gpNavBind is. */
+        function gpDriftLaneBind() {
+            var cv = document.getElementById("gpDriftLane");
+            if (!cv || cv._bound) return;
+            cv._bound = true;
+            var dragging = false;
+
+            var timeAt = function (ev) {
+                var L = gp._dlane;
+                if (!L || L.plotW <= 0) return null;
+                var rect = cv.getBoundingClientRect();
+                var f = (ev.clientX - rect.left - L.plotX) / L.plotW;
+                return Math.max(0, Math.min(1, f)) * L.span;
+            };
+            var bracketAt = function (ev) {
+                var L = gp._dlane, t = timeAt(ev);
+                if (!L || t === null) return null;
+                var hit = null;
+                L.brackets.forEach(function (br) { if (t >= br.a && t <= br.b) hit = br; });
+                return hit;
+            };
+            var seek = function (ev) {
+                var t = timeAt(ev);
+                if (t === null) return;
+                var i = gpDriftLaneIdxAt(t);
+                if (i === null) return;
+                gp.playIdx = i;
+                gp.playSub = 0;
+                gpSyncScrub();
+                gpVideoFollowSeek(true);
+                gpDrawPlayhead();
+            };
+
+            cv.addEventListener("mousedown", function (ev) {
+                /* Taking hold pauses — you cannot go and look somewhere while
+                   the thing you are dragging against is still running. */
+                gpPlayStop();
+                dragging = true;
+                cv.classList.add("dragging");
+                seek(ev);
+                ev.preventDefault();
+            });
+            window.addEventListener("mousemove", function (ev) {
+                if (dragging) { seek(ev); return; }
+                if (gp.view !== "drift") return;
+                var rect = cv.getBoundingClientRect();
+                var inside = ev.clientX >= rect.left && ev.clientX <= rect.right &&
+                             ev.clientY >= rect.top && ev.clientY <= rect.bottom;
+                var t = inside ? timeAt(ev) : null;
+                if (t === gp._dlaneHoverT) return;
+                gp._dlaneHoverT = t;
+                gpDrawDriftLane();
+            });
+            window.addEventListener("mouseup", function () {
+                if (!dragging) return;
+                dragging = false;
+                cv.classList.remove("dragging");
+            });
+            cv.addEventListener("click", function (ev) {
+                var br = bracketAt(ev);
+                if (br) window.gpDriftCornerPick(br.unit);
+            });
+            cv.addEventListener("dblclick", function (ev) {
+                var br = bracketAt(ev);
+                if (br) window.gpDriftCornerPlay(br.unit, false);
+            });
+        }
+
+        /* ---- playing ONE corner ---------------------------------------------
+         * A drifter watches the same five seconds ten times over. The dock
+         * stays the only transport; this sets where it starts and where it
+         * stops, and the ticker honours both.
+         */
+        window.gpDriftCornerPlay = function (ci, loop) {
+            var b = gpDriftBoard();
+            if (!b) return;
+            ci = parseInt(ci, 10);
+            var cell = (b.cells[gp.selLap] || [])[ci];
+            if (!cell) return;
+            var r = gpLapRange();
+            gpPlayStop();                       /* clears any previous stop point */
+            gp.driftUnit = ci;
+            /* Into the corner, not from the apex: starting at the apex means
+               starting with the braking and the entry already over, which is
+               the half worth watching. */
+            gp.playIdx = Math.max(r.from, gpIdxSecondsBefore(cell.from, GP_CORNER_RUNUP));
+            gp.playSub = 0;
+            gp.playStopAt = Math.min(r.to, gpIdxSecondsAfter(cell.to, 1.0));
+            gp.playLoopFrom = loop ? gp.playIdx : null;
+            gpDrawTrace();
+            gpRenderDrift();
+            gpSyncScrub();
+            window.gpPlayToggle();
+        };
+
+        /* Loop is a toggle on whatever corner is selected. */
+        window.gpDriftLoopToggle = function () {
+            if (gp.playLoopFrom !== null && gp.playLoopFrom !== undefined) {
+                gpPlayStop();
+                return;
+            }
+            window.gpDriftCornerPlay(gp.driftUnit, true);
+        };
+
+        /* Previous / next corner. Clamped rather than wrapping: running off
+           the end of the lap into turn one is a jump nobody asked for. */
+        window.gpDriftCornerStep = function (dir) {
+            var b = gpDriftBoard();
+            if (!b) return;
+            var n = b.units.length;
+            var i = Math.max(0, Math.min(n - 1, gp.driftUnit + (dir > 0 ? 1 : -1)));
+            if (i === gp.driftUnit) return;
+            window.gpDriftCornerPick(i);
+        };
+
+        /* The loop button's lit state, marked in place. Called from
+           gpPlayClearStop, which runs on every stop — rebuilding the column
+           there would fight the render that is already happening. */
+        function gpDriftToolsSync() {
+            var b = document.getElementById("gpDriftLoopBtn");
+            if (!b) return;
+            b.classList.toggle("on", gp.playLoopFrom !== null && gp.playLoopFrom !== undefined);
+        }
+
+        /* ---- the live readout -----------------------------------------------
+         * Runs at 20 Hz off gpDrawPlayhead. It writes into slots and blits a
+         * cached canvas; it never rebuilds the column, and it never asks the
+         * layout a question (offsetParent was measured costing more than the
+         * work it skipped).
+         */
+        /* The slots the 20 Hz path writes into. Emitted empty — gpDriftLive
+           fills them on the next playhead draw, which gpRenderDrift's caller
+           always triggers. */
+        function gpDriftLiveHtml() {
+            return "<div class='gpb-dlive'>" +
+                   "<span class='k'>Now</span>" +
+                   "<b data-dv='dang'>&mdash;</b>" +
+                   "<i class='sw' data-dv='dsw'></i>" +
+                   "<span class='wh' data-dv='dwhere'></span>" +
+                   "<span class='sep'>&middot;</span>" +
+                   "<span class='sp2' data-dv='dspd'></span>" +
+                   "</div>";
+        }
+
+        /* The shape of a drift, small enough to sit in a table row. The
+           numbers say a corner was worth 3.5; only the shape says whether it
+           was late, early, or caught twice. */
+        function gpDriftSparks(el) {
+            var d = gpDriftAngle(), b = gpDriftBoard();
+            if (!d || !b) return;
+            Array.prototype.forEach.call(el.querySelectorAll("canvas[data-gp-dspark]"), function (cv) {
+                var ui = parseInt(cv.getAttribute("data-gp-dspark"), 10);
+                var cell = (b.cells[gp.selLap] || [])[ui];
+                if (!cell) return;
+                var dpr = window.devicePixelRatio || 1;
+                var w = 84, hh = 20;
+                cv.width = Math.round(w * dpr); cv.height = Math.round(hh * dpr);
+                var g = cv.getContext("2d");
+                g.setTransform(dpr, 0, 0, dpr, 0, 0);
+                g.clearRect(0, 0, w, hh);
+                var rough = !cell.angle || cell.angle.rough;
+                /* Scaled so the 40 degree standard is always the same height
+                   in every row — a sparkline that rescaled per corner would
+                   make a 20 degree drift look like a 45 degree one. */
+                var top2 = Math.max(GP_DRIFT_STAR_DEG * 1.15,
+                                    cell.angle ? cell.angle.peak * 1.1 : GP_DRIFT_STAR_DEG);
+                var n = cell.to - cell.from + 1;
+                if (n < 2) return;
+                var X = function (i) { return (i / (n - 1)) * w; };
+                var Y = function (v) { return hh - 1 - Math.min(1, Math.abs(v) / top2) * (hh - 3); };
+                /* the standard, so the eye has something to measure against */
+                g.strokeStyle = "rgba(210,35,42,0.35)"; g.lineWidth = 1;
+                g.setLineDash([2, 2]);
+                g.beginPath(); g.moveTo(0, Y(GP_DRIFT_STAR_DEG)); g.lineTo(w, Y(GP_DRIFT_STAR_DEG)); g.stroke();
+                g.setLineDash([]);
+                var i, k, first = true;
+                g.beginPath();
+                for (i = 0; i < n; i++) {
+                    k = cell.from + i;
+                    var v = (d.ok[k]) ? d.beta[k] : 0;
+                    if (first) { g.moveTo(X(i), Y(v)); first = false; } else g.lineTo(X(i), Y(v));
+                }
+                if (!rough && !cell.spun) {
+                    g.lineTo(w, hh); g.lineTo(0, hh); g.closePath();
+                    g.fillStyle = "rgba(210,35,42,0.30)"; g.fill();
+                }
+                g.beginPath(); first = true;
+                for (i = 0; i < n; i++) {
+                    k = cell.from + i;
+                    var v2 = (d.ok[k]) ? d.beta[k] : 0;
+                    if (first) { g.moveTo(X(i), Y(v2)); first = false; } else g.lineTo(X(i), Y(v2));
+                }
+                g.lineWidth = 1.2;
+                if (cell.spun) { g.strokeStyle = "#c02026"; g.setLineDash([]); }
+                else if (rough) { g.strokeStyle = "rgba(29,31,32,0.40)"; g.setLineDash([2, 2]); }
+                else { g.strokeStyle = "#d2232a"; g.setLineDash([]); }
+                g.stroke();
+                g.setLineDash([]);
+            });
+        }
+
+        function gpDriftLive() {
+            if (gp.view !== "drift") return;
+            gpDrawDriftLane();
+            var E = gp._dliveEls;
+            if (!E || !E.ang) return;
+            var rows = gp.trace;
+            if (!rows || !rows.length) return;
+            var i = Math.max(0, Math.min(gp.playIdx, rows.length - 1));
+            var d = gpDriftAngle();
+
+            /* The same three states the dock's angle slot uses — a number
+               that is plain here and rough there would be the tool
+               disagreeing with itself about one sample. */
+            var cf = (d && d.ok[i]) ? d.conf[i] : null;
+            E.ang.innerHTML = cf === null ? "&mdash;"
+                : cf > GP_DRIFT_ROUGH ? "<small>rough</small>"
+                : Math.round(Math.abs(d.beta[i])) + "<small>°" +
+                  (d.direct ? "" : " ±" + Math.round(cf)) + "</small>";
+            /* Which side, in the map's own colour rather than a word.
+               Nothing in the code establishes which sign is left and which is
+               right on the puck's gyro, so naming one would be a guess
+               wearing a label. */
+            if (E.sw) {
+                var showSw = cf !== null && cf <= GP_DRIFT_ROUGH && Math.abs(d.beta[i]) >= GP_DRIFT_OFF;
+                E.sw.style.visibility = showSw ? "visible" : "hidden";
+                if (showSw) E.sw.style.background = gpAngleColour(d.beta[i] / gpAngleScale());
+            }
+            if (E.where) {
+                var b = gpDriftBoard(), name = null;
+                if (b) {
+                    (b.cells[gp.selLap] || []).forEach(function (c, ui) {
+                        if (c && i >= c.from && i <= c.to) name = b.units[ui].name;
+                    });
+                }
+                E.where.textContent = name || "between corners";
+            }
+            if (E.spd) E.spd.textContent = Math.round(gpSpdN(rows[i].kph)) + " " + gpSpdU();
+        }
+
         function gpRenderDrift() {
             var el = document.getElementById("gpDrift");
             if (!el || gp.view !== "drift") return;
@@ -25246,6 +25927,8 @@
             if (!rows || !rows.length) {
                 el.innerHTML = "<div class='ws-none' style='padding:40px 20px'>Nothing loaded.<br>" +
                     "Open a session first &mdash; this view reads every corner of every lap.</div>";
+                gp._dliveEls = null;
+                gpDrawDriftLane();
                 return;
             }
             var laps = gp.traceLaps || [];
@@ -25259,6 +25942,8 @@
                     "start/finish line to cut laps at, and the car never stopped long enough to " +
                     "separate one run from the next. Place a line in <b>Tracks</b>, or record each " +
                     "run with the car coming to a stop between them.</div>";
+                gp._dliveEls = null;
+                gpDrawDriftLane();
                 return;
             }
             if (gp.selLap < 0 || gp.selLap >= laps.length) gp.selLap = 0;
@@ -25268,6 +25953,8 @@
                 el.innerHTML = "<div class='ws-none' style='padding:24px 4px'>No corners found.<br>" +
                     "A corner is a place the car slowed for and then picked back up. Nothing in " +
                     "these laps looks like one &mdash; too short, or too little change of speed.</div>";
+                gp._dliveEls = null;
+                gpDrawDriftLane();
                 return;
             }
             if (gp.driftUnit >= b.units.length) gp.driftUnit = 0;
@@ -25298,15 +25985,35 @@
                      gpDriftSourceLine(d) + "</div>";
                 el.innerHTML = h;
                 gpDriftBind(el);
+                gp._dliveEls = null;
+                gpDrawDriftLane();
                 return;
             }
 
             var cur = (b.cells[sel] || [])[ci];
             var un = b.units[ci];
-            h += "<div class='gpb-dsect'><h4>" + (un ? un.name : "?") +
-                 "<span class='sp'></span><span class='gpb-dnorm'>" + gpRunWord() + " " + (sel + 1) +
-                 (un && un.linked ? " &middot; " + un.members.length + " corners, one drift" : "") +
-                 "</span></h4>";
+
+            /* ---- the corner, at the size of the thing being talked about ----
+               It was a 10.5 px uppercase label. The view exists to answer
+               "how did that corner go", so the corner's name is the headline
+               and the transport for watching it is directly under it —
+               present even when the corner cannot be RATED, because an
+               unrated corner is still one you want to watch. */
+            h += "<div class='gpb-dsect'><div class='gpb-dhead'>" +
+                 "<div class='nm'>" + gpEsc(un ? un.name : "?") + "</div>" +
+                 "<div class='sub'>" + gpRunWord(true) + " " + (sel + 1) + " of " + laps.length +
+                 (un && un.linked ? " &middot; " + un.members.length + " corners driven as one" : "") +
+                 "</div><div class='gpb-dtools'>" +
+                 "<button data-gp-dstep='-1' title='Previous corner  [' " +
+                 (ci <= 0 ? "disabled " : "") + "aria-label='Previous corner'>&lsaquo;</button>" +
+                 "<button class='pri' data-gp-dplay='1' title='Play this corner from " +
+                 GP_CORNER_RUNUP + " s before the entry  (Enter)'" +
+                 (cur ? "" : " disabled") + ">&#9654; Play corner</button>" +
+                 "<button id='gpDriftLoopBtn' data-gp-dloop='1' title='Loop it  (Shift+Enter)'" +
+                 (cur ? "" : " disabled") + ">&#8635; Loop</button>" +
+                 "<button data-gp-dstep='1' title='Next corner  ]' " +
+                 (ci >= b.units.length - 1 ? "disabled " : "") + "aria-label='Next corner'>&rsaquo;</button>" +
+                 "</div></div>" + gpDriftLiveHtml();
 
             if (!cur) {
                 h += "<div class='gpb-dsay'>This lap did not drive that &mdash; it went more than " +
@@ -25418,6 +26125,7 @@
                  (anyLink ? "linked corners rated as one drift" : "best " + gpRunWord() + " for each on the right") +
                  "</span></h4>";
             h += "<table class='gpb-table gpb-dcorn'><thead><tr><th>Turn</th>" +
+                 "<th title='the shape of the drift: how the angle came on, held and came off'>Shape</th>" +
                  "<th class='n' title='the average angle held while the car was sideways'>Angle</th>" +
                  "<th class='n' title='how much of it was spent above " + GP_DRIFT_ON +
                  " degrees — for a linked run of corners this is the number that says whether the link was held'>Comm</th>" +
@@ -25453,6 +26161,9 @@
                      "<td style='white-space:nowrap'>" +
                      (u.linked ? "<i class='gpb-dlink-mark' title='driven as one drift'></i>" : "") +
                      u.name + "</td>" +
+                     "<td>" + (r ? "<canvas class='gpb-dspark' data-gp-dspark='" + k +
+                                   "' width='84' height='20'></canvas>"
+                                 : "<span class='gpb-dpm'>not driven</span>") + "</td>" +
                      "<td class='n'>" + mine + "</td>" +
                      "<td class='n mut'>" + comm + "</td>" +
                      "<td class='n mut'>" + area + "</td>" +
@@ -25507,7 +26218,13 @@
             h += "</tbody></table></div>";
 
             /* ---- how it is rated, in words --------------------------------- */
-            h += "<div class='gpb-dsect'><h4>How this is rated</h4>";
+            /* A quarter of the column was a manual, always open, above the
+               fold on a laptop. It is the same words behind a disclosure —
+               read once, then out of the way. The angle SOURCE stays visible
+               below it: that is a control, not an explanation. */
+            h += "<div class='gpb-dsect'><h4><a class='gpb-dhow' href='#' data-gp-dhow='1'>" +
+                 (gp.driftHowOpen ? "&#9662;" : "&#9656;") + " How this is rated</a></h4>";
+            if (gp.driftHowOpen) {
             if (anyLink) {
                 h += "<div class='gpb-dsay'>Corners the car went through <b>without ever straightening</b> " +
                      "are rated as one drift, because that is what they are &mdash; scoring them separately " +
@@ -25522,11 +26239,24 @@
                  "them. A <b>spin</b> is not rated at all. Nothing is guessed, and style is not " +
                  "scored: a person does that. " +
                  "<span class='gpb-dpm'>Rating v" + GP_DRIFT_SCORE_VER + "</span></div>";
+            }
             h += gpDriftSourceLine(d);
             h += "</div>";
 
             el.innerHTML = h;
             gpDriftBind(el);
+            gpDriftSparks(el);
+            /* The 20 Hz path must not ask the DOM where its slots are — cache
+               them once per rebuild, which is the only time they move. */
+            gp._dliveEls = {
+                ang: el.querySelector("[data-dv='dang']"),
+                sw: el.querySelector("[data-dv='dsw']"),
+                where: el.querySelector("[data-dv='dwhere']"),
+                spd: el.querySelector("[data-dv='dspd']")
+            };
+            gpDriftToolsSync();
+            gpDriftLaneBind();
+            gpDriftLive();
         }
 
         /* Where the angle came from, and how to change it. */
@@ -25607,6 +26337,23 @@
                 tr.addEventListener("click", function () {
                     window.gpDriftGoto(tr.getAttribute("data-gp-dsw"));
                 });
+            });
+            Array.prototype.forEach.call(el.querySelectorAll("[data-gp-dstep]"), function (b) {
+                b.addEventListener("click", function () {
+                    window.gpDriftCornerStep(parseInt(b.getAttribute("data-gp-dstep"), 10));
+                });
+            });
+            var pb = el.querySelector("[data-gp-dplay]");
+            if (pb) pb.addEventListener("click", function () {
+                window.gpDriftCornerPlay(gp.driftUnit, false);
+            });
+            var lb = el.querySelector("[data-gp-dloop]");
+            if (lb) lb.addEventListener("click", function () { window.gpDriftLoopToggle(); });
+            var hw = el.querySelector("[data-gp-dhow]");
+            if (hw) hw.addEventListener("click", function (e) {
+                e.preventDefault();
+                gp.driftHowOpen = !gp.driftHowOpen;
+                gpRenderDrift();
             });
             var ss = el.querySelector("[data-gp-driftsrc]");
             if (ss) ss.addEventListener("change", function () { window.gpDriftSrcSet(this.value); });
@@ -29485,6 +30232,7 @@
             gpStripFollow();
             gpDrawStrip();
             gpUpdateDock();
+            gpDriftLive();         /* the Now row and the lane's cursor */
             gpDrawGrip();          /* the live dot on the grip circle */
             if (!gp.map || !gp.trace || !gp.trace.length) return;
             /* On the line the user can SEE, not on the raw fix half a metre
@@ -29605,7 +30353,7 @@
         window.gpTransport = function (what) {
             if (!gp.trace || !gp.trace.length) return;
             var r = gpLapRange();
-            gpPlayStop();
+            gpPlayStop();               /* which clears any corner stop point */
             if (what === "start") gp.playIdx = r.from;
             else if (what === "end") gp.playIdx = r.to;
             else if (what === "back") gp.playIdx = Math.max(r.from, gp.playIdx - 1);
@@ -29623,6 +30371,10 @@
 
         window.gpScrubTo = function (v) {
             var r = gpLapRange();
+            /* Dragging the bar is a deliberate move, so it outranks a corner
+               loop — otherwise the next tick would drag you straight back to
+               the corner and the scrub would look broken. */
+            gpPlayClearStop();
             gp.playIdx = Math.max(r.from, Math.min(r.to, r.from + (parseInt(v, 10) || 0)));
             gp.playSub = 0;             /* the bar picks a sample, not a moment */
             /* The bar moved the playhead on purpose — take the picture with
@@ -29656,7 +30408,20 @@
             var el = document.getElementById("gpVideo");
             if (el && !el.paused) { try { el.pause(); } catch (e) { } }
             gp.playing = false;
+            /* A stop point belongs to one press of Play corner. Leaving it
+               armed would make the next plain Play stop somewhere nobody
+               asked it to — and the loop would never end. */
+            gpPlayClearStop();
             gpPlayIcon(false);
+        }
+
+        /* Cleared by anything deliberate: the stop button, a scrub, a
+           transport button, leaving the view. The same rule the synced video
+           follows — a person's gesture outranks the clock. */
+        function gpPlayClearStop() {
+            gp.playStopAt = null;
+            gp.playLoopFrom = null;
+            gpDriftToolsSync();
         }
 
         window.gpPlayToggle = function () {
@@ -29678,8 +30443,9 @@
                time. Outside the footage the ticker is the transport, exactly
                as it was before videos existed, and the handover happens in
                the ticker the moment the playhead walks into coverage. */
-            var el = document.getElementById("gpVideo");
-            var vt = gp.video && gp.video.follow ? gpVideoTimeFor(gp.playIdx) : null;
+            var el = (gp.playStopAt === null || gp.playStopAt === undefined)
+                   ? document.getElementById("gpVideo") : null;
+            var vt = el && gp.video && gp.video.follow ? gpVideoTimeFor(gp.playIdx) : null;
             if (el && vt !== null && isFinite(el.duration) &&
                 vt >= -0.25 && vt < el.duration - 0.05) {
                 el.currentTime = Math.max(0, Math.min(el.duration, vt));
@@ -29784,8 +30550,40 @@
                    the new position as the anchor rather than fighting it. */
                 if (gp.playIdx !== gp._playIdxSet) gpPlayAnchor();
                 var want = gp._playAtS + (gpNow() - gp._playWallMs) / 1000 * gp.playRate;
+                /* ---- a stop point, for playing ONE corner -------------------
+                   Drift is watched a corner at a time: the same five seconds,
+                   ten times over. gpDriftCornerPlay sets gp.playStopAt (and
+                   gp.playLoopFrom when it is a loop) and the transport is
+                   otherwise untouched — one transport, one dock, one set of
+                   keys.
+
+                   Asked at BOTH ends of this callback, because the last
+                   corner on a lap reaches the end of the lap span in the same
+                   tick that it reaches its own stop: checked only after the
+                   position was computed, that corner rolled into the next lap
+                   instead of stopping. */
+                var stopHit = function () {
+                    if (gp.playStopAt === null || gp.playStopAt === undefined) return false;
+                    if (gp.playIdx < gp.playStopAt) return false;
+                    if (gp.playLoopFrom !== null && gp.playLoopFrom !== undefined) {
+                        gp.playIdx = gp.playLoopFrom;
+                        gp.playSub = 0;
+                        gp.playSubIdx = gp.playIdx;
+                        gp._playIdxSet = gp.playIdx;
+                        gpPlayAnchor();
+                        gpDrawPlayhead();
+                        return true;
+                    }
+                    gp.playIdx = gp.playStopAt;
+                    gpSyncScrub();
+                    gpDrawPlayhead();
+                    gpPlayStop();
+                    return true;
+                };
                 if (want >= gpSpanSecs(gp.trace, rr)) {
                     gp.playIdx = rr.to;
+                    /* A corner that ends on the line stops there. */
+                    if (stopHit()) return;
                     /* End of the lap, not end of the drive. */
                     if (gpPlayRollOver()) {
                         gpPlayAnchor();     /* the clock is measured from the NEW lap start */
@@ -29802,15 +30600,23 @@
                 gp.playSub = pos ? pos.f : 0;
                 gp.playSubIdx = gp.playIdx;
                 gp._playIdxSet = gp.playIdx;
+                /* And again here, for the ordinary case: the playhead just
+                   walked to a new sample and it may be the stop. */
+                if (stopHit()) return;
                 /* The footage takes over the moment the playhead walks into
                    it — the mirror of the 'ended' handler, which hands back to
                    this ticker when the footage runs out before the lap does.
                    Between the two, one press of play crosses in and out of
                    the covered stretch without anyone touching anything.
                    Checked against the position just computed, so the handover
-                   lands on the tick that crosses the line, not one later. */
-                var hv = document.getElementById("gpVideo");
-                var hvt = gp.video && gp.video.follow ? gpVideoTimeFor(gp.playIdx) : null;
+                   lands on the tick that crosses the line, not one later.
+
+                   Not while a corner is being played: the video's own clock
+                   has no stop point in it, so handing over would run past the
+                   end of the corner and never come back. */
+                var hv = gp.playStopAt === null || gp.playStopAt === undefined
+                       ? document.getElementById("gpVideo") : null;
+                var hvt = hv && gp.video && gp.video.follow ? gpVideoTimeFor(gp.playIdx) : null;
                 if (hv && hvt !== null && isFinite(hv.duration) &&
                     hvt >= 0 && hvt < hv.duration - 0.05) {
                     clearInterval(gp.playTimer); gp.playTimer = null;
