@@ -202,6 +202,40 @@ A rough reading lights nothing — not the dial's ring, not the bar's fill. Thre
 quarters of a lit ring beside the word "rough" is the tool contradicting itself
 in the one place the contradiction gets burned into a file.
 
+### The overlay travels in the .rdm bundle (2026-09-01, ADR-0051)
+
+One file, two placements. The widget list is shared; the geometry is not, and
+cannot be — the dash is 800×480 of fixed hardware in absolute centre-origin
+pixels, this is any aspect laid out by an algorithmic flow in S units and stored
+as nudges from it. A dash layout copied onto video covers the footage.
+
+Carried as **`.rdm` entry type 4**, which every existing reader and the dash
+itself skip — the container's format comment has promised that since it was
+written, and this is the first use of it on purpose rather than by accident.
+Not as a key in the layout JSON, which has a 32 KB ceiling the dash needs.
+
+- `gpHudBundlePayload()` — `{v, hud, off, mapStyle}`. `off` and `mapStyle` are
+  flattened in because they live **beside** `hud` on `gp.cam`, not inside it;
+  absent means on for a widget, so it is the switched-off ones that get listed.
+  Returns null for a factory layout: a file carrying it would say nothing.
+- `gpHudBundleEntry()` — the complete entry, appended by the desktop side of
+  `exportRdm` with the header count bumped. The firmware never builds it.
+- `gpHudBundleTake(bytes)` — **offered, never applied**. An overlay layout is
+  hand-tuned work and the one in somebody else's bundle is not yours. Applied
+  through `gpCamPut`/`gpCamSet`, never straight into `localStorage`.
+
+The firmware half is inert on purpose: type 4 is read into a local and never
+used, so a bundle carrying an overlay opens unchanged on the dash and on every
+older Studio.
+
+**And the dash importer stopped collapsing.** `gpHudDashPlan` used to flatten
+every dash widget to `bar` or `value`, because those were the only two shapes
+the overlay had. The thirteen shared types are the vocabulary now, so a meter
+arrives as a meter. The five excluded types — `toggle` and `button` are
+pressable, `image` needs the device's image store, `pathbar` and `anim` are dash
+chrome — still bring their reading across rather than being dropped. Ranges are
+read from any of six key names, which all mean the same two ends.
+
 ### Presets
 
 Eleven instruments and four style pickers is a lot to meet at once, and the

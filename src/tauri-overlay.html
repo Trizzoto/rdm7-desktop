@@ -33672,6 +33672,77 @@
             if (typeof gpVideoDrawOverlay === "function") gpVideoDrawOverlay();
         }
 
+        /* ---- the overlay travels in the bundle (ADR-0051) -------------------
+         * One .rdm, two placements. The widget list is shared; the geometry is
+         * not, and cannot be: the dash is 800×480 of fixed hardware in absolute
+         * centre-origin pixels, this is any aspect laid out by an algorithmic
+         * flow in S units and stored as nudges from it. A dash layout copied
+         * onto video covers the footage.
+         *
+         * Carried as entry type 4, which every existing reader and the dash
+         * itself skip — the container has promised that since it was written.
+         * NOT as a key in the layout JSON, which has a 32 KB ceiling the dash
+         * needs for the dash.
+         */
+        var GP_HUD_BUNDLE_NAME = "overlay.json";
+
+        /* What goes in the file: gp.cam.hud, plus the two things that live
+           BESIDE it on gp.cam rather than inside it. Absent means on for a
+           widget, so it is the switched-OFF ones that have to be listed. */
+        function gpHudBundlePayload() {
+            var st = (gp.cam && gp.cam.hud) || null;
+            var off = [];
+            GP_HUD_WIDGETS.forEach(function (w) { if (!gpHudOn(w[0])) off.push(w[0]); });
+            var made = gpHudAdds();
+            /* Nothing chosen and nothing switched off is not a layout — it is
+               the factory picture, and a file carrying it would say nothing. */
+            if (!off.length && !made.length &&
+                !(st && ((st.w && Object.keys(st.w).length) ||
+                         (st.st && Object.keys(st.st).length) ||
+                         (st.z && st.z.length) || (st.lock && Object.keys(st.lock).length))))
+                return null;
+            return { v: 1, hud: st || { v: 1, w: {} }, off: off,
+                     mapStyle: gpHudMapStyle() };
+        }
+
+        /* The complete entry, ready to append: type, name, length, bytes. */
+        window.gpHudBundleEntry = function () {
+            var p = gpHudBundlePayload();
+            if (!p) return null;
+            var body = new TextEncoder().encode(JSON.stringify(p));
+            var name = new TextEncoder().encode(GP_HUD_BUNDLE_NAME);
+            var out = new Uint8Array(2 + name.length + 4 + body.length);
+            var dv = new DataView(out.buffer);
+            out[0] = 4; out[1] = name.length;
+            out.set(name, 2);
+            dv.setUint32(2 + name.length, body.length, true);
+            out.set(body, 2 + name.length + 4);
+            return out;
+        };
+
+        /* Offered, never applied. An overlay layout is hand-tuned work and the
+           one in somebody else's bundle is not yours. */
+        window.gpHudBundleTake = function (bytes) {
+            var p;
+            try { p = JSON.parse(new TextDecoder().decode(bytes)); }
+            catch (e) { return Promise.resolve(false); }
+            if (!p || !p.hud) return Promise.resolve(false);
+            return gpConfirm("This bundle also carries a video overlay layout. Use it in " +
+                             "place of the one you have?").then(function (yes) {
+                if (!yes) return false;
+                /* Through the setters, never straight into localStorage:
+                   gpCamLoad rebuilds gp.cam key by key and drops anything it
+                   has not been told about. */
+                gpCamPut("hud", p.hud);
+                if (p.mapStyle) gpCamPut("hudMapStyle", p.mapStyle);
+                var off = {};
+                (p.off || []).forEach(function (k) { off[k] = 1; });
+                GP_HUD_WIDGETS.forEach(function (w) { gpCamSet(w[0], !off[w[0]]); });
+                if (typeof gpVideoDrawOverlay === "function") gpVideoDrawOverlay();
+                return true;
+            });
+        };
+
         /* ---- the preset finds you ------------------------------------------
          * A preset you have to go looking for is still setup. The recording
          * already says which one it wants — it knows whether the car spent the
@@ -33909,7 +33980,19 @@
                     if (!labelled && ws[i].config && ws[i].config.label) labelled = ws[i];
                 }
                 var pick = barW || labelled || ws[0];
-                var kind = barW ? "bar" : "value";
+                /* One for one, now that there is a vocabulary to be one for one
+                   WITH. This used to collapse everything to "bar" or "value"
+                   because those were the only two shapes the overlay had — so a
+                   meter, an arc and a shift light all arrived as bars. The
+                   thirteen shared types are listed in GP_HUD_MADE, and a dash
+                   type outside that list has nothing here to become: `toggle`
+                   and `button` are pressable, `image` needs the device's own
+                   image store, `pathbar` and `anim` are dash chrome. Those fall
+                   back to the shape that can still carry the reading, rather
+                   than being dropped — the number is the point, and a widget
+                   that is not in the picture cannot be moved into it. */
+                var kind = gpHudMadeDef(pick.type) ? gpHudMadeType(pick.type)
+                         : (barW ? "bar" : "panel");
                 var want = String(sig).replace(/_/g, " ");
                 var hit = gpHudMatchChan(want, chans);
                 if (!hit) { out.missed.push(want); return; }
@@ -33917,11 +34000,16 @@
                 var made = { type: kind, chan: hit.id,
                              label: gpHudDashName(labelled || pick, sigs) || hit.name,
                              unit: sg.unit || hit.unit, dp: hit.dp };
-                if (kind === "bar") {
-                    var cf = (barW && barW.config) || {};
-                    made.lo = (cf.min !== undefined) ? cf.min : hit.lo;
-                    made.hi = (cf.max !== undefined) ? cf.max
-                            : ((cf.rpm_max !== undefined) ? cf.rpm_max : hit.hi);
+                /* Ranges live under six different key names across the dash's
+                   widget set, and every one of them means the same two ends. */
+                if (gpHudMadeNeeds(kind, "range")) {
+                    var cf = (barW && barW.config) || pick.config || {};
+                    var lo = [cf.bar_min, cf.min, cf.signal_min, cf.range_min, cf.tick_min]
+                        .filter(function (v) { return v !== undefined; })[0];
+                    var hi = [cf.bar_max, cf.max, cf.rpm_max, cf.signal_max, cf.range_max, cf.tick_max]
+                        .filter(function (v) { return v !== undefined; })[0];
+                    made.lo = lo !== undefined ? lo : hit.lo;
+                    made.hi = hi !== undefined ? hi : hit.hi;
                 }
                 out.made.push(made);
             });
@@ -44203,15 +44291,36 @@
             a.click();
             URL.revokeObjectURL(url);
 ##[ replace-with ]##
+            /* The video overlay rides along (ADR-0051, entry type 4). Appended
+               HERE rather than inside exportRdm, because the dash knows nothing
+               about it and the firmware editor should not have to. The
+               container is append-friendly by design: put the entry on the end
+               and bump the count in the header. Every existing reader, and the
+               dash, then skip it — which the format comment has promised since
+               it was written. */
+            let outBuf = buf;
+            try {
+                const ovEntry = (typeof gpHudBundleEntry === 'function') ? gpHudBundleEntry() : null;
+                if (ovEntry) {
+                    const base = new Uint8Array(buf);
+                    const merged = new Uint8Array(base.length + ovEntry.length);
+                    merged.set(base, 0);
+                    merged.set(ovEntry, base.length);
+                    const dv = new DataView(merged.buffer);
+                    dv.setUint16(6, dv.getUint16(6, true) + 1, true);
+                    outBuf = merged;
+                }
+            } catch (e) { /* an overlay that will not serialise never costs a layout */ }
+
             /* Download */
             if (typeof RDM !== 'undefined' && RDM.isTauri()) {
                 const path = await RDM.saveFileDialog(
                     fileName,
                     [{ name: 'RDM Bundle', extensions: ['rdm'] }]
                 );
-                if (path) await RDM.writeFile(path, new Uint8Array(buf));
+                if (path) await RDM.writeFile(path, new Uint8Array(outBuf));
             } else {
-                const blob = new Blob([buf], { type: 'application/octet-stream' });
+                const blob = new Blob([outBuf], { type: 'application/octet-stream' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url; a.download = fileName;
@@ -44257,6 +44366,33 @@
 #! The firmware body's `file.name` mentions need no anchors of their own —
 #! import-rdm-head gives the extracted body a `file` stand-in to read them off.
 
+##[ block import-rdm-overlay ]##
+##[ anchor ]##
+                    /* Channel setup travels in the bundle too (type 3). Offer
+                     * it LAST — restoring replaces the dash's channels.json
+##[ insert-before ]##
+                    /* The video overlay travels in the bundle too (type 4,
+                     * ADR-0051). Desktop only: the dash reads that entry and
+                     * does nothing with it, because it has no HUD to put it on.
+                     *
+                     * Offered, never applied — an overlay layout is hand-tuned
+                     * work and the one in somebody else's bundle is not yours.
+                     * Ahead of the channel offer because it is the cheaper
+                     * question: taking it changes a picture, and taking that
+                     * one reboots the dash. */
+                    if (overlayData && overlayData.length &&
+                        typeof window.gpHudBundleTake === 'function') {
+                        try {
+                            const tookOverlay = await window.gpHudBundleTake(overlayData);
+                            if (tookOverlay) showToast('Video overlay layout applied.', 'success');
+                        } catch (e) {
+                            /* The layout is already in. An overlay that will not
+                               read is worth a sentence, not an aborted import. */
+                            showToast('The video overlay in that bundle could not be read.', 'error');
+                        }
+                    }
+
+##[ end ]##
 ##[ block import-rdm-tail ]##
 ##[ anchor ]##
                     updateStatus('Failed to import .rdm: ' + err.message, true);

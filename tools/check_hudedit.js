@@ -50,7 +50,8 @@ function grabVar(s, name) {
     return s.slice(m.index, j) + ';';
 }
 
-const VARS = ['GP_HUD_WIDGETS', 'GP_CAM_LS', 'GP_HUD_MADE', 'GP_HUD_STYLES', 'GP_HUD_PRESETS'];
+const VARS = ['GP_HUD_WIDGETS', 'GP_CAM_LS', 'GP_HUD_MADE', 'GP_HUD_STYLES', 'GP_HUD_PRESETS',
+    'GP_HUD_MAP_STYLES', 'GP_HUD_BUNDLE_NAME'];
 const FNS = ['gpHudOn', 'gpCamLoad', 'gpCamPut', 'gpCamSet', 'gpHudLayout', 'gpHudPlaceOf',
              'gpHudPlace', 'gpHudOrder', 'gpHudEdStore', 'gpHudEdSet', 'gpHudEdHit',
              'gpHudEdSize', 'gpHudEdOrderNow', 'gpHudEdMove', 'gpHudEdLocked', 'gpHudEdLock',
@@ -61,7 +62,9 @@ const FNS = ['gpHudOn', 'gpCamLoad', 'gpCamPut', 'gpCamSet', 'gpHudLayout', 'gpH
              'gpHudNorm', 'gpHudWords', 'gpHudMatchChan',
              'gpHudDashName',
              'gpHudStyle', 'gpHudEdStyle', 'gpHudEdPreset',
-             'gpHudUntouched', 'gpHudEdSugDone'];
+             'gpHudUntouched', 'gpHudEdSugDone',
+             'gpHudBundlePayload', 'gpHudBundleEntry', 'gpHudBundleTake',
+             'gpHudMapStyle'];
 const parts = [], missing = [];
 for (const v of VARS) { try { parts.push(grabVar(src, v)); } catch (e) { missing.push(v); } }
 for (const f of FNS) { try { parts.push(grabFn(src, f)); } catch (e) { missing.push(f); } }
@@ -91,6 +94,10 @@ function env(opt) {
         function gpRenderSetup() { SETUPS++; }
         var PAINTS = 0, DRAWS = 0, SETUPS = 0;
         var GP_HUD_ED = ARGed;
+        var CONFIRM = ARGconfirm;
+        function gpConfirm(msg) { LOGC.push(msg); return Promise.resolve(CONFIRM); }
+        var LOGC = [];
+        var TextEncoder = ARGte, TextDecoder = ARGtd;
         ${parts.join('\n')}
         return {
             gp: gp, load: gpCamLoad, put: gpCamPut, set: gpCamSet, on: gpHudOn,
@@ -106,12 +113,15 @@ function env(opt) {
             styleOf: gpHudStyle, edStyle: gpHudEdStyle, preset: gpHudEdPreset,
             hudStyles: GP_HUD_STYLES, presets: GP_HUD_PRESETS,
             untouched: gpHudUntouched, sugDone: gpHudEdSugDone,
+            payload: gpHudBundlePayload, entry: gpHudBundleEntry, take: gpHudBundleTake,
+            asked: function () { return LOGC; },
             stored: function () { return ARGstore.v; },
             counts: function () { return { paints: PAINTS, draws: DRAWS }; }
         };
     `;
-    return new Function('ARGstore', 'ARGed', 'ARGvideo', shim)(
-        store, opt.ed || { sel: null, rects: [], frame: 'land' }, opt.video || null);
+    return new Function('ARGstore', 'ARGed', 'ARGvideo', 'ARGconfirm', 'ARGte', 'ARGtd', shim)(
+        store, opt.ed || { sel: null, rects: [], frame: 'land' }, opt.video || null,
+        opt.confirm === undefined ? true : opt.confirm, TextEncoder, TextDecoder);
 }
 
 let pass = 0, fail = 0;
@@ -549,7 +559,12 @@ console.log('\na dash layout brings its CHOICES across, not its geometry');
     ok('a dash BAR becomes a bar', plan.made[1].type === 'bar', plan.made[1].type);
     ok('…and its caption is not taken from the widget that had none',
        !!plan.made[1].label, plan.made[1].label);
-    ok('…and a text gauge becomes a readout', plan.made[0].type === 'value');
+    /* One for one, since ADR-0051. This used to collapse everything to "bar"
+       or "value" because those were the only two shapes the overlay had; the
+       thirteen shared types are the vocabulary now, and a dash text gauge
+       becomes the overlay's own text gauge. */
+    ok('…and a text gauge becomes a text gauge, not a flattened one',
+       plan.made[0].type === 'text', plan.made[0].type);
     ok('…with the range the DASH was set to, not the recording\'s',
        plan.made[1].lo === 70 && plan.made[1].hi === 110,
        plan.made[1].lo + '-' + plan.made[1].hi);
@@ -883,5 +898,141 @@ console.log('\nthe suggestion is answered once, and stays answered');
     ok('a preset chosen from the list ends the offer too', !G.untouched());
 }
 
-console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+/* ══ the overlay travels in the .rdm bundle (ADR-0051) ════════════════════ */
+console.log('\none file, two placements');
+{
+    const E = env();
+    E.gp.cam = E.load();
+    ok('a factory layout has nothing to put in a file', E.payload() === null);
+    ok('…so no entry is appended', E.entry() === null);
+
+    E.edSet('hudSpeed', { dx: 12, dy: -4, k: 1.5 });
+    E.edStyle('hudAngle', 'dial');
+    E.set('hudTacho', false);
+    const p = E.payload();
+    ok('a layout with something in it does', !!p);
+    ok('…carrying the placements', !!(p.hud && p.hud.w && p.hud.w.hudSpeed));
+    ok('…and the styles', p.hud.st && p.hud.st.hudAngle === 'dial');
+    /* Absent means ON for a widget, so it is the switched-off ones that have
+       to be written down — the whole list would be a state dump. */
+    ok('…and the widgets switched OFF, because absent means on',
+       p.off.indexOf('hudTacho') >= 0 && p.off.indexOf('hudSpeed') < 0,
+       JSON.stringify(p.off));
+    ok('…and the minimap ground, which lives beside hud and not inside it',
+       typeof p.mapStyle === 'string', String(p.mapStyle));
+}
+{
+    const E = env();
+    E.gp.cam = E.load();
+    E.edSet('hudMap', { dx: 3 });
+    const e = E.entry();
+    ok('the entry is type 4', e[0] === 4, String(e[0]));
+    const nameLen = e[1];
+    const name = new TextDecoder().decode(e.slice(2, 2 + nameLen));
+    ok('…names itself', /overlay/.test(name), name);
+    const dv = new DataView(e.buffer, e.byteOffset);
+    const len = dv.getUint32(2 + nameLen, true);
+    ok('…declares its own length, and that is the length',
+       len === e.length - (2 + nameLen + 4), len + ' vs ' + (e.length - (2 + nameLen + 4)));
+    const body = JSON.parse(new TextDecoder().decode(e.slice(2 + nameLen + 4)));
+    ok('…and the body is the payload', !!(body.hud && body.hud.w.hudMap));
+}
+{
+    /* Offered, never applied. */
+    const src = env();
+    src.gp.cam = src.load();
+    src.edSet('hudG', { dx: 9, dy: 2, k: 0.8 });
+    src.edStyle('hudG', 'radar');
+    src.set('hudDelta', false);
+    const e = src.entry();
+    const body = e.slice(2 + e[1] + 4);
+
+    const no = env({ confirm: false });
+    no.gp.cam = no.load();
+    no.take(body).then(function (took) {
+        ok('turning the offer down changes nothing', took === false);
+        ok('…and it did ask', no.asked().length === 1);
+        ok('…leaving the layout alone', !no.layout() || !no.layout().hudG);
+
+        const yes = env({ confirm: true });
+        yes.gp.cam = yes.load();
+        return yes.take(body).then(function (ok2) {
+            ok('taking it applies the placement', ok2 === true);
+            const q = yes.placeOf('hudG');
+            ok('…every field of it', q.dx === 9 && q.dy === 2 && near(q.k, 0.8),
+               JSON.stringify(q));
+            ok('…the styles', yes.styleOf('hudG') === 'radar', yes.styleOf('hudG'));
+            ok('…and the widgets that were switched off', yes.on('hudDelta') === false);
+            ok('…while the ones that were not stay on', yes.on('hudSpeed') === true);
+            /* Written through the setters, so gpCamLoad's key-by-key copy
+               brings it back. Straight into localStorage it would evaporate. */
+            const back = env({ ls: yes.stored() });
+            back.gp.cam = back.load();
+            ok('…and it survives a reload', back.placeOf('hudG').dx === 9,
+               JSON.stringify(back.placeOf('hudG')));
+            return rubbish();
+        });
+    });
+}
+function rubbish() {
+    const E = env({ confirm: true });
+    E.gp.cam = E.load();
+    return E.take(new TextEncoder().encode('{ not json')).then(function (took) {
+        ok('a bundle whose overlay will not parse is declined, not thrown',
+           took === false);
+        ok('…without even asking', E.asked().length === 0, String(E.asked().length));
+        return E.take(new TextEncoder().encode('{"v":1}')).then(function (t2) {
+            ok('…and neither is one with no layout in it', t2 === false);
+            mapping();
+        });
+    });
+}
+function mapping() {
+    /* One for one, now that there is a vocabulary to be one for one with. */
+    console.log('\nthe dash importer stops collapsing');
+    const E = env();
+    const chans = [{ id: 'ecu:rpm', name: 'Engine RPM', unit: 'rpm', dp: 0, lo: 0, hi: 8000 }];
+    const shared = E.hudStyles ? null : null;
+    const types = ['panel', 'text', 'bar', 'rpm_bar', 'meter', 'shift_light',
+                   'warning', 'indicator', 'banner', 'shape_panel', 'line', 'arc'];
+    const wrong = [];
+    types.forEach(function (t) {
+        const plan = E.dashPlan({
+            name: 'x', signals: [{ name: 'ENGINE_RPM', unit: 'rpm' }],
+            widgets: [{ type: t, signal: 'ENGINE_RPM', config: {} }]
+        }, chans);
+        if (!plan.made.length || plan.made[0].type !== t) wrong.push(t + '->' +
+            (plan.made[0] ? plan.made[0].type : 'nothing'));
+    });
+    ok('every shared type comes across as itself', wrong.length === 0, wrong.join(' '));
+
+    /* The excluded ones have nothing here to become — pressable, or needing
+       the device's own image store, or dash chrome. They still carry their
+       reading rather than being dropped. */
+    ['toggle', 'button', 'image', 'pathbar', 'anim'].forEach(function (t) {
+        const plan = E.dashPlan({
+            name: 'x', signals: [{ name: 'ENGINE_RPM', unit: 'rpm' }],
+            widgets: [{ type: t, signal: 'ENGINE_RPM', config: {} }]
+        }, chans);
+        ok('a dash ' + t + ' still brings its reading across',
+           plan.made.length === 1 && plan.made[0].chan === 'ecu:rpm',
+           JSON.stringify(plan.made));
+    });
+
+    /* Ranges live under six key names across the dash widget set. */
+    [['bar_min', 'bar_max'], ['min', 'max'], ['signal_min', 'signal_max'],
+     ['range_min', 'range_max']].forEach(function (pair) {
+        const cfg = {};
+        cfg[pair[0]] = 11; cfg[pair[1]] = 99;
+        const plan = E.dashPlan({
+            name: 'x', signals: [{ name: 'ENGINE_RPM', unit: 'rpm' }],
+            widgets: [{ type: 'bar', signal: 'ENGINE_RPM', config: cfg }]
+        }, chans);
+        ok('a range written as ' + pair[0] + '/' + pair[1] + ' is understood',
+           plan.made[0].lo === 11 && plan.made[0].hi === 99,
+           plan.made[0].lo + '-' + plan.made[0].hi);
+    });
+
+    console.log('\n' + pass + ' passed, ' + fail + ' failed');
+    process.exit(fail ? 1 : 0);
+}
