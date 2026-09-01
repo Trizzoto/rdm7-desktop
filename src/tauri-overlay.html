@@ -11530,6 +11530,27 @@
                    under a bare channel id. */
                 chanDefs: (gp.traceChanDefs && gp.traceChanDefs.length)
                     ? gp.traceChanDefs.slice() : null,
+                /* What the recorder itself said, at the only moment it can be
+                   asked. gp.traceInfo is the puck's live reply and is replaced
+                   by a stub the moment a session is opened from the store, so
+                   a recording that does not capture these here can never
+                   recover them (ADR-0049). Absent on everything saved before
+                   this shipped, and absent is not zero. */
+                ring: (function () {
+                    var inf = gp.traceInfo;
+                    if (!inf || inf.capacity_samples === undefined) return null;
+                    return { wrapped: !!inf.wrapped,
+                             dropped: gpN(inf.dropped) || 0,
+                             holes: gp.dlHoles || 0 };
+                })(),
+                /* The verdict only — small enough that the Sessions list can
+                   badge every row without reading a single sample. */
+                health: (function () {
+                    try {
+                        var H = gpHealth();
+                        return H ? { tone: H.verdict.tone, n: H.verdict.n } : null;
+                    } catch (e) { return null; }
+                })(),
                 car: "", driver: ""            /* stage 6 fills these in */
             };
         }
@@ -12026,10 +12047,21 @@
                    honest and still happens. */
                 var demoted = !timed && meta.lapCount > 0 &&
                               meta.trackId && !gpTrackById(meta.trackId);
+                /* The stored verdict goes stale exactly when the numbers above
+                   do — the timing row and the flagged-run row are read off the
+                   split this block is about to rewrite. Recomputed here rather
+                   than in its own pass so one write covers both, and compared
+                   rather than written blindly so opening a recording that has
+                   not changed does not rewrite its meta (ADR-0049). */
+                var freshH = null;
+                try { var HH = gpHealth(); if (HH) freshH = { tone: HH.verdict.tone, n: HH.verdict.n }; }
+                catch (e) { }
+                var healthMoved = !!freshH && (!meta.health ||
+                    meta.health.tone !== freshH.tone || meta.health.n !== freshH.n);
                 if (!demoted &&
                     (meta.lapCount !== (timed ? times.length : 0) ||
                     (gpN(meta.bestLapS) || 0) !== ((timed ? best : null) || 0) ||
-                    meta.lapsBy !== (gp.lapsFrom || null) || adopt)) {
+                    meta.lapsBy !== (gp.lapsFrom || null) || adopt || healthMoved)) {
                     if (adopt) {
                         meta.trackId = adopt.id;
                         meta.trackName = adopt.name;
@@ -12056,11 +12088,13 @@
                                      kph: Math.round(apex.kph * 10) / 10,
                                      s: Math.round(gpSecs(gp.trace, c.entry, c.exit) * 1000) / 1000 };
                         });
+                    if (freshH) meta.health = freshH;
                     var inList = (gp.sessions || []).filter(function (x) { return x.id === meta.id; })[0];
                     if (inList) {
                         inList.lapCount = meta.lapCount; inList.bestLapS = meta.bestLapS;
                         inList.lapsBy = meta.lapsBy;
                         inList.lapTimesS = meta.lapTimesS; inList.corners = meta.corners;
+                        inList.health = meta.health;
                         /* The trend reads gp.sessions, not the store, so a track
                            healed only into the store would not show up until the
                            next reload. */
@@ -13349,7 +13383,17 @@
                          "<td class='n'>" + (s.lapCount || 0) + "</td>" +
                          "<td class='n" + (s.bestLapS ? " best" : "") + "'>" + (s.bestLapS ? gpLapTime(s.bestLapS) : "—") + "</td>" +
                          "<td class='n'>" + (avg ? gpLapTime(avg) : "—") + "</td>" +
-                         "<td><span class='gpb-badge " + (s.chanIds && s.chanIds.length ? "red'>GPS + CAN" : "grey'>GPS") + "</span></td>" +
+                         "<td><span class='gpb-badge " + (s.chanIds && s.chanIds.length ? "red'>GPS + CAN" : "grey'>GPS") + "</span>" +
+                         /* Read straight off the stored verdict — the list is
+                            metadata only and stays that way. Absent on every
+                            recording saved before ADR-0049, and absent badges
+                            nothing rather than badging green. */
+                         (s.health && s.health.tone && s.health.tone !== "ok"
+                            ? " <i class='gp-lamp " + s.health.tone + "' title='" +
+                              gpEsc(s.health.n === 1 ? "One thing to know about this recording"
+                                                     : s.health.n + " things to know about this recording") +
+                              "'></i>"
+                            : "") + "</td>" +
                          "<td class='n'><button class='open' data-gp-sopen='" + gpEsc(s.id) + "'>" +
                          (open ? "Open ·" : "Open") + "</button></td></tr>";
                 });
@@ -13663,6 +13707,281 @@
                      "<span class='tm'>" + gpMomentWhen(m.i) + "</span></button>";
             });
             return h + "</div>";
+        }
+
+        /* ════════════════════════════════════════════════════════════════
+         * Can I trust this recording? (ADR-0049)
+         *
+         * On the 23 August Mallala session the slip angle read +54° then −48°
+         * inside one corner, wearing a confident ±2.1°, on footage that shows
+         * the car tracking the racing line. Finding that took a day.
+         *
+         * Every signal needed to SUSPECT it was already being computed. The
+         * breaks, the quiet channels, the drift fit's own scale and sample
+         * count, the anchor count, the run flags, this recording's GPS noise —
+         * all derived, most invisible, and what was visible was spread across
+         * four surfaces. Three of these numbers had never been shown anywhere.
+         *
+         * So: one panel, one verdict, and underneath it only what is wrong.
+         * Same shape as the Ready card, for the same reason it gives — nine
+         * rows of mostly-fine is a panel you read to learn nothing.
+         *
+         * Nothing here measures anything new. It is the reading-out.
+         * ════════════════════════════════════════════════════════════════ */
+
+        /* A row is the Ready card's row: {k, v, tone, sub, fix, pin}. No `wait`
+           tone — "not known yet" is a live-device idea and a finished
+           recording is never waiting on anything. */
+        function gpHealth() {
+            var rows = gp.trace;
+            if (!rows || !rows.length) return null;
+            var key = rows.length + ":" + (gp.traceLaps ? gp.traceLaps.length : 0) +
+                      ":" + (gp.ghostFence === null ? "-" : gp.ghostFence) +
+                      ":" + (gp.lapsFrom || "-");
+            if (gp.healthKey === key && gp.healthCache) return gp.healthCache;
+
+            var end = gp.ghostFence !== null ? gp.ghostFence : rows.length;
+            var out = [], i;
+            var add = function (k, v, tone, sub, fix) {
+                out.push({ k: k, v: v, tone: tone || null, sub: sub || "", fix: fix || null });
+            };
+            var metres = function (m) {
+                return m >= 1000 ? (m / 1000).toFixed(1) + " km" : Math.round(m) + " m";
+            };
+
+            /* ---- the fix ---- */
+            var nBrk = 0, nJump = 0, worstM = 0;
+            for (i = 1; i < end; i++) {
+                if (!rows[i].brk) continue;
+                nBrk++;
+                if (rows[i].brkM > worstM) worstM = rows[i].brkM;
+                if (rows[i].brkTime) nJump++;
+            }
+            var scan = gp.breakScan;
+            if (scan && scan.reverted) {
+                /* Not "no breaks". gpMarkBreaks gave up because more than one
+                   step in fifty looked impossible, which is an import with no
+                   usable speed channel rather than a drive full of holes. */
+                add("The fix", "not checked", "warn",
+                    "Too much of this recording looks impossible to test — usually a file " +
+                    "with no speed of its own. Gaps in the driving cannot be found here.");
+            } else if (!scan) {
+                add("The fix", "not checked", null, "This recording has not been scanned for gaps.");
+            } else if (nJump) {
+                add("The fix", nJump === 1 ? "1 gap" : nJump + " gaps", "bad",
+                    "The car jumps up to " + metres(worstM) + " with the clock saying no time " +
+                    "passed. A lap across one of those reads faster than it was driven.");
+            } else if (nBrk) {
+                add("The fix", nBrk === 1 ? "1 gap" : nBrk + " gaps", "warn",
+                    "Up to " + metres(worstM) + " of driving is missing, but the clock is honest " +
+                    "about it. The road is unknown across the gap; the time is not.");
+            } else {
+                add("The fix", "held", "ok", "No gaps — the line is continuous.");
+            }
+
+            /* ---- how steady the position was ----
+               Measured on every recording and, until now, never shown. */
+            var sigma = gp.pathSigma;
+            if (sigma === undefined || sigma === null) {
+                try { gpSmoothPath(); sigma = gp.pathSigma; } catch (e) { }
+            }
+            if (typeof sigma === "number" && isFinite(sigma)) {
+                add("Position", sigma.toFixed(2) + " m",
+                    sigma <= 0.8 ? "ok" : sigma <= 2 ? "warn" : "bad",
+                    sigma <= 0.8 ? "Steady enough to trust the line and the corner shapes."
+                  : sigma <= 2 ? "Noisier than usual. Corner shapes and angles are softer than they look."
+                  : "Very noisy. Treat the driven line, the corners and the angle as approximate.");
+            }
+
+            /* ---- what timed it ---- */
+            var timed = gp.lapsFrom === "gate";
+            var clean = 0;
+            try { clean = gpCleanRuns().length; } catch (e) { }
+            if (timed) {
+                add("Timing", clean + (clean === 1 ? " clean lap" : " clean laps"), "ok",
+                    "Cut by the start/finish line.");
+            } else if (gp.lapsFrom === "stops") {
+                add("Timing", "cut at the stops", "warn",
+                    "No timing line cut this recording, so these are runs, not laps, and they " +
+                    "carry no lap times. " + (function () {
+                        try { return gpNoLapsWhy(); } catch (e) { return ""; }
+                    })());
+            } else {
+                add("Timing", "nothing timed it", "bad", (function () {
+                    try { return gpNoLapsWhy(); } catch (e) { return ""; }
+                })());
+            }
+
+            /* ---- runs the grader would not stand behind ---- */
+            var flagged = 0, why = "";
+            ((gp.traceLaps) || []).forEach(function (l) {
+                if (l.ghost || !l.flag) return;
+                flagged++;
+                if (!why) why = l.flag;
+            });
+            if (flagged) {
+                add("Flagged " + gpRunWord() + "s", String(flagged), "warn",
+                    why === "jump" ? "Measured across a gap the clock got wrong — the time is short by an unknown amount."
+                  : why === "gap" ? "Measured across a hole in the recording, so part of it was never seen."
+                  : "Well off the pace of the rest — rolled round, or interrupted.");
+            }
+
+            /* ---- the car's own channels ---- */
+            var ids = gp.traceChanIds || [];
+            if (!ids.length) {
+                add("Channels", "none recorded", null,
+                    "This recording carries position and speed only.");
+            } else {
+                var quiet = null;
+                try { quiet = gpChanQuiet(); } catch (e) { }
+                var nq = 0;
+                if (quiet) for (i = 0; i < quiet.length; i++) if (quiet[i]) nq++;
+                if (quiet && nq >= ids.length) {
+                    add("Channels", "all " + ids.length + " silent", "bad",
+                        "Not one frame arrived on any of them for the whole recording. " +
+                        "Nothing here is a scaling problem — the car was not talking, or the " +
+                        "logger was in a different one.");
+                } else if (nq) {
+                    add("Channels", nq + " of " + ids.length + " silent", "warn",
+                        "The rest carried data. A silent one draws empty rather than flat zero.");
+                } else {
+                    add("Channels", ids.length + " carrying data", "ok",
+                        "Every channel spoke at some point in the recording.");
+                }
+            }
+
+            /* ---- the angle, and the fit behind it (item 1 lives here) ---- */
+            var d = null;
+            try { d = gpDriftAngle(); } catch (e) { }
+            if (!d) {
+                add("Slip angle", "not measured", null,
+                    "Nothing in this recording measures which way the car was pointed, so no " +
+                    "angle is shown anywhere. It is never worked out from the path.");
+            } else {
+                /* Typical and worst error bar, in the engine's own numbers. */
+                var confs = [], stride = Math.max(1, Math.floor(end / 4000));
+                for (i = 0; i < end && i < d.ok.length; i += stride)
+                    if (d.ok[i] && d.conf) confs.push(d.conf[i]);
+                confs.sort(function (a, b) { return a - b; });
+                var typ = confs.length ? confs[Math.floor(confs.length / 2)] : null;
+                var fit = "Worked out from " + (d.fitN || 0) + " samples of ordinary driving" +
+                          (isFinite(d.scale) ? ", scale " + d.scale.toFixed(3) : "") +
+                          (isFinite(d.bias) ? ", drift " + d.bias.toFixed(2) + "°/s" : "") + ".";
+                if (d.weak) {
+                    add("Slip angle", "uncalibrated", "bad",
+                        "There was not enough ordinary grip driving in this recording to work " +
+                        "out the sensor's scale, so the angles are raw. A few corners driven on " +
+                        "the limit without sliding would fix it.");
+                } else if (isFinite(d.scale) && (d.scale < 0.95 || d.scale > 1.05)) {
+                    add("Slip angle", "scale " + d.scale.toFixed(3), "warn",
+                        "The sensor reads " + Math.round(Math.abs(1 - d.scale) * 100) + "% " +
+                        (d.scale > 1 ? "high" : "low") + " against GPS and has been corrected " +
+                        "for it. A long way off usually means it is mounted rotated. " + fit);
+                } else if (!d.anchors) {
+                    add("Slip angle", "nothing to check against", "warn",
+                        "The car never went provably straight for long enough to check the " +
+                        "angle against anything, so errors can build up unseen. " + fit);
+                } else if (typ !== null && isFinite(d.worst) && d.worst > Math.max(4, typ * 3)) {
+                    /* The Mallala row. Closing at both ends says nothing about
+                       the middle, and this is where that shows. */
+                    add("Slip angle", "±" + typ.toFixed(1) + "° typical, ±" +
+                        d.worst.toFixed(1) + "° worst", "warn",
+                        "Most of this recording is confident, but somewhere in it the angle is " +
+                        "far less certain than the rest. Treat the biggest angles with suspicion. " + fit);
+                } else {
+                    add("Slip angle", typ === null ? "measured" : "±" + typ.toFixed(1) + "°", "ok",
+                        "Checked against " + d.anchors +
+                        (d.anchors === 1 ? " straight" : " straights") + " in the drive. " + fit);
+                }
+            }
+
+            /* ---- the footage, when there is any ---- */
+            if (gp.video) {
+                if (gp.video.dead) {
+                    add("Video", "will not decode", "bad",
+                        "The picture does not play here. A converted copy usually does.",
+                        { label: "Make a playable copy", call: "gpVideoConvert()" });
+                } else {
+                    var cov = null;
+                    try { cov = gpVideoCover(); } catch (e) { }
+                    if (cov && isFinite(cov.frac) && cov.frac < 0.9) {
+                        add("Video", Math.round(cov.frac * 100) + "% covered", "warn",
+                            "The footage does not reach all of the part being analysed.");
+                    } else {
+                        add("Video", "in sync", "ok",
+                            "The footage covers what is being analysed.");
+                    }
+                }
+            }
+
+            /* ---- what the puck said at download ----
+               Only on recordings saved since these were kept; absent on every
+               older one, and absent is not zero. */
+            var meta = null;
+            try { meta = gpCurSessionMeta(); } catch (e) { }
+            var ring = meta && meta.ring;
+            if (ring) {
+                var lost = (ring.dropped || 0) + (ring.holes || 0);
+                if (lost || ring.wrapped) {
+                    add("Download", ring.wrapped ? "ring had wrapped" : lost + " lost", "warn",
+                        ring.wrapped
+                            ? "The recorder had run out of room and was overwriting the oldest part before this was downloaded."
+                            : "The recorder could not keep up for part of the session, so some samples were never written.");
+                } else {
+                    add("Download", "complete", "ok", "Everything the recorder held came across.");
+                }
+            }
+
+            var res = { rows: out, verdict: gpHealthVerdict(out) };
+            gp.healthKey = key; gp.healthCache = res;
+            return res;
+        }
+
+        /* Worst wins. Not a score — a score invites arguing with the number,
+           and what matters is WHICH row is wrong. */
+        function gpHealthVerdict(rows) {
+            var bad = 0, warn = 0;
+            rows.forEach(function (r) {
+                if (r.tone === "bad") bad++;
+                else if (r.tone === "warn") warn++;
+            });
+            return { tone: bad ? "bad" : warn ? "warn" : "ok", n: bad + warn };
+        }
+
+        window.gpHealthToggle = function () {
+            gp.healthOpen = !gp.healthOpen;
+            gpRenderGridSoft();
+        };
+
+        function gpPanelHealthHtml() {
+            var H = gpHealth();
+            if (!H) return "<div class='gpb-pscroll'>" + gpPanelEmpty("No recording open.") + "</div>";
+            var v = H.verdict, open = !!gp.healthOpen;
+            var title = v.tone === "ok" ? "Nothing looks wrong with this recording"
+                      : (v.n === 1 ? "One thing" : v.n + " things") + " to know about this recording";
+            var h = "<div class='gpb-pscroll'><div class='gp-ready" +
+                    (v.tone === "warn" ? " warn" : v.tone === "bad" ? " bad" : "") + "'>";
+            h += "<button class='gp-ready-hd' onclick='gpHealthToggle()' title='" +
+                 (open ? "show only what is wrong" : "show all " + H.rows.length + " checks") + "'>" +
+                 "<i class='gp-lamp" + (v.tone === "ok" ? " on" : " " + v.tone) + "'></i>" +
+                 "<span class='t'>" + gpEsc(title) + "</span>" +
+                 "<span class='s'>" + (open ? "▾" : "▸") + "</span></button>";
+            var show = open ? H.rows : H.rows.filter(function (r) {
+                return r.tone === "warn" || r.tone === "bad";
+            });
+            if (show.length) {
+                h += "<div class='gp-rows'>";
+                show.forEach(function (r) {
+                    h += gpReadyRow(gpEsc(r.k), gpEsc(r.v), r.tone, gpEsc(r.sub));
+                });
+                h += "</div>";
+                show.forEach(function (r) {
+                    if (r.fix)
+                        h += "<button class='ws-btn-line' onclick=\"" + r.fix.call + "\">" +
+                             gpEsc(r.fix.label) + "</button>";
+                });
+            }
+            return h + "</div></div>";
         }
 
         /* ════════════════════════════════════════════════════════════════
@@ -14224,6 +14543,9 @@
             { id: "video", label: "Video", solo: true },
             { id: "times", label: "Lap times" },
             { id: "report", label: "Lap report" },
+            /* Deliberately near the top of the list. It is the panel you want
+               BEFORE you believe any of the others (ADR-0049). */
+            { id: "health", label: "Can I trust this?" },
             { id: "corners", label: "Where the time went" },
             { id: "moments", label: "Moments" },
             { id: "grip", label: "Grip circle" },
@@ -16357,6 +16679,7 @@
             if (p.type === "times") h2 += gpPanelTimesHtml();
             else if (p.type === "report") h2 += gpPanelReportHtml();
             else if (p.type === "corners") h2 += gpPanelCornersHtml();
+            else if (p.type === "health") h2 += gpPanelHealthHtml();
             else if (p.type === "moments") h2 += gpPanelMomentsHtml();
             else if (p.type === "grip") h2 += gpPanelGripHtml();
             else if (p.type === "splits") h2 += "<div class='gpb-pscroll' style='padding:6px 10px'>" +
@@ -20951,6 +21274,10 @@
                    hold, and a zero inside the ring is stepped over rather than
                    believed. */
                 var nodeOff = 0, holes = 0;
+                /* Counted since the ring learned to step over its own empty
+                   sectors, and thrown away ever since. The health panel is
+                   the first thing that ever asked. */
+                gp.dlHoles = 0;
                 /* Coarser than one sector on purpose: a run of stints that each
                    ended early leaves several part-full sectors in a row, and
                    the gaps measured in the car ran to 3 000 indices. Scanning
@@ -20989,7 +21316,7 @@
                             if (nodeOff >= total) return null;
                             return findNext(nodeOff).then(function (nx) {
                                 if (nx < 0) return null;
-                                holes++;
+                                holes++; gp.dlHoles = holes;
                                 nodeOff = nx;
                                 return step();
                             });
@@ -21685,6 +22012,13 @@
             gp.scaleCache = null;
             gp.rate = null; gp.rateKey = ""; gp.lineOff = null; gp.lineKey = ""; gp.insightCursor = -1;
             gp.chan = null; gp.chanKey = "";
+            /* The trust verdict too. Its own key follows the recording — the
+               sample count, the lap count, the ghost fence, what timed it —
+               and a re-split that lands on the SAME lap count with different
+               run flags moves none of them, so the panel would go on showing
+               the answer from before the change. Cleared here with every other
+               derived answer rather than made to guess (ADR-0049). */
+            gp.healthKey = ""; gp.healthCache = null;
             /* Ticked laps are lap INDICES, and after a re-split they point at
                different laps — open a 10-lap session having ticked laps 7 and
                8 of a 12-lap one and it drew two laps nobody chose, while the
@@ -24271,6 +24605,7 @@
            on every path that produces samples, live included.
            Checked against the real ring in tools/check_breaks.js. */
         function gpMarkBreaks(rows) {
+            gp.breakScan = null;                /* nothing tested yet */
             if (!rows || rows.length < 2) return 0;
             var n = rows.length, nom = gpNominalStep(rows), hits = [], i;
             rows[0].brk = false; rows[0].brkTime = false; rows[0].brkM = 0;
@@ -24292,8 +24627,16 @@
                     rows[hits[i]].brkTime = false;
                     rows[hits[i]].brkM = 0;
                 }
+                /* The count goes back as 0 because that is what every reader
+                   downstream should act on — no marks. But "no marks because
+                   the test does not describe this recording" and "no marks
+                   because the drive is whole" are different answers, and a
+                   panel that reports the first as clean is lying. The return
+                   value keeps its meaning; the reason is recorded beside it. */
+                gp.breakScan = { marked: 0, found: hits.length, reverted: true };
                 return 0;
             }
+            gp.breakScan = { marked: hits.length, found: hits.length, reverted: false };
             return hits.length;
         }
 

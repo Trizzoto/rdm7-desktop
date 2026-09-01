@@ -63,9 +63,16 @@ if (missing.length) {
 }
 
 const F = new Function(`
+    /* The functions here live inside the workspace IIFE, where gp is ambient.
+       gpMarkBreaks records WHY it found nothing on it — "no gaps" and "this
+       recording cannot be tested for gaps" are different answers and the
+       health panel needs to tell them apart — so the sandbox has to provide
+       it, the way every other harness does. */
+    var gp = {};
     function gpN(v) { return (v === undefined || v === null || isNaN(v)) ? null : Number(v); }
     ${parts.join('\n')}
-    return { computeG: gpComputeG, markBreaks: gpMarkBreaks };
+    return { computeG: gpComputeG, markBreaks: gpMarkBreaks,
+             scan: function () { return gp.breakScan; } };
 `)();
 
 let pass = 0, fail = 0;
@@ -158,6 +165,41 @@ ok('every g in every case above is a finite number',
 console.log('\nthe limit is the same one cornering already used');
 const gate = /Math\.abs\(gv\) > 3/.test(src);
 ok('3 g, stated in the code rather than implied', gate);
+
+console.log('\nthe marking says which kind of nothing it found');
+/* gpMarkBreaks returns 0 both when the drive is whole and when it gave up
+   because more than one step in fifty looked impossible. Downstream that is
+   correctly the same answer — no marks — but "clean" and "untested" are
+   different things to tell somebody, and the health panel reads the
+   difference off gp.breakScan (ADR-0049). The return value is unchanged and
+   check_breaks still owns what it means. */
+{
+    const whole = [];
+    for (let i = 0; i < 300; i++)
+        whole.push({ lat: -34.4 + i * 1e-5, lon: 138.5, kph: 90, hdg: 0, t: 1000 + i * 40 });
+    const n1 = F.markBreaks(whole);
+    ok('a whole drive marks nothing', n1 === 0, String(n1));
+    ok('…and records that the test applied and found nothing',
+       !!F.scan() && F.scan().reverted === false && F.scan().found === 0,
+       JSON.stringify(F.scan()));
+
+    /* Every step impossible: 2 km apart at walking pace, 40 ms apart. Well
+       past the 2% that makes the whole marking meaningless. */
+    const junk = [];
+    for (let i = 0; i < 300; i++)
+        junk.push({ lat: -34.4 + i * 0.02, lon: 138.5, kph: 4, hdg: 0, t: 1000 + i * 40 });
+    const n2 = F.markBreaks(junk);
+    ok('a recording the test cannot describe marks nothing either', n2 === 0, String(n2));
+    ok('…but records that it GAVE UP rather than found a clean drive',
+       !!F.scan() && F.scan().reverted === true && F.scan().found > 0,
+       JSON.stringify(F.scan()));
+    ok('…and the two are distinguishable, which is the whole point',
+       F.scan().reverted === true, JSON.stringify(F.scan()));
+
+    F.markBreaks(null);
+    ok('nothing to test leaves no claim behind at all', F.scan() === null,
+       JSON.stringify(F.scan()));
+}
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
