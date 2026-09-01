@@ -38,8 +38,8 @@ regenerate-don't-commit rule in this one case.
 
 ## Where it got to (2026-09-01)
 
-Seven built, one half-built. Every one of them turned out to be smaller than the
-brief expected, because the thing was already there and not being said.
+All eight built. Every one of them turned out to be smaller than the brief
+expected, because the thing was already there and not being said.
 
 | Feature | State | The commit |
 |---|---|---|
@@ -93,10 +93,10 @@ Item 1b (mounting-axis routine) sits after all of these, or never.
 
 ## ADRs — written 2026-09-01
 
-All four are in `../RDM-7_Dash/docs/adr/` and indexed in that directory's `README.md`.
-Status **Proposed**: the decisions are made and signed off, the code is not written yet.
-Read the ADR before starting its brief — the brief is the plan, the ADR is the reasoning
-that must survive the plan changing.
+All five are in `../RDM-7_Dash/docs/adr/` and indexed in that directory's `README.md`.
+0049–0052 were written as **Proposed** and their code has since landed; 0053 was
+written after the fact, as **Accepted**. Read the ADR before changing the area it
+covers — the brief was the plan, the ADR is the reasoning that outlives it.
 
 | ADR | Brief | The assertion it makes |
 |---|---|---|
@@ -104,8 +104,9 @@ that must survive the plan changing.
 | [0050](../../RDM-7_Dash/docs/adr/0050-a-real-drive-cannot-be-generated.md) | `02-golden-recordings.md` | A real drive is the only fixture a synthetic one cannot replace |
 | [0051](../../RDM-7_Dash/docs/adr/0051-one-layout-file-drawn-two-ways.md) | `03-one-layout-format.md` | One layout file, drawn two ways |
 | [0052](../../RDM-7_Dash/docs/adr/0052-an-export-is-a-snapshot-not-a-worker.md) | `06-background-exports.md` | An export is a snapshot, not a worker |
+| [0053](../../RDM-7_Dash/docs/adr/0053-a-circuit-can-be-built-from-the-drive-that-proves-it.md) | — written after the fact | A circuit can be built from the drive that proves it |
 
-The next free number is **0053** (0029 was skipped and stays skipped). Numbers get
+The next free number is **0054** (0029 was skipped and stays skipped). Numbers get
 claimed by code comments before the file exists, so re-grep both repos before taking one:
 
 ```bash
