@@ -156,6 +156,18 @@
             return names;
         },
 
+        /* The other half of that filter. Splashes are stored as layouts under
+           the _splash_ prefix — saveActiveLayout has always written them that
+           way — and listLayouts hides them on purpose, so without this there
+           was no way to read them back and the splash picker was empty
+           offline no matter how many you had made. Bare names, the shape
+           /api/splash/list answers with. */
+        async listSplashes() {
+            return Object.keys(localStorage)
+                .filter(k => k.startsWith('rdm7_layout__splash_'))
+                .map(k => k.slice('rdm7_layout__splash_'.length));
+        },
+
         async loadLayout(name) {
             const raw = localStorage.getItem('rdm7_layout_' + (name || 'default'));
             if (raw) {
@@ -1519,6 +1531,7 @@
      * { status, data }; a 404 makes the editor fall through (e.g. no live
      * /current, so loadLayout falls back to /raw?name=). */
     const LOCAL_ACTIVE_KEY = 'rdm7_local_active';
+    const LOCAL_SPLASH_KEY = 'rdm7_local_splash';
     function _bytesToB64(bytes) {
         let bin = '';
         const chunk = 0x8000;
@@ -1662,6 +1675,39 @@
                         display: { width: 800, height: 480, shape: 'rect' } });
         }
         if (pathname === '/api/selftest') return ok({ ok: true, offline: true });
+        /* Splashes are layouts under the _splash_ prefix — saveActiveLayout
+           already writes them that way, so the local store has them and the
+           only thing missing was a list to read them back with. Which one
+           boots, and whether the splash runs at all, are dash settings with
+           no dash behind them offline; they are remembered here so the
+           picker keeps its place between sessions rather than pretending
+           something was pushed to a device. */
+        if (pathname === '/api/splash/list') {
+            const splashes = await T.listSplashes();
+            let active = localStorage.getItem(LOCAL_SPLASH_KEY);
+            if (!active || splashes.indexOf(active) < 0) active = splashes[0] || 'Default';
+            return ok({ splashes, active, offline: true,
+                        enabled: localStorage.getItem(LOCAL_SPLASH_KEY + '_off') !== '1',
+                        fade_enabled: true });
+        }
+        /* "Switch screen" is a real thing offline: it is the editor moving
+           between the dashboard and the splash, both of which live in this
+           store. There is no panel to repaint, so agreeing is the whole of
+           it — and the 503 below turned Splash mode into "Screen switch
+           failed" and refused to open at all. */
+        if (pathname === '/api/screen/switch') return ok();
+        if (pathname === '/api/splash/set' && method === 'POST') {
+            if (body && body.name) localStorage.setItem(LOCAL_SPLASH_KEY, body.name);
+            return ok();
+        }
+        if (pathname === '/api/splash/enabled' && method === 'POST') {
+            localStorage.setItem(LOCAL_SPLASH_KEY + '_off', (body && body.enabled === false) ? '1' : '0');
+            return ok();
+        }
+        if (pathname === '/api/splash/delete' && method === 'POST') {
+            if (body && body.name) await T.deleteLayout('_splash_' + body.name);
+            return ok();
+        }
         /* Channels are a DASH registry — offline there are none, and the
            truthful answer is an empty collection, not the catch-all's bare
            {ok:true}. The difference is not cosmetic. {ok:true} is an HTTP 200
@@ -1681,8 +1727,28 @@
            saved copy and disable offline channel editing (ADR-0030). */
         if (pathname === '/api/channels' || pathname === '/api/channels/canonical')
             return ok({ channels: [], capacity: 128, offline: true });
-        /* Device-only families (CAN, OTA, dimmer, …): harmless no-op. */
-        return ok({ ok: true });
+        /* Everything left is a DASH endpoint, and offline there is no dash.
+           This used to answer `{ok:true}` — a 200 carrying no data — on the
+           grounds that a no-op is harmless. It is not harmless: the editor
+           reads `ok` as "the dash answered", and then reports a car it has
+           never spoken to. Measured offline, every one of these came back
+           "sure, fine", and the pages built on them said so:
+
+             /api/obd2/dtcs     → Trouble Codes: "No codes 🎉", timestamped
+             /api/obd2/vin      → Vehicle Info: "no response — not all ECUs
+                                  support VIN", as though one had been asked
+             /api/can/status    → ECU & CAN bus: "The driver is stopped —
+                                  check the dash has power on its CAN pins"
+
+           None of that was measured. The last one is advice about hardware
+           that is not plugged in. 503 with a reason is the truthful answer,
+           and it is the branch every one of these callers already has.
+
+           Same argument the /api/channels route above already makes for
+           collections: a stub that says "sure, fine" is a lie, and the next
+           caller to trust it gets bitten the same way. */
+        return { status: 503, data: { ok: false, offline: true,
+                                      error: 'Offline — no dash is connected' } };
     }
 
     /* Endpoint families that only a dash implements. On any other RDM node
