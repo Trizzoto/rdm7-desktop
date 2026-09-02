@@ -741,3 +741,14 @@ this machine: QuickTime `.MOV` with `wide`/`mdat`/`moov` ordering, one with no
   synthetic data and produces ±50° phantoms on the Mallala lap, because
   nothing calibrates the puck's gyro. The HUD refuses to state a rough angle,
   but the underlying number still needs the instrument chain fixed.
+
+## Superseded here: one video per recording (2026-09-02, ADR-0053)
+
+Everything above assumes a recording has *a* video. It has as many as you shot
+— see `briefs/08-footage-in-sections.md`. `gp.video` is still one clip, so the
+alignment, the HUD and the export are unchanged; what is new is `gp.clips`, the
+lanes they sit on, and the thing that points `gp.video` at the right one as the
+playhead moves.
+
+The export still writes one section, and the coverage line in the video panel's
+control bar says which stretch that is.

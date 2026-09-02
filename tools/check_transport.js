@@ -88,6 +88,14 @@ function makeEnv(opt) {
         gpPlayIcon() { }, gpPlayStop() { ctx.gp.playing = false; },
         gpPlayRollOver() { return false; },
         gpSyncScrub() { }, gpDrawPlayhead() { },
+        /* Footage now arrives in SECTIONS (ADR-0053), and which element
+           `getElementById('gpVideo')` returns depends on which section covers
+           the playhead. So both handover points have to ask FIRST, or the one
+           that plays is whichever section happened to be in the picture. The
+           stub records the questions; the assertions below are that they were
+           asked at all, and asked about the right sample. */
+        gpClipSyncFor(i) { ctx.syncCalls.push(i); return false; },
+        syncCalls: [],
         window: null,
         performance: { now: () => ctx._now || 0 }
     };
@@ -99,17 +107,37 @@ function makeEnv(opt) {
     const built = new Function(
         'gp', 'document', 'setInterval', 'clearInterval', 'gpLapRange', 'gpSampleUtc',
         'gpSpanSecs', 'gpPlaySecs', 'gpLapPosAtSecs', 'gpPlayIcon', 'gpPlayStop', 'gpPlayRollOver',
-        'gpSyncScrub', 'gpDrawPlayhead', 'gpNow', 'window', 'isFinite', 'Math',
+        'gpSyncScrub', 'gpDrawPlayhead', 'gpNow', 'gpClipSyncFor', 'window', 'isFinite', 'Math',
         body
     )(ctx.gp, ctx.document, ctx.setInterval, ctx.clearInterval, ctx.gpLapRange,
       ctx.gpSampleUtc, ctx.gpSpanSecs, ctx.gpPlaySecs, ctx.gpLapPosAtSecs, ctx.gpPlayIcon,
       ctx.gpPlayStop, ctx.gpPlayRollOver, ctx.gpSyncScrub, ctx.gpDrawPlayhead,
-      ctx.gpNow, ctx, isFinite, Math);
+      ctx.gpNow, ctx.gpClipSyncFor, ctx, isFinite, Math);
     return { ctx, el, timers, rows, api: built,
              tick() { if (timers.length) timers[0].fn(); } };
 }
 
-console.log('play inside the footage: the video is the transport');
+console.log('which SECTION is asked for, before the element is looked up');
+{
+    const E = makeEnv({ playIdx: 500 });
+    E.api.toggle();
+    ok('pressing play asks which section covers the playhead',
+       E.ctx.syncCalls.length >= 1 && E.ctx.syncCalls[0] === 500,
+       JSON.stringify(E.ctx.syncCalls));
+}
+{
+    const E = makeEnv({ playIdx: 380 });
+    E.api.toggle();
+    const before = E.ctx.syncCalls.length;
+    E.ctx._now = 1000;
+    E.tick();
+    ok('and so does the ticker, on the sample it has just walked to',
+       E.ctx.syncCalls.length > before &&
+       E.ctx.syncCalls[E.ctx.syncCalls.length - 1] === E.ctx.gp.playIdx,
+       JSON.stringify(E.ctx.syncCalls));
+}
+
+console.log('\nplay inside the footage: the video is the transport');
 {
     const E = makeEnv({ playIdx: 500 });               /* video time 4.0 s */
     E.api.toggle();

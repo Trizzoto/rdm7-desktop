@@ -1716,9 +1716,24 @@
         .gp-viewer.has-video .gp-vtile { display: block; }
         .gp-viewer.has-video.solo-video .gp-mapwrap { display: none; }
         .gp-viewer.has-video.solo-map .gp-vtile { display: none; }
+        /* One element per clip, stacked; only the active one is visible.
+           `visibility`, not `display:none` — a hidden-by-display video is not
+           laid out, so it reports no size, does not keep a decoded frame, and
+           flashes black on the switch. This way the next section is already
+           painted when it is asked for. Background TRANSPARENT so the
+           channel-field canvas behind shows through the letterbox bars
+           instead of a pair of dead black margins. */
         .gp-vtile video { position: absolute; inset: 0; width: 100%; height: 100%;
-                          object-fit: contain; background: #000; }
+                          object-fit: contain; background: transparent;
+                          visibility: hidden; }
+        .gp-vtile video.on { visibility: visible; }
+        /* No film for this instant — a gap between sections, or none open at
+           all. The frozen frame the clamp used to leave behind reads as a
+           broken player, so the field behind takes the box. */
+        .gp-vtile.nofilm video.on { visibility: hidden; }
         .gp-vtile canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
+        /* The field behind the film: fills the tile, never the picture rect. */
+        .gp-vtile canvas#gpVideoBg { inset: 0; width: 100%; height: 100%; }
         .gp-vtile-btns { position: absolute; top: 9px; right: 9px; z-index: 1000; display: flex; gap: 6px;
                          flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 18px); }
         /* ---- export dialog and its progress ------------------------------
@@ -4086,8 +4101,157 @@
             color: #e6e6e8; font: inherit; font-size: 10.5px; padding: 1px 4px;
             font-variant-numeric: tabular-nums;
         }
-        /* the tile must not sit under the strip */
+        /* the tile must not sit under the strip. The strip's height is no
+           longer a constant — it wraps, and it can carry a timeline — so the
+           reserve is measured and written back by gpVidCtlFit; this is only
+           the starting value, for the frame before it runs. */
         #gpWorkspace .gpb-panel.hosting .gp-vtile { margin-bottom: 26px; }
+
+        /* "It is already open, and it is over there." */
+        #gpWorkspace .gpb-panel.gpb-flash { box-shadow: inset 0 0 0 2px var(--gpb-red); }
+
+        /* ---- the footage timeline (ADR-0053) -----------------------------
+           Sections of film, dropped against the recording and dragged into
+           place: an NLE track sheet, because that is the thing everybody
+           already knows how to use. Dark wherever it is hosted — it is an
+           editing surface, and the picture it lines up is dark. */
+        #gpWorkspace .gp-tl {
+            display: flex; flex-direction: column; min-height: 0;
+            background: #0e1012; color: #d8dde1; font-size: 11px;
+            font-family: var(--gpb-body);
+            --tl-lane: 30px;
+        }
+        #gpWorkspace .gp-tl.compact { --tl-lane: 16px; }
+        /* The strip inside the video panel's own control row: a full-width
+           wrap of a bar that is already flex-wrap, so it becomes its own line
+           and gpVidCtlFit measures the taller bar and gives the picture back
+           the difference. */
+        #gpWorkspace .gpb-vidctl .gp-tl {
+            width: 100%; background: transparent; border-top: 1px solid #2a2c2e;
+            margin-top: 2px; padding-top: 2px;
+        }
+        #gpWorkspace .gp-tl.compact .gp-tl-ruler { height: 12px; }
+        #gpWorkspace .gp-tl.compact .gp-tl-tick { line-height: 12px; font-size: 9px; }
+        #gpWorkspace .gp-tl.panel { position: absolute; inset: 0; }
+        #gpWorkspace .gp-tl-bar {
+            display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+            padding: 4px 8px; border-bottom: 1px solid #23282c; flex: none;
+        }
+        #gpWorkspace .gp-tl-bar button {
+            background: transparent; border: 1px solid #3a3d40; color: #e6e6e8;
+            font: inherit; font-size: 10.5px; padding: 2px 8px; cursor: pointer;
+        }
+        #gpWorkspace .gp-tl-bar button:hover { border-color: #8a8f94; }
+        #gpWorkspace .gp-tl-bar button.on { border-color: var(--gpb-red); color: #ff8b85; }
+        #gpWorkspace .gp-tl-bar .nt { opacity: 0.62; }
+        #gpWorkspace .gp-tl-bar .rd { font-variant-numeric: tabular-nums; opacity: 0.85; }
+        /* The scroller is the drag surface, so it must not scroll under the
+           pointer while a clip is being dragged — panning is the drag on the
+           BACKGROUND, and the wheel zooms. Hence overflow hidden and a
+           transform-free absolute layout inside. */
+        #gpWorkspace .gp-tl-view {
+            position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden;
+            cursor: default; user-select: none;
+        }
+        #gpWorkspace .gp-tl-view.panning { cursor: grabbing; }
+        #gpWorkspace .gp-tl-ruler {
+            position: relative; height: 15px; flex: none;
+            border-bottom: 1px solid #23282c; overflow: hidden;
+        }
+        #gpWorkspace .gp-tl-tick {
+            position: absolute; top: 0; bottom: 0; border-left: 1px solid #262c31;
+            padding-left: 3px; font-size: 9.5px; line-height: 15px; color: #7d868d;
+            font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none;
+        }
+        /* The recording itself, as a track. Everything above it is film;
+           this is the thing the film is being lined up WITH. */
+        #gpWorkspace .gp-tl-sess {
+            position: absolute; height: 13px; border-radius: 2px;
+            background: repeating-linear-gradient(90deg, #33393e 0 1px, #22272b 1px 2px);
+            border: 1px solid #454c52; overflow: hidden;
+        }
+        #gpWorkspace .gp-tl-sesslab {
+            position: absolute; font-size: 9.5px; color: #8b949b; line-height: 13px;
+            padding-left: 4px; pointer-events: none; white-space: nowrap;
+        }
+        #gpWorkspace .gp-tl-lap { position: absolute; top: 0; bottom: 0; width: 1px; background: #5d666d; }
+        #gpWorkspace .gp-tl-lap.sel { background: var(--gpb-red); width: 2px; }
+        #gpWorkspace .gp-tl-lane {
+            position: absolute; left: 0; right: 0; height: var(--tl-lane);
+            border-top: 1px solid #1b1f22;
+        }
+        #gpWorkspace .gp-tl-lane.drop { background: rgba(210,35,42,0.10); }
+        #gpWorkspace .gp-tl-lane .lab {
+            position: absolute; left: 3px; top: 1px; font-size: 9px; color: #4e565c;
+            pointer-events: none; letter-spacing: 0.06em;
+        }
+        #gpWorkspace .gp-tl-clip {
+            position: absolute; top: 2px; height: calc(var(--tl-lane) - 5px);
+            border: 1px solid #46606f; border-radius: 2px; overflow: hidden;
+            background: linear-gradient(180deg, #2c4150 0%, #1e2c36 100%);
+            color: #cfe2ef; cursor: grab; min-width: 3px;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.4);
+        }
+        #gpWorkspace .gp-tl-clip .nm {
+            position: absolute; left: 5px; right: 4px; top: 0; bottom: 0;
+            line-height: calc(var(--tl-lane) - 5px); font-size: 10px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            pointer-events: none;
+        }
+        /* The waveform stand-in: a clip is a length of time, and the eye reads
+           length far faster than a number. Ticks every ten seconds. */
+        #gpWorkspace .gp-tl-clip .rib {
+            position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+            background: repeating-linear-gradient(90deg,
+                        rgba(255,255,255,0.16) 0 1px, transparent 1px 6px);
+            pointer-events: none;
+        }
+        #gpWorkspace .gp-tl-clip.sel { border-color: #ff8b85; }
+        #gpWorkspace .gp-tl-clip.live {
+            background: linear-gradient(180deg, #3f5f43 0%, #26362a 100%);
+            border-color: #5f8a66;
+        }
+        #gpWorkspace .gp-tl-clip.live.sel { border-color: #ff8b85; }
+        #gpWorkspace .gp-tl-clip.dead { background: linear-gradient(180deg, #4a2b2b 0%, #2c1a1a 100%); border-color: #7a4444; }
+        #gpWorkspace .gp-tl-clip.dragging { cursor: grabbing; z-index: 6; opacity: 0.92; }
+        #gpWorkspace .gp-tl-clip .x {
+            position: absolute; right: 0; top: 0; bottom: 0; width: 15px;
+            background: rgba(0,0,0,0.28); border: 0; color: #cfe2ef; cursor: pointer;
+            font: inherit; font-size: 11px; line-height: 1; padding: 0; display: none;
+        }
+        #gpWorkspace .gp-tl-clip:hover .x { display: block; }
+        #gpWorkspace .gp-tl-clip .x:hover { background: var(--gpb-red); color: #fff; }
+        #gpWorkspace .gp-tl-head {
+            position: absolute; top: 0; bottom: 0; width: 1px; background: var(--gpb-red);
+            pointer-events: none; z-index: 7;
+        }
+        #gpWorkspace .gp-tl-head::before {
+            content: ''; position: absolute; left: -3px; top: 0;
+            border-left: 3.5px solid transparent; border-right: 3.5px solid transparent;
+            border-top: 5px solid var(--gpb-red);
+        }
+        #gpWorkspace .gp-tl-snap {
+            position: absolute; top: 0; bottom: 0; width: 1px; background: #ffd166;
+            pointer-events: none; z-index: 8;
+        }
+        /* What the drag is doing, said in numbers, beside the thing being
+           dragged — a nudge you cannot read is a nudge you cannot undo. */
+        #gpWorkspace .gp-tl-tip {
+            position: absolute; z-index: 9; background: #1b1f22; border: 1px solid #46606f;
+            padding: 1px 5px; font-size: 10px; color: #e8eef3; pointer-events: none;
+            font-variant-numeric: tabular-nums; white-space: nowrap;
+        }
+        /* Where a dragged file would land. Inset so it reads on a surface
+           whose own edge is already a border. */
+        #gpWorkspace .gp-tl.gp-dropping,
+        #gpWorkspace .gp-vtile.gp-dropping,
+        .gp-vtile.gp-dropping {
+            box-shadow: inset 0 0 0 2px var(--gpb-red, #d2232a);
+        }
+        #gpWorkspace .gp-tl-empty {
+            position: absolute; inset: 0; display: grid; place-items: center;
+            text-align: center; padding: 10px; color: #6f787f; font-size: 11px;
+        }
 
         /* export popover */
         #gpWorkspace .gpb-exppop {
@@ -4520,14 +4684,25 @@
                     </div>
                 </div>
                 <div class="gp-vtile" id="gpVideoTile">
+                    <!-- What is in the box when no film is. Footage now comes
+                         in SECTIONS (ADR-0053) and sections have gaps between
+                         them; before this the gap showed as a frozen frame or
+                         a black rectangle, which reads as a broken player. It
+                         is also what an empty Video panel shows instead of a
+                         dead red placard. Drawn from the channels — see
+                         gpVideoBgDraw. -->
+                    <canvas id="gpVideoBg"></canvas>
                     <!-- No `controls`: the bar at the bottom is the transport.
                          The browser's own bar was a second one sitting on top
                          of the picture with its own play button and its own
                          scrub, competing with the dock and winning — the video
                          drove the timeline and the dock could not move it.
                          Volume is the one thing that bar provided which the
-                         dock does not, so the panel carries a mute button. -->
-                    <video id="gpVideo" playsinline></video>
+                         dock does not, so the panel carries a mute button.
+                         One <video> per clip lives here; the ACTIVE one wears
+                         id="gpVideo" (gpClipActivate), so every reader of that
+                         id gets the clip currently in the picture. -->
+                    <video id="gpVideo" class="on" playsinline></video>
                     <canvas id="gpVideoOv"></canvas>
                     <div class="gp-vtile-btns">
                         <button class="gp-mapbtn" id="gpBtnHud" onclick="gpHudPop(event)"
@@ -8750,6 +8925,12 @@
             sessions: null,             /* stored recordings; null = not read yet */
             sessionId: null,            /* which stored recording is loaded */
             ghostFence: null,           /* gp.trace length before the ghost was appended */
+            /* Footage comes in SECTIONS (ADR-0053). `clips` is all of them;
+               `video` is still ONE of them — the one in the picture — which is
+               what keeps every reader of it unchanged. `clipPin` is the one
+               that was picked by hand, and outranks the lane order while the
+               playhead is inside it. `tl` is the timeline's view window. */
+            clips: [], clipPin: null, tl: null,
             video: null,                /* { name, url, t0, autoT0, offsetMs, follow } */
             viewFocus: null,            /* null = side by side; 'map' | 'video' = that tile solo */
             cam: null,                  /* camera defaults, this PC (gpCamLoad) */
@@ -12423,20 +12604,11 @@
                 /* A video opened before any recording existed has been playing
                    untethered — tether it now: its clock against this session's,
                    by the same rule as opening it the other way round. */
-                if (gp.video && !gp.video.probing) {
-                    if (gp.video.autoT0 !== null && meta.dated === "gps") {
-                        /* Same corrections as pressing Camera — a raw autoT0
-                           here skipped the timezone/week fix and left the
-                           footage a timezone (or a GNSS week error) adrift. */
-                        var vtz = gpVideoTzFix(gp.video.autoT0, meta.recordedAt, gp.video.autoTz);
-                        gp.video.t0 = vtz.t0;
-                        gp.video.tzHours = vtz.hours;
-                    } else {
-                        gp.video.t0 = meta.recordedAt;
-                        gp.video.tzHours = 0;
-                    }
-                    gp.video.offsetMs = 0;
-                }
+                /* Every section of it, not only the one in the picture — the
+                   same corrections as pressing Camera, so the timezone and
+                   GNSS-week fixes are not skipped (they were, once, and left
+                   the footage an hour adrift). */
+                gpClips().forEach(function (c) { gpClipTether(c, meta); });
                 gpComputeG(gp.trace);
                 gp.cmpLap = -1;
                 /* The auto set-up exists to rescue "no laps": it recognises
@@ -16142,6 +16314,11 @@
             { id: "map", label: "Track map", solo: true },
             { id: "graph", label: "Graph", solo: true },
             { id: "video", label: "Video", solo: true },
+            /* Beside Video, because it is the other half of it: the sections
+               of film and where each of them sits against the recording
+               (ADR-0053). Not solo — it is markup, and two of them is a
+               perfectly reasonable thing to want. */
+            { id: "clips", label: "Footage timeline" },
             { id: "times", label: "Lap times" },
             { id: "report", label: "Lap report" },
             /* Deliberately near the top of the list. It is the panel you want
@@ -18050,6 +18227,13 @@
                 var meta = (gp.sessions || []).filter(function (x) { return x.id === gp.sessionId; })[0];
                 var tethered = !!(gp.trace && gp.trace.length && v.t0 !== null && v.t0 !== undefined);
                 var h = "<div class='gpb-vidctl'>";
+                /* Which of the sections these controls are pointed at. With
+                   one it says nothing; with three, a Nudge slider that did not
+                   name the clip it was nudging would be a slider you could not
+                   trust. */
+                if (gpClips().length > 1)
+                    h += "<span class='nt' title='These controls act on this section. Click another on the timeline to point them at it.'>" +
+                         gpEsc(v.name || "clip") + "</span>";
                 if (tethered) {
                     h += "<label title='Video later than the data is positive'>Nudge" +
                          /* ±120, not ±30: a camera clock and a logger clock can
@@ -18143,6 +18327,12 @@
                        simply stopped and nothing said why. */
                     var cov = gpVideoCover();
                     if (cov) {
+                        /* With sections open this figure is about the section
+                           the controls are pointed at, not about the footage
+                           as a whole — the timeline's own bar carries that. A
+                           bare "covers 4% of this lap" beside three sections
+                           reads as the whole day's answer, and is not. */
+                        var wsub = gpClips().length > 1 ? "this section " : "";
                         var mmss = function (s) {
                             s = Math.max(0, Math.round(s));
                             var m = Math.floor(s / 60), q = s - m * 60;
@@ -18150,14 +18340,14 @@
                         };
                         var span = mmss(cov.from) + "–" + mmss(cov.to);
                         if (cov.frac >= 0.999) {
-                            h += "<span class='nt'>covers this " + gpRunWord() + "</span>";
+                            h += "<span class='nt'>" + wsub + "covers this " + gpRunWord() + "</span>";
                         } else if (cov.frac <= 0) {
-                            h += "<span class='nt' style='color:#ff8b85'>footage is " + span +
+                            h += "<span class='nt' style='color:#ff8b85'>" + (wsub || "footage ") + "is " + span +
                                  " — outside this " + gpRunWord() + "</span>" +
                                  "<button onclick='gpVideoGoto()' title='Move the playhead to where the footage actually is'>" +
                                  "Go to footage</button>";
                         } else {
-                            h += "<span class='nt' style='color:#ffc46b'>covers " + Math.round(cov.frac * 100) +
+                            h += "<span class='nt' style='color:#ffc46b'>" + wsub + "covers " + Math.round(cov.frac * 100) +
                                  "% of this " + gpRunWord() + " (" + span + ")</span>" +
                                  "<button onclick='gpVideoGoto()' title='Move the playhead to where the footage actually is'>" +
                                  "Go to footage</button>";
@@ -18187,21 +18377,80 @@
                          (linked ? " checked" : "") + " onchange='gpVideoLink(this.checked)'>Link</label>";
                 }
                 h += "<span style='flex:1'></span>" +
-                     "<button title='Load a different file' onclick='gpVideoPick()'>Replace</button>" +
-                     "<button onclick='gpVideoClose()'>Close</button></div>";
+                     "<button title='Add another section of footage. A day is rarely one file — " +
+                     "open as many as you shot and each one finds its own place on the timeline.' " +
+                     "onclick='gpVideoPick()'>+ Footage</button>" +
+                     "<button title='Show the sections of footage and where each one sits against " +
+                     "this recording, as a timeline you can drag them along' " +
+                     "onclick='gpClipsPanelReveal()'>Timeline</button>" +
+                     "<button title='" + (gpClips().length > 1
+                        ? "Take this section off the recording. The others stay."
+                        : "Take this footage off the recording. The file is not touched.") +
+                     "' onclick='gpVideoClose()'>Close</button>";
+                /* Two or more sections and the strip comes with the picture:
+                   which one you are watching, and what is either side of it,
+                   is part of watching it. One section has nothing to arrange,
+                   so the strip would only be eating picture — and neither has
+                   a window that already has the full timeline open in a panel
+                   of its own, where there is room to drag properly. */
+                if (gpClips().length > 1 && !gpClipsPanelOn()) h += gpTlHtml(true);
+                h += "</div>";
                 return h;
             }
-            return "<div style='position:absolute;inset:0;background:var(--gpb-red-900);color:var(--gpb-red-200);" +
-                   "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:16px'>" +
-                   "<svg width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5'>" +
-                   "<path d='m16 10 6-3v10l-6-3'></path><rect x='2' y='6' width='14' height='12'></rect></svg>" +
-                   "<div style='font-family:var(--gpb-head);font-weight:600;font-size:15px;letter-spacing:0.1em;text-transform:uppercase'>No video loaded</div>" +
-                   "<div style='font-size:11px;opacity:0.75'>The camera's own clock lines it up with the " +
-                   gpRunWord() + " &mdash; nothing to sync by hand.</div>" +
-                   "<button class='ws-btn-line' onclick='gpVideoPick()' style='width:auto;padding:5px 14px;cursor:pointer;" +
-                   "background:transparent;border-color:var(--gpb-red-400);color:var(--gpb-red-200)'>" +
-                   "Load video&hellip;</button></div>";
+            /* Nothing open. The tile above is drawing the channels (ADR-0053),
+               so this is a control bar and not a placard: what replaced the
+               placard is worth looking at, and a full-panel "No video loaded"
+               would be covering it up to say so. */
+            return "<div class='gpb-vidctl'>" +
+                   "<span class='nt'>No footage on this " + gpRunWord() + " yet &mdash; " +
+                   "the camera's own clock lines it up, nothing to sync by hand.</span>" +
+                   "<span style='flex:1'></span>" +
+                   "<button onclick='gpVideoPick()'>Open a video&hellip;</button>" +
+                   "<button onclick='gpClipsPanelReveal()' title='The timeline the sections of " +
+                   "footage are arranged on'>Timeline</button></div>";
         }
+
+        /* ---- getting to the timeline --------------------------------------
+         * It is a panel like any other, so it can be chosen from any panel's
+         * type list. Nobody would find it that way the first time, and the
+         * moment you want it is the moment you have opened a second section —
+         * so the Video panel carries a button, and this is what it does:
+         * shows the one that is already there, or cuts the video panel in two
+         * and puts one below it. Recoverable in one click, like every other
+         * panel.
+         */
+        function gpClipsPanelOn() {
+            try {
+                return gpNodeLeaves(gpRootCol(gpGrid()))
+                       .filter(function (l) { return l.type === "clips"; }).length > 0;
+            } catch (e) { return false; }
+        }
+
+        window.gpClipsPanelReveal = function () {
+            var g = gpGrid();
+            var have = gpNodeLeaves(gpRootCol(g)).filter(function (l) { return l.type === "clips"; })[0];
+            if (have) {
+                /* Already on screen. Flash it rather than silently doing
+                   nothing — a button that appears dead is worse than no
+                   button. */
+                gp.full = null;
+                gpRenderGrid();
+                var el = document.querySelector("[data-gp-panel='" + have.id + "']");
+                if (el) {
+                    el.classList.add("gpb-flash");
+                    setTimeout(function () { el.classList.remove("gpb-flash"); }, 900);
+                }
+                return;
+            }
+            var host = gpNodeLeaves(gpRootCol(g)).filter(function (l) { return l.type === "video"; })[0]
+                    || gpNodeLeaves(gpRootCol(g))[0];
+            if (!host) return;
+            var before = gpNodeLeaves(gpRootCol(gpGrid())).map(function (l) { return l.id; });
+            window.gpPanelSplit(host.id, "col");
+            var after = gpNodeLeaves(gpRootCol(gpGrid()));
+            var fresh = after.filter(function (l) { return before.indexOf(l.id) < 0; })[0];
+            if (fresh) window.gpPanelType(fresh.id, "clips");
+        };
 
         /* The key above the rack. It has to say what the swatches MEAN,
            because that changes with what is ticked and with which mode the
@@ -18289,6 +18538,7 @@
                 (gp.trace && gp.trace.length ? gpSplitsHtml() : gpPanelEmpty("No recording open.")) + "</div>";
             else if (p.type === "history") h2 += gpPanelHistoryHtml();
             else if (p.type === "video") h2 += gpPanelVideoHtml();
+            else if (p.type === "clips") h2 += gpTlHtml(false);
             else if (p.type === "graph") h2 += "<div class='gpb-graphwrap'>" + gpPanelGraphLegendHtml() + "</div>";
             return h2 + "</div></section>";
         }
@@ -18351,8 +18601,14 @@
                     var v = document.getElementById("gpViewer");
                     if (v) { v.style.display = ""; v.className = "gp-viewer"; body.appendChild(v); }
                 } else if (ty === "video") {
+                    /* Hosted whether or not there is film. What used to be
+                       here — the tile only when a video existed, a red "No
+                       video loaded" placard otherwise — meant the panel was
+                       dead space until you found the button on it. The tile
+                       draws the channels when there is nothing to play
+                       (ADR-0053), so it is worth looking at either way. */
                     var vt = document.getElementById("gpVideoTile");
-                    if (vt && gp.video && gp.video.url) {
+                    if (vt) {
                         vt.style.display = "block";
                         body.insertBefore(vt, body.firstChild);
                     }
@@ -18374,19 +18630,49 @@
                is idempotent (_gpBound) and returns early when there is no
                video element, so calling it on every render costs nothing. */
             gpVideoBind();
+            gpTlBind();
+            /* Whether a timeline is on screen at all — read once per render so
+               gpTlSync, which runs on every presented frame, does not have to
+               go and look. */
+            gp._tlLive = !!host.querySelector("[data-gp-tl]");
             gpPopDismissInit();
             /* The markup above was built from the numbers as they stood; the
                measurement that turns them into the numbers this window can
                actually honour happens now, and has to be written back. */
             gpGridApplyFlex();
             gpRenderDock();
+            gpVidCtlFit();
             /* The map and the canvases all have new boxes now. */
             setTimeout(function () {
                 if (gp.view !== "session") return;
                 gpGridApplyFlex();
                 if (gp.map) gp.map.invalidateSize({ animate: false });
                 gpDrawTrace(); gpDrawStrip(); gpViewerSync(); gpDrawGrip();
+                gpVidCtlFit();
+                gpVideoDrawOverlay();
             }, 30);
+        }
+
+        /* ---- the picture must not sit under its own controls ---------------
+         * The strip along the bottom of the Video panel wraps, and since
+         * ADR-0053 it can carry a timeline as well — so the space the picture
+         * has to leave for it is a measurement, not the 26 px constant it used
+         * to be. Watched rather than computed: the bar re-wraps when the panel
+         * is resized, and no render happens for that.
+         */
+        function gpVidCtlFit() {
+            var tile = document.getElementById("gpVideoTile");
+            var bar = document.querySelector("#gpWorkspace .gpb-vidctl");
+            if (!tile) return;
+            if (!bar || tile.parentNode !== bar.parentNode) { tile.style.marginBottom = ""; return; }
+            var h = bar.offsetHeight || 26;
+            if (tile._gpFit !== h) { tile._gpFit = h; tile.style.marginBottom = h + "px"; }
+            if (!gp._vidCtlRO && window.ResizeObserver) {
+                gp._vidCtlRO = new ResizeObserver(function () { gpVidCtlFit(); gpVideoDrawOverlay(); });
+            }
+            if (gp._vidCtlRO && gp._vidCtlBar !== bar) {
+                try { gp._vidCtlRO.disconnect(); gp._vidCtlRO.observe(bar); gp._vidCtlBar = bar; } catch (e) { }
+            }
         }
 
         function gpBindGrid(host) {
@@ -30519,6 +30805,10 @@
                time. Outside the footage the ticker is the transport, exactly
                as it was before videos existed, and the handover happens in
                the ticker the moment the playhead walks into coverage. */
+            /* Which SECTION covers the playhead — asked before the element is
+               looked up, because with sections the element is whichever one
+               that answer names (ADR-0053). */
+            gpClipSyncFor(gp.playIdx);
             var el = (gp.playStopAt === null || gp.playStopAt === undefined)
                    ? document.getElementById("gpVideo") : null;
             var vt = el && gp.video && gp.video.follow ? gpVideoTimeFor(gp.playIdx) : null;
@@ -30690,6 +30980,7 @@
                    Not while a corner is being played: the video's own clock
                    has no stop point in it, so handing over would run past the
                    end of the corner and never come back. */
+                gpClipSyncFor(gp.playIdx);
                 var hv = gp.playStopAt === null || gp.playStopAt === undefined
                        ? document.getElementById("gpVideo") : null;
                 var hvt = hv && gp.video && gp.video.follow ? gpVideoTimeFor(gp.playIdx) : null;
@@ -30960,39 +31251,13 @@
            timezone at all, so nothing is touched. What is left after the snap
            is real clock error — the hero5 camera runs 40 s ahead of its own
            GPS — and Nudge is what that is for. */
-        /* The camera clock has now been believed as far as it deserves. It
-           can still be wrong in a way no timezone explains — the hero5
-           sample's runs 40 s ahead of its own GPS — and when the error is
-           bigger than the video is long, believing it puts the WHOLE
-           recording outside the footage. The picture then freezes on frame
-           zero and stays there however you scrub, which looks like a broken
-           player rather than a clock that cannot be trusted.
-
-           So: if the session does not overlap the video at all, stop
-           trusting the clock and line them up start to start. That is the
-           behaviour from before there was a camera clock to read, it always
-           yields a usable picture, and it says so rather than pretending to
-           a precision it has not got.
-
-           Needs the video's DURATION, so it runs once that is known — which
-           is why it is called from the metadata handler and not only from
-           the probe. */
+        /* The same question about the clip in the picture. The rule itself —
+           a clip whose clock puts it entirely outside the recording is a clip
+           whose clock is not to be believed — lives in gpClipAutoAlign, which
+           every section goes through; this is the one-video name that the rest
+           of the file already calls. */
         function gpVideoAutoAlign() {
-            var v = gp.video, el = document.getElementById("gpVideo");
-            if (!v || !el || v.t0 === null || v.t0 === undefined) return;
-            if (!isFinite(el.duration) || !gp.trace || !gp.trace.length) return;
-            var first = gpSampleUtc(0), last = gpSampleUtc(gp.trace.length - 1);
-            if (first === null || last === null) return;
-            var a = (first - v.t0) / 1000, b = (last - v.t0) / 1000;
-            if (b < 0 || a > el.duration) {
-                v.t0 = first;
-                v.noOverlap = true;
-            } else {
-                v.noOverlap = false;
-            }
-            gpVideoFollowSeek();
-            gpVideoDrawOverlay();
-            gpRenderGridSoft();
+            gpClipAutoAlign(gp.video);
         }
 
         /* Re-render the grid only when it exists, so the alignment message can
@@ -31258,16 +31523,17 @@
         }
 
         window.gpVideoLink = function (on) {
-            var meta = gpCurSessionMeta(), v = gp.video;
+            var meta = gpCurSessionMeta();
             if (!meta) return;
-            if (on && v && v.path) {
-                meta.videoPath = v.path;
-                meta.videoSrc = v.src || "start";
-                meta.videoOffsetMs = v.offsetMs || 0;
-            } else {
-                delete meta.videoPath; delete meta.videoSrc; delete meta.videoOffsetMs;
+            /* Every section, not just the one the controls happen to be
+               pointed at (ADR-0053) — a tick that remembered one third of the
+               day's footage would be worse than no tick. */
+            if (on) gpClipsSave(meta);
+            else {
+                delete meta.videoClips; delete meta.videoPath;
+                delete meta.videoSrc; delete meta.videoOffsetMs;
+                gpStore.putMeta(meta);
             }
-            gpStore.putMeta(meta);
             gpRenderGridSoft();
         };
 
@@ -31278,28 +31544,71 @@
             if (!meta || !v || !v.path || !meta.videoPath) return;
             meta.videoSrc = v.src || "start";
             meta.videoOffsetMs = v.offsetMs || 0;
+            /* ...and the other sections with it. Guarded on the name because
+               two harnesses run this function on its own, out of the file, to
+               prove the restore path — see tools/check_videot0.js. */
+            if (typeof gpClipsSave === "function") { gpClipsSave(meta); return; }
             gpStore.putMeta(meta);
         }
 
-        /* Re-attach on open. Silent when the file has moved: a missing video
-           is not a reason to interrupt someone opening a recording, but it is
-           a reason to forget the link rather than fail on it every time. */
+        /* Re-attach on open. Silent when a file has moved: a missing video is
+           not a reason to interrupt someone opening a recording, but it is a
+           reason to forget that one and say so.
+           `videoClips` is the list; the three older keys are the one-video
+           form, still written beside it, and still what a recording saved by
+           an older build carries. */
         function gpVideoRelink(meta) {
             if (!gpVideoLinked(meta)) return;
             if (!(window.__TAURI_INTERNALS__ || window.__TAURI__)) return;
-            var want = meta.videoPath;
-            gpTauriCall("video_allow", { path: want }).then(function (size) {
-                if (gp.sessionId !== meta.id) return;      /* they moved on */
-                var conv = (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) ||
-                           (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.convertFileSrc);
-                if (!conv) return;
-                gpVideoBegin(String(want).split(/[\\/]/).pop(), conv(want),
-                             gpVideoSrcPath(want, size), false, want,
-                             { src: meta.videoSrc, offsetMs: meta.videoOffsetMs });
-            }).catch(function () {
-                delete meta.videoPath; delete meta.videoSrc; delete meta.videoOffsetMs;
+            var list = (meta.videoClips && meta.videoClips.length)
+                ? meta.videoClips
+                : [{ path: meta.videoPath, src: meta.videoSrc,
+                     offsetMs: meta.videoOffsetMs, lane: 0 }];
+            var lost = [];
+            var done = 0;
+            var finish = function () {
+                if (++done < list.length) return;
+                if (!lost.length || gp.sessionId !== meta.id) return;
+                /* Only the entries that went missing come OUT of the stored
+                   list. Re-deriving it from the live clips here would be a
+                   write on top of sections that are still probing their
+                   clocks, and would save every one of them with the nudge it
+                   has not been given back yet. */
+                var kept = list.filter(function (r) { return lost.indexOf(r && r.path) < 0; });
+                if (kept.length) {
+                    meta.videoClips = kept.map(function (r) {
+                        return { path: r.path, src: r.src || "start",
+                                 offsetMs: r.offsetMs || 0, lane: r.lane || 0 };
+                    });
+                    meta.videoPath = kept[0].path;
+                    meta.videoSrc = kept[0].src || "start";
+                    meta.videoOffsetMs = kept[0].offsetMs || 0;
+                } else {
+                    delete meta.videoClips; delete meta.videoPath;
+                    delete meta.videoSrc; delete meta.videoOffsetMs;
+                }
                 gpStore.putMeta(meta);
-                gpImportSaid("The video linked to this recording is no longer where it was, so the link has been dropped.", "error");
+                gpImportSaid(lost.length === 1
+                    ? "The video linked to this recording is no longer where it was, so the link has been dropped."
+                    : lost.length + " of the videos linked to this recording are no longer where they were, so those links have been dropped.",
+                    "error");
+            };
+            list.forEach(function (rec) {
+                var want = rec && rec.path;
+                if (!want) { finish(); return; }
+                gpTauriCall("video_allow", { path: want }).then(function (size) {
+                    if (gp.sessionId !== meta.id) { finish(); return; }   /* they moved on */
+                    var conv = (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) ||
+                               (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.convertFileSrc);
+                    if (!conv) { finish(); return; }
+                    gpVideoBegin(String(want).split(/[\\/]/).pop(), conv(want),
+                                 gpVideoSrcPath(want, size), false, want,
+                                 { src: rec.src, offsetMs: rec.offsetMs, lane: rec.lane || 0 });
+                    finish();
+                }).catch(function () {
+                    lost.push(want);
+                    finish();
+                });
             });
         }
 
@@ -31335,9 +31644,14 @@
             if (!v || !v.path || v.converting) return;
             v.converting = true;
             gpRenderGridSoft();
+            var was = { src: v.src, offsetMs: v.offsetMs, lane: v.lane || 0, replace: v.id };
             gpTauriCall("video_convert", { src: v.path }).then(function (outPath) {
                 gpImportSaid("Converted — loading the playable copy.", "success");
-                window.gpVideoOpenPath(outPath);
+                /* The copy stands where the original stood: same lane, same
+                   alignment, and the file that would not decode goes. Opened
+                   as a second section it would have sat on top of a dead one,
+                   and lane 0 would have gone on winning with no picture. */
+                window.gpVideoOpenPath(outPath, was);
             }).catch(function (e) {
                 if (gp.video) { gp.video.converting = false; }
                 gpImportSaid("Could not convert that video: " + (e && e.message ? e.message : e), "error");
@@ -31380,14 +31694,18 @@
                .catch(function () { });
         };
 
-        window.gpVideoOpenPath = function (path) {
+        /* `restore` is passed straight through, which is how a converted copy
+           takes the place — the lane and the alignment — of the file it was
+           made from rather than arriving as a second section of the same
+           footage. */
+        window.gpVideoOpenPath = function (path, restore) {
             gpTauriCall("video_allow", { path: path })
                 .then(function (size) {
                     var conv = (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) ||
                                (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.convertFileSrc);
                     if (!conv) throw new Error("convertFileSrc unavailable");
                     var name = String(path).split(/[\\/]/).pop();
-                    gpVideoBegin(name, conv(path), gpVideoSrcPath(path, size), false, path, null);
+                    gpVideoBegin(name, conv(path), gpVideoSrcPath(path, size), false, path, restore || null);
                 })
                 .catch(function (e) {
                     gpImportSaid("Could not open that video: " + (e && e.message ? e.message : e), "error");
@@ -31449,14 +31767,367 @@
             el.src = url;
         }
 
-        /* Everything that is the same whichever way the file arrived. `blob`
-           says whether the url needs revoking when it is replaced. */
-        function gpVideoBegin(name, url, probeSrc, blob, path, restore) {
-            if (gp.video && gp.video.url && gp.video.blob) {
-                try { URL.revokeObjectURL(gp.video.url); } catch (e) { }
+        /* ══════════════════════════════════════════════════════════════════
+         * Footage in sections (ADR-0053)
+         *
+         * A day is very rarely one file. Cards fill, cameras stop between
+         * runs, someone remembers to press record halfway down the back
+         * straight — so a recording's footage is a handful of clips with gaps
+         * between them, and until now the app held exactly one. Opening the
+         * second threw the first away, and there was no way to say "this one
+         * covers the morning, that one covers the afternoon".
+         *
+         * The model is an editor's, because that is the one everybody already
+         * knows: every clip sits on a LANE at a POSITION, a lower lane number
+         * covers the lanes beneath it, and the recording itself is the track
+         * they are all lined up against. Dragging a clip along the timeline
+         * writes its nudge; dropping it on another lane writes its lane.
+         *
+         * `gp.video` is still ONE clip — the one in the picture — so every
+         * reader of it is unchanged. What is new is that something now points
+         * it at the right one as the playhead moves.
+         * ═════════════════════════════════════════════════════════════════ */
+        function gpClips() { return gp.clips || (gp.clips = []); }
+
+        /* When this clip's first frame happened, in UTC, nudge included. Null
+           while it has no alignment at all, which is what an untethered video
+           opened before any recording looks like. */
+        function gpClipStart(c) {
+            return (c && c.t0 !== null && c.t0 !== undefined) ? c.t0 + (c.offsetMs || 0) : null;
+        }
+        /* Seconds of film. Read off the element — the only thing that knows —
+           and cached, so a clip whose element is busy still draws its length. */
+        function gpClipDur(c) {
+            if (!c) return 0;
+            if (c.el && isFinite(c.el.duration) && c.el.duration > 0) c.dur = c.el.duration;
+            return c.dur || 0;
+        }
+        function gpClipEnd(c) {
+            var a = gpClipStart(c);
+            return a === null ? null : a + gpClipDur(c) * 1000;
+        }
+        function gpClipById(id) {
+            return gpClips().filter(function (c) { return c.id === id; })[0] || null;
+        }
+        function gpClipCovers(c, utc) {
+            var a = gpClipStart(c), d = gpClipDur(c);
+            return a !== null && d > 0 && utc >= a && utc < a + d * 1000;
+        }
+
+        /* Which section is on screen at this instant.
+         *
+         * Lane 0 is the top of the stack and wins, exactly as a track does in
+         * an editor; inside one lane the later clip covers the earlier, which
+         * is what a track does too. A clip the user has just PICKED outranks
+         * both for as long as the playhead stays inside it — that is the only
+         * way to look at a clip which something above it is covering, and it
+         * costs a field rather than a Solo button nobody would find.
+         *
+         * Null means a gap: there is no film for this moment, which is a real
+         * and ordinary answer, not a failure. See gpVideoBgDraw for what fills
+         * the box when it comes back. */
+        function gpClipAtUtc(utc) {
+            var cs = gpClips(), best = null;
+            if (gp.clipPin) {
+                var pin = gpClipById(gp.clipPin);
+                if (pin && gpClipCovers(pin, utc)) return pin;
             }
+            for (var k = 0; k < cs.length; k++) {
+                var c = cs[k];
+                if (!gpClipCovers(c, utc)) continue;
+                if (!best) { best = c; continue; }
+                var la = c.lane || 0, lb = best.lane || 0;
+                if (la < lb) { best = c; continue; }
+                if (la === lb && gpClipStart(c) > gpClipStart(best)) best = c;
+            }
+            return best;
+        }
+        /* The same question about a SAMPLE of the recording. */
+        function gpClipAt(i) {
+            var u = gpSampleUtc(i);
+            return u === null ? null : gpClipAtUtc(u);
+        }
+
+        /* ---- one <video> per clip ------------------------------------------
+         * The switch between sections has to be instant, and it has to leave
+         * every existing reader of `getElementById("gpVideo")` working. So
+         * each clip decodes in its own element, they all live in the tile, and
+         * the ACTIVE one wears the id. Nothing downstream knows there is more
+         * than one.
+         *
+         * Elements are pooled: a removed clip gives its element back with its
+         * source dropped, and the next clip opened takes it. Otherwise a
+         * session of trying files would leave a decoder behind for each. */
+        function gpVideoElIdSet(el) {
+            var had = document.getElementById("gpVideo");
+            if (had === el) return;
+            if (had) { had.removeAttribute("id"); had.classList.remove("on"); }
+            if (el) { el.id = "gpVideo"; el.classList.add("on"); }
+        }
+
+        function gpClipEl(c) {
+            if (c.el) return c.el;
+            var tile = document.getElementById("gpVideoTile");
+            if (!tile) return null;
+            var el = null, all = tile.querySelectorAll("video");
+            for (var k = 0; k < all.length; k++) {
+                if (!all[k].getAttribute("data-gp-clip")) { el = all[k]; break; }
+            }
+            if (!el) {
+                el = document.createElement("video");
+                el.setAttribute("playsinline", "");
+                /* Before the HUD canvas, or the picture would be painted over
+                   the gauges rather than under them. */
+                var ov = document.getElementById("gpVideoOv");
+                if (ov && ov.parentNode === tile) tile.insertBefore(el, ov);
+                else tile.appendChild(el);
+            }
+            el.setAttribute("data-gp-clip", c.id);
+            el.preload = "metadata";
+            el.muted = true;                 /* only the active one is heard */
+            c.el = el;
+            return el;
+        }
+
+        /* Hand the element back to the pool. Deliberately not removed from the
+           DOM: the tile must always contain at least one <video> for the id to
+           live on, and reusing one is cheaper than building one. */
+        function gpClipFreeEl(c) {
+            var el = c && c.el;
+            if (!el) return;
+            try { el.pause(); el.removeAttribute("src"); el.load(); } catch (e) { }
+            el.removeAttribute("data-gp-clip");
+            el.classList.remove("on");
+            c.el = null;
+        }
+
+        /* Put a clip in the picture. One place, so a switch cannot
+           half-happen: the id, `gp.video`, the sound and the bindings all move
+           together. Returns whether anything changed. */
+        function gpClipActivate(c) {
+            if (!c || gp.video === c) return false;
+            var old = gp.video;
+            gp.video = c;
+            var el = gpClipEl(c);
+            if (el) {
+                gpVideoElIdSet(el);
+                el.preload = "auto";
+                el.muted = !!(gp.cam && gp.cam.muted);
+                try { el.playbackRate = gp.playRate || 1; } catch (e) { }
+            }
+            /* The outgoing element is stood down only AFTER the id has moved.
+               Pausing it fires the pause handler, and that handler stops the
+               whole replay when the element it fires on is the active one —
+               so stopping the old clip first ended playback every time the
+               footage crossed from one section into the next. */
+            if (old && old.el) {
+                if (!old.el.paused) { try { old.el.pause(); } catch (e) { } }
+                old.el.muted = true;
+                old.el.preload = "metadata";
+            }
+            /* The new element has never been bound; gpVideoBind is per-element
+               and idempotent, so this is the only place it needs saying. */
+            gpVideoBind();
+            gpVideoFollowSeek(true);
+            gpVideoDrawOverlay();
+            return true;
+        }
+
+        /* The playhead moved — make sure the picture is the section covering
+           it. Called from the frame loop and from every seek, so it is one
+           pass over a handful of clips and an identity test.
+           Only while the footage is on the leash: off it, somebody is driving
+           one clip by hand and must not have it taken off them. */
+        function gpClipSyncFor(i) {
+            var cs = gpClips();
+            if (cs.length < 2) return false;
+            var v = gp.video;
+            if (!v || !v.follow) return false;
+            /* A pick outranks the lanes while you are still inside it — and
+               goes on outranking them for a section that the playhead CANNOT
+               get inside, because it has been dragged off the end of the day.
+               Dropping the pick there would take the controls off the very
+               clip somebody has selected in order to drag it back. */
+            if (gp.clipPin) {
+                var pin = gpClipById(gp.clipPin), u = gpSampleUtc(i);
+                if (!pin) gp.clipPin = null;
+                else if ((u !== null && gpClipCovers(pin, u)) || !gpClipReaches(pin))
+                    return gpClipActivate(pin);
+                else gp.clipPin = null;
+            }
+            var c = gpClipAt(i);
+            if (!c || c === v) return false;
+            return gpClipActivate(c);
+        }
+
+        /* Does this section touch the recording at all? A clip dragged past
+           the end of the day is a perfectly ordinary thing to be holding
+           mid-drag, and it must not stop being selectable. */
+        function gpClipReaches(c) {
+            var a = gpClipStart(c), d = gpClipDur(c) * 1000;
+            if (a === null || !d || !gp.trace || !gp.trace.length) return false;
+            var f = gpSampleUtc(0), l = gpSampleUtc(gp.trace.length - 1);
+            return f !== null && l !== null && a + d >= f && a <= l;
+        }
+
+        /* Is there film under the playhead at all, and is the tile showing it?
+           A gap used to present as a frozen frame — the clamp in
+           gpVideoFollowSeek parks the picture on whichever end it can reach —
+           which reads as a broken player rather than as footage that has run
+           out. The tile is told, and draws the field instead. */
+        function gpVideoFilmSync() {
+            var tile = document.getElementById("gpVideoTile");
+            if (!tile) return false;
+            var film = false;
+            var v = gp.video;
+            if (v && v.url && !v.dead) {
+                if (!gp.trace || !gp.trace.length || v.t0 === null || v.t0 === undefined) {
+                    film = true;                 /* untethered: it is just a picture */
+                } else {
+                    var t = gpVideoTimeFor(gp.playIdx), d = gpClipDur(v);
+                    film = t !== null && d > 0 && t >= -0.05 && t < d;
+                }
+            }
+            tile.classList.toggle("nofilm", !film);
+            return film;
+        }
+
+        /* ---- where a new section belongs ----------------------------------
+         * A clip with a clock of its own places itself. One without — no
+         * camera time, no log anchor — used to land at the start of the
+         * recording, which is right for the FIRST clip and the worst available
+         * guess for the second: it stacks every section on top of the first
+         * one. "I recorded it in pieces" almost always means consecutive
+         * pieces, so the guess that costs the least dragging is end to end.
+         */
+        function gpClipButt(c) {
+            if (!c || c.t0 === null || c.t0 === undefined) return;
+            var prev = null, pe = null;
+            gpClips().forEach(function (o) {
+                if (o === c) return;
+                var e = gpClipEnd(o);
+                if (e === null || !gpClipDur(o)) return;
+                if (pe === null || e > pe) { prev = o; pe = e; }
+            });
+            if (prev === null) return;
+            c.offsetMs = Math.round(pe - c.t0);
+        }
+
+        /* Two sections of the same moment are two CAMERAS, and two cameras
+           belong on two lanes — stacked on one, the lower is unreachable and
+           looks lost. Only ever moves a clip DOWN, and only the one being
+           placed. */
+        function gpClipLaneFree(c) {
+            var a = gpClipStart(c), d = gpClipDur(c);
+            if (a === null || !d) return;
+            var b = a + d * 1000;
+            for (var lane = 0; lane < 6; lane++) {
+                var clash = false;
+                gpClips().forEach(function (o) {
+                    if (o === c || (o.lane || 0) !== lane) return;
+                    var oa = gpClipStart(o), od = gpClipDur(o);
+                    if (oa === null || !od) return;
+                    if (a < oa + od * 1000 && b > oa) clash = true;
+                });
+                if (!clash) { c.lane = lane; return; }
+            }
+            c.lane = 5;
+        }
+
+        /* The camera clock has now been believed as far as it deserves. It can
+           still be wrong in a way no timezone explains, and when the error is
+           bigger than the clip is long, believing it puts the whole recording
+           outside the footage: the picture freezes on frame zero and stays
+           there however you scrub.
+           So when a clip does not overlap the recording AT ALL, stop trusting
+           its clock and line it up start to start — except when there are
+           other sections already placed, where the end of the last one is a
+           better answer than the start of the day. Needs the clip's DURATION,
+           so it runs from the metadata handler, not from the probe. */
+        function gpClipAutoAlign(c) {
+            if (!c || c.t0 === null || c.t0 === undefined) return;
+            var d = gpClipDur(c);
+            if (!d || !gp.trace || !gp.trace.length) return;
+            var first = gpSampleUtc(0), last = gpSampleUtc(gp.trace.length - 1);
+            if (first === null || last === null) return;
+            var a = (first - gpClipStart(c)) / 1000, b = (last - gpClipStart(c)) / 1000;
+            if (b < 0 || a > d) {
+                c.t0 = first;
+                c.offsetMs = 0;
+                c.noOverlap = true;
+                if (gpClips().length > 1) gpClipButt(c);
+            } else {
+                c.noOverlap = false;
+            }
+            if (!c.placed) { gpClipLaneFree(c); c.placed = true; }
+            if (gpVideoLinked(gpCurSessionMeta())) gpClipsSave(gpCurSessionMeta());
+            gpVideoFollowSeek();
+            gpVideoDrawOverlay();
+            gpRenderGridSoft();
+        }
+
+        /* A clip opened before any recording existed has been playing
+           untethered. Tether it now, by the same rule as opening it the other
+           way round. */
+        function gpClipTether(c, meta) {
+            if (!c || !meta || c.probing) return;
+            if (c.autoT0 !== null && c.autoT0 !== undefined && meta.dated === "gps") {
+                var tz = gpVideoTzFix(c.autoT0, meta.recordedAt, c.autoTz);
+                c.t0 = tz.t0;
+                c.tzHours = tz.hours;
+            } else {
+                c.t0 = meta.recordedAt;
+                c.tzHours = 0;
+            }
+            c.offsetMs = 0;
+            c.placed = false;
+        }
+
+        /* ---- what comes back when the recording is opened again ------------
+         * Every section, with the lane and the nudge it was left on. The first
+         * of them is MIRRORED onto the three keys that existed before sections
+         * did, because a lap borrowed from another day reads those directly
+         * (gpGhostVideoTimeFor) and a session written here gets opened by
+         * builds that are not this one.
+         */
+        function gpClipsSave(meta) {
+            if (!meta) return;
+            var keep = gpClips().filter(function (c) { return !!c.path; });
+            if (!keep.length) {
+                delete meta.videoClips; delete meta.videoPath;
+                delete meta.videoSrc; delete meta.videoOffsetMs;
+                gpStore.putMeta(meta);
+                return;
+            }
+            keep = keep.slice().sort(function (a, b) {
+                return (gpClipStart(a) || 0) - (gpClipStart(b) || 0);
+            });
+            meta.videoClips = keep.map(function (c) {
+                return { path: c.path, src: c.src || "start",
+                         offsetMs: c.offsetMs || 0, lane: c.lane || 0 };
+            });
+            meta.videoPath = keep[0].path;
+            meta.videoSrc = keep[0].src || "start";
+            meta.videoOffsetMs = keep[0].offsetMs || 0;
+            gpStore.putMeta(meta);
+        }
+
+        /* Everything that is the same whichever way the file arrived. `blob`
+           says whether the url needs revoking when it is replaced.
+           Since ADR-0053 this ADDS a section rather than replacing the one
+           already open. */
+        function gpVideoBegin(name, url, probeSrc, blob, path, restore) {
             var meta = gpCurSessionMeta();
             if (!gp.cam) gp.cam = gpCamLoad();
+            /* Opening the same file twice is a mis-click, not a request for
+               two copies of it — go to the one they already have. */
+            if (path) {
+                var dup = gpClips().filter(function (o) { return o.path === path; })[0];
+                if (dup) {
+                    gpClipPick(dup.id);
+                    return;
+                }
+            }
             /* If the log stated where it sits in the footage, that IS the
                answer and there is nothing to probe for: t0 is the moment the
                video started, which is the first sample less its position in
@@ -31464,56 +32135,86 @@
                button can still fall back to it. */
             var fileT0 = (meta && isFinite(meta.videoAnchorMs))
                 ? meta.recordedAt - meta.videoAnchorMs : null;
-            gp.video = { name: name, url: url, blob: !!blob, path: path || null,
-                         /* The same random-access reader the clock probe uses.
-                            The fast export demuxes through it, so it has to
-                            outlive the probe rather than being a local. */
-                         reader: probeSrc || null,
-                         size: (probeSrc && probeSrc.size) || 0,
-                         t0: meta ? (fileT0 !== null ? fileT0 : meta.recordedAt) : null,
-                         fileT0: fileT0,      /* non-null = the log knows; do not overrule it */
-                         src: fileT0 !== null ? "log" : "start",
-                         autoT0: null, autoTz: false, offsetMs: 0, follow: gp.cam.follow, probing: true };
-            var el = document.getElementById("gpVideo");
+            gp.clipSeq = (gp.clipSeq || 0) + 1;
+            var c = { id: "vc" + gp.clipSeq,
+                      name: name, url: url, blob: !!blob, path: path || null,
+                      /* The same random-access reader the clock probe uses.
+                         The fast export demuxes through it, so it has to
+                         outlive the probe rather than being a local. */
+                      reader: probeSrc || null,
+                      size: (probeSrc && probeSrc.size) || 0,
+                      t0: meta ? (fileT0 !== null ? fileT0 : meta.recordedAt) : null,
+                      fileT0: fileT0,      /* non-null = the log knows; do not overrule it */
+                      src: fileT0 !== null ? "log" : "start",
+                      autoT0: null, autoTz: false, offsetMs: 0,
+                      lane: (restore && isFinite(restore.lane)) ? restore.lane : 0,
+                      placed: !!(restore && restore.src),
+                      dur: 0, el: null,
+                      follow: gp.cam.follow, probing: true };
+            gpClips().push(c);
+            /* A converted copy stands in for the file it was made from — same
+               lane, same alignment, and the original goes. */
+            if (restore && restore.replace) {
+                var old = gpClipById(restore.replace);
+                if (old) {
+                    c.lane = old.lane || 0;
+                    gpClipDrop(old, true);
+                }
+            }
+            var el = gpClipEl(c);
             if (el) {
-                el.muted = !!gp.cam.muted;
-                gpVideoSetSrc(el, gp.video.url, !!path);
-                /* gpVideoFollowSeek refuses to move a video whose duration it
-                   does not know yet, and a file that has only just been handed
-                   to the element does not know it — so the seek that syncs it
-                   lands before there is anything to seek, and the picture sits
-                   on frame zero while the readout beside it says it is lined
-                   up. Whichever arrives last, the probe or the metadata, does
-                   the seeking. */
+                gpVideoSetSrc(el, c.url, !!path);
+                /* gpClipAutoAlign refuses to place a clip whose duration it
+                   does not know yet, and a file only just handed to the
+                   element does not know it — so the seek that syncs it lands
+                   before there is anything to seek, and the picture sits on
+                   frame zero while the readout beside it says it is lined up.
+                   Whichever arrives last, the probe or the metadata, does the
+                   placing. */
                 var onMeta = function () {
                     el.removeEventListener("loadedmetadata", onMeta);
-                    gpVideoAutoAlign();
+                    c.dur = isFinite(el.duration) ? el.duration : 0;
+                    if (c.src === "start" && !c.placed && gpClips().length > 1) gpClipButt(c);
+                    gpClipAutoAlign(c);
+                    gpRenderGridSoft();
                 };
                 el.addEventListener("loadedmetadata", onMeta);
+            }
+            /* The first section opened becomes the picture; a later one does
+               not steal it from under a playhead that is somewhere else. */
+            if (!gp.video || gpClips().length === 1) {
+                gp.video = null;                     /* so activate does its work */
+                gpClipActivate(c);
             }
             gp.viewFocus = null;               /* a fresh video arrives side by side */
             gpViewerSync();
             gpRenderInspector();
             gpVideoProbeT0(probeSrc).then(function (r) {
-                if (!gp.video) return;
+                if (gpClips().indexOf(c) < 0) return;      /* removed while probing */
                 var ms = r === null ? null : r.ms;
-                gp.video.probing = false;
-                gp.video.autoT0 = ms;
-                gp.video.autoTz = r !== null && !!r.tz;
+                c.probing = false;
+                c.autoT0 = ms;
+                c.autoTz = r !== null && !!r.tz;
                 /* Auto-sync only means something when the session itself is
                    GPS-dated — against a download-dated anchor the camera clock
                    is comparing apples to a guess. */
                 if (ms !== null && meta && meta.dated === "gps" && gp.cam.auto &&
-                    gp.video.fileT0 === null) {
-                    var tz = gpVideoTzFix(ms, meta.recordedAt, gp.video.autoTz);
-                    gp.video.t0 = tz.t0;
-                    gp.video.tzHours = tz.hours;
-                    gp.video.src = "cam";
+                    c.fileT0 === null) {
+                    var tz = gpVideoTzFix(ms, meta.recordedAt, c.autoTz);
+                    c.t0 = tz.t0;
+                    c.tzHours = tz.hours;
+                    c.src = "cam";
                 }
                 /* A remembered alignment outranks anything worked out above:
                    it is the answer this recording was LEFT on, camera clock
                    included. Applied after the probe so it cannot be undone by
-                   it. */
+                   it. Run against the clip as the ACTIVE one, because
+                   gpVideoSyncSet and gpVideoOffset are the app's only two
+                   alignment writers and both of them work on gp.video —
+                   having a second pair that worked on a clip would be two
+                   implementations of one rule, a week from disagreeing. */
+                var held = gp.video;
+                gp.video = c;
                 if (restore && restore.src) {
                     /* A remembered source cannot always be honoured on the way
                        back in: the clock probe may have found no camera time
@@ -31538,45 +32239,1001 @@
                         var keep = gpCurSessionMeta();
                         if (keep) { keep.videoSrc = restore.src; gpStore.putMeta(keep); }
                     }
-                } else if (gp.video.path && meta) {
+                } else if (c.path && meta) {
                     /* Opened by path and not restored — remember it, so this
                        is a thing you do once per recording rather than every
                        time you open it. Untick Link to stop. */
                     window.gpVideoLink(true);
                 }
+                gp.video = held || c;
                 gpRenderInspector();
                 if (gp.view === "session") gpRenderGrid();
-                /* Setting t0 is what SYNCS the video; it is not what MOVES it.
+                /* Setting t0 is what SYNCS the clip; it is not what MOVES it.
                    Without this the picture sits on frame zero looking broken
-                   while the readout beside it says it is lined up — and it
-                   stays there until something unrelated forces a redraw, so
-                   the first thing that appeared to fix it was closing a
-                   panel. Seek it to where the playhead already is. */
-                gpVideoAutoAlign();
+                   while the readout beside it says it is lined up. */
+                gpClipAutoAlign(c);
             });
-            /* The tile lives in whichever panel is hosting it, and the grid
-               only re-appends it once a video EXISTS — so loading one has to
-               rebuild, or the picture decodes invisibly in the holder and the
-               panel goes on saying "No video loaded". */
+            /* The tile lives in whichever panel is hosting it, and the panel
+               only shows the controls a loaded video has — so opening one has
+               to rebuild, or the picture decodes invisibly in the holder. */
             if (gp.view === "session") gpRenderGrid();
         };
 
-        window.gpVideoClose = function () {
-            var el = document.getElementById("gpVideo");
-            if (el) { try { el.pause(); el.removeAttribute("src"); el.load(); } catch (e) { } }
+        /* ---- taking a section out ------------------------------------------
+         * `quiet` skips the re-render and the save, for the caller that is
+         * about to do both anyway. */
+        function gpClipDrop(c, quiet) {
+            var cs = gpClips(), k = cs.indexOf(c);
+            if (k < 0) return;
+            cs.splice(k, 1);
             /* Only a blob url is ours to revoke; an asset-protocol url is just
                a path the webview streams from and revoking it is meaningless. */
-            if (gp.video && gp.video.url && gp.video.blob) {
-                try { URL.revokeObjectURL(gp.video.url); } catch (e) { }
+            if (c.url && c.blob) { try { URL.revokeObjectURL(c.url); } catch (e) { } }
+            gpClipFreeEl(c);
+            if (gp.clipPin === c.id) gp.clipPin = null;
+            if (gp.video === c) {
+                gp.video = null;
+                var next = cs[Math.min(k, cs.length - 1)] || null;
+                if (next) gpClipActivate(next);
+                else {
+                    /* Nothing left. Something must still carry the id or every
+                       reader of it gets null for the rest of the session — the
+                       tile's own element takes it back. */
+                    var tile = document.getElementById("gpVideoTile");
+                    var spare = tile ? tile.querySelector("video") : null;
+                    if (spare) gpVideoElIdSet(spare);
+                    gp.viewFocus = null;
+                }
             }
-            gp.video = null;
-            gp.viewFocus = null;
+            if (quiet) return;
+            gpClipsSave(gpCurSessionMeta());
             gpViewerSync();
             gpRenderInspector();
-            /* and the mirror: without a rebuild the emptied tile stays in the
-               panel and the "Load video…" prompt never comes back */
             if (gp.view === "session") gpRenderGrid();
+        }
+
+        window.gpClipRemove = function (id) {
+            var c = gpClipById(id);
+            if (c) gpClipDrop(c);
         };
+
+        /* Close ONE section — the one the controls are pointed at. With a
+           single video open that is the old behaviour exactly; with three, a
+           button labelled Close that threw away all three would be a trap. */
+        window.gpVideoClose = function () {
+            if (gp.video) gpClipDrop(gp.video);
+            else gpRenderGridSoft();
+        };
+
+        /* ...and all of them, which is what the timeline's own button says. */
+        window.gpClipsClear = function () {
+            gpConfirm("Remove all footage?\n\nThe files stay where they are on disk. Only the " +
+                      "sections, and how they are lined up with this recording, go.")
+                     .then(function (yes) {
+                if (!yes) return;
+                gpClips().slice().forEach(function (c) { gpClipDrop(c, true); });
+                gp.clips = [];
+                gp.video = null;
+                gp.clipPin = null;
+                var tile = document.getElementById("gpVideoTile");
+                var spare = tile ? tile.querySelector("video") : null;
+                if (spare) gpVideoElIdSet(spare);
+                gpClipsSave(gpCurSessionMeta());
+                gp.viewFocus = null;
+                gpViewerSync();
+                gpRenderInspector();
+                if (gp.view === "session") gpRenderGrid();
+            });
+        };
+
+        /* ══════════════════════════════════════════════════════════════════
+         * The timeline (ADR-0053)
+         *
+         * Lanes of film above the recording they belong to, dragged into
+         * place. Everything here is measured in SECONDS FROM THE FIRST SAMPLE,
+         * which is the one axis every other surface in Analyse already speaks:
+         * the lap ticks on the session band are the same laps as the rack's,
+         * and the playhead is the playhead.
+         *
+         * Positions are written as percentages of the visible window rather
+         * than pixels, so a panel resize needs no re-render and the same
+         * markup serves the strip under the picture and the full panel.
+         * ═════════════════════════════════════════════════════════════════ */
+        function gpTl() {
+            if (!gp.tl) gp.tl = { from: null, to: null, snap: true };
+            return gp.tl;
+        }
+
+        /* Seconds from the first sample, for an absolute UTC moment. */
+        function gpTlSec(utc) {
+            var meta = gpCurSessionMeta();
+            return (meta && utc !== null) ? (utc - meta.recordedAt) / 1000 : null;
+        }
+        function gpTlSessDur() {
+            if (!gp.trace || gp.trace.length < 2) return 0;
+            var a = gpSampleUtc(0), b = gpSampleUtc(gp.trace.length - 1);
+            return (a === null || b === null) ? 0 : (b - a) / 1000;
+        }
+
+        /* Everything that has to fit: the recording, and every section of film
+           wherever it has ended up — including one dragged well off the end,
+           which must stay reachable or it cannot be dragged back. */
+        function gpTlExtent() {
+            var a = 0, b = Math.max(gpTlSessDur(), 10);
+            gpClips().forEach(function (c) {
+                var s = gpTlSec(gpClipStart(c));
+                if (s === null) return;
+                var d = gpClipDur(c);
+                if (s < a) a = s;
+                if (s + d > b) b = s + d;
+            });
+            var pad = Math.max(2, (b - a) * 0.03);
+            return { from: a - pad, to: b + pad };
+        }
+
+        function gpTlView() {
+            var t = gpTl(), ex = gpTlExtent();
+            if (t.from === null || t.to === null || !(t.to > t.from)) return ex;
+            /* Never so far out that the work disappears, never so far in that
+               a frame is a mile wide. */
+            var span = Math.min(Math.max(t.to - t.from, 0.5), (ex.to - ex.from) * 8);
+            var from = Math.min(Math.max(t.from, ex.from - span), ex.to);
+            return { from: from, to: from + span };
+        }
+
+        window.gpTlFit = function () {
+            var t = gpTl();
+            t.from = null; t.to = null;
+            gpRenderGridSoft();
+        };
+        window.gpTlSnapToggle = function () {
+            var t = gpTl();
+            t.snap = !t.snap;
+            gpRenderGridSoft();
+        };
+
+        /* A tick every 1/2/5/10/15/30 s, minute, two, five… — whichever gives
+           between four and twelve labels for the window on screen. */
+        var GP_TL_STEPS = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
+        function gpTlStep(span) {
+            for (var k = 0; k < GP_TL_STEPS.length; k++)
+                if (span / GP_TL_STEPS[k] <= 12) return GP_TL_STEPS[k];
+            return GP_TL_STEPS[GP_TL_STEPS.length - 1];
+        }
+        function gpTlClock(s) {
+            var neg = s < 0;
+            s = Math.abs(s);
+            var m = Math.floor(s / 60), q = s - m * 60;
+            var qs = (q < 10 ? "0" : "") + (q < 10 ? q.toFixed(q % 1 ? 1 : 0) : q.toFixed(q % 1 ? 1 : 0));
+            return (neg ? "-" : "") + m + ":" + qs;
+        }
+
+        /* ---- the markup ---------------------------------------------------
+         * `compact` is the strip that lives under the picture; the full one is
+         * the panel. Same renderer, one density flag — two of these would have
+         * disagreed about something within a week. */
+        function gpTlHtml(compact) {
+            var meta = gpCurSessionMeta();
+            var cs = gpClips();
+            var LH = compact ? 16 : 30;
+            var lanes = 1;
+            cs.forEach(function (c) { lanes = Math.max(lanes, (c.lane || 0) + 1); });
+            /* One spare lane, always: a lane you cannot see is a lane you
+               cannot drop onto, and stacking two cameras is the whole point of
+               having lanes at all. */
+            lanes = Math.min(6, lanes + 1);
+            var vw = gpTlView(), span = vw.to - vw.from;
+            var X = function (sec) { return ((sec - vw.from) / span) * 100; };
+            var sdur = gpTlSessDur();
+
+            var h = "<div class='gp-tl" + (compact ? " compact" : " panel") +
+                    "' style='--tl-lane:" + LH + "px' data-gp-tl='1'>";
+
+            /* ---- the bar ----
+               Not in the compact strip: it lives inside the video panel's own
+               control row, which already carries + Footage and the rest, and a
+               second row of the same buttons under the first would be eating
+               picture to say nothing new. */
+            if (!compact) {
+            h += "<div class='gp-tl-bar'>";
+            h += "<button onclick='gpVideoPick()' title='Add another section of footage to this recording'>+ Footage</button>";
+            h += "<button onclick='gpTlFit()' title='Fit every section and the whole recording in the window'>Fit</button>";
+            h += "<button class='" + (gpTl().snap ? "on" : "") + "' onclick='gpTlSnapToggle()' " +
+                 "title='Snap a dragged section to the start of the recording, to the playhead, and to the edges of the other sections. Hold Alt while dragging to ignore it once.'>Snap</button>";
+            if (cs.length)
+                h += "<button onclick='gpClipsClear()' title='Take every section off this recording. The files are not touched.'>Remove all</button>";
+            h += "<span class='nt'>" + cs.length + " section" + (cs.length === 1 ? "" : "s") + "</span>";
+            var cov = gpTlCoverage();
+            if (cov !== null && gpTlSessDur() > 0)
+                h += "<span class='nt' title='How much of this recording has film against it'>&middot; covers " +
+                     Math.round(cov * 100) + "% of the recording</span>";
+            h += "<span style='flex:1'></span>";
+            /* A data attribute, not an id: the strip under the picture and
+                the panel are the same markup rendered twice, and two elements
+                sharing one id is a document that getElementById answers wrong. */
+            h += "<span class='rd' data-gp-tlread='1'>" + gpEsc(gpTlReadout()) + "</span>";
+            h += "</div>";
+            }
+
+            /* ---- the ruler ---- */
+            h += "<div class='gp-tl-ruler' data-gp-tlruler='1'>";
+            var step = gpTlStep(span);
+            var t0 = Math.ceil(vw.from / step) * step;
+            for (var s = t0; s <= vw.to; s += step) {
+                h += "<div class='gp-tl-tick' style='left:" + X(s).toFixed(4) + "%'>" +
+                     gpEsc(gpTlClock(s)) + "</div>";
+            }
+            h += "</div>";
+
+            /* ---- lanes, clips, the recording, the playhead ---- */
+            /* The panel's view fills what it is given; the strip inside the
+               control bar is given nothing, so it states its own height —
+               lanes, plus the band the recording is drawn on. */
+            var viewH = lanes * LH + (sdur > 0 ? 20 : 6) + (compact ? 0 : 14);
+            h += "<div class='gp-tl-view' data-gp-tlview='1' style='min-height:" + viewH + "px" +
+                 (compact ? ";height:" + viewH + "px;flex:none" : "") + "'>";
+            for (var L = 0; L < lanes; L++) {
+                h += "<div class='gp-tl-lane' data-gp-tllane='" + L + "' style='top:" + (L * LH) + "px'>" +
+                     (compact ? "" : "<span class='lab'>" + (L === 0 ? "TOP" : "L" + (L + 1)) + "</span>") +
+                     "</div>";
+            }
+            cs.forEach(function (c) {
+                var s = gpTlSec(gpClipStart(c)), d = gpClipDur(c);
+                if (s === null) return;
+                var w = Math.max(0.15, (d / span) * 100);
+                var live = gp.video === c;
+                h += "<div class='gp-tl-clip" + (live ? " live" : "") +
+                     (gp.clipPin === c.id ? " sel" : "") + (c.dead ? " dead" : "") +
+                     "' data-gp-tlclip='" + c.id + "' title='" + gpEsc(gpTlClipTip(c)) +
+                     "' style='left:" + X(s).toFixed(4) + "%;width:" + w.toFixed(4) +
+                     "%;top:" + ((c.lane || 0) * LH + 2) + "px'>" +
+                     "<span class='nm'>" + gpEsc(c.name || "clip") + "</span>" +
+                     "<span class='rib'></span>" +
+                     "<button class='x' data-gp-tlx='" + c.id + "' title='Take this section off the recording'>&times;</button>" +
+                     "</div>";
+            });
+            /* The recording itself, under the film it carries. */
+            var sd = sdur;
+            if (sd > 0) {
+                var sy = lanes * LH + 3;
+                h += "<div class='gp-tl-sess' style='left:" + X(0).toFixed(4) + "%;width:" +
+                     ((sd / span) * 100).toFixed(4) + "%;top:" + sy + "px'>";
+                (gp.traceLaps || []).forEach(function (l, li) {
+                    if (l.ghost) return;
+                    var a = gpSampleUtc(l.from);
+                    if (a === null) return;
+                    var ls = gpTlSec(a);
+                    h += "<div class='gp-tl-lap" + (li === gp.selLap ? " sel" : "") +
+                         "' style='left:" + (((ls - 0) / sd) * 100).toFixed(4) + "%'></div>";
+                });
+                h += "</div>";
+                if (!compact)
+                    h += "<div class='gp-tl-sesslab' style='left:" + X(0).toFixed(4) +
+                         "%;top:" + (sy + 14) + "px'>the recording &middot; " +
+                         gpEsc(gpTlClock(sd)) + "</div>";
+            }
+            var ph = gpTlSec(gpSampleUtc(gp.playIdx));
+            if (ph !== null)
+                h += "<div class='gp-tl-head' data-gp-tlhead='1' style='left:" + X(ph).toFixed(4) + "%'></div>";
+            if (!cs.length)
+                h += "<div class='gp-tl-empty'>No footage on this recording yet.<br>" +
+                     "<b>+ Footage</b> adds a file &mdash; add as many as you shot, " +
+                     "and drag them onto the moment they were filmed.</div>";
+            h += "</div></div>";
+            return h;
+        }
+
+        function gpTlClipTip(c) {
+            var d = gpClipDur(c), s = gpTlSec(gpClipStart(c));
+            var bits = [c.name || "clip"];
+            if (d) bits.push(gpTlClock(d) + " long");
+            if (s !== null) bits.push("starts at " + gpTlClock(s) + " into the recording");
+            if (c.src) bits.push("lined up by " + (GP_VSRC_LBL[c.src] || c.src).toLowerCase());
+            if (c.offsetMs) bits.push("nudged " + (c.offsetMs > 0 ? "+" : "") + (c.offsetMs / 1000).toFixed(2) + " s");
+            if (c.dead) bits.push("this file will not decode here");
+            return bits.join(" · ") + "  — drag to move it, drop it on another lane to stack it";
+        }
+
+        /* How much of the recording has film against it. Union of the clips,
+           so two cameras over the same lap count once. */
+        function gpTlCoverage() {
+            var sd = gpTlSessDur();
+            if (!sd) return null;
+            var iv = [];
+            gpClips().forEach(function (c) {
+                var s = gpTlSec(gpClipStart(c)), d = gpClipDur(c);
+                if (s === null || !d) return;
+                var a = Math.max(0, s), b = Math.min(sd, s + d);
+                if (b > a) iv.push([a, b]);
+            });
+            if (!iv.length) return 0;
+            iv.sort(function (p, q) { return p[0] - q[0]; });
+            var tot = 0, ca = iv[0][0], cb = iv[0][1];
+            for (var k = 1; k < iv.length; k++) {
+                if (iv[k][0] > cb) { tot += cb - ca; ca = iv[k][0]; cb = iv[k][1]; }
+                else if (iv[k][1] > cb) cb = iv[k][1];
+            }
+            return Math.min(1, (tot + cb - ca) / sd);
+        }
+
+        /* What the timeline says about where you are: the section under the
+           playhead, or how far it is to the next one. Silence here is what
+           made a gap look like a broken player. */
+        function gpTlReadout() {
+            if (!gp.trace || !gp.trace.length) return "";
+            var u = gpSampleUtc(gp.playIdx);
+            if (u === null) return "";
+            var c = gpClipAtUtc(u);
+            if (c) {
+                var into = (u - gpClipStart(c)) / 1000;
+                return (c.name || "clip") + " — " + gpTlClock(into) + " in";
+            }
+            var next = null, gapTo = null;
+            gpClips().forEach(function (o) {
+                var a = gpClipStart(o);
+                if (a === null || !gpClipDur(o) || a <= u) return;
+                if (gapTo === null || a < gapTo) { gapTo = a; next = o; }
+            });
+            if (next) return "no footage — next section in " + gpTlClock((gapTo - u) / 1000);
+            return gpClips().length ? "no footage here" : "";
+        }
+
+        /* Written in place while dragging and on every playhead move: a full
+           re-render would rebuild the element being dragged. */
+        function gpTlSync() {
+            /* gpDrawPlayhead is the caller, and gpDrawPlayhead runs once per
+               presented frame — so this must cost nothing at all when no
+               timeline is on screen, which is most of the time. The flag is
+               set by whatever rendered one. */
+            if (!gp._tlLive) return;
+            var vw = gpTlView(), span = vw.to - vw.from;
+            var ph = gpTlSec(gpSampleUtc(gp.playIdx));
+            if (ph !== null) {
+                var pc = (((ph - vw.from) / span) * 100).toFixed(4) + "%";
+                Array.prototype.forEach.call(document.querySelectorAll("[data-gp-tlhead]"),
+                    function (e) { e.style.left = pc; });
+            }
+            var txt = gpTlReadout();
+            Array.prototype.forEach.call(document.querySelectorAll("[data-gp-tlread]"),
+                function (e) { e.textContent = txt; });
+        }
+
+        /* ---- picking one ---------------------------------------------------
+         * Clicking a section makes it the one the controls act on, pins it
+         * above whatever lane order would otherwise cover it, and takes the
+         * playhead to it when the playhead is somewhere else — which is what
+         * you wanted every time, and is how you get to look at a section that
+         * a camera on a higher lane is sitting on top of. */
+        window.gpClipPick = function (id) {
+            var c = gpClipById(id);
+            if (!c) return;
+            /* The playhead moves FIRST. Pinning and activating before it would
+               hand straight back to gpClipSyncFor, which would see a pin that
+               does not cover where the playhead still is, drop it, and switch
+               the picture back to whatever was there — the pick undoing
+               itself, one frame after the click. */
+            var u = gpSampleUtc(gp.playIdx);
+            if (u === null || !gpClipCovers(c, u)) {
+                var idx = gpClipFirstIdx(c);
+                if (idx !== null) {
+                    gpPlayStop();
+                    var rr = gpLapRange();
+                    if ((idx < rr.from || idx > rr.to) && typeof window.gpLapAnalyse === "function")
+                        window.gpLapAnalyse(-1);
+                    gp.playIdx = idx;
+                    gp.playSub = 0;
+                    gpSyncScrub();
+                    gpDrawPlayhead();
+                }
+            }
+            gp.clipPin = c.id;
+            gpClipActivate(c);
+            gpVideoFollowSeek(true);
+            gpRenderGridSoft();
+        };
+
+        /* The first sample of the recording this section covers — where "go to
+           the footage" lands. Null when the section reaches no sample at all,
+           which is a clip parked entirely off the end of the day. */
+        function gpClipFirstIdx(c) {
+            var a = gpClipStart(c);
+            if (a === null || !gp.trace || !gp.trace.length) return null;
+            var first = gpSampleUtc(0), last = gpSampleUtc(gp.trace.length - 1);
+            if (first === null || last === null) return null;
+            var d = gpClipDur(c) * 1000;
+            if (a + d < first || a > last) return null;
+            var want = Math.max(a, first);
+            var held = gp.video;
+            gp.video = c;
+            var idx = gpIndexForVideoTime(Math.max(0, (want - a) / 1000) + 0.05);
+            gp.video = held;
+            return idx;
+        }
+
+        /* ---- dragging ------------------------------------------------------
+         * Bound once on the document, because the timeline's markup is rebuilt
+         * on every render and a per-element binding would be re-hung dozens of
+         * times a session.
+         *
+         * A drag on a CLIP moves it: sideways writes the nudge, up and down
+         * writes the lane. A drag on the BACKGROUND pans, and a click on it
+         * moves the playhead — the same grammar as the rack above.
+         */
+        function gpTlBind() {
+            gpTlDropInit();
+            if (gp._tlBound) return;
+            gp._tlBound = true;
+
+            /* Pixels per second of the visible window, or NULL when the
+               surface has no width to measure against.
+               Null matters: a panel measured mid-layout is 0 px wide, and a
+               `Math.max(0.0001, k)` guard on the division turned a 140 px drag
+               into a shift of fourteen DAYS — the clip vanished off the end of
+               time and the only way back was to type the nudge in by hand. A
+               drag against a surface with no width is not a small drag, it is
+               not a drag at all. */
+            var pxPerSec = function (view) {
+                var w = view.getBoundingClientRect().width;
+                var vw = gpTlView(), span = vw.to - vw.from;
+                if (!(w > 20) || !(span > 0)) return null;
+                return w / span;
+            };
+            var secAt = function (view, clientX) {
+                var vw = gpTlView(), r = view.getBoundingClientRect();
+                if (!(r.width > 20)) return null;
+                return vw.from + ((clientX - r.left) / r.width) * (vw.to - vw.from);
+            };
+
+            /* Everything a dragged edge is allowed to stick to, in seconds. */
+            var snapPoints = function (c) {
+                var pts = [{ s: 0, why: "the start of the recording" }];
+                var sd = gpTlSessDur();
+                if (sd) pts.push({ s: sd, why: "the end of the recording" });
+                var ph = gpTlSec(gpSampleUtc(gp.playIdx));
+                if (ph !== null) pts.push({ s: ph, why: "the playhead" });
+                (gp.traceLaps || []).forEach(function (l) {
+                    if (l.ghost) return;
+                    var a = gpTlSec(gpSampleUtc(l.from));
+                    if (a !== null) pts.push({ s: a, why: "a lap start" });
+                });
+                gpClips().forEach(function (o) {
+                    if (o === c) return;
+                    var s = gpTlSec(gpClipStart(o)), d = gpClipDur(o);
+                    if (s === null) return;
+                    pts.push({ s: s, why: "the start of " + (o.name || "another section") });
+                    if (d) pts.push({ s: s + d, why: "the end of " + (o.name || "another section") });
+                });
+                return pts;
+            };
+
+            document.addEventListener("mousedown", function (ev) {
+                if (ev.button !== 0) return;
+                var tl = ev.target.closest ? ev.target.closest("[data-gp-tl]") : null;
+                if (!tl) return;
+                var view = tl.querySelector("[data-gp-tlview]");
+                if (!view) return;
+
+                /* the × on a clip */
+                var x = ev.target.closest("[data-gp-tlx]");
+                if (x) {
+                    ev.preventDefault(); ev.stopPropagation();
+                    window.gpClipRemove(x.getAttribute("data-gp-tlx"));
+                    return;
+                }
+
+                var block = ev.target.closest("[data-gp-tlclip]");
+                var LH = parseFloat(getComputedStyle(tl).getPropertyValue("--tl-lane")) || 30;
+
+                if (block) {
+                    var c = gpClipById(block.getAttribute("data-gp-tlclip"));
+                    if (!c) return;
+                    ev.preventDefault();
+                    var k = pxPerSec(view);
+                    if (k === null) return;
+                    var baseOff = c.offsetMs || 0, baseLane = c.lane || 0;
+                    var startS = gpTlSec(gpClipStart(c)), dur = gpClipDur(c);
+                    var x0 = ev.clientX, y0 = ev.clientY, moved = false;
+                    var lane = baseLane, offMs = baseOff;
+                    var vw0 = gpTlView(), span0 = vw0.to - vw0.from;
+                    var tip = document.createElement("div");
+                    tip.className = "gp-tl-tip";
+                    var mark = document.createElement("div");
+                    mark.className = "gp-tl-snap";
+                    var lanes = view.querySelectorAll("[data-gp-tllane]");
+
+                    var move = function (e2) {
+                        var dx = e2.clientX - x0, dy = e2.clientY - y0;
+                        if (!moved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+                        if (!moved) {
+                            moved = true;
+                            block.classList.add("dragging");
+                            gpPlayStop();
+                            view.appendChild(tip);
+                        }
+                        var dt = dx / k;                             /* seconds */
+                        var want = startS + dt;
+                        var snapped = null;
+                        if (gpTl().snap && !e2.altKey) {
+                            var tolS = 7 / k, bestD = tolS, hit = null, edge = 0;
+                            snapPoints(c).forEach(function (p) {
+                                [[want, 0], [want + dur, dur]].forEach(function (pair) {
+                                    var d2 = Math.abs(pair[0] - p.s);
+                                    if (d2 < bestD) { bestD = d2; hit = p; edge = pair[1]; }
+                                });
+                            });
+                            if (hit) { want = hit.s - edge; snapped = hit; }
+                        }
+                        offMs = Math.round(baseOff + (want - startS) * 1000);
+                        lane = Math.max(0, Math.min(lanes.length - 1,
+                                        baseLane + Math.round(dy / LH)));
+                        block.style.left = (((want - vw0.from) / span0) * 100).toFixed(4) + "%";
+                        block.style.top = (lane * LH + 2) + "px";
+                        Array.prototype.forEach.call(lanes, function (ln, li) {
+                            ln.classList.toggle("drop", li === lane);
+                        });
+                        if (snapped) {
+                            if (!mark.parentNode) view.appendChild(mark);
+                            mark.style.left = (((snapped.s - vw0.from) / span0) * 100).toFixed(4) + "%";
+                        } else if (mark.parentNode) mark.parentNode.removeChild(mark);
+                        var d3 = (offMs - baseOff) / 1000;
+                        tip.textContent = (d3 > 0 ? "+" : "") + d3.toFixed(2) + " s" +
+                                          (snapped ? "  → " + snapped.why : "") +
+                                          (lane !== baseLane ? "  ↓ lane " + (lane + 1) : "");
+                        tip.style.left = block.style.left;
+                        tip.style.top = Math.max(0, lane * LH - 15) + "px";
+                    };
+                    /* Escape puts it back. A section dragged somewhere by
+                       accident is otherwise only recoverable by reading the
+                       number off the nudge box and typing it back, and by then
+                       you have to know that is what happened. */
+                    var cancelled = false;
+                    var key = function (e2) {
+                        if (e2.key !== "Escape") return;
+                        e2.preventDefault();
+                        cancelled = true;
+                        up();
+                    };
+                    var up = function () {
+                        document.removeEventListener("mousemove", move);
+                        document.removeEventListener("mouseup", up);
+                        document.removeEventListener("keydown", key, true);
+                        block.classList.remove("dragging");
+                        if (tip.parentNode) tip.parentNode.removeChild(tip);
+                        if (mark.parentNode) mark.parentNode.removeChild(mark);
+                        if (cancelled) { gpRenderGridSoft(); return; }
+                        if (!moved) { window.gpClipPick(c.id); return; }
+                        c.offsetMs = offMs;
+                        c.lane = lane;
+                        /* A section that has been placed by hand is placed:
+                           nothing may quietly move it again. */
+                        c.placed = true;
+                        c.noOverlap = false;
+                        gpClipsSave(gpCurSessionMeta());
+                        gpClipSyncFor(gp.playIdx);
+                        gpVideoFollowSeek(true);
+                        gpRenderGridSoft();
+                    };
+                    document.addEventListener("mousemove", move);
+                    document.addEventListener("mouseup", up);
+                    document.addEventListener("keydown", key, true);
+                    return;
+                }
+
+                /* the background: click to move the playhead, drag to pan */
+                if (!ev.target.closest("[data-gp-tlview], [data-gp-tlruler]")) return;
+                ev.preventDefault();
+                var px0 = ev.clientX, panned = false;
+                var vwA = gpTlView(), kk = pxPerSec(view);
+                if (kk === null) return;
+                var pmove = function (e2) {
+                    var dx = e2.clientX - px0;
+                    if (!panned && Math.abs(dx) < 3) return;
+                    if (!panned) { panned = true; view.classList.add("panning"); }
+                    var t = gpTl();
+                    t.from = vwA.from - dx / kk;
+                    t.to = t.from + (vwA.to - vwA.from);
+                    gpRenderGridSoft();
+                };
+                var pup = function (e2) {
+                    document.removeEventListener("mousemove", pmove);
+                    document.removeEventListener("mouseup", pup);
+                    view.classList.remove("panning");
+                    if (panned) return;
+                    var at = secAt(view, e2.clientX);
+                    if (at !== null) gpTlSeekTo(at);
+                };
+                document.addEventListener("mousemove", pmove);
+                document.addEventListener("mouseup", pup);
+            }, true);
+
+            /* Wheel zooms about the pointer — the one gesture every editor
+               agrees on. Shift scrolls sideways instead. */
+            document.addEventListener("wheel", function (ev) {
+                var tl = ev.target.closest ? ev.target.closest("[data-gp-tl]") : null;
+                if (!tl) return;
+                var view = tl.querySelector("[data-gp-tlview]");
+                if (!view) return;
+                ev.preventDefault();
+                var vw = gpTlView(), span = vw.to - vw.from, t = gpTl();
+                var r = view.getBoundingClientRect();
+                var f = Math.max(0, Math.min(1, (ev.clientX - r.left) / Math.max(1, r.width)));
+                if (ev.shiftKey) {
+                    t.from = vw.from + (ev.deltaY > 0 ? span * 0.12 : -span * 0.12);
+                    t.to = t.from + span;
+                } else {
+                    var k = ev.deltaY > 0 ? 1.18 : 1 / 1.18;
+                    var at = vw.from + f * span;
+                    t.from = at - f * span * k;
+                    t.to = t.from + span * k;
+                }
+                gpRenderGridSoft();
+            }, { passive: false, capture: true });
+        }
+
+        /* The playhead, moved to a point on the timeline. Widens the analysed
+           range first when the point is outside it — the lap is the frame, so
+           a cursor that cannot leave it cannot reach a section filmed on a
+           different lap. */
+        function gpTlSeekTo(sec) {
+            var meta = gpCurSessionMeta();
+            if (!meta || !gp.trace || !gp.trace.length) return;
+            var want = meta.recordedAt + sec * 1000;
+            var lo = 0, hi = (gp.ghostFence !== null ? gp.ghostFence : gp.trace.length) - 1;
+            if (hi < 0) return;
+            while (hi - lo > 1) {
+                var mid = (lo + hi) >> 1;
+                if (gpSampleUtc(mid) <= want) lo = mid; else hi = mid;
+            }
+            var idx = (Math.abs(gpSampleUtc(lo) - want) <= Math.abs(gpSampleUtc(hi) - want)) ? lo : hi;
+            gpPlayStop();
+            var rr = gpLapRange();
+            if ((idx < rr.from || idx > rr.to) && typeof window.gpLapAnalyse === "function")
+                window.gpLapAnalyse(-1);
+            gp.playIdx = idx;
+            gp.playSub = 0;
+            gp.clipPin = null;
+            gpClipSyncFor(idx);
+            gpSyncScrub();
+            gpVideoFollowSeek(true);
+            gpDrawPlayhead();
+            gpTlSync();
+        }
+
+        /* ---- dropping files on it ------------------------------------------
+         * The gesture the surface asks for. Two mechanisms, because there are
+         * two runtimes: the webview's own drag events outside Tauri, and
+         * Tauri's `tauri://drag-drop` inside it (Tauri swallows the DOM ones
+         * to hand over real paths on disk instead — which is the half that
+         * matters, since only a path can be remembered with the recording).
+         *
+         * A drop has to land ON the timeline or the picture. Accepting one
+         * anywhere in the window would be guessing at what a file dragged onto
+         * a lap-times panel was meant to do, and the answer to a guess like
+         * that is a video nobody asked for.
+         */
+        var GP_VID_EXT = /\.(mp4|mov|m4v|avi|mkv|webm)$/i;
+
+        function gpDropTarget(x, y) {
+            var els = [];
+            Array.prototype.push.apply(els, document.querySelectorAll("[data-gp-tl]"));
+            var tile = document.getElementById("gpVideoTile");
+            if (tile && tile.offsetParent !== null) els.push(tile);
+            for (var k = 0; k < els.length; k++) {
+                var r = els[k].getBoundingClientRect();
+                if (r.width && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
+                    return els[k];
+            }
+            return null;
+        }
+        function gpDropMark(el) {
+            Array.prototype.forEach.call(document.querySelectorAll(".gp-dropping"),
+                function (e) { if (e !== el) e.classList.remove("gp-dropping"); });
+            if (el) el.classList.add("gp-dropping");
+        }
+
+        function gpTlDropInit() {
+            if (gp._tlDrop) return;
+            gp._tlDrop = true;
+
+            document.addEventListener("dragover", function (ev) {
+                var t = gpDropTarget(ev.clientX, ev.clientY);
+                if (!t) { gpDropMark(null); return; }
+                ev.preventDefault();
+                if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
+                gpDropMark(t);
+            });
+            document.addEventListener("dragleave", function (ev) {
+                if (!ev.relatedTarget) gpDropMark(null);
+            });
+            document.addEventListener("drop", function (ev) {
+                var t = gpDropTarget(ev.clientX, ev.clientY);
+                gpDropMark(null);
+                if (!t) return;
+                ev.preventDefault();
+                var fs = (ev.dataTransfer && ev.dataTransfer.files) || [];
+                var took = 0;
+                for (var k = 0; k < fs.length; k++) {
+                    if (!GP_VID_EXT.test(fs[k].name)) continue;
+                    took++;
+                    gpVideoBegin(fs[k].name, URL.createObjectURL(fs[k]), gpVideoSrcFile(fs[k]), true);
+                }
+                gpDropSaid(took, fs.length);
+            });
+
+            /* And the same thing again for Tauri, which never lets the events
+               above see a file. Its payload carries PATHS, so what lands this
+               way can be remembered with the recording; a browser drop cannot
+               be, and says so by simply not offering the Link tick. */
+            if (window.__TAURI__ && window.__TAURI__.event &&
+                typeof window.__TAURI__.event.listen === "function") {
+                var at = function (p) {
+                    var k = window.devicePixelRatio || 1;
+                    return p ? { x: (p.x || 0) / k, y: (p.y || 0) / k } : { x: -1, y: -1 };
+                };
+                window.__TAURI__.event.listen("tauri://drag-over", function (e) {
+                    var p = at(e.payload && e.payload.position);
+                    gpDropMark(gp.view === "session" ? gpDropTarget(p.x, p.y) : null);
+                }).catch(function () { });
+                window.__TAURI__.event.listen("tauri://drag-leave", function () {
+                    gpDropMark(null);
+                }).catch(function () { });
+                window.__TAURI__.event.listen("tauri://drag-drop", function (e) {
+                    var p = at(e.payload && e.payload.position);
+                    var t = gp.view === "session" ? gpDropTarget(p.x, p.y) : null;
+                    gpDropMark(null);
+                    if (!t) return;
+                    var paths = (e.payload && e.payload.paths) || [];
+                    var took = 0;
+                    paths.forEach(function (path) {
+                        if (!GP_VID_EXT.test(path)) return;
+                        took++;
+                        window.gpVideoOpenPath(path);
+                    });
+                    gpDropSaid(took, paths.length);
+                }).catch(function () { });
+            }
+        }
+
+        /* A drop that did nothing has to say so. Dragging three files in and
+           watching two of them land is the moment you need to be told which
+           one the app would not take, and why. */
+        function gpDropSaid(took, total) {
+            if (took) {
+                gpImportSaid(took === 1 ? "Added that section of footage."
+                                        : "Added " + took + " sections of footage.", "success");
+            } else if (total) {
+                gpImportSaid("Nothing there is a video Studio can open — it takes " +
+                             "MP4, MOV, M4V, AVI, MKV and WebM.", "error");
+            }
+        }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * What is in the box when no film is
+         *
+         * Sections have gaps, and a recording may have no footage at all. Both
+         * used to present as a black rectangle or a frozen frame beside
+         * readouts that were still moving — which reads as a broken player.
+         *
+         * So the tile draws the CHANNELS instead. Not a second instrument
+         * cluster — the HUD is already drawn on top and says the numbers — but
+         * the thing a number cannot do: a field of light moving at the speed
+         * the car is moving, leaning the way it is leaning, coloured by what
+         * the driver's feet are doing, with the last twelve seconds of every
+         * channel running along the bottom. You can tell a braking zone from a
+         * straight across the room, with no footage of either.
+         * ═════════════════════════════════════════════════════════════════ */
+        var GP_BG_STREAKS = 70;
+        function gpVideoBgField() {
+            if (gp._bgField && gp._bgField.length === GP_BG_STREAKS) return gp._bgField;
+            var f = [];
+            /* Deterministic, so the field does not reshuffle itself on every
+               resize — it is a backdrop, not a screensaver. */
+            var seed = 12345;
+            var rnd = function () { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+            for (var k = 0; k < GP_BG_STREAKS; k++) {
+                f.push({ y: rnd(), z: 0.25 + rnd() * 1.6, len: 0.04 + rnd() * 0.22, p: rnd() });
+            }
+            gp._bgField = f;
+            return f;
+        }
+
+        function gpVideoBgDraw(film) {
+            var cv = document.getElementById("gpVideoBg");
+            if (!cv) return;
+            var W = cv.clientWidth, H = cv.clientHeight;
+            if (!W || !H) return;
+            var dpr = Math.min(2, window.devicePixelRatio || 1);
+            var pw = Math.round(W * dpr), phh = Math.round(H * dpr);
+            if (cv.width !== pw || cv.height !== phh) { cv.width = pw; cv.height = phh; }
+            var g = cv.getContext("2d");
+            g.setTransform(dpr, 0, 0, dpr, 0, 0);
+            g.clearRect(0, 0, W, H);
+
+            /* The plate. Painted whatever is happening, because the tile's own
+               background is what shows through the letterbox bars of a
+               portrait clip and a flat black there is a hole in the picture. */
+            var plate = g.createLinearGradient(0, 0, 0, H);
+            plate.addColorStop(0, "#0a0c0e");
+            plate.addColorStop(1, "#12171b");
+            g.fillStyle = plate;
+            g.fillRect(0, 0, W, H);
+            /* With film up, that is all: a moving field in the letterbox bars
+               would compete with the footage, which is the subject. */
+            if (film) return;
+
+            var d = null;
+            try { d = gpHudData(gp.playIdx); } catch (e) { }
+            var kph = d && d.kph !== null && isFinite(d.kph) ? Math.abs(d.kph) : 0;
+            var glat = d ? (d.glat || 0) : 0;
+            var thr = d && d.thrF !== null ? d.thrF : null;
+            var brk = d && d.brkF !== null ? d.brkF : null;
+
+            var now = (window.performance && performance.now ? performance.now() : Date.now()) / 1000;
+            gp._bgT = gp._bgT || { t: now, x: 0 };
+            var dt = Math.max(0, Math.min(0.1, now - gp._bgT.t));
+            gp._bgT.t = now;
+            /* The field only runs while the recording does. A paused replay
+               holds still — it is showing one moment, and a moment does not
+               move. */
+            if (gp.playing) gp._bgT.x += dt * (0.05 + kph / 180) * (gp.playRate || 1);
+
+            /* Lean into the corner. Small: this is a horizon, not a
+               rollercoaster, and it has to sit still enough to read text on. */
+            var lean = Math.max(-1, Math.min(1, glat / 1.6)) * 0.09;
+            g.save();
+            g.translate(W / 2, H / 2);
+            g.rotate(lean);
+            g.translate(-W / 2, -H / 2);
+
+            var tint = [120, 150, 175];
+            if (brk !== null && brk > 0.06) tint = [225, 96, 74];
+            else if (thr !== null && thr > 0.12) tint = [110, 200, 130];
+            var span = W * 1.6, x0 = -W * 0.3;
+            gpVideoBgField().forEach(function (s) {
+                var y = s.y * H * 1.25 - H * 0.12;
+                var px = ((s.p + gp._bgT.x * s.z) % 1) * span + x0;
+                var len = s.len * W * (0.4 + Math.min(2.4, kph / 90));
+                /* Measured on the real panel rather than guessed: at the first
+                   values here the whole field sat between luminance 11 and 25
+                   on a plate of 10, which is a backdrop nobody can see. It has
+                   to read as motion from across the room and still leave the
+                   HUD the brightest thing in the frame. */
+                var a = 0.08 + 0.22 * Math.min(1, s.z / 1.4) * (0.35 + Math.min(1, kph / 120));
+                var grd = g.createLinearGradient(px, y, px + len, y);
+                grd.addColorStop(0, "rgba(" + tint[0] + "," + tint[1] + "," + tint[2] + ",0)");
+                grd.addColorStop(0.5, "rgba(" + tint[0] + "," + tint[1] + "," + tint[2] + "," + a.toFixed(3) + ")");
+                grd.addColorStop(1, "rgba(" + tint[0] + "," + tint[1] + "," + tint[2] + ",0)");
+                g.strokeStyle = grd;
+                g.lineWidth = Math.max(0.6, s.z * 1.1);
+                g.beginPath(); g.moveTo(px, y); g.lineTo(px + len, y); g.stroke();
+            });
+            g.restore();
+
+            /* A vignette, so the HUD over the top keeps its contrast. */
+            var vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25,
+                                            W / 2, H / 2, Math.max(W, H) * 0.75);
+            vg.addColorStop(0, "rgba(0,0,0,0)");
+            vg.addColorStop(1, "rgba(0,0,0,0.55)");
+            g.fillStyle = vg;
+            g.fillRect(0, 0, W, H);
+
+            gpVideoBgTraces(g, W, H);
+            gpVideoBgSay(g, W, H);
+        }
+
+        /* The last twelve seconds of the channels this car actually reports,
+           stacked along the top edge where the HUD is not. Thin, low contrast,
+           and labelled — it is the answer to "what was happening here", which
+           is the question the missing footage would have answered. */
+        function gpVideoBgTraces(g, W, H) {
+            var rows = gp.trace;
+            if (!rows || rows.length < 4 || W < 200) return;
+            var series = [];
+            var ch = null;
+            try { ch = gpHudChans(); } catch (e) { }
+            series.push({ lab: "SPEED", get: function (r) { return r.kph; }, col: "#7fb2ff" });
+            if (ch && ch.rpm) series.push({ lab: "RPM", key: "rpm", col: "#ffb454" });
+            if (ch && ch.thr) series.push({ lab: "THROTTLE", key: "thr", col: "#6fd08c" });
+            if (ch && ch.brk) series.push({ lab: "BRAKE", key: "brk", col: "#ff8b85" });
+            series = series.slice(0, 4);
+
+            var rr = gpLapRange();
+            var i1 = Math.max(rr.from, Math.min(rr.to, gp.playIdx));
+            /* Twelve seconds either side, in samples, off the real timestamps
+               rather than an assumed rate — a VBO import is 10 Hz and a puck
+               download is 25. */
+            var t1 = rows[i1].t;
+            var back = i1, fwd = i1;
+            if (t1 !== undefined) {
+                while (back > rr.from && rows[back].t > t1 - 12000) back--;
+                while (fwd < rr.to && rows[fwd].t < t1 + 4000) fwd++;
+            } else {
+                back = Math.max(rr.from, i1 - 300);
+                fwd = Math.min(rr.to, i1 + 100);
+            }
+            if (fwd - back < 3) return;
+
+            var padX = Math.max(10, W * 0.04);
+            var top = Math.max(8, H * 0.05);
+            var hEach = Math.min(30, (H * 0.42) / series.length);
+            var plotW = W - padX * 2;
+            series.forEach(function (s, si) {
+                var y0 = top + si * (hEach + 7), lo = Infinity, hi = -Infinity, vals = [];
+                for (var k = back; k <= fwd; k++) {
+                    var v = null;
+                    if (s.key) { try { v = gpHudChan(ch, s.key, k); } catch (e) { v = null; } }
+                    else v = s.get(rows[k]);
+                    if (v === null || v === undefined || !isFinite(v)) v = null;
+                    vals.push(v);
+                    if (v !== null) { if (v < lo) lo = v; if (v > hi) hi = v; }
+                }
+                if (!isFinite(lo) || hi - lo < 1e-6) { hi = lo + 1; }
+                g.beginPath();
+                var started = false;
+                for (var q = 0; q < vals.length; q++) {
+                    if (vals[q] === null) continue;
+                    var x = padX + (q / (vals.length - 1)) * plotW;
+                    var y = y0 + hEach - ((vals[q] - lo) / (hi - lo)) * hEach;
+                    if (!started) { g.moveTo(x, y); started = true; } else g.lineTo(x, y);
+                }
+                g.strokeStyle = s.col;
+                g.globalAlpha = 0.65;
+                g.lineWidth = 1.4;
+                g.stroke();
+                g.globalAlpha = 1;
+                g.font = "600 9px " + (typeof GP_HUD_SANS === "string" ? GP_HUD_SANS : "sans-serif");
+                g.fillStyle = "rgba(220,232,240,0.42)";
+                g.textAlign = "left";
+                g.fillText(s.lab, padX, y0 - 1);
+            });
+            /* Where "now" is in that window. */
+            var fnow = (i1 - back) / Math.max(1, fwd - back);
+            var xn = padX + fnow * plotW;
+            g.strokeStyle = "rgba(210,35,42,0.55)";
+            g.lineWidth = 1;
+            g.beginPath();
+            g.moveTo(xn, top - 6);
+            g.lineTo(xn, top + series.length * (hEach + 7));
+            g.stroke();
+        }
+
+        /* One line saying why there is no picture. Small and out of the HUD's
+           way — the point is that nothing is broken. */
+        function gpVideoBgSay(g, W, H) {
+            var msg;
+            if (!gpClips().length) {
+                msg = (gp.trace && gp.trace.length)
+                    ? "No footage on this recording — open a video and it lines itself up"
+                    : "No footage open";
+            } else {
+                msg = gpTlReadout() || "no footage here";
+                msg = msg.charAt(0).toUpperCase() + msg.slice(1);
+            }
+            g.font = "600 " + Math.max(10, Math.min(14, W / 42)) + "px " +
+                     (typeof GP_HUD_SANS === "string" ? GP_HUD_SANS : "sans-serif");
+            g.textAlign = "center";
+            g.fillStyle = "rgba(228,236,242,0.34)";
+            g.fillText(msg, W / 2, H * 0.5);
+            g.textAlign = "left";
+        }
+
+        /* The field has to move while the replay does, and the replay does not
+           always redraw the tile — with no film up there is no
+           requestVideoFrameCallback to hang off. One loop, started when the
+           tile is showing the field and stopped the moment it is not. */
+        function gpVideoBgTick() {
+            if (gp._bgLoop) return;
+            gp._bgLoop = true;
+            var step = function () {
+                var tile = document.getElementById("gpVideoTile");
+                var on = tile && tile.classList.contains("nofilm") &&
+                         tile.offsetParent !== null && gp.view === "session";
+                if (!on) { gp._bgLoop = false; return; }
+                gpVideoBgDraw(false);
+                requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+        }
 
         window.gpVideoOffset = function (v) {
             if (!gp.video) return;
@@ -31591,9 +33248,14 @@
                 var e = document.getElementById(id);
                 if (e && document.activeElement !== e) e.value = secs;
             });
+            /* Nudged by hand is placed by hand: nothing may quietly move it
+               again when its duration finally arrives. */
+            gp.video.placed = true;
+            gp.video.noOverlap = false;
             gpVideoLinkSync();
             gpVideoFollowSeek();
             gpVideoXportSync();
+            gpTlSync();
         };
 
         window.gpVideoAuto = function () {
@@ -31829,6 +33491,15 @@
         };
 
         function gpVideoFollowSeek(force) {
+            /* Before anything is seeked: is the picture even the right SECTION
+               (ADR-0053)? Every path that moves the playhead comes through
+               here, so this is the one place the switch has to live. It is an
+               identity test and a pass over a handful of clips — cheap enough
+               for the frame loop, which is also a caller. */
+            gpClipSyncFor(gp.playIdx);
+            var film = gpVideoFilmSync();
+            if (!film) gpVideoBgTick();
+            gpTlSync();
             var v = gp.video, el = document.getElementById("gpVideo");
             if (!v || !el || !v.follow || v.driving) return;
             /* While the video is playing it is the CLOCK — it advances the
@@ -34136,8 +35807,22 @@
         function gpVideoDrawOverlay() {
             var el = document.getElementById("gpVideo");
             var cv = document.getElementById("gpVideoOv");
+            /* The field behind goes first, and goes whether or not there is a
+               recording to draw gauges from — an empty Video panel is a panel
+               somebody is looking at. */
+            var film = gpVideoFilmSync();
+            gpVideoBgDraw(film);
+            if (!film) gpVideoBgTick();
             if (!el || !cv || !gp.trace || !gp.trace.length) return;
-            var rect = gpVideoPictureRect(el);
+            /* With no film up there is no PICTURE, so there is no picture rect
+               to sit in: the gauges take the whole tile rather than hugging
+               the shape of a clip that is not being shown. */
+            var rect = film ? gpVideoPictureRect(el)
+                            : (function () {
+                                  var t = document.getElementById("gpVideoTile");
+                                  return t && t.clientWidth
+                                      ? { x: 0, y: 0, w: t.clientWidth, h: t.clientHeight } : null;
+                              })();
             if (!rect || rect.w < 40) return;
             var dpr = Math.min(2.5, window.devicePixelRatio || 1);
             var pw = Math.round(rect.w * dpr), ph = Math.round(rect.h * dpr);
@@ -37405,6 +39090,14 @@
             if (!el) return;
             if (el._gpBound) return;
             el._gpBound = true;
+            /* Since ADR-0053 there is an element per section and only one of
+               them is the picture. Every listener below speaks for the WHOLE
+               replay — pause here stops the replay, ended here hands the clock
+               back to the ticker — so a listener firing on a section that is
+               not on screen must say nothing. Standing a section down fires
+               its pause, and without this that pause stopped the replay each
+               time the footage crossed from one section into the next. */
+            var mine = function () { return el.id === "gpVideo"; };
             /* Double-click on the picture solos the tile. Chromium's default
                for that gesture is OS fullscreen, which would fight the tile
                model — prevented, ours instead. */
@@ -37413,6 +39106,7 @@
                 window.gpViewFocus("video");
             });
             el.addEventListener("timeupdate", function () {
+                if (!mine()) return;
                 /* A backstop now, not the driver — see gpVideoDriveTick. It
                    runs only when the frame loop is NOT, so a webview without
                    requestVideoFrameCallback still gets its four-times-a-second
@@ -37422,11 +39116,13 @@
                 gpVideoXportSync();
             });
             el.addEventListener("play", function () {
+                if (!mine()) return;
                 gpVideoDriveStart();
                 gpVideoXportSync();
             });
 
             el.addEventListener("seeked", function () {
+                if (!mine()) return;
                 gpVideoDrawOverlay();
                 gpVideoXportSync();
             });
@@ -37436,14 +39132,16 @@
                the lap does, the ticker carries the playhead the rest of the
                way — 'ended' fires without a 'pause', so this is its own case. */
             el.addEventListener("pause", function () {
+                if (!mine()) return;
                 /* Only while the footage IS the transport. Off the leash it is
                    just a picture being scrubbed, and pausing it must not stop
                    a replay it is not driving. */
                 if (gp.video && !gp.video.follow) { gpVideoXportSync(); return; }
                 if (gp.playing && !el.ended) gpPlayStop();
             });
-            el.addEventListener("play", function () { gpVideoXportSync(); });
+            el.addEventListener("play", function () { if (mine()) gpVideoXportSync(); });
             el.addEventListener("play", function () {
+                if (!mine()) return;
                 if (gp.playTimer) { clearInterval(gp.playTimer); gp.playTimer = null; }
                 if (!gp.playing && gp.video && gp.video.follow) {
                     gp.playing = true;
@@ -37453,6 +39151,7 @@
                 gpVideoWatch();
             });
             el.addEventListener("ended", function () {
+                if (!mine()) return;
                 if (gp.playing && gp.playIdx < gpLapRange().to) gpPlayResumeTicker();
                 else if (gp.playing) gpPlayStop();
             });
