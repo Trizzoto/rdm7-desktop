@@ -380,14 +380,22 @@
                 if (key.startsWith('rdm7_layout_') && !key.startsWith('rdm7_layout__splash_'))
                     layoutKeys.push(key);
             }
+            /* Image and font BYTES live in IndexedDB, not in localStorage —
+               only their metadata is in the loop above. Counting just the
+               metadata made a 40 KB image weigh about 60 bytes. Each entry
+               carries the size it was uploaded at, so add those. */
+            const images = await this.listImages();
+            const fonts = await this.listFonts();
+            const assetBytes = [].concat(images, fonts).reduce(
+                (n, x) => n + ((x && typeof x === 'object' && x.size) || 0), 0);
             return {
                 layouts: layoutKeys.map(k => ({
                     name: k.replace('rdm7_layout_', ''),
                     size: (localStorage.getItem(k) || '').length * 2
                 })),
-                images: await this.listImages(),
-                fonts: await this.listFonts(),
-                totalBytes,
+                images,
+                fonts,
+                totalBytes: totalBytes + assetBytes,
                 maxBytes: 5 * 1024 * 1024
             };
         },
@@ -1563,6 +1571,15 @@
             const layouts = await T.listLayouts();
             let active = localStorage.getItem(LOCAL_ACTIVE_KEY);
             if (!active || !layouts.includes(active)) active = layouts[0] || 'default';
+            /* ?details=1 → [{name, size}], the shape the Storage Manager
+               asks for. The font route already honoured the flag; this one
+               did not, so every layout in that list read "0 B". */
+            if (params.details === '1') {
+                const s = await T.getStorageInfo();
+                const size = {};
+                (s.layouts || []).forEach(l => { size[l.name] = l.size; });
+                return ok({ layouts: layouts.map(n => ({ name: n, size: size[n] || 0 })), active });
+            }
             return ok({ layouts, active });
         }
         /* No "live in-memory" layout offline — 404 so loadLayout uses /raw. */
@@ -1667,8 +1684,17 @@
             return ok(await T.getSimulationStatus());
         }
         if (pathname === '/api/storage/info') {
-            /* Rough localStorage/IndexedDB budget — enough for the UI meter. */
-            return ok({ total: 8 * 1024 * 1024, used: 0, free: 8 * 1024 * 1024, maxBytes: 8 * 1024 * 1024, totalBytes: 0 });
+            /* The real numbers, from the store itself. This used to answer a
+               fixed `used: 0` — so the Storage Manager's meter read
+               "0 KB / 8.0 MB used" however much you had saved, which is the
+               one number that page exists to show. The ceiling is
+               localStorage's, because that is what actually runs out: the
+               layouts live there. */
+            const s = await T.getStorageInfo();
+            return ok({ total: s.maxBytes, used: s.totalBytes,
+                        free: Math.max(0, s.maxBytes - s.totalBytes),
+                        maxBytes: s.maxBytes, totalBytes: s.totalBytes,
+                        offline: true });
         }
         if (pathname === '/api/device/info') {
             return ok({ serial: 'LOCAL', name: 'This PC', schema: 17, offline: true,

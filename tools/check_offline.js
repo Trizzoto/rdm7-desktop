@@ -83,6 +83,13 @@ const LocalTransport = {
     saveLayout: async () => {}, setActiveLayout: async () => {}, deleteLayout: async () => {},
     renameLayout: async () => {}, listImages: async () => [{ name: 'logo' }],
     listFonts: async () => [{ name: 'sora' }], listTracks: async () => [],
+    /* One 4 KB image and one 100-character layout key — the numbers the
+       storage checks below are written against. */
+    getStorageInfo: async () => ({
+        layouts: [{ name: 'default', size: 200 }],
+        images: [{ name: 'logo', size: 4096 }], fonts: [{ name: 'sora' }],
+        totalBytes: 200 + 4096, maxBytes: 5 * 1024 * 1024,
+    }),
     getImageData: async () => null, getFontData: async () => null, getTrackData: async () => null,
     setImageData: async () => {}, setFontData: async () => {}, setTrackData: async () => {},
     addImageMeta: async () => {}, addFontMeta: async () => {}, deleteImage: async () => {},
@@ -136,8 +143,50 @@ async function call(url, method, body) {
        'here would blank the saved copy');
     const sigs = await call('/api/signals/values');
     ok('so is the signal list', sigs.status === 200 && Array.isArray(sigs.data.signals));
+    /* The Storage Manager's meter. It used to answer a fixed used: 0 against
+       a made-up 8 MB ceiling, so the one number that page exists to show read
+       "0 KB / 8.0 MB used" however much was saved — and every layout in the
+       list under it read "0 B". */
     const store2 = await call('/api/storage/info');
-    ok('storage still reports a budget', store2.status === 200 && store2.data.total > 0);
+    ok('storage reports a budget', store2.status === 200 && store2.data.total > 0);
+    ok('and a real amount used, counting the images', store2.data.used === 200 + 4096,
+       'stubbed as one 4 KB image plus 100 chars of layout key (×2 for UTF-16); ' +
+       'got ' + JSON.stringify(store2.data));
+    ok('and free is the difference, not the whole thing',
+       store2.data.free === store2.data.total - store2.data.used);
+    /* And the number the route hands on, computed for real. Images and fonts
+       live in IndexedDB and only their metadata is in localStorage, so
+       counting the loop alone made a 40 KB image weigh about sixty bytes. */
+    {
+        const backing = {
+            rdm7_layout_default: 'x'.repeat(100),
+            rdm7_images: '[{"name":"logo","size":40960}]',
+        };
+        const ls = {
+            get length() { return Object.keys(backing).length; },
+            key: (i) => Object.keys(backing)[i],
+            getItem: (k) => (k in backing ? backing[k] : null),
+        };
+        const real = new Function('localStorage', 'return {\n' +
+            grabFn(TRANSPORT, '        async getStorageInfo() {') + ',\n' +
+            'listImages: async () => JSON.parse(localStorage.getItem("rdm7_images")),\n' +
+            'listFonts: async () => ["sora"] };')(ls);
+        const s = await real.getStorageInfo();
+        const keysOnly = (100 + '[{"name":"logo","size":40960}]'.length) * 2;
+        ok('the image bytes are counted, not just its metadata',
+           s.totalBytes === keysOnly + 40960,
+           'got ' + s.totalBytes + ', metadata alone would be ' + keysOnly);
+        ok('and the layout is still listed with its own size',
+           s.layouts.length === 1 && s.layouts[0].name === 'default' && s.layouts[0].size === 200);
+    }
+
+    const detailed = await call('/api/layout/list?details=1');
+    ok('?details=1 answers with sizes, like the font list already did',
+       detailed.status === 200 && detailed.data.layouts[0] &&
+       detailed.data.layouts[0].name === 'default' && detailed.data.layouts[0].size === 200,
+       JSON.stringify(detailed.data));
+    ok('and without it the list is still bare names',
+       typeof (await call('/api/layout/list')).data.layouts[0] === 'string');
     const imgs = await call('/api/image/list');
     const fnts = await call('/api/font/list');
     /* Both answer the shape the firmware answers: images as objects, fonts
