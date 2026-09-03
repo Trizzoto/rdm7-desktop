@@ -3586,6 +3586,22 @@
         #gpWorkspace .gpb-secs button:focus-visible {
             outline: 2px solid var(--gpb-red); outline-offset: -3px;
         }
+        /* The chevron that hides the bars, and its twin on the strip that
+           replaces them. Quiet until you go looking: it is a way out of a
+           layout, not a thing to do. */
+        #gpWorkspace .gpb-hide {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 26px; height: 26px; padding: 0; margin-left: 2px;
+            background: transparent; border: 1px solid transparent;
+            color: var(--gpb-muted); cursor: pointer; flex: none;
+        }
+        #gpWorkspace .gpb-hide:hover { border-color: var(--gpb-div); color: var(--gpb-ink); }
+        #gpWorkspace .gpb-hide:focus-visible { outline: 2px solid var(--gpb-red); outline-offset: -2px; }
+        /* 11 px in a 14 px strip: the chevron has to sit inside the line it
+           belongs to, not set the height of it. */
+        #gpWorkspace .gpb-zenbar svg { color: var(--gpb-muted); flex: none; width: 11px; height: 11px; }
+        #gpWorkspace.gpb-zen .gpb-zenbar:hover svg { color: var(--gpb-ink); }
+
         #gpWorkspace .gpb-navacts {
             margin-left: auto; display: flex; align-items: center; gap: 8px;
             padding-left: 12px;
@@ -3639,7 +3655,7 @@
         #gpWorkspace .gpb-zenbar { display: none; }
         #gpWorkspace.gpb-zen .gpb-zenbar {
             display: flex; align-items: center; justify-content: flex-end;
-            gap: 8px; flex: none; height: 12px; padding: 0 10px;
+            gap: 6px; flex: none; height: 14px; padding: 0 8px;
             background: var(--gpb-bar);
             border-bottom: 1px solid var(--gpb-red);
             cursor: pointer; user-select: none;
@@ -5915,6 +5931,19 @@
                 <button class="gpb-arr" id="gpArrBtn" style="display:none" onclick="gpLayoutsToggle()"
                         title="Presets, saved arrangements, and how the panels fill the window"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18"></rect><path d="M3 12h18M12 3v9"></path></svg>Arrange</button>
                 <button class="gpb-export" id="gpExportBtn" style="display:none;" onclick="gpExportPop(event)">Export</button>
+                <!-- Focus mode had three ways in (F, Arrange, Escape to leave)
+                     and no visible one. A chevron at the end of the bar is
+                     where every collapsing panel in every editor puts it, and
+                     it is the only one of the three you can find without
+                     being told. Its twin lives on the strip that replaces
+                     these bars, pointing the other way. -->
+                <button class="gpb-hide" id="gpHideBtn" onclick="gpZenSet(true)"
+                        title="Hide the top bars and give the height to the panels (F)"
+                        aria-label="Hide the top bars">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 14l6-6 6 6"></path></svg>
+                </button>
             </div>
             <div class="gpb-arrpop" id="gpArrPop" style="display:none"></div>
         </div>
@@ -5923,7 +5952,10 @@
              the bars down; clicking it leaves focus mode for good. -->
         <div class="gpb-zenbar" id="gpZenBar" onclick="gpZenToggle()"
              title="Focus mode — the bars are above this line. Hover to bring them back, click (or Esc, or F) to leave.">
-            <span>Focus &middot; Esc</span>
+            <span>Focus</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 10l6 6 6-6"></path></svg>
         </div>
         <div class="ws-body">
             <div class="ws-rail" id="gpRail"></div>
@@ -20397,7 +20429,25 @@
         function gpCornerOps() {
             if (!(gp.trace && gp.trace.length) || !gp.traceLaps.length) return null;
             /* the view needs a lap AND a reference; pick sensible ones */
-            if (gp.cmpLap < 0 || !gp.traceLaps[gp.cmpLap]) return null;
+            /* A missing REFERENCE used to be a dead end: the view returned
+               null and said "pick a comparison lap in the Analyse rail" — a
+               rail that no longer exists, about a setting most people have
+               never set. Ticking laps did nothing for it either, because a
+               tick is "draw this", not "measure against this".
+               There is an obvious default and the view already computes it:
+               the fastest clean lap. Where the time went is where it went
+               against your best, unless you say otherwise — and saying
+               otherwise is still REF in the lap list. */
+            if (gp.cmpLap < 0 || !gp.traceLaps[gp.cmpLap]) {
+                var ri = -1, rt = Infinity;
+                gp.traceLaps.forEach(function (l, i) {
+                    if (l.ghost || l.flag) return;
+                    var s2 = gpSpanSecs(gp.trace, l);
+                    if (s2 > 0 && s2 < rt) { rt = s2; ri = i; }
+                });
+                if (ri < 0) return null;
+                gp.cmpLap = ri;
+            }
             if (gp.selLap < 0 || gp.selLap === gp.cmpLap) {
                 /* analyse the closest challenger against the reference */
                 var bi = -1, bt = Infinity;
@@ -20477,9 +20527,18 @@
             }
             var ops = gpCornerOps();
             if (!ops || !ops.length) {
+                /* Both of these used to point at "the Analyse rail", which was
+                   retired — advice you cannot follow is worse than none. The
+                   second case is now unreachable for want of a reference (one
+                   is chosen for you), so it can say the thing that is actually
+                   true: the corners could not be matched between the two. */
                 var why = gp.traceLaps.filter(function (l) { return !l.ghost; }).length < 2
-                    ? "This recording has only one timed " + gpRunWord() + " — compare against another day in the Analyse rail, then come back."
-                    : "Pick a comparison " + gpRunWord() + " in the Analyse rail and this becomes a ranked list of corners.";
+                    ? "This recording has only one timed " + gpRunWord() + ". Open another recording from " +
+                      "the same track in <b>Library</b>, or use <b>Compare with another recording</b> in " +
+                      "the lap list, and this becomes a ranked list of corners."
+                    : "These two " + gpRunWord() + "s could not be matched corner for corner &mdash; usually " +
+                      "an off, a pit lane, or a " + gpRunWord() + " that did not go the same way round. " +
+                      "Pick a different <b>REF</b> in the lap list.";
                 el.innerHTML = "<div class='ws-none' style='padding:40px 20px'>" + why + "</div>";
                 return;
             }
