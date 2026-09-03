@@ -307,6 +307,31 @@ two columns to its left. Dropped only when the table actually does not fit
 window grows. `overflow-x: auto` on the container as a backstop, so nothing can
 ever be cut off with no way to reach it.
 
+## The lap list, on one line (2026-09-03)
+
+Each lap was two rows: name / time / delta on the first with a third of it
+empty, and the sector times indented underneath. **82 px a lap**, so the panel
+that should answer "how did the session go" showed five of them and you
+scrolled for the rest.
+
+One row now, in fixed-width columns — `.nm` / `.tm` / `.dl` and the sector
+chips all sized, not left to fit their contents, so a column of times reads as
+a column instead of each row setting its own left edge. The sectors moved into
+the gap the flex spacer used to hold open. **30 px a lap**: the same panel holds
+twelve, and a seven-lap session fits with its heading and its footnote.
+
+Nothing is dropped. The only thing removed is the per-chip `S1`/`S2`/`S3`
+prefix, which said the same three things on every row — it is a column heading,
+and there is now a heading to put it in. `gpSectorChips` still emits it, because
+it is shared with the compare-a-recording rows where there is no heading to
+carry it; the lap list hides it in CSS.
+
+One bug this exposed: `.nm` carried a hard `width: 54px` from a later rule. With
+the name on a line of its own that clipped nothing, but on a shared row "Whole
+session" printed straight through the time beside it. A column that cannot grow
+for its longest entry is not a column — it is `min-width` now, and the check is
+an assertion that no row's name box overlaps its time box.
+
 ## Where the height still goes
 
 On 1366 × 768 with a recording open, after this change: 95 px of bars, 47 px

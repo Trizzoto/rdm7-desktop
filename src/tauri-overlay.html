@@ -5024,9 +5024,25 @@
         /* A lap line is a ROW of totals with its sectors under it — the shape
            of a timing screen. The row keeps every rule it had; the button
            around it became a column to hold the second line. */
+        /* ---- one row per lap ----------------------------------------------
+           It was two: name/time/delta on the first with a third of it empty,
+           and the sector times indented underneath. 82 px a lap, so a panel
+           that could show a session showed five of them. Everything is on one
+           line now, in fixed-width columns so the figures line up down the
+           list rather than each row setting its own, and the sectors fill the
+           gap the spacer used to hold open. ~27 px a lap: the same panel holds
+           twelve. Nothing is dropped — only the per-chip "S1" labels, which
+           said the same three things on every row and are a heading. */
+        #gpWorkspace .gpb-laphead {
+            display: flex; align-items: center; gap: 9px; padding: 3px 11px 3px;
+            border-bottom: 1px solid var(--gpb-div);
+            font-family: var(--gpb-head); font-weight: 600; font-size: 8.5px;
+            letter-spacing: 0.12em; text-transform: uppercase; color: var(--gpb-muted);
+        }
+        #gpWorkspace .gpb-laphead .pad { width: 24px; flex: none; }
         #gpWorkspace .gpb-lapline {
             display: flex; flex-direction: column; align-items: stretch; gap: 0;
-            padding: 6px 11px;
+            padding: 4px 11px;
             border-bottom: 1px solid var(--gpb-div-lt); cursor: pointer; width: 100%;
             background: transparent; border-left: none; border-right: none; border-top: none;
             font: inherit; color: var(--gpb-ink); text-align: left;
@@ -5043,15 +5059,30 @@
            overflowed sideways and hid its own sector times behind a scrollbar
            — measured at 401 px of content in a 234 px panel. Wrapped, they run
            onto a second line and gpPanelWantH grows the panel to suit. */
-        #gpWorkspace .gpb-lapline .gp-secs { margin: 4px 0 1px 24px; gap: 4px; flex-wrap: wrap; }
+        /* Fixed widths, so a column of times reads as a column. `flex:none`
+           on all three: left to size themselves, "1:08.493" and "+1.90" set a
+           different width on every row and the eye has to re-find each number.
+           The lap name keeps a minimum and may grow — "Run 12" is longer than
+           "Lap 1" and the word is configurable. */
+        /* nowrap, or "Whole session" breaks across two lines and that one row
+           is half again as tall as every other — the exact thing this layout
+           exists to stop. */
+        #gpWorkspace .gpb-lapline .nm { min-width: 54px; flex: 0 0 auto; white-space: nowrap; }
+        #gpWorkspace .gpb-lapline .tm { width: 64px; flex: none; text-align: right;
+                                        font-variant-numeric: tabular-nums; }
+        #gpWorkspace .gpb-lapline .dl { width: 42px; flex: none; text-align: right;
+                                        font-variant-numeric: tabular-nums; }
+        #gpWorkspace .gpb-lapline .gp-secs { margin: 0 0 0 6px; gap: 3px; flex-wrap: nowrap; }
         #gpWorkspace .gpb-lapline .gp-secs span {
-            flex: 0 0 auto; min-width: 58px; padding: 1px 6px; font-size: 10.5px;
-            text-align: left; display: inline-flex; align-items: baseline; gap: 5px;
+            flex: 0 0 auto; width: 44px; min-width: 0; padding: 1px 4px; font-size: 10px;
+            text-align: right; display: inline-block;
+            font-variant-numeric: tabular-nums; white-space: nowrap;
         }
-        #gpWorkspace .gpb-lapline .gp-secs b {
-            font-family: var(--gpb-head); font-weight: 600; font-size: 8.5px;
-            letter-spacing: 0.1em; opacity: 0.6;
-        }
+        /* The S1/S2/S3 prefix is a column heading, said once at the top
+           (.gpb-laphead) instead of three times on every row. The chips are
+           still generated with it — gpSectorChips is shared with the
+           compare-a-recording rows, where there is no heading to carry it. */
+        #gpWorkspace .gpb-lapline .gp-secs b { display: none; }
         #gpWorkspace .gpb-lapline:hover { background: rgba(29,31,32,0.04); }
         #gpWorkspace .gpb-lapline.sel { background: rgba(29,31,32,0.06); box-shadow: inset 3px 0 0 var(--gpb-n900); }
         #gpWorkspace .gpb-lapline input[type=checkbox] { accent-color: var(--gpb-red); width: 15px; height: 15px; cursor: pointer; }
@@ -5060,7 +5091,11 @@
            locked, not unavailable, and a faded tick reads as the opposite. */
         #gpWorkspace .gpb-lapline input[type=checkbox]:disabled { cursor: default; opacity: 1; }
         #gpWorkspace .gpb-lapline .sw { width: 11px; height: 11px; flex: none; }
-        #gpWorkspace .gpb-lapline .nm { font-family: var(--gpb-head); font-weight: 600; font-size: 14px; letter-spacing: 0.05em; width: 54px; }
+        /* min-width, not width. As a hard 54 px this clipped nothing while the
+           name had a line to itself, but on one row it overflowed its box and
+           "Whole session" printed straight through the time beside it. A
+           column that cannot grow for its longest entry is not a column. */
+        #gpWorkspace .gpb-lapline .nm { font-family: var(--gpb-head); font-weight: 600; font-size: 14px; letter-spacing: 0.05em; min-width: 54px; }
         #gpWorkspace .gpb-lapline .tm { font-family: var(--gpb-head); font-weight: 600; font-size: 17px; font-variant-numeric: tabular-nums; }
         #gpWorkspace .gpb-lapline .dl { font-size: 11.5px; color: var(--gpb-muted); font-variant-numeric: tabular-nums; }
         #gpWorkspace .gpb-reftag {
@@ -22643,6 +22678,27 @@
                other readers already fence this off; this line did not. */
             var wholeEnd = (gp.ghostFence !== null ? gp.ghostFence : gp.trace.length) - 1;
             var wholeMin = gpSecs(gp.trace, 0, wholeEnd) / 60;
+            /* The heading the rows are now short enough to need: with the
+               sector times inline and unlabelled, three bare numbers at the
+               end of a row have to be named once at the top. Widths mirror
+               .nm/.tm/.dl and the chips exactly — see the CSS. */
+            var S0 = gpSessionSectors();
+            h += "<div class='gpb-laphead'><span class='pad'></span>" +
+                 "<span style='min-width:54px'>" + gpEsc(word) + "</span>" +
+                 "<span style='width:64px;text-align:right'>Time</span>" +
+                 "<span style='width:42px;text-align:right'>vs best</span>";
+            if (S0 && S0.per) {
+                var nsec = 0;
+                for (var q0 = 0; q0 < gp.traceLaps.length; q0++)
+                    if (S0.per[q0]) { nsec = S0.per[q0].length; break; }
+                if (nsec) {
+                    h += "<span style='margin-left:6px'></span>";
+                    for (var q1 = 0; q1 < nsec; q1++)
+                        h += "<span style='width:44px;text-align:right;margin-left:" +
+                             (q1 ? "3px" : "0") + "'>S" + (q1 + 1) + "</span>";
+                }
+            }
+            h += "</div>";
             h += "<button class='gpb-lapline" + (gp.selLap < 0 ? " sel" : "") + "' data-gp-lapline='-1'" +
                  " title='Play and analyse the entire recording, not one " + gpRunWord() + "'>" +
                  "<span class='ln'>" +
@@ -22672,6 +22728,11 @@
                      "<span class='nm'>" + word + " " + (r.i + 1) + "</span>" +
                      "<span class='tm'>" + gpLapTime(r.s) + "</span>" +
                      "<span class='dl'>" + dl + "</span>" +
+                     /* On the row, not under it. As a second line the sectors
+                        cost every lap another 26 px and left the first line
+                        two-thirds empty — five laps filled a panel that now
+                        holds twelve. */
+                     gpSectorChips(r.i) +
                      "<span class='sp' style='flex:1'></span>" +
                      (r.i === bestI ? "<span class='gpb-tag red'>BEST</span>" : "") +
                      /* What is wrong with it, on the row, in one word. The
@@ -22684,10 +22745,6 @@
                        "<span class='gpb-reftag" + (gp.cmpLap === r.i ? " on" : "") + "' data-gp-lapref='" + r.i + "'" +
                        " title='Use this " + gpRunWord() + " as the reference everything is measured against'>REF</span>") +
                      "</span>" +
-                     /* "Which third did I lose it in" is a question you ask
-                        while looking at the list of times. It used to need
-                        another panel, so it mostly went unasked. */
-                     gpSectorChips(r.i) +
                      "</button>";
             });
             h += "<div style='padding:7px 11px;font-size:11px;color:var(--gpb-muted)'>" +
