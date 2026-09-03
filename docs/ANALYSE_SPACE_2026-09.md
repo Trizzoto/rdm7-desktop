@@ -396,3 +396,46 @@ widget; a second one landed on the speed gauge.
 `window.gpBgDebug()` reports what the box decided and from what — the two
 failure modes here ("the style drew nothing" and "the style drew off the edge")
 are both a black box on screen.
+
+## The footage timeline, and the section that would not show (ADR-0066)
+
+**A second clip loaded, decoded, and never appeared.** `gpClipEl` pools `<video>`
+elements by taking any one in the tile without a `data-gp-clip` attribute — and
+the tile also holds `#gpVideoB`, which belongs to Beside. That element carries an
+inline `display:none` so it stays hidden until Beside is on, and its id is
+already spoken for, so `gpVideoElIdSet` could not put the picture on screen
+either. The second clip took it and vanished. Two clips on one lane is the
+ordinary case — a session filmed in sections — so this was not an edge case;
+it was the feature not working the second time you used it. `#gpVideoB` now
+carries `data-gp-reserved` and the pool skips it.
+
+**The panel gave its subject the least room.** The speed trace had
+`flex: 1 1 auto` and the film lanes `flex: none`, so the trace took two hundred
+pixels and every clip you owned was a thirty-pixel strip of chips underneath,
+names clipped to "IM...". Worse, the two things you are matching sat in
+different boxes on different rows — you cannot line a clip up against a trace
+you have to look away from.
+
+They are one surface now. The trace is painted into the background of the lane
+view and a clip sits on the stretch of recording it filmed; the blocks are
+translucent so the trace shows through the thing you are aligning, and each
+carries its name over its duration rather than fighting for one line.
+
+**Coverage is the picture, not a sentence.** The trace is drawn twice — grey
+everywhere, then bright blue clipped to the columns a clip covers. Dragging a
+clip lights the trace under it as it moves. The lit/dim split applies whenever
+the session has any film at all, *not* when the current view holds some: basing
+it on the view lit up an empty Close-up window as though it were covered, which
+is exactly when "is there picture here?" is the question.
+
+The canvas cache key had to grow a signature of where every clip sits, or a drag
+repainted nothing.
+
+**And the red sentence went.** "This offset puts the last 1123.3 s and the first
+912.9 s of the recording outside the footage" made sense when a session had one
+clip meant to cover it. With sections it is true of every healthy session — a
+69 s clip against a 35-minute drive leaves 34 minutes uncovered by design — and
+a warning that is always on is a warning you stop reading. `gpAlignOverrun` now
+asks the question it was written for, about the SECTION rather than the
+recording: has the nudge pushed this clip off the recording altogether? It says
+so only when less than half of the clip (and under 20 s) lands on data.

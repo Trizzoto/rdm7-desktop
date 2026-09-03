@@ -5438,8 +5438,14 @@
             position: relative; height: 46px; flex: none; overflow: hidden;
             border-bottom: 1px solid #23282c; background: #0b0d0f;
         }
-        #gpWorkspace .gp-tl.panel .gp-tl-data { flex: 1 1 auto; height: auto; min-height: 30px; }
-        #gpWorkspace .gp-tl.panel .gp-tl-view { flex: none; }
+        /* The view is the whole surface now — the trace is painted into its
+           background and the lanes sit on top. Given the height, rather than
+           the 30 px strip it used to get under a trace that took the rest. */
+        #gpWorkspace .gp-tl.panel .gp-tl-view { flex: 1 1 auto; background: #0b0d0f; }
+        #gpWorkspace .gp-tl-back {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            display: block; z-index: 0; pointer-events: none;
+        }
         /* And if the lanes still do not fit — a short panel with a spare drop
            lane on the end — the column scrolls rather than hiding one. Same
            rule the mosaic keeps (ADR-0061): never hide what you could not
@@ -5447,7 +5453,7 @@
         #gpWorkspace .gp-tl.panel { overflow-y: auto; overflow-x: hidden; }
         #gpWorkspace .gp-tl-data canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
         #gpWorkspace .gp-tl-dataval {
-            position: absolute; top: 3px; margin-left: 5px; padding: 1px 5px;
+            position: absolute; top: 3px; left: 6px; right: auto; padding: 1px 5px;
             background: var(--gpb-red); color: #fff; font-size: 10.5px; font-weight: 700;
             font-variant-numeric: tabular-nums; pointer-events: none; z-index: 8; white-space: nowrap;
         }
@@ -5485,26 +5491,40 @@
         #gpWorkspace .gp-tl-lap.sel { background: var(--gpb-red); width: 2px; }
         #gpWorkspace .gp-tl-lane {
             position: absolute; left: 0; right: 0; height: var(--tl-lane);
-            border-top: 1px solid #1b1f22;
+            border-top: 1px solid rgba(140,150,158,0.10); z-index: 1;
         }
         #gpWorkspace .gp-tl-lane.drop { background: rgba(210,35,42,0.10); }
         #gpWorkspace .gp-tl-lane .lab {
             position: absolute; left: 3px; top: 1px; font-size: 9px; color: #4e565c;
             pointer-events: none; letter-spacing: 0.06em;
         }
+        /* Translucent on purpose: the trace it is sitting on is the thing you
+           are lining it up with, and a solid block hides exactly the stretch
+           you are trying to look at. */
         #gpWorkspace .gp-tl-clip {
             position: absolute; top: 2px; height: calc(var(--tl-lane) - 5px);
-            border: 1px solid #46606f; border-radius: 2px; overflow: hidden;
-            background: linear-gradient(180deg, #2c4150 0%, #1e2c36 100%);
-            color: #cfe2ef; cursor: grab; min-width: 3px;
-            box-shadow: 0 1px 0 rgba(0,0,0,0.4);
+            border: 1px solid rgba(120,175,210,0.75); border-radius: 3px; overflow: hidden;
+            background: linear-gradient(180deg, rgba(44,65,80,0.86) 0%, rgba(30,44,54,0.78) 100%);
+            color: #dcecf7; cursor: grab; min-width: 3px; z-index: 3;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.45);
         }
         #gpWorkspace .gp-tl-clip .nm {
-            position: absolute; left: 5px; right: 4px; top: 0; bottom: 0;
-            line-height: calc(var(--tl-lane) - 5px); font-size: 10px;
+            position: absolute; left: 6px; right: 4px; top: 0; height: 50%;
+            display: flex; align-items: flex-end; font-size: 10.5px; font-weight: 600;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             pointer-events: none;
         }
+        /* Under the name, not beside it: a clip is often narrow, and two
+           things fighting for one line is how the name became "IM...". */
+        #gpWorkspace .gp-tl-clip .dur {
+            position: absolute; left: 6px; right: 4px; top: 50%; bottom: 0;
+            display: flex; align-items: center; font-size: 9px; letter-spacing: 0.04em;
+            color: rgba(220,236,247,0.62); font-variant-numeric: tabular-nums;
+            white-space: nowrap; overflow: hidden; pointer-events: none;
+        }
+        /* Too narrow to say anything: the block itself is still the answer. */
+        #gpWorkspace .gp-tl.compact .gp-tl-clip .dur { display: none; }
+        #gpWorkspace .gp-tl.compact .gp-tl-clip .nm { height: 100%; align-items: center; }
         /* The waveform stand-in: a clip is a length of time, and the eye reads
            length far faster than a number. Ticks every ten seconds. */
         #gpWorkspace .gp-tl-clip .rib {
@@ -5513,10 +5533,10 @@
                         rgba(255,255,255,0.16) 0 1px, transparent 1px 6px);
             pointer-events: none;
         }
-        #gpWorkspace .gp-tl-clip.sel { border-color: #ff8b85; }
+        #gpWorkspace .gp-tl-clip.sel { border-color: #ff8b85; box-shadow: 0 0 0 1px rgba(255,139,133,0.45), 0 1px 3px rgba(0,0,0,0.45); }
         #gpWorkspace .gp-tl-clip.live {
-            background: linear-gradient(180deg, #3f5f43 0%, #26362a 100%);
-            border-color: #5f8a66;
+            background: linear-gradient(180deg, rgba(63,95,67,0.88) 0%, rgba(38,54,42,0.80) 100%);
+            border-color: #74a67c;
         }
         #gpWorkspace .gp-tl-clip.live.sel { border-color: #ff8b85; }
         #gpWorkspace .gp-tl-clip.dead { background: linear-gradient(180deg, #4a2b2b 0%, #2c1a1a 100%); border-color: #7a4444; }
@@ -5531,6 +5551,7 @@
         #gpWorkspace .gp-tl-head {
             position: absolute; top: 0; bottom: 0; width: 1px; background: var(--gpb-red);
             pointer-events: none; z-index: 7;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
         }
         #gpWorkspace .gp-tl-head::before {
             content: ''; position: absolute; left: -3px; top: 0;
@@ -6074,7 +6095,7 @@
                          element rather than a second clip on the same one: the
                          two are at different moments in the file at the same
                          moment on the track, which is the entire point. -->
-                    <video id="gpVideoB" playsinline muted style="display:none"></video>
+                    <video id="gpVideoB" data-gp-reserved playsinline muted style="display:none"></video>
                     <span class="gp-vlab" id="gpVLabA" style="display:none"></span>
                     <span class="gp-vlab b" id="gpVLabB" style="display:none"></span>
                     <canvas id="gpVideoOv"></canvas>
@@ -37722,8 +37743,19 @@
             if (c.el) return c.el;
             var tile = document.getElementById("gpVideoTile");
             if (!tile) return null;
+            /* Reserved elements are not in the pool. The tile also holds
+               #gpVideoB, which belongs to Beside — it is a second picture of
+               the SAME moment on the track from another lap, not a section of
+               this recording, and it carries an inline display:none so it
+               stays hidden until Beside is on. A second clip that grabbed it
+               loaded and decoded perfectly and then never appeared: the
+               display:none came with the element, and the id was already
+               spoken for so gpVideoElIdSet could not put the picture on screen
+               either. Two clips on one lane is the ordinary case — a session
+               filmed in sections — so this was not an edge. */
             var el = null, all = tile.querySelectorAll("video");
             for (var k = 0; k < all.length; k++) {
+                if (all[k].hasAttribute("data-gp-reserved")) continue;
                 if (!all[k].getAttribute("data-gp-clip")) { el = all[k]; break; }
             }
             if (!el) {
@@ -38223,6 +38255,12 @@
             var meta = gpCurSessionMeta();
             return (meta && utc !== null) ? (utc - meta.recordedAt) / 1000 : null;
         }
+        /* And back the other way, for anything that walks the timeline in
+           pixels and needs to ask a question about the moment under one. */
+        function gpTlUtcAt(sec) {
+            var meta = gpCurSessionMeta();
+            return meta ? meta.recordedAt + sec * 1000 : null;
+        }
         function gpTlSessDur() {
             if (!gp.trace || gp.trace.length < 2) return 0;
             var a = gpSampleUtc(0), b = gpSampleUtc(gp.trace.length - 1);
@@ -38385,14 +38423,6 @@
                on it pans, exactly like the surfaces either side of it. The
                canvas is painted by gpTlDataDraw once this markup is in the
                document. */
-            if (!compact && sdur > 0) {
-                var ph2 = gpTlSec(gpSampleUtc(gp.playIdx));
-                h += "<div class='gp-tl-data' data-gp-tlruler='1' data-gp-tldatarow='1'>" +
-                     "<canvas data-gp-tldata='1'></canvas>" +
-                     (ph2 !== null ? "<div class='gp-tl-head' data-gp-tlhead='1' style='left:" + X(ph2).toFixed(4) + "%'></div>" : "") +
-                     "<span class='gp-tl-dataval' data-gp-tlval='1'></span>" +
-                     "</div>";
-            }
 
             /* ---- lanes, clips, the playhead ---- */
             /* The panel's view fills what it is given; the strip inside the
@@ -38402,6 +38432,14 @@
             var viewH = lanes * LH + (compact ? (sdur > 0 ? 20 : 6) : 4);
             h += "<div class='gp-tl-view' data-gp-tlview='1' style='min-height:" + viewH + "px" +
                  (compact ? ";height:" + viewH + "px;flex:none" : "") + "'>";
+            /* The recording, BEHIND the film that covers it. It used to be a
+               row of its own above the lanes, which put the two things you are
+               matching in separate boxes on separate scales — you cannot line
+               a clip up against a trace you have to look away from. Same
+               surface, same axis, one glance. */
+            if (!compact && sdur > 0)
+                h += "<canvas class='gp-tl-back' data-gp-tldata='1'></canvas>" +
+                     "<span class='gp-tl-dataval' data-gp-tlval='1'></span>";
             for (var L = 0; L < lanes; L++) {
                 h += "<div class='gp-tl-lane' data-gp-tllane='" + L + "' style='top:" + (L * LH) + "px'></div>";
             }
@@ -38416,6 +38454,7 @@
                      "' style='left:" + X(s).toFixed(4) + "%;width:" + w.toFixed(4) +
                      "%;top:" + ((c.lane || 0) * LH + 2) + "px'>" +
                      "<span class='nm'>" + gpEsc(c.name || "clip") + "</span>" +
+                     "<span class='dur'>" + gpEsc(gpTlClock(d)) + "</span>" +
                      "<span class='rib'></span>" +
                      "<button class='x' data-gp-tlx='" + c.id + "' title='Take this section off the recording'>&times;</button>" +
                      "</div>";
@@ -38589,7 +38628,15 @@
             if (!cvs.length) return;
             var rows = gp.trace;
             var vw = gpTlView(), span = vw.to - vw.from;
-            var key = rows && rows.length ? [vw.from.toFixed(3), vw.to.toFixed(3), rows.length].join(":") : "";
+            /* A dragged clip changes only the lighting, not the trace — so
+               the key carries where every clip currently sits, or the canvas
+               would keep its old answer through the whole drag. */
+            var fkey = gpClips().map(function (c) {
+                var a = gpClipStart(c);
+                return (a === null ? "-" : a) + "/" + Math.round(gpClipDur(c) * 1000) + "/" + (c.lane || 0);
+            }).join(",");
+            var key = rows && rows.length
+                ? [vw.from.toFixed(3), vw.to.toFixed(3), rows.length, fkey].join(":") : "";
             var v = (rows && rows.length && gp.playIdx < rows.length) ? rows[gp.playIdx].kph : null;
             Array.prototype.forEach.call(document.querySelectorAll("[data-gp-tlval]"), function (e) {
                 e.textContent = (v !== null && isFinite(v)) ? Math.round(gpSpdN(v)) + " " + gpSpdU() : "";
@@ -38671,15 +38718,57 @@
                     g.lineTo(i, Y(mn[i]) + 1);
                 }
                 g.closePath();
-                g.fillStyle = "rgba(91,184,255,0.28)";
-                g.fill();
-                g.beginPath();
+                var band = new Path2D();
                 for (q2 = 0; q2 < cols.length; q2++) {
                     i = cols[q2];
-                    if (!q2) g.moveTo(i, Y(mx[i])); else g.lineTo(i, Y(mx[i]));
+                    if (!q2) band.moveTo(i, Y(mx[i])); else band.lineTo(i, Y(mx[i]));
                 }
-                g.strokeStyle = "#5BB8FF"; g.lineWidth = Math.max(1, dpr); g.lineJoin = "round";
-                g.stroke();
+                for (q2 = cols.length - 1; q2 >= 0; q2--) { i = cols[q2]; band.lineTo(i, Y(mn[i]) + 1); }
+                band.closePath();
+                var edge = new Path2D();
+                for (q2 = 0; q2 < cols.length; q2++) {
+                    i = cols[q2];
+                    if (!q2) edge.moveTo(i, Y(mx[i])); else edge.lineTo(i, Y(mx[i]));
+                }
+
+                /* ---- lit where there is film ---------------------------------
+                   "This offset puts the last 1123.3 s and the first 912.9 s of
+                   the recording outside the footage" is a sentence you have to
+                   read and then translate into a picture. The picture IS the
+                   answer: the stretch you filmed is bright, the rest is grey,
+                   and dragging a clip lights the trace under it as it goes. */
+                var film = new Uint8Array(wD);
+                /* With no footage at all there is nothing to contrast against,
+                   so the trace is simply itself. The moment there IS film the
+                   split applies everywhere — including a Close-up window that
+                   happens to hold none, which is exactly when "is there
+                   picture here?" is the question being asked. Basing this on
+                   what the VIEW holds lit up an empty close-up as though it
+                   were covered. */
+                var anyFilm = gpClips().length ? 1 : 0;
+                if (anyFilm) for (i = 0; i < wD; i++) {
+                    var u = gpTlUtcAt(vw.from + (i / wD) * span);
+                    if (u !== null && gpClipAtUtc(u)) film[i] = 1;
+                }
+                var paint = function (fill, stroke) {
+                    g.fillStyle = fill; g.fill(band);
+                    g.strokeStyle = stroke; g.lineWidth = Math.max(1, dpr);
+                    g.lineJoin = "round"; g.stroke(edge);
+                };
+                if (!anyFilm) {
+                    paint("rgba(91,184,255,0.28)", "#5BB8FF");
+                } else {
+                    paint("rgba(122,136,148,0.16)", "rgba(150,164,176,0.55)");
+                    for (i = 0; i < wD; i++) {
+                        if (!film[i]) continue;
+                        var a2 = i;
+                        while (i + 1 < wD && film[i + 1]) i++;
+                        g.save();
+                        g.beginPath(); g.rect(a2, 0, (i - a2) + 1, hD); g.clip();
+                        paint("rgba(91,184,255,0.30)", "#5BB8FF");
+                        g.restore();
+                    }
+                }
                 /* Lap starts. */
                 g.strokeStyle = "rgba(216,221,225,0.28)"; g.lineWidth = Math.max(1, dpr);
                 (gp.traceLaps || []).forEach(function (l, li) {
@@ -39520,27 +39609,30 @@
             window.gpVideoOffset((gp.video.offsetMs / 1000) + (parseFloat(sec) || 0));
         };
 
-        /* How much of the recording the current offset pushes off the ends of
-           the film. A wrong offset is usually a LARGE wrong offset — a
-           mis-guessed clock, a nudge that ran away — and the cheapest way to
-           know is that it now claims footage that does not exist. The log
-           anchor on the Donington file lands 606.2 s of recording inside
-           618.1 s of film with 0.8 s to spare; 28 s of nudge on top of that
-           leaves the last 27 s of the drive with no picture at all, and
-           nothing on screen said so. */
+        /* Has the nudge pushed this section off the recording?
+         *
+         * This used to report how much of the RECORDING fell outside the film
+         * — "the last 1123.3 s and the first 912.9 s of the recording are
+         * outside the footage". That made sense when a session had one clip
+         * that was meant to cover it. It does not now: sections are the
+         * ordinary case, a 69 s clip against a 35-minute drive leaves 34
+         * minutes uncovered by design, and saying so in red on every session
+         * with footage taught you to ignore the line.
+         *
+         * What is still worth saying is the failure it was written for: an
+         * offset so large the section no longer sits on the recording at all,
+         * so the picture freezes and nothing explains why. That is about the
+         * SECTION, not the recording, and the lit trace says the rest.
+         */
         function gpAlignOverrun() {
             var v = gp.video, rows = gp.trace;
-            var el = document.getElementById("gpVideo");
-            if (!v || !rows || !rows.length || !el) return null;
-            var dur = Number(el.duration);
-            if (!isFinite(dur) || dur <= 0) return null;
-            var end = (gp.ghostFence !== null && gp.ghostFence !== undefined
-                          ? gp.ghostFence : rows.length) - 1;
-            var a = gpVideoTimeFor(0), b = gpVideoTimeFor(end);
-            if (a === null || b === null) return null;
-            var before = a < 0 ? -a : 0;          /* recording starts before the film */
-            var after = b > dur ? b - dur : 0;    /* ...and runs past the end of it */
-            return (before > 0.5 || after > 0.5) ? { before: before, after: after } : null;
+            if (!v || !rows || !rows.length) return null;
+            var s0 = gpTlSec(gpClipStart(v)), d = gpClipDur(v), sd = gpTlSessDur();
+            if (s0 === null || !d || sd <= 0) return null;
+            var on = Math.min(s0 + d, sd) - Math.max(s0, 0);   /* seconds that land */
+            if (on >= d * 0.5 || on >= 20) return null;
+            return { name: v.name || "this section", on: Math.max(0, on), dur: d,
+                     nudged: !!v.offsetMs };
         }
 
         function gpAlignWarnSync() {
@@ -39548,12 +39640,13 @@
             if (!els.length) return;
             var o = gpAlignOverrun();
             var html = "";
-            if (o) html = "This offset puts " +
-                (o.after > 0.5 ? "the last " + o.after.toFixed(1) + " s" : "") +
-                (o.after > 0.5 && o.before > 0.5 ? " and " : "") +
-                (o.before > 0.5 ? "the first " + o.before.toFixed(1) + " s" : "") +
-                " of the recording outside the footage — there is no picture there. " +
-                "<button onclick='gpVideoOffset(0)'>Back to 0.00</button>";
+            if (o) {
+                html = o.on <= 0.5
+                    ? gpEsc(o.name) + " sits off the recording entirely."
+                    : "Only " + o.on.toFixed(1) + " s of " + gpEsc(o.name) +
+                      " lands on the recording.";
+                if (o.nudged) html += " <button onclick='gpVideoOffset(0)'>Back to 0.00</button>";
+            }
             Array.prototype.forEach.call(els, function (e) {
                 if (e._gpHtml === html) return;
                 e._gpHtml = html;
