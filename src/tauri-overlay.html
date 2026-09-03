@@ -20512,11 +20512,15 @@
                 c.restore();
             }
 
-            /* Dots. Longitudinal g is negative under brakes and the picture
-               reads the way the car feels, so braking goes DOWN the screen. */
+            /* Dots, drawn the way the driver is thrown rather than the way the
+               car accelerates — braking goes UP the screen, a right-hander
+               goes left. Same as the HUD and as the logger's own meter; see
+               gpGripX for why it changed. */
             for (i = r.from; i <= r.to && i < rows.length; i++) {
                 if (rows[i].kph < 8) continue;                 /* not cornering, just noise */
-                var lx = ch.glat[i], ly = rows[i].g;
+                /* Same convention as the HUD and as the logger's own meter —
+                   see gpGripX. One app, one way round. */
+                var lx = gpGripX(ch.glat[i]), ly = gpGripY(rows[i].g);
                 if (!isFinite(lx) || !isFinite(ly)) continue;
                 c.fillStyle = gpSpeedColour(Math.min(1, rows[i].kph / vMax));
                 c.globalAlpha = 0.45;
@@ -40523,6 +40527,32 @@
         /* ---- grip circle ----------------------------------------------------
          * Lateral against longitudinal, one dot, one ring per g. The same
          * picture the analysis view draws, at the size a video can carry. */
+        /* ---- which way a g-meter points -------------------------------------
+         * Two conventions exist and they are exact opposites.
+         *
+         *   the CAR'S ACCELERATION — turn right, the car accelerates right,
+         *     dot right; brake, the car decelerates, dot down.
+         *   the FORCE ON THE DRIVER — turn right and you are thrown left, dot
+         *     left; brake and you are thrown forward, dot up.
+         *
+         * This drew the first. RaceBox and VBOX draw the second, and on this
+         * footage both meters are on screen at once — ours beside the logger's
+         * own burn-in — pointing opposite ways through every corner. Measured
+         * on lap 6: braking 229 to 149 km/h put our dot at BRK and theirs at
+         * the top; mid-corner at 97 km/h put ours hard right and theirs hard
+         * left. A point reflection, in both axes.
+         *
+         * So it draws the second now, because that is what the hardware this
+         * app ships beside does, and because a driver reads a g-meter as
+         * "where am I being thrown".
+         *
+         * The labels still name the CAUSE, which is what you can act on: the
+         * top edge is where braking sends the dot, the left edge is where a
+         * right-hander sends it. Dot shows the force, label names the reason.
+         */
+        function gpGripX(glat) { return -(glat || 0); }
+        function gpGripY(glon) { return -(glon || 0); }
+
         function gpHudGrip(g, d, cx, cy, r) {
             var S = r / 48;
             g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
@@ -40534,8 +40564,8 @@
             g.moveTo(cx, cy - r); g.lineTo(cx, cy + r);
             g.strokeStyle = "rgba(245,247,250,0.12)"; g.stroke();
             var lim = 2.0;                              /* full scale, 2 g */
-            var px = cx + Math.max(-1, Math.min(1, (d.glat || 0) / lim)) * r;
-            var py = cy - Math.max(-1, Math.min(1, (d.glon || 0) / lim)) * r;
+            var px = cx + Math.max(-1, Math.min(1, gpGripX(d.glat) / lim)) * r;
+            var py = cy - Math.max(-1, Math.min(1, gpGripY(d.glon) / lim)) * r;
             gpHudGlow(g, 10 * S);
             g.beginPath(); g.arc(px, py, 5.5 * S, 0, Math.PI * 2);
             g.fillStyle = GP_HUD_RED; g.fill();
@@ -40809,13 +40839,16 @@
             g.font = "600 " + (9 * S) + "px " + GP_HUD_SANS;
             g.fillStyle = "rgba(245,247,250,0.38)";
             g.textAlign = "center"; g.textBaseline = "middle";
-            g.fillText("ACC", cx, cy - r + 6 * S);
-            g.fillText("BRK", cx, cy + r - 6 * S);
-            g.fillText("L", cx - r + 6 * S, cy);
-            g.fillText("R", cx + r - 6 * S, cy);
+            /* Naming the cause at the edge the dot is sent to: braking throws
+               you forward, so BRK is the top; a right-hander throws you left,
+               so R is the left. */
+            g.fillText("BRK", cx, cy - r + 6 * S);
+            g.fillText("ACC", cx, cy + r - 6 * S);
+            g.fillText("R", cx - r + 6 * S, cy);
+            g.fillText("L", cx + r - 6 * S, cy);
 
-            var px = cx + Math.max(-1, Math.min(1, (d.glat || 0) / lim)) * r;
-            var py = cy - Math.max(-1, Math.min(1, (d.glon || 0) / lim)) * r;
+            var px = cx + Math.max(-1, Math.min(1, gpGripX(d.glat) / lim)) * r;
+            var py = cy - Math.max(-1, Math.min(1, gpGripY(d.glon) / lim)) * r;
             g.beginPath();
             g.moveTo(cx, cy); g.lineTo(px, py);
             g.lineWidth = 1.4 * S; g.strokeStyle = "rgba(210,35,42,0.6)"; g.stroke();
