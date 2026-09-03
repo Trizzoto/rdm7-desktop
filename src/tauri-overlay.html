@@ -34051,6 +34051,133 @@
             return gp._xy;
         }
 
+        /* ---- clicking the driven line ------------------------------------
+         * Every other surface answers "take me there": the graph seeks, the
+         * strip seeks, the footage timeline seeks. The map — the one place
+         * where you can SEE that this lap ran wide here and that one did not —
+         * did nothing at all, so having spotted the difference you had to go
+         * and find the moment on a different panel.
+         *
+         * A click now lands on the nearest DRAWN sample, and drawn is the
+         * operative word: hit-testing every sample of the recording would let
+         * you click a lap that is not on the map, which is indistinguishable
+         * from the click going somewhere random. The strands are the answer to
+         * "what is on the map" — the renderer already works from them — so
+         * they are what is searched.
+         *
+         * If that sample belongs to a lap other than the one being analysed,
+         * that lap is selected first and then the playhead is placed. That
+         * order matters: gpLapAnalyse re-frames what the panels are showing,
+         * and setting the playhead before it would leave the index pointing
+         * into the previous subject.
+         */
+        var GP_MAP_HIT_PX = 22;      /* a click this far off the line is a miss */
+
+        function gpMapNearestDrawn(latlng) {
+            var rows = gp.trace, cv = gp.traceCv;
+            if (!rows || !rows.length || !cv || !cv._strands || !cv._strands.length) return null;
+            /* Metres, not degrees: a degree of longitude is 0.82 of a degree of
+               latitude here, and comparing raw degrees would bias every hit
+               north-south. */
+            var m = gpMetresPerDeg(latlng.lat);
+            var fence = (gp.ghostFence !== null && gp.ghostFence !== undefined)
+                            ? gp.ghostFence : rows.length;
+            var best = -1, bd = Infinity;
+            cv._strands.forEach(function (st) {
+                if (!st || st.to <= st.from) return;
+                var a = Math.max(0, st.from), b = Math.min(st.to, fence - 1);
+                for (var i = a; i <= b; i++) {
+                    var r = rows[i];
+                    if (!r || !isFinite(r.lat) || !isFinite(r.lon)) continue;
+                    var dx = (r.lon - latlng.lng) * m.lo, dy = (r.lat - latlng.lat) * m.la;
+                    var d = dx * dx + dy * dy;
+                    if (d < bd) { bd = d; best = i; }
+                }
+            });
+            return best < 0 ? null : best;
+        }
+
+        /* Which lap owns a sample, or -1 for the stretches between laps. */
+        function gpLapOfIdx(i) {
+            var laps = gp.traceLaps || [];
+            for (var q = 0; q < laps.length; q++) {
+                var l = laps[q];
+                if (l && !l.ghost && i >= l.from && i <= l.to) return q;
+            }
+            return -1;
+        }
+
+        function gpMapLineClick(ev) {
+            /* The map is also a drawing surface — placing gates, tracing an
+               outline. Those own the click while they are on. */
+            if (gp.tracing || gp.shapeEdit) return;
+            if (gp.view === "tracks") return;
+            var idx = gpMapNearestDrawn(ev.latlng);
+            if (idx === null) return;
+            /* In SCREEN pixels, so the tolerance means the same thing at every
+               zoom — a 20 m threshold is the whole width of the circuit when
+               you are looking at all of it. */
+            var rows = gp.trace;
+            var p = gp.map.latLngToContainerPoint([rows[idx].lat, rows[idx].lon]);
+            var q = gp.map.latLngToContainerPoint(ev.latlng);
+            if (Math.abs(p.x - q.x) > GP_MAP_HIT_PX || Math.abs(p.y - q.y) > GP_MAP_HIT_PX) return;
+
+            gpPlayStop();
+            var li = gpLapOfIdx(idx);
+            if (li >= 0 && li !== gp.selLap && typeof window.gpLapAnalyse === "function") {
+                /* Ticked as well as analysed: you clicked its line because you
+                   were looking at it, and analysing a lap that then vanishes
+                   off the map is not what the click asked for. */
+                gpShownLaps()[li] = true;
+                window.gpLapAnalyse(li);
+            } else if (li < 0 && gp.selLap >= 0 && typeof window.gpLapAnalyse === "function") {
+                /* Between laps — an out-lap, the trip to the pits. There is no
+                   lap to select, so the subject widens to the whole recording
+                   rather than the playhead being dropped outside the lap that
+                   every panel is currently scaled to. */
+                window.gpLapAnalyse(-1);
+            }
+            gp.playIdx = idx;
+            /* gpFollowCar wants the point, not a nudge — called bare it takes
+               the "nothing to follow" branch and turns Track-up off. */
+            gpFollowCar([rows[idx].lat, rows[idx].lon]);
+            gpDrawPlayhead();
+            gpSyncScrub();
+            gpRenderGridSoft();
+        }
+
+        /* What a click at a screen point would resolve to, without performing
+           it. The two failure modes here are invisible from outside — "the
+           lap was not on the map to hit" and "another lap's line was nearer" —
+           and both look like a click that did nothing. */
+        window.gpMapHitDebug = function (x, y) {
+            if (!gp.map) return { err: "no map" };
+            var cv = gp.traceCv;
+            /* VIEWPORT coordinates in, the same space a real mouse event
+               reports — the map container is not at the origin (the panel
+               clips it, so its rect can start well negative), and feeding
+               viewport numbers straight to containerPointToLatLng probes a
+               completely different place from the one being clicked. */
+            var box = gp.map.getContainer().getBoundingClientRect();
+            var ll = gp.map.containerPointToLatLng([x - box.left, y - box.top]);
+            var idx = gpMapNearestDrawn(ll);
+            var out = {
+                strands: cv && cv._strands ? cv._strands.map(function (st) {
+                    return st.from + ".." + st.to;
+                }) : null,
+                shown: gpShownList(), selLap: gp.selLap, cmpLap: gp.cmpLap, hit: idx
+            };
+            if (idx !== null) {
+                var r = gp.trace[idx];
+                var p = gp.map.latLngToContainerPoint([r.lat, r.lon]);
+                out.offPx = Math.round(Math.max(Math.abs(p.x + box.left - x),
+                                                Math.abs(p.y + box.top - y)));
+                out.lap = gpLapOfIdx(idx);
+                out.within = out.offPx <= GP_MAP_HIT_PX;
+            }
+            return out;
+        };
+
         function gpTraceCv() {
             if (!gp.map) return null;
             if (!gp.map.getPane(GP_TRACE_PANE)) {
@@ -46384,6 +46511,7 @@
                ground one of them covers — see GP_IMAGERY. */
             gpGroundInit();
             gp.map.on("moveend", gpTilesFollowMap);
+            gp.map.on("click", gpMapLineClick);
             gp.carLayer = L.layerGroup().addTo(gp.map);
             gp.trail = L.polyline([], { color: "#d2232a", weight: 2.5, opacity: 0.75 }).addTo(gp.map);
             /* Dragging the map is an explicit "stop following me" — in

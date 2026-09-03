@@ -439,3 +439,37 @@ a warning that is always on is a warning you stop reading. `gpAlignOverrun` now
 asks the question it was written for, about the SECTION rather than the
 recording: has the nudge pushed this clip off the recording altogether? It says
 so only when less than half of the clip (and under 20 s) lands on data.
+
+## Clicking the driven line (ADR-0067)
+
+Every other surface answers "take me there" — the graph seeks, the rack seeks,
+the footage timeline seeks. The map did nothing, which is odd given it is the
+one place you can *see* that this lap ran wide here and that one did not. Having
+spotted the difference you then had to go and find the moment on another panel.
+
+A click now lands on the nearest **drawn** sample. Drawn is the operative word:
+hit-testing every sample of the recording would let you click a lap that is not
+on the map, which from the outside is indistinguishable from the click going
+somewhere random. The strands are already the renderer's answer to "what is on
+the map", so they are what gets searched.
+
+If the sample belongs to a lap other than the one being analysed, that lap is
+ticked and analysed first, then the playhead is placed — that order matters,
+because `gpSelectLap` moves the playhead itself (via `gpSameSpot`) and setting
+the index first would just be overwritten. A click on the stretches *between*
+laps — an out-lap, the trip to the pits — widens the subject to the whole
+recording rather than dropping the playhead outside the lap every panel is
+scaled to.
+
+The tolerance is 22 **screen** pixels, not metres: 20 m is the whole width of
+the circuit when you are looking at all of it, and the same click has to mean
+the same thing at every zoom. Past that the click does nothing at all.
+
+`window.gpMapHitDebug(x, y)` reports what a click would resolve to without
+performing it — the two failure modes ("the lap was not on the map to hit" and
+"another lap's line was nearer") both look like a click that did nothing.
+It takes **viewport** coordinates and converts them itself: the map container is
+clipped by its panel and its rect can start well negative, so feeding viewport
+numbers straight to `containerPointToLatLng` probes a different place from the
+one being clicked. That cost an hour of chasing a bug that was only ever in the
+probe.
