@@ -40333,12 +40333,44 @@
                          name: trk.name || (meta && meta.trackName) || "", closed: true };
             var rows = gp.trace;
             if (!rows || rows.length < 8) return null;
+            /* ONE LAP, not the whole recording.
+               Drawing every sample of the session put the out-lap, the in-lap
+               and the pit lane on the circuit's outline, joined to it by a
+               straight chord across the infield — a shape Donington does not
+               have. The car's dot is projected from the same points and so is
+               always exactly ON that line, which is why this reads as "the dot
+               is in the wrong place" rather than as "the track is drawn
+               wrong": the only thing you can check the dot against is a shape
+               that is itself wrong.
+               A lap is the circuit, once, and closes. Preference order is the
+               lap being analysed, then the reference, then the fastest clean
+               one — and only with no laps at all does it fall back to the
+               whole drive, which for a road drive is the right answer anyway. */
+            var laps = gp.traceLaps || [], lr = null, q;
+            if (gp.selLap >= 0 && laps[gp.selLap]) lr = laps[gp.selLap];
+            else if (gp.cmpLap >= 0 && laps[gp.cmpLap]) lr = laps[gp.cmpLap];
+            else {
+                var best = Infinity;
+                for (q = 0; q < laps.length; q++) {
+                    if (!laps[q] || laps[q].ghost || laps[q].flag) continue;
+                    var sp = gpSpanSecs(rows, laps[q]);
+                    if (sp > 0 && sp < best) { best = sp; lr = laps[q]; }
+                }
+            }
+            /* Behind the ghost fence when there is no lap: past it the samples
+               belong to another day's recording appended onto this one, and
+               they would drag the bounding box to wherever that was driven. */
+            var from = lr ? lr.from : 0;
+            var to = lr ? lr.to
+                        : ((gp.ghostFence !== null && gp.ghostFence !== undefined
+                              ? gp.ghostFence : rows.length) - 1);
+            if (to <= from) { from = 0; to = rows.length - 1; lr = null; }
             /* Every nth sample: a lap is thousands of points and a 200-unit
                box cannot show them. */
-            var step = Math.max(1, Math.floor(rows.length / 400)), pts = [], k;
-            for (k = 0; k < rows.length; k += step) pts.push([rows[k].lat, rows[k].lon]);
+            var step = Math.max(1, Math.floor((to - from + 1) / 400)), pts = [], k;
+            for (k = from; k <= to; k += step) pts.push([rows[k].lat, rows[k].lon]);
             return { pts: pts, sf: null,
-                     name: (meta && (meta.trackName || meta.name)) || "", closed: false };
+                     name: (meta && (meta.trackName || meta.name)) || "", closed: !!lr };
         }
 
         function gpHudDrawMade(g, a, box, S, i) {
