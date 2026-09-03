@@ -1,0 +1,135 @@
+<!doctype html><meta charset="utf-8"><title>Moments</title>
+<style>
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-400.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-700.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-700.woff2') format('woff2');font-weight:700}
+*{margin:0;padding:0;box-sizing:border-box;border-radius:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{background:#f2f2f3;color:#1d1f20;font-family:'Barlow',system-ui,sans-serif;
+     -webkit-font-smoothing:antialiased;position:relative}
+.page{width:1080px;height:1350px;position:relative;display:flex;flex-direction:column}
+
+/* the black brand bar, exactly as the workspace wears it */
+.bar{height:96px;background:#0c0d0e;color:#fff;display:flex;align-items:center;
+     gap:18px;padding:0 40px;flex:none}
+.bar img{height:38px;display:block}
+.bar .ws{font-family:'Barlow Condensed';font-weight:700;font-size:31px;letter-spacing:.06em;
+         text-transform:uppercase;color:#fff;line-height:1}
+.bar .sep{width:1px;height:38px;background:#26282a}
+.bar .tag{font-family:'Barlow Condensed';font-weight:600;font-size:23px;letter-spacing:.17em;
+          text-transform:uppercase;color:#9a9a9e;line-height:1}
+.bar .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.bar .rec{width:11px;height:11px;border-radius:50%;background:#d2232a}
+
+.body{flex:1;display:flex;flex-direction:column;padding:0 40px;min-height:0;position:relative}
+
+.kicker{font-family:'Barlow Condensed';font-weight:600;font-size:24px;letter-spacing:.2em;
+        text-transform:uppercase;color:#d2232a;margin-top:34px}
+.kicker.mut{color:rgba(29,31,32,0.55)}
+h1{font-family:'Barlow Condensed';font-weight:700;font-size:88px;line-height:.92;
+   letter-spacing:.005em;text-transform:uppercase;margin-top:10px}
+h1.sm{font-size:70px}
+h1.xs{font-size:58px}
+.sub{font-size:25px;line-height:1.34;color:rgba(29,31,32,0.72);margin-top:16px;max-width:850px;font-weight:400}
+.rule{height:1px;background:rgba(29,31,32,0.16);margin:24px 0}
+.grow{flex:1 1 auto;min-height:0}
+.rule.hard{background:#1d1f20;height:2px}
+
+/* the huge readouts */
+.big{font-family:'Barlow Condensed';font-weight:700;line-height:.84;letter-spacing:-.005em;
+     font-variant-numeric:tabular-nums}
+.unit{font-family:'Barlow Condensed';font-weight:600;color:rgba(29,31,32,0.55);letter-spacing:.06em;
+      text-transform:uppercase}
+
+/* ruled tables: one fact per column, labelled — never prose */
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-family:'Barlow Condensed';font-weight:600;font-size:20px;letter-spacing:.15em;
+   text-transform:uppercase;color:rgba(29,31,32,0.55);text-align:left;padding:0 0 9px;
+   border-bottom:2px solid #1d1f20}
+td{font-size:29px;padding:13px 0;border-bottom:1px solid rgba(29,31,32,0.08);font-weight:500}
+td.n{font-family:'Barlow Condensed';font-weight:700;font-size:34px}
+.r{text-align:right}
+
+.foot{flex:none;border-top:1px solid rgba(29,31,32,0.16);padding:20px 40px 30px;display:flex;
+      align-items:flex-end;gap:20px;background:#f2f2f3}
+.foot .l{font-family:'Barlow Condensed';font-weight:600;font-size:22px;letter-spacing:.16em;
+         text-transform:uppercase;color:#1d1f20}
+.foot .s{font-size:19px;color:rgba(29,31,32,0.55);margin-top:3px;line-height:1.3;font-weight:400}
+.foot .r{margin-left:auto;text-align:right;font-family:'Barlow Condensed';font-weight:600;
+         font-size:22px;letter-spacing:.16em;text-transform:uppercase;color:#d2232a;
+         white-space:nowrap;flex:none}
+
+.chip{display:inline-block;font-family:'Barlow Condensed';font-weight:600;font-size:20px;
+      letter-spacing:.13em;text-transform:uppercase;padding:5px 11px 4px;
+      background:#1d1f20;color:#fff}
+.chip.red{background:#d2232a}
+.chip.line{background:transparent;color:rgba(29,31,32,0.55);border:1px solid rgba(29,31,32,0.16)}
+</style>
+<div class="page">
+<div class="bar">
+  <img src="file:///C:/Users/ruuva/workspace/rdm7-desktop/src/rdm_logo.png" alt="RDM">
+  <div class="ws">Studio</div>
+  <div class="sep"></div>
+  <div class="tag">GPS Lap Timer</div>
+  
+</div>
+<div class="body">
+  <div class="kicker">Moments</div>
+  <h1>The bits worth<br>watching again</h1>
+  <div class="sub">The app finds them and puts them in a list. Click one and the playhead — and the video with it — jumps straight there.</div>
+  <div style="margin-top:30px">
+    
+  <div style="border-top:1px solid rgba(29,31,32,0.16);padding:26px 0 24px;display:flex;align-items:flex-start">
+    <div style="flex:1">
+      <div class="unit" style="font-size:23px;letter-spacing:.17em">Top speed</div>
+      <div style="font-size:25px;color:rgba(29,31,32,0.72);margin-top:9px;max-width:520px;line-height:1.32">Five sixths of the way round, with one corner still to come.</div>
+    </div>
+    <div style="text-align:right;min-width:330px">
+      <div class="big" style="font-size:104px">230.2<span style="font-size:38px;color:rgba(29,31,32,0.55)"> km/h</span></div>
+    </div>
+  </div>
+    
+  <div style="border-top:1px solid rgba(29,31,32,0.16);padding:26px 0 24px;display:flex;align-items:flex-start">
+    <div style="flex:1">
+      <div class="unit" style="font-size:23px;letter-spacing:.17em">Hardest braking</div>
+      <div style="font-size:25px;color:rgba(29,31,32,0.72);margin-top:9px;max-width:520px;line-height:1.32">Hauling it down from 180 km/h, halfway round the lap.</div>
+    </div>
+    <div style="text-align:right;min-width:330px">
+      <div class="big" style="font-size:104px">1.70<span style="font-size:38px;color:rgba(29,31,32,0.55)"> g</span></div>
+    </div>
+  </div>
+    
+  <div style="border-top:1px solid rgba(29,31,32,0.16);padding:26px 0 24px;display:flex;align-items:flex-start">
+    <div style="flex:1">
+      <div class="unit" style="font-size:23px;letter-spacing:.17em">Highest cornering</div>
+      <div style="font-size:25px;color:rgba(29,31,32,0.72);margin-top:9px;max-width:520px;line-height:1.32">Held at 214 km/h — a corner taken very nearly flat.</div>
+    </div>
+    <div style="text-align:right;min-width:330px">
+      <div class="big" style="font-size:104px">1.83<span style="font-size:38px;color:rgba(29,31,32,0.55)"> g</span></div>
+    </div>
+  </div>
+    
+  <div style="border-top:1px solid rgba(29,31,32,0.16);padding:26px 0 24px;display:flex;align-items:flex-start">
+    <div style="flex:1">
+      <div class="unit" style="font-size:23px;letter-spacing:.17em">Fastest lap</div>
+      <div style="font-size:25px;color:rgba(29,31,32,0.72);margin-top:9px;max-width:520px;line-height:1.32">Lap 6 of 7, and 0.278 s clear of the next best.</div>
+    </div>
+    <div style="text-align:right;min-width:330px">
+      <div class="big" style="font-size:104px">1:08.215<span style="font-size:38px;color:rgba(29,31,32,0.55)"> </span></div>
+    </div>
+  </div>
+  </div>
+  <div style="margin-top:auto;padding-bottom:20px">
+    <div class="rule hard"></div>
+    <div class="unit" style="font-size:21px;padding-top:18px">Everything it looks for · solid are the four above</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:12px">
+      <span class="chip">Top speed</span><span class="chip">Hardest braking</span><span class="chip">Highest cornering</span><span class="chip">Fastest lap</span><span class="chip line">Biggest slide</span><span class="chip line">Best launch</span><span class="chip line">Near-spin</span>
+    </div>
+  </div>
+</div>
+<div class="foot"><div><div class="l">Donington National · lap 6</div><div class="s">Every moment is a sample index, so it is the same instant on the map, the graph and the footage.</div></div><div class="r">RDM Studio</div></div>
+</div>

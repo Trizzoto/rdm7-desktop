@@ -1,0 +1,141 @@
+<!doctype html><meta charset="utf-8"><title>Closer</title>
+<style>
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-400.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-700.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-700.woff2') format('woff2');font-weight:700}
+*{margin:0;padding:0;box-sizing:border-box;border-radius:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{background:#f2f2f3;color:#1d1f20;font-family:'Barlow',system-ui,sans-serif;
+     -webkit-font-smoothing:antialiased;position:relative}
+.page{width:1080px;height:1350px;position:relative;display:flex;flex-direction:column}
+
+/* the black brand bar, exactly as the workspace wears it */
+.bar{height:96px;background:#0c0d0e;color:#fff;display:flex;align-items:center;
+     gap:18px;padding:0 40px;flex:none}
+.bar img{height:38px;display:block}
+.bar .ws{font-family:'Barlow Condensed';font-weight:700;font-size:31px;letter-spacing:.06em;
+         text-transform:uppercase;color:#fff;line-height:1}
+.bar .sep{width:1px;height:38px;background:#26282a}
+.bar .tag{font-family:'Barlow Condensed';font-weight:600;font-size:23px;letter-spacing:.17em;
+          text-transform:uppercase;color:#9a9a9e;line-height:1}
+.bar .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.bar .rec{width:11px;height:11px;border-radius:50%;background:#d2232a}
+
+.body{flex:1;display:flex;flex-direction:column;padding:0 40px;min-height:0;position:relative}
+
+.kicker{font-family:'Barlow Condensed';font-weight:600;font-size:24px;letter-spacing:.2em;
+        text-transform:uppercase;color:#d2232a;margin-top:34px}
+.kicker.mut{color:rgba(29,31,32,0.55)}
+h1{font-family:'Barlow Condensed';font-weight:700;font-size:88px;line-height:.92;
+   letter-spacing:.005em;text-transform:uppercase;margin-top:10px}
+h1.sm{font-size:70px}
+h1.xs{font-size:58px}
+.sub{font-size:25px;line-height:1.34;color:rgba(29,31,32,0.72);margin-top:16px;max-width:850px;font-weight:400}
+.rule{height:1px;background:rgba(29,31,32,0.16);margin:24px 0}
+.grow{flex:1 1 auto;min-height:0}
+.rule.hard{background:#1d1f20;height:2px}
+
+/* the huge readouts */
+.big{font-family:'Barlow Condensed';font-weight:700;line-height:.84;letter-spacing:-.005em;
+     font-variant-numeric:tabular-nums}
+.unit{font-family:'Barlow Condensed';font-weight:600;color:rgba(29,31,32,0.55);letter-spacing:.06em;
+      text-transform:uppercase}
+
+/* ruled tables: one fact per column, labelled — never prose */
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-family:'Barlow Condensed';font-weight:600;font-size:20px;letter-spacing:.15em;
+   text-transform:uppercase;color:rgba(29,31,32,0.55);text-align:left;padding:0 0 9px;
+   border-bottom:2px solid #1d1f20}
+td{font-size:29px;padding:13px 0;border-bottom:1px solid rgba(29,31,32,0.08);font-weight:500}
+td.n{font-family:'Barlow Condensed';font-weight:700;font-size:34px}
+.r{text-align:right}
+
+.foot{flex:none;border-top:1px solid rgba(29,31,32,0.16);padding:20px 40px 30px;display:flex;
+      align-items:flex-end;gap:20px;background:#f2f2f3}
+.foot .l{font-family:'Barlow Condensed';font-weight:600;font-size:22px;letter-spacing:.16em;
+         text-transform:uppercase;color:#1d1f20}
+.foot .s{font-size:19px;color:rgba(29,31,32,0.55);margin-top:3px;line-height:1.3;font-weight:400}
+.foot .r{margin-left:auto;text-align:right;font-family:'Barlow Condensed';font-weight:600;
+         font-size:22px;letter-spacing:.16em;text-transform:uppercase;color:#d2232a;
+         white-space:nowrap;flex:none}
+
+.chip{display:inline-block;font-family:'Barlow Condensed';font-weight:600;font-size:20px;
+      letter-spacing:.13em;text-transform:uppercase;padding:5px 11px 4px;
+      background:#1d1f20;color:#fff}
+.chip.red{background:#d2232a}
+.chip.line{background:transparent;color:rgba(29,31,32,0.55);border:1px solid rgba(29,31,32,0.16)}
+</style>
+<div class="page">
+<div class="bar">
+  <img src="file:///C:/Users/ruuva/workspace/rdm7-desktop/src/rdm_logo.png" alt="RDM">
+  <div class="ws">Studio</div>
+  <div class="sep"></div>
+  <div class="tag">Lap timer · Drift mode</div>
+  
+</div>
+<div class="body">
+  <div class="kicker">Everything in the box</div>
+  <h1 class="sm">Twelve things it does<br>that you would<br>otherwise do by eye</h1>
+  <div style="margin-top:24px;border-top:2px solid #1d1f20">
+    <div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">01</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">Lap timing</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">From a line you place once, or from where the car actually stopped</div>
+    </div><div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">02</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">Continuous delta</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">Against any lap, matched by place</div>
+    </div><div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">03</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">Corner report</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">Ranked by the time each one cost you</div>
+    </div><div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">04</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">The ideal lap</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">Best sectors, plus average, median and consistency</div>
+    </div><div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">05</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">Drift scoring</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">Every corner on every lap, out of five</div>
+    </div><div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">06</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">Slip angle</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">With the error bar on the reading printed</div>
+    </div><div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">07</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">Grip circle</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">Live at the playhead, and for the whole lap</div>
+    </div><div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">08</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">Moments</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">The bits worth watching again, found for you</div>
+    </div><div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">09</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">Video, synced</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">Two laps at once, paired by place</div>
+    </div><div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">10</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">Overlay export</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">Eleven instruments burned into the file</div>
+    </div><div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">11</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">Trust panel</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">Every dropout found, marked and measured</div>
+    </div><div style="display:flex;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(29,31,32,0.08)">
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:21px;color:#d2232a;width:42px;flex:none">12</div>
+      <div style="font-family:'Barlow Condensed';font-weight:700;font-size:32px;text-transform:uppercase;letter-spacing:.03em;width:318px;flex:none;line-height:1">CAN channels</div>
+      <div style="font-size:22px;color:rgba(29,31,32,0.72);line-height:1.26">Twelve from the car, live beside the GPS</div>
+    </div>
+  </div>
+  <div class="grow"></div>
+  <div style="padding:22px 0 12px;border-top:2px solid #1d1f20;margin-top:16px">
+    <div style="font-family:'Barlow Condensed';font-weight:700;font-size:60px;text-transform:uppercase;line-height:1;letter-spacing:.02em">
+      Built for the<br><span style="color:#d2232a">RDM GPS lap timer</span></div>
+  </div>
+</div>
+<div class="foot"><div><div class="l">Windows · macOS · Linux</div><div class="s">The same analysis engine the device runs, on a screen big enough to read it.</div></div><div class="r">RDM Studio</div></div>
+</div>

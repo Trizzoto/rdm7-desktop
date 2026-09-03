@@ -1,0 +1,122 @@
+<!doctype html><meta charset="utf-8"><title>Angle</title>
+<style>
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-400.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-700.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-700.woff2') format('woff2');font-weight:700}
+*{margin:0;padding:0;box-sizing:border-box;border-radius:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{background:#f2f2f3;color:#1d1f20;font-family:'Barlow',system-ui,sans-serif;
+     -webkit-font-smoothing:antialiased;position:relative}
+.page{width:1080px;height:1350px;position:relative;display:flex;flex-direction:column}
+
+/* the black brand bar, exactly as the workspace wears it */
+.bar{height:96px;background:#0c0d0e;color:#fff;display:flex;align-items:center;
+     gap:18px;padding:0 40px;flex:none}
+.bar img{height:38px;display:block}
+.bar .ws{font-family:'Barlow Condensed';font-weight:700;font-size:31px;letter-spacing:.06em;
+         text-transform:uppercase;color:#fff;line-height:1}
+.bar .sep{width:1px;height:38px;background:#26282a}
+.bar .tag{font-family:'Barlow Condensed';font-weight:600;font-size:23px;letter-spacing:.17em;
+          text-transform:uppercase;color:#9a9a9e;line-height:1}
+.bar .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.bar .rec{width:11px;height:11px;border-radius:50%;background:#d2232a}
+
+.body{flex:1;display:flex;flex-direction:column;padding:0 40px;min-height:0;position:relative}
+
+.kicker{font-family:'Barlow Condensed';font-weight:600;font-size:24px;letter-spacing:.2em;
+        text-transform:uppercase;color:#d2232a;margin-top:34px}
+.kicker.mut{color:rgba(29,31,32,0.55)}
+h1{font-family:'Barlow Condensed';font-weight:700;font-size:88px;line-height:.92;
+   letter-spacing:.005em;text-transform:uppercase;margin-top:10px}
+h1.sm{font-size:70px}
+h1.xs{font-size:58px}
+.sub{font-size:25px;line-height:1.34;color:rgba(29,31,32,0.72);margin-top:16px;max-width:850px;font-weight:400}
+.rule{height:1px;background:rgba(29,31,32,0.16);margin:24px 0}
+.grow{flex:1 1 auto;min-height:0}
+.rule.hard{background:#1d1f20;height:2px}
+
+/* the huge readouts */
+.big{font-family:'Barlow Condensed';font-weight:700;line-height:.84;letter-spacing:-.005em;
+     font-variant-numeric:tabular-nums}
+.unit{font-family:'Barlow Condensed';font-weight:600;color:rgba(29,31,32,0.55);letter-spacing:.06em;
+      text-transform:uppercase}
+
+/* ruled tables: one fact per column, labelled — never prose */
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-family:'Barlow Condensed';font-weight:600;font-size:20px;letter-spacing:.15em;
+   text-transform:uppercase;color:rgba(29,31,32,0.55);text-align:left;padding:0 0 9px;
+   border-bottom:2px solid #1d1f20}
+td{font-size:29px;padding:13px 0;border-bottom:1px solid rgba(29,31,32,0.08);font-weight:500}
+td.n{font-family:'Barlow Condensed';font-weight:700;font-size:34px}
+.r{text-align:right}
+
+.foot{flex:none;border-top:1px solid rgba(29,31,32,0.16);padding:20px 40px 30px;display:flex;
+      align-items:flex-end;gap:20px;background:#f2f2f3}
+.foot .l{font-family:'Barlow Condensed';font-weight:600;font-size:22px;letter-spacing:.16em;
+         text-transform:uppercase;color:#1d1f20}
+.foot .s{font-size:19px;color:rgba(29,31,32,0.55);margin-top:3px;line-height:1.3;font-weight:400}
+.foot .r{margin-left:auto;text-align:right;font-family:'Barlow Condensed';font-weight:600;
+         font-size:22px;letter-spacing:.16em;text-transform:uppercase;color:#d2232a;
+         white-space:nowrap;flex:none}
+
+.chip{display:inline-block;font-family:'Barlow Condensed';font-weight:600;font-size:20px;
+      letter-spacing:.13em;text-transform:uppercase;padding:5px 11px 4px;
+      background:#1d1f20;color:#fff}
+.chip.red{background:#d2232a}
+.chip.line{background:transparent;color:rgba(29,31,32,0.55);border:1px solid rgba(29,31,32,0.16)}
+</style>
+<div class="page">
+<div class="bar">
+  <img src="file:///C:/Users/ruuva/workspace/rdm7-desktop/src/rdm_logo.png" alt="RDM">
+  <div class="ws">Studio</div>
+  <div class="sep"></div>
+  <div class="tag">Drift Mode</div>
+  
+</div>
+<div class="body">
+  <div class="kicker">The angle, and the error bar on it</div>
+  <h1>How sideways —<br>and how sure</h1>
+  <div class="sub">The shaded band is the app's own uncertainty about the reading. When it cannot tell you accurately, it says so instead of drawing a confident line.</div>
+  <div style="margin:24px 0 0 -14px"><svg width="1000" height="500" viewBox="0 0 1000 500">
+  <rect x="211.83333333333331" y="0" width="576.3" height="500" fill="#fdeeec"/>
+  <line x1="0" y1="351.457485818159" x2="1000" y2="351.457485818159" stroke="rgba(29,31,32,0.08)" stroke-width="1"/>
+     <text x="6" y="343.457485818159" font-family="Barlow Condensed" font-weight="600" font-size="21" fill="#b7b7ba">−40°</text><line x1="0" y1="214.18353339392607" x2="1000" y2="214.18353339392607" stroke="rgba(29,31,32,0.08)" stroke-width="1"/>
+     <text x="6" y="206.18353339392607" font-family="Barlow Condensed" font-weight="600" font-size="21" fill="#b7b7ba">−20°</text>
+  <line x1="0" y1="76.90958096969317" x2="1000" y2="76.90958096969317" stroke="#1d1f20" stroke-width="2"/>
+  <!-- Set in from the left, where the car is already sideways and the space
+       above the zero line is empty. At the left edge the trace itself starts
+       ON zero and dived straight through the caption's first character. -->
+  <text x="340" y="65.90958096969317" font-family="Barlow Condensed" font-weight="700" font-size="21" letter-spacing="1.6" fill="rgba(29,31,32,0.55)">0° · POINTING WHERE IT IS GOING</text>
+  <line x1="0" y1="351.457485818159" x2="1000" y2="351.457485818159" stroke="#d2232a" stroke-width="1.5" stroke-dasharray="7 5"/>
+  <text x="995" y="379.457485818159" text-anchor="end" font-family="Barlow Condensed" font-weight="700" font-size="23" letter-spacing="1.4" fill="#d2232a">FULL MARKS · HELD 40°</text>
+  <path d="M6.0 49.9L10.6 54.3L15.1 58.1L19.7 61.2L24.3 64.3L28.9 66.6L33.4 68.7L38.0 69.4L42.6 70.0L47.2 70.0L51.7 70.0L56.3 69.4L60.9 70.0L65.5 70.0L70.0 70.0L74.6 70.7L79.2 70.7L83.8 71.4L88.3 71.4L92.9 71.4L97.5 71.4L102.1 72.8L106.6 73.8L111.2 75.5L115.8 77.2L120.4 80.3L124.9 83.4L129.5 86.5L134.1 89.6L138.6 92.8L143.2 97.3L147.8 101.1L152.4 105.7L156.9 111.0L161.5 116.2L166.1 122.1L170.7 128.1L175.2 134.8L179.8 142.1L184.4 150.1L189.0 156.8L193.5 163.5L198.1 170.1L202.7 177.5L207.3 184.9L211.8 191.5L216.4 199.6L221.0 207.7L225.6 215.8L230.1 224.5L234.7 233.3L239.3 242.1L243.9 250.1L248.4 257.5L253.0 264.9L257.6 271.6L262.1 277.7L266.7 283.7L271.3 290.4L275.9 296.5L280.4 303.3L285.0 309.3L289.6 315.4L294.2 320.7L298.7 326.1L303.3 330.8L307.9 334.1L312.5 337.4L317.0 340.8L321.6 343.4L326.2 346.0L330.8 349.3L335.3 352.7L339.9 356.0L344.5 360.0L349.1 363.3L353.6 366.7L358.2 370.1L362.8 372.7L367.4 374.7L371.9 377.3L376.5 379.3L381.1 380.6L385.6 380.5L390.2 380.4L394.8 380.4L399.4 379.6L403.9 378.8L408.5 378.1L413.1 378.0L417.7 378.6L422.2 379.3L426.8 379.9L431.4 380.5L436.0 381.8L440.5 383.1L445.1 384.4L449.7 385.7L454.3 386.3L458.8 387.6L463.4 387.6L468.0 387.6L472.6 386.8L477.1 386.1L481.7 385.4L486.3 383.9L490.9 382.5L495.4 380.4L500.0 377.6L504.6 375.5L509.1 372.7L513.7 370.6L518.3 368.5L522.9 366.4L527.4 365.7L532.0 364.3L536.6 362.9L541.2 362.9L545.7 362.1L550.3 361.4L554.9 360.0L559.5 357.2L564.0 355.2L568.6 353.0L573.2 349.6L577.8 345.5L582.3 342.0L586.9 338.6L591.5 335.1L596.1 330.9L600.6 326.8L605.2 322.7L609.8 319.3L614.4 315.8L618.9 312.3L623.5 309.6L628.1 306.2L632.6 302.7L637.2 298.6L641.8 295.8L646.4 292.4L650.9 288.2L655.5 283.4L660.1 278.6L664.7 273.8L669.2 268.3L673.8 262.2L678.4 256.7L683.0 250.5L687.5 245.0L692.1 240.2L696.7 235.4L701.3 230.7L705.8 226.5L710.4 222.4L715.0 218.3L719.6 213.5L724.1 208.0L728.7 203.3L733.3 197.1L737.9 191.6L742.4 186.1L747.0 180.0L751.6 173.8L756.1 167.6L760.7 162.2L765.3 156.0L769.9 150.6L774.4 145.1L779.0 140.3L783.6 135.5L788.2 130.1L792.7 125.3L797.3 121.2L801.9 116.4L806.5 111.7L811.0 106.9L815.6 103.5L820.2 100.1L824.8 96.1L829.3 92.0L833.9 88.6L838.5 84.5L843.1 81.2L847.6 78.4L852.2 75.1L856.8 73.1L861.4 71.0L865.9 69.0L870.5 66.3L875.1 64.3L879.6 62.3L884.2 61.0L888.8 59.0L893.4 57.7L897.9 57.8L902.5 57.8L907.1 57.2L911.7 56.6L916.2 56.7L920.8 56.7L925.4 56.1L930.0 55.5L934.5 56.2L939.1 56.3L943.7 56.4L948.3 56.5L952.8 56.5L957.4 57.3L962.0 57.4L966.6 56.8L971.1 57.6L975.7 57.6L980.3 57.1L984.9 57.1L989.4 57.2L994.0 58.0L994.0 91.7L989.4 91.1L984.9 91.2L980.3 91.3L975.7 92.1L971.1 92.1L966.6 91.5L962.0 92.3L957.4 92.4L952.8 91.8L948.3 91.9L943.7 91.9L939.1 92.0L934.5 92.1L930.0 91.5L925.4 92.2L920.8 93.0L916.2 93.0L911.7 93.1L907.1 93.9L902.5 94.6L897.9 94.7L893.4 94.8L888.8 96.2L884.2 98.3L879.6 99.8L875.1 101.8L870.5 104.0L865.9 106.8L861.4 108.9L856.8 111.0L852.2 113.1L847.6 116.6L843.1 119.3L838.5 122.8L833.9 127.0L829.3 130.4L824.8 134.6L820.2 138.8L815.6 142.3L811.0 145.8L806.5 150.6L801.9 155.4L797.3 160.2L792.7 164.4L788.2 169.2L783.6 174.8L779.0 179.6L774.4 184.4L769.9 190.0L765.3 195.4L760.7 201.6L756.1 207.2L751.6 213.4L747.0 219.5L742.4 225.8L737.9 231.3L733.3 236.8L728.7 242.9L724.1 247.8L719.6 253.3L715.0 258.1L710.4 262.2L705.8 266.3L701.3 270.5L696.7 275.3L692.1 280.1L687.5 284.9L683.0 290.4L678.4 296.6L673.8 302.1L669.2 308.3L664.7 313.8L660.1 318.6L655.5 323.4L650.9 328.2L646.4 332.3L641.8 335.7L637.2 338.4L632.6 342.5L628.1 346.0L623.5 349.4L618.9 352.1L614.4 355.6L609.8 358.9L605.2 362.4L600.6 366.5L596.1 370.6L591.5 374.7L586.9 378.1L582.3 381.5L577.8 384.9L573.2 389.0L568.6 392.4L564.0 394.4L559.5 396.5L554.9 399.2L550.3 400.5L545.7 401.2L541.2 401.8L536.6 401.8L532.0 403.1L527.4 404.5L522.9 405.1L518.3 407.2L513.7 409.2L509.1 411.2L504.6 413.9L500.0 415.9L495.4 418.6L490.9 420.6L486.3 421.9L481.7 423.3L477.1 423.9L472.6 424.6L468.0 425.2L463.4 425.1L458.8 425.1L454.3 423.7L449.7 422.9L445.1 421.5L440.5 420.0L436.0 418.6L431.4 417.1L426.8 416.4L422.2 415.6L417.7 414.9L413.1 414.1L408.5 414.1L403.9 414.7L399.4 415.3L394.8 415.9L390.2 415.8L385.6 415.8L381.1 415.7L376.5 414.2L371.9 412.1L367.4 409.2L362.8 407.1L358.2 404.2L353.6 400.7L349.1 397.2L344.5 393.7L339.9 389.5L335.3 385.9L330.8 382.4L326.2 378.8L321.6 376.0L317.0 373.1L312.5 369.6L307.9 366.1L303.3 362.5L298.7 357.6L294.2 352.0L289.6 346.4L285.0 340.1L280.4 333.7L275.9 326.8L271.3 320.5L266.7 313.5L262.1 307.2L257.6 300.9L253.0 293.9L248.4 286.2L243.9 278.4L239.3 270.1L234.7 261.0L230.1 251.9L225.6 242.8L221.0 234.4L216.4 226.0L211.8 217.6L207.3 210.5L202.7 202.9L198.1 195.1L193.5 188.0L189.0 181.0L184.4 173.9L179.8 165.5L175.2 157.7L170.7 150.6L166.1 144.2L161.5 137.8L156.9 132.1L152.4 126.3L147.8 121.3L143.2 116.9L138.6 111.8L134.1 108.1L129.5 104.4L124.9 100.7L120.4 96.9L115.8 93.1L111.2 90.7L106.6 88.3L102.1 86.5L97.5 85.1L92.9 85.1L88.3 85.1L83.8 85.1L79.2 84.5L74.6 84.5L70.0 83.8L65.5 83.8L60.9 83.8L56.3 83.1L51.7 83.8L47.2 83.8L42.6 83.8L38.0 83.1L33.4 82.4L28.9 80.3L24.3 78.6L19.7 76.2L15.1 73.8L10.6 70.7L6.0 66.8Z" fill="#1d1f20" opacity="0.13"/>
+  <path d="M6.0 58.4L10.6 62.5L15.1 65.9L19.7 68.7L24.3 71.4L28.9 73.5L33.4 75.5L38.0 76.2L42.6 76.9L47.2 76.9L51.7 76.9L56.3 76.2L60.9 76.9L65.5 76.9L70.0 76.9L74.6 77.6L79.2 77.6L83.8 78.3L88.3 78.3L92.9 78.3L97.5 78.3L102.1 79.7L106.6 81.0L111.2 83.1L115.8 85.1L120.4 88.6L124.9 92.0L129.5 95.4L134.1 98.9L138.6 102.3L143.2 107.1L147.8 111.2L152.4 116.0L156.9 121.5L161.5 127.0L166.1 133.2L170.7 139.4L175.2 146.2L179.8 153.8L184.4 162.0L189.0 168.9L193.5 175.7L198.1 182.6L202.7 190.2L207.3 197.7L211.8 204.6L216.4 212.8L221.0 221.0L225.6 229.3L230.1 238.2L234.7 247.1L239.3 256.1L243.9 264.3L248.4 271.8L253.0 279.4L257.6 286.3L262.1 292.4L266.7 298.6L271.3 305.5L275.9 311.6L280.4 318.5L285.0 324.7L289.6 330.9L294.2 336.4L298.7 341.8L303.3 346.7L307.9 350.1L312.5 353.5L317.0 356.9L321.6 359.7L326.2 362.4L330.8 365.9L335.3 369.3L339.9 372.7L344.5 376.9L349.1 380.3L353.6 383.7L358.2 387.1L362.8 389.9L367.4 392.0L371.9 394.7L376.5 396.8L381.1 398.1L385.6 398.1L390.2 398.1L394.8 398.1L399.4 397.4L403.9 396.8L408.5 396.1L413.1 396.1L417.7 396.8L422.2 397.4L426.8 398.1L431.4 398.8L436.0 400.2L440.5 401.6L445.1 402.9L449.7 404.3L454.3 405.0L458.8 406.4L463.4 406.4L468.0 406.4L472.6 405.7L477.1 405.0L481.7 404.3L486.3 402.9L490.9 401.6L495.4 399.5L500.0 396.8L504.6 394.7L509.1 392.0L513.7 389.9L518.3 387.8L522.9 385.8L527.4 385.1L532.0 383.7L536.6 382.3L541.2 382.3L545.7 381.7L550.3 381.0L554.9 379.6L559.5 376.9L564.0 374.8L568.6 372.7L573.2 369.3L577.8 365.2L582.3 361.8L586.9 358.3L591.5 354.9L596.1 350.8L600.6 346.7L605.2 342.5L609.8 339.1L614.4 335.7L618.9 332.2L623.5 329.5L628.1 326.1L632.6 322.6L637.2 318.5L641.8 315.8L646.4 312.3L650.9 308.2L655.5 303.4L660.1 298.6L664.7 293.8L669.2 288.3L673.8 282.1L678.4 276.6L683.0 270.5L687.5 265.0L692.1 260.2L696.7 255.4L701.3 250.6L705.8 246.4L710.4 242.3L715.0 238.2L719.6 233.4L724.1 227.9L728.7 223.1L733.3 216.9L737.9 211.4L742.4 205.9L747.0 199.8L751.6 193.6L756.1 187.4L760.7 181.9L765.3 175.7L769.9 170.3L774.4 164.8L779.0 160.0L783.6 155.2L788.2 149.7L792.7 144.9L797.3 140.7L801.9 135.9L806.5 131.1L811.0 126.3L815.6 122.9L820.2 119.5L824.8 115.3L829.3 111.2L833.9 107.8L838.5 103.7L843.1 100.2L847.6 97.5L852.2 94.1L856.8 92.0L861.4 90.0L865.9 87.9L870.5 85.1L875.1 83.1L879.6 81.0L884.2 79.7L888.8 77.6L893.4 76.2L897.9 76.2L902.5 76.2L907.1 75.5L911.7 74.9L916.2 74.9L920.8 74.9L925.4 74.2L930.0 73.5L934.5 74.2L939.1 74.2L943.7 74.2L948.3 74.2L952.8 74.2L957.4 74.9L962.0 74.9L966.6 74.2L971.1 74.9L975.7 74.9L980.3 74.2L984.9 74.2L989.4 74.2L994.0 74.9" fill="none" stroke="#1d1f20" stroke-width="3.6" stroke-linejoin="round"/>
+  <text x="500" y="488" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="24" letter-spacing="1.8" fill="#d2232a">SIDEWAYS FOR 5.0 S</text>
+  <text x="6" y="488" font-family="Barlow Condensed" font-weight="600" font-size="21" letter-spacing="1.5" fill="rgba(29,31,32,0.55)">SHADED BAND = THE ERROR BAR</text>
+</svg></div>
+  <div style="background:#ffffff;border:1px solid rgba(29,31,32,0.16);padding:20px 24px;font-size:25px;line-height:1.36;font-weight:500;margin-top:6px">
+    The sensor is corrected before you ever see this line — this one read <b>1.8% long</b> and sat <b>0.52°/s off zero</b>, found from 274 places on the drive where the car was demonstrably straight.
+  </div>
+  <div class="grow"></div>
+  <div class="rule hard" style="margin:0 0 20px"></div>
+  <div style="display:flex;align-items:flex-end;padding-bottom:8px">
+    <div>
+      <div class="unit" style="font-size:22px">Peak angle</div>
+      <div class="big" style="font-size:104px;color:#d2232a">48<span style="font-size:44px">°</span></div>
+    </div>
+    <div style="margin-left:50px">
+      <div class="unit" style="font-size:22px">Held</div>
+      <div class="big" style="font-size:104px">36.3<span style="font-size:44px">°</span></div>
+    </div>
+    <div style="margin-left:auto;text-align:right">
+      <div class="unit" style="font-size:22px">Reading good to</div>
+      <div class="big" style="font-size:104px;color:rgba(29,31,32,0.55)">±2.9<span style="font-size:44px">°</span></div>
+    </div>
+  </div>
+</div>
+<div class="foot"><div><div class="l">Angle from the yaw sensor, against the path the car actually took</div><div class="s">A spin is not a very good drift — the app refuses to rate one rather than giving it full marks.</div></div><div class="r">RDM Studio</div></div>
+</div>

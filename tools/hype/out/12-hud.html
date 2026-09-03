@@ -1,0 +1,188 @@
+<!doctype html><meta charset="utf-8"><title>Overlay</title>
+<style>
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-400.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-700.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-700.woff2') format('woff2');font-weight:700}
+*{margin:0;padding:0;box-sizing:border-box;border-radius:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{background:#f2f2f3;color:#1d1f20;font-family:'Barlow',system-ui,sans-serif;
+     -webkit-font-smoothing:antialiased;position:relative}
+.page{width:1080px;height:1350px;position:relative;display:flex;flex-direction:column}
+
+/* the black brand bar, exactly as the workspace wears it */
+.bar{height:96px;background:#0c0d0e;color:#fff;display:flex;align-items:center;
+     gap:18px;padding:0 40px;flex:none}
+.bar img{height:38px;display:block}
+.bar .ws{font-family:'Barlow Condensed';font-weight:700;font-size:31px;letter-spacing:.06em;
+         text-transform:uppercase;color:#fff;line-height:1}
+.bar .sep{width:1px;height:38px;background:#26282a}
+.bar .tag{font-family:'Barlow Condensed';font-weight:600;font-size:23px;letter-spacing:.17em;
+          text-transform:uppercase;color:#9a9a9e;line-height:1}
+.bar .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.bar .rec{width:11px;height:11px;border-radius:50%;background:#d2232a}
+
+.body{flex:1;display:flex;flex-direction:column;padding:0 40px;min-height:0;position:relative}
+
+.kicker{font-family:'Barlow Condensed';font-weight:600;font-size:24px;letter-spacing:.2em;
+        text-transform:uppercase;color:#d2232a;margin-top:34px}
+.kicker.mut{color:rgba(29,31,32,0.55)}
+h1{font-family:'Barlow Condensed';font-weight:700;font-size:88px;line-height:.92;
+   letter-spacing:.005em;text-transform:uppercase;margin-top:10px}
+h1.sm{font-size:70px}
+h1.xs{font-size:58px}
+.sub{font-size:25px;line-height:1.34;color:rgba(29,31,32,0.72);margin-top:16px;max-width:850px;font-weight:400}
+.rule{height:1px;background:rgba(29,31,32,0.16);margin:24px 0}
+.grow{flex:1 1 auto;min-height:0}
+.rule.hard{background:#1d1f20;height:2px}
+
+/* the huge readouts */
+.big{font-family:'Barlow Condensed';font-weight:700;line-height:.84;letter-spacing:-.005em;
+     font-variant-numeric:tabular-nums}
+.unit{font-family:'Barlow Condensed';font-weight:600;color:rgba(29,31,32,0.55);letter-spacing:.06em;
+      text-transform:uppercase}
+
+/* ruled tables: one fact per column, labelled — never prose */
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-family:'Barlow Condensed';font-weight:600;font-size:20px;letter-spacing:.15em;
+   text-transform:uppercase;color:rgba(29,31,32,0.55);text-align:left;padding:0 0 9px;
+   border-bottom:2px solid #1d1f20}
+td{font-size:29px;padding:13px 0;border-bottom:1px solid rgba(29,31,32,0.08);font-weight:500}
+td.n{font-family:'Barlow Condensed';font-weight:700;font-size:34px}
+.r{text-align:right}
+
+.foot{flex:none;border-top:1px solid rgba(29,31,32,0.16);padding:20px 40px 30px;display:flex;
+      align-items:flex-end;gap:20px;background:#f2f2f3}
+.foot .l{font-family:'Barlow Condensed';font-weight:600;font-size:22px;letter-spacing:.16em;
+         text-transform:uppercase;color:#1d1f20}
+.foot .s{font-size:19px;color:rgba(29,31,32,0.55);margin-top:3px;line-height:1.3;font-weight:400}
+.foot .r{margin-left:auto;text-align:right;font-family:'Barlow Condensed';font-weight:600;
+         font-size:22px;letter-spacing:.16em;text-transform:uppercase;color:#d2232a;
+         white-space:nowrap;flex:none}
+
+.chip{display:inline-block;font-family:'Barlow Condensed';font-weight:600;font-size:20px;
+      letter-spacing:.13em;text-transform:uppercase;padding:5px 11px 4px;
+      background:#1d1f20;color:#fff}
+.chip.red{background:#d2232a}
+.chip.line{background:transparent;color:rgba(29,31,32,0.55);border:1px solid rgba(29,31,32,0.16)}
+</style>
+<div class="page">
+<div class="bar">
+  <img src="file:///C:/Users/ruuva/workspace/rdm7-desktop/src/rdm_logo.png" alt="RDM">
+  <div class="ws">Studio</div>
+  <div class="sep"></div>
+  <div class="tag">Video</div>
+  
+</div>
+<div class="body">
+  <div class="kicker">The overlay</div>
+  <h1>Burn the numbers<br>into the footage</h1>
+  <div class="sub">Open your video beside the recording, line it up once, and the app renders the telemetry straight into the exported file. No second program.</div>
+  <div style="margin:22px 0 0 -14px"><svg width="1000" height="396" viewBox="0 0 1000 396">
+  <defs>
+    <linearGradient id="fr" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0%" stop-color="#232a30"/><stop offset="55%" stop-color="#161b20"/>
+      <stop offset="100%" stop-color="#0b0e11"/></linearGradient>
+    <linearGradient id="wash" x1="0" y1="73.60000000000002" x2="0" y2="396" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#06080a" stop-opacity="0"/>
+      <stop offset="55%" stop-color="#06080a" stop-opacity="0.40"/>
+      <stop offset="100%" stop-color="#06080a" stop-opacity="0.80"/></linearGradient>
+  </defs>
+  <rect width="1000" height="396" fill="url(#fr)"/>
+  <path d="M0 396L505 158L615 158L1000 396Z" fill="#0e1215"/>
+  <path d="M0 158L1000 158" stroke="#2b333a" stroke-width="2"/>
+  <path d="M0 396L505 158" stroke="#3b444c" stroke-width="3"/>
+  <path d="M1000 396L615 158" stroke="#3b444c" stroke-width="3"/><path d="M500 396L500 395" stroke="#39424a" stroke-width="8.2"/><path d="M501 392L502 387" stroke="#39424a" stroke-width="8.1"/><path d="M504 379L507 370" stroke="#39424a" stroke-width="7.7"/><path d="M510 356L514 342" stroke="#39424a" stroke-width="7.0"/><path d="M519 323L523 304" stroke="#39424a" stroke-width="6.0"/><path d="M530 279L535 256" stroke="#39424a" stroke-width="4.7"/><path d="M543 224L551 196" stroke="#39424a" stroke-width="3.1"/>
+  <rect x="0" y="73.60000000000002" width="1000" height="322.4" fill="url(#wash)"/>
+
+  <!-- Speed, from the sample. No pedal tubes: this car reports no throttle
+       or brake, and the app draws only the instruments a recording can fill. -->
+  <text x="32.24" y="363.76" font-family="Barlow Condensed" font-weight="700" font-size="114.08" fill="#F5F7FA" letter-spacing="-1">214</text>
+  <text x="220.72" y="363.76" font-family="Barlow" font-weight="600" font-size="26.04" fill="rgba(245,247,250,0.72)">km/h</text>
+
+  <!-- lap time and delta -->
+  <text x="32.24" y="192.64" font-family="Barlow Condensed" font-weight="600" font-size="23.56" letter-spacing="2" fill="rgba(245,247,250,0.62)">LAP 6 · AGAINST LAP 4</text>
+  <text x="32.24" y="234.79999999999998" font-family="Barlow Condensed" font-weight="700" font-size="49.6" fill="#F5F7FA">1:08.215</text>
+  <text x="230.64000000000001" y="234.79999999999998" font-family="Barlow Condensed" font-weight="700" font-size="49.6" fill="#6FBF73">−0.12</text>
+
+  <!-- grip circle -->
+  <circle cx="581.84" cy="304.24" r="52.08" fill="rgba(10,13,16,0.35)" stroke="rgba(245,247,250,0.28)" stroke-width="1.5"/>
+  <circle cx="581.84" cy="304.24" r="26.04" fill="none" stroke="rgba(245,247,250,0.16)" stroke-width="1"/>
+  <line x1="529.76" y1="304.24" x2="633.9200000000001" y2="304.24" stroke="rgba(245,247,250,0.16)" stroke-width="1"/>
+  <line x1="581.84" y1="252.16000000000003" x2="581.84" y2="356.32" stroke="rgba(245,247,250,0.16)" stroke-width="1"/>
+  <circle cx="534.2" cy="300.3" r="6.2" fill="#d2232a"/>
+  <text x="581.84" y="379.88" text-anchor="middle" font-family="Barlow Condensed" font-weight="600" font-size="18.6" letter-spacing="1.6" fill="rgba(245,247,250,0.62)">1.84 G</text>
+
+  <!-- minimap: the analyse map's own constant line, with the car on it -->
+  <g transform="translate(747.76,217.76)">
+    <path d="M64.5 77.3L63.8 77.1L63.0 77.0L62.2 76.9L61.5 76.7L60.7 76.6L59.9 76.5L59.2 76.4L58.4 76.2L57.6 76.1L56.8 75.9L56.0 75.8L55.2 75.7L54.4 75.5L53.6 75.4L52.8 75.2L52.0 75.1L51.2 74.9L50.4 74.8L49.6 74.6L48.7 74.5L47.9 74.3L47.1 74.2L46.3 74.0L45.5 73.9L44.6 73.8L43.8 73.6L43.0 73.4L42.1 73.3L41.3 73.1L40.4 73.0L39.6 72.8L38.7 72.7L37.9 72.5L37.0 72.3L36.2 72.2L35.3 72.0L34.4 71.9L33.6 71.7L32.7 71.6L31.9 71.4L31.0 71.2L30.2 71.1L29.3 70.9L28.5 70.8L27.8 70.6L27.0 70.5L26.3 70.3L25.6 70.2L24.9 70.1L24.2 69.9L23.6 69.8L23.0 69.7L22.4 69.5L21.8 69.4L21.3 69.3L20.7 69.1L20.2 69.0L19.7 68.9L19.2 68.8L18.7 68.6L18.3 68.5L17.9 68.3L17.4 68.2L17.0 68.0L16.6 67.8L16.3 67.6L15.9 67.4L15.5 67.2L15.2 66.9L14.9 66.7L14.6 66.4L14.3 66.1L14.0 65.8L13.7 65.5L13.5 65.1L13.3 64.8L13.1 64.4L12.9 64.1L12.7 63.7L12.5 63.3L12.4 62.9L12.3 62.5L12.2 62.1L12.1 61.7L12.1 61.3L12.0 60.8L12.0 60.4L12.0 60.0L12.0 59.5L12.1 59.1L12.1 58.6L12.2 58.2L12.3 57.7L12.4 57.3L12.5 56.8L12.7 56.4L12.9 55.9L13.0 55.5L13.2 55.1L13.5 54.6L13.7 54.1L14.0 53.7L14.2 53.3L14.5 52.8L14.8 52.4L15.1 51.9L15.4 51.5L15.7 51.0L16.1 50.6L16.4 50.1L16.8 49.7L17.2 49.3L17.6 48.8L17.9 48.4L18.3 47.9L18.7 47.5L19.1 47.0L19.6 46.6L20.0 46.1L20.4 45.6L20.9 45.2L21.3 44.8L21.8 44.3L22.2 43.9L22.7 43.4L23.2 43.0L23.8 42.6L24.3 42.2L24.8 41.8L25.4 41.4L25.9 41.0L26.5 40.6L27.1 40.2L27.7 39.9L28.3 39.5L28.9 39.2L29.5 38.8L30.2 38.5L30.8 38.2L31.5 37.9L32.1 37.6L32.8 37.3L33.5 37.0L34.2 36.8L34.9 36.5L35.6 36.3L36.3 36.1L37.1 35.9L37.8 35.7L38.5 35.5L39.3 35.4L40.0 35.2L40.8 35.1L41.6 35.0L42.4 34.9L43.1 34.8L43.9 34.7L44.7 34.7L45.5 34.7L46.3 34.7L47.1 34.7L47.9 34.7L48.7 34.7L49.5 34.8L50.4 34.8L51.2 34.9L52.0 35.1L52.8 35.2L53.6 35.4L54.4 35.5L55.2 35.7L56.0 35.9L56.9 36.1L57.7 36.3L58.5 36.4L59.3 36.6L60.2 36.7L61.0 36.8L61.8 37.0L62.6 37.1L63.5 37.2L64.3 37.2L65.1 37.3L65.9 37.4L66.8 37.4L67.6 37.4L68.5 37.3L69.3 37.3L70.1 37.2L71.0 37.1L71.8 37.0L72.6 36.9L73.5 36.7L74.3 36.5L75.1 36.3L75.9 36.1L76.7 35.8L77.5 35.5L78.3 35.2L79.1 34.9L79.9 34.6L80.7 34.2L81.5 33.8L82.3 33.5L83.1 33.1L83.8 32.8L84.5 32.4L85.2 32.1L85.9 31.8L86.6 31.5L87.2 31.2L87.9 30.9L88.5 30.7L89.1 30.4L89.7 30.1L90.2 29.9L90.8 29.7L91.4 29.5L91.9 29.3L92.4 29.2L93.0 29.0L93.5 28.9L94.1 28.8L94.6 28.7L95.2 28.6L95.7 28.5L96.3 28.5L96.8 28.5L97.4 28.5L97.9 28.5L98.4 28.6L99.0 28.7L99.5 28.8L100.1 28.9L100.6 29.1L101.1 29.2L101.7 29.4L102.2 29.6L102.7 29.8L103.2 30.1L103.7 30.4L104.2 30.6L104.7 30.9L105.2 31.2L105.7 31.6L106.2 31.9L106.6 32.3L107.1 32.7L107.5 33.1L108.0 33.5L108.4 33.9L108.8 34.4L109.3 34.8L109.7 35.3L110.1 35.7L110.5 36.2L110.9 36.7L111.3 37.2L111.7 37.7L112.1 38.2L112.5 38.7L113.0 39.2L113.4 39.8L113.8 40.3L114.3 40.8L114.7 41.3L115.2 41.8L115.6 42.3L116.1 42.8L116.6 43.3L117.1 43.8L117.6 44.3L118.1 44.8L118.6 45.2L119.2 45.7L119.7 46.2L120.3 46.6L120.8 47.1L121.4 47.5L122.0 47.9L122.6 48.3L123.2 48.8L123.9 49.1L124.5 49.5L125.2 49.9L125.8 50.2L126.5 50.5L127.2 50.9L127.9 51.2L128.6 51.4L129.3 51.7L130.0 52.0L130.7 52.2L131.5 52.5L132.2 52.7L132.9 52.9L133.7 53.1L134.5 53.2L135.2 53.4L136.0 53.6L136.8 53.7L137.6 53.8L138.3 53.9L139.1 54.1L139.9 54.1L140.7 54.3L141.5 54.3L142.3 54.4L143.1 54.5L143.9 54.5L144.7 54.6L145.6 54.6L146.4 54.7L147.2 54.7L148.0 54.7L148.8 54.6L149.7 54.6L150.5 54.5L151.3 54.5L152.1 54.4L153.0 54.3L153.8 54.1L154.6 54.0L155.4 53.8L156.2 53.6L157.1 53.4L157.9 53.2L158.7 52.9L159.5 52.6L160.3 52.4L161.0 52.0L161.8 51.7L162.6 51.4L163.3 51.0L164.1 50.7L164.9 50.3L165.6 50.0L166.3 49.7L166.9 49.4L167.6 49.1L168.2 48.8L168.9 48.5L169.5 48.2L170.0 48.0L170.6 47.7L171.2 47.5L171.7 47.3L172.2 47.1L172.7 46.9L173.2 46.8L173.7 46.6L174.2 46.5L174.6 46.4L175.1 46.3L175.6 46.2L176.0 46.2L176.5 46.1L177.0 46.1L177.4 46.1L177.9 46.2L178.3 46.2L178.8 46.3L179.2 46.4L179.6 46.5L180.1 46.6L180.5 46.8L180.9 47.0L181.3 47.2L181.7 47.4L182.1 47.6L182.5 47.8L182.9 48.1L183.3 48.3L183.6 48.6L184.0 48.9L184.4 49.2L184.7 49.6L185.1 49.9L185.4 50.3L185.7 50.7L186.1 51.1L186.4 51.5L186.6 51.9L186.9 52.4L187.2 52.8L187.5 53.3L187.7 53.8L188.0 54.2L188.2 54.8L188.5 55.3L188.7 55.8L189.0 56.3L189.3 56.8L189.5 57.3L189.8 57.8L190.1 58.4L190.4 58.9L190.6 59.4L190.9 60.0L191.2 60.5L191.6 61.0L191.9 61.6L192.2 62.1L192.5 62.7L192.8 63.2L193.1 63.8L193.5 64.4L193.8 64.9L194.2 65.5L194.5 66.1L194.9 66.7L195.2 67.2L195.5 67.8L195.9 68.4L196.3 69.0L196.6 69.6L197.0 70.2L197.3 70.8L197.7 71.4L198.1 72.0L198.4 72.6L198.8 73.2L199.2 73.9L199.5 74.5L199.9 75.0L200.2 75.6L200.5 76.1L200.8 76.6L201.1 77.1L201.4 77.6L201.7 78.1L201.9 78.5L202.2 78.9L202.4 79.4L202.6 79.8L202.9 80.3L203.0 80.7L203.2 81.1L203.4 81.6L203.5 82.0L203.6 82.5L203.7 82.9L203.8 83.4L203.9 83.8L204.0 84.3L204.0 84.8L204.0 85.2L204.0 85.7L204.0 86.1L203.9 86.6L203.8 87.1L203.8 87.5L203.7 88.0L203.5 88.5L203.4 88.9L203.2 89.4L203.0 89.8L202.8 90.2L202.6 90.7L202.4 91.1L202.1 91.5L201.8 92.0L201.5 92.4L201.2 92.8L200.9 93.2L200.5 93.6L200.1 93.9L199.8 94.3L199.4 94.6L198.9 95.0L198.5 95.3L198.1 95.6L197.6 96.0L197.1 96.3L196.6 96.5L196.1 96.8L195.6 97.1L195.1 97.3L194.5 97.6L194.0 97.8L193.4 98.0L192.8 98.2L192.3 98.4L191.7 98.6L191.1 98.8L190.5 98.9L189.8 99.0L189.2 99.2L188.6 99.2L187.9 99.3L187.3 99.4L186.6 99.5L186.0 99.5L185.3 99.5L184.6 99.5L184.0 99.5L183.3 99.5L182.6 99.4L181.9 99.4L181.2 99.3L180.5 99.3L179.8 99.2L179.1 99.1L178.4 99.0L177.7 98.9L177.0 98.8L176.3 98.7L175.5 98.6L174.8 98.6L174.1 98.5L173.3 98.4L172.6 98.3L171.8 98.2L171.1 98.1L170.3 98.0L169.6 97.9L168.8 97.9L168.1 97.8L167.3 97.7L166.5 97.6L165.7 97.5L165.0 97.4L164.2 97.4L163.4 97.3L162.6 97.2L161.8 97.1L161.0 97.1L160.2 97.0L159.4 96.9L158.6 96.9L157.8 96.8L157.0 96.7L156.2 96.7L155.3 96.6L154.5 96.5L153.7 96.4L152.9 96.4L152.0 96.3L151.2 96.2L150.4 96.1L149.5 96.1L148.7 96.0L147.8 95.9L147.0 95.8L146.1 95.8L145.3 95.7L144.4 95.6L143.6 95.5L142.7 95.5L141.8 95.4L141.0 95.3L140.1 95.2L139.2 95.2L138.3 95.1L137.5 95.0L136.6 94.9L135.7 94.9L134.8 94.8L133.9 94.7L133.0 94.7L132.1 94.6L131.2 94.5L130.3 94.5L129.4 94.4L128.5 94.3L127.6 94.2L126.7 94.2L125.8 94.1L125.0 94.0L124.1 93.9L123.3 93.9L122.4 93.8L121.6 93.7L120.9 93.6L120.1 93.6L119.4 93.5L118.7 93.5L118.0 93.4L117.3 93.3L116.7 93.3L116.1 93.2L115.5 93.2L114.9 93.1L114.3 93.1L113.8 93.0L113.3 93.0L112.8 92.9L112.3 92.8L111.8 92.8L111.4 92.7L111.0 92.6L110.6 92.5L110.2 92.4L109.9 92.3L109.5 92.1L109.1 92.0L108.8 91.8L108.5 91.6L108.1 91.4L107.8 91.2L107.5 91.0L107.2 90.7L107.0 90.4L106.7 90.1L106.4 89.8L106.2 89.5L105.9 89.2L105.7 88.9L105.5 88.6L105.3 88.2L105.0 87.9L104.8 87.5L104.5 87.2L104.2 86.8L103.9 86.5L103.6 86.2L103.3 85.9L102.9 85.6L102.6 85.3L102.2 85.0L101.8 84.8L101.4 84.5L101.0 84.3L100.6 84.0L100.2 83.8L99.7 83.6L99.3 83.4L98.8 83.2L98.3 83.1L97.9 82.9L97.4 82.8L96.9 82.6L96.4 82.5L95.9 82.4L95.3 82.2L94.8 82.1L94.3 82.0L93.7 81.9L93.2 81.8L92.6 81.7L92.0 81.6L91.5 81.5L90.9 81.4L90.3 81.3L89.7 81.2L89.1 81.1L88.5 81.0L87.9 80.9L87.3 80.8L86.7 80.7L86.1 80.6L85.5 80.5L84.9 80.4L84.2 80.3L83.6 80.2L82.9 80.0L82.3 79.9L81.6 79.8L81.0 79.7L80.3 79.6L79.7 79.4L79.0 79.3L78.3 79.2L77.6 79.1L77.0 78.9L76.3 78.8L75.6 78.7L74.9 78.5L74.2 78.4L73.5 78.3L72.8 78.2L72.1 78.0L71.4 77.9L70.6 77.8L69.9 77.6L69.2 77.5L68.5 77.4L67.7 77.3L67.0 77.1L66.2 77.0L65.5 76.9L64.7 76.7" fill="none" stroke="rgba(245,247,250,0.32)" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M64.5 77.3L63.8 77.1L63.0 77.0L62.2 76.9L61.5 76.7L60.7 76.6L59.9 76.5L59.2 76.4L58.4 76.2L57.6 76.1L56.8 75.9L56.0 75.8L55.2 75.7L54.4 75.5L53.6 75.4L52.8 75.2L52.0 75.1L51.2 74.9L50.4 74.8L49.6 74.6L48.7 74.5L47.9 74.3L47.1 74.2L46.3 74.0L45.5 73.9L44.6 73.8L43.8 73.6L43.0 73.4L42.1 73.3L41.3 73.1L40.4 73.0L39.6 72.8L38.7 72.7L37.9 72.5L37.0 72.3L36.2 72.2L35.3 72.0L34.4 71.9L33.6 71.7L32.7 71.6L31.9 71.4L31.0 71.2L30.2 71.1L29.3 70.9L28.5 70.8L27.8 70.6L27.0 70.5L26.3 70.3L25.6 70.2L24.9 70.1L24.2 69.9L23.6 69.8L23.0 69.7L22.4 69.5L21.8 69.4L21.3 69.3L20.7 69.1L20.2 69.0L19.7 68.9L19.2 68.8L18.7 68.6L18.3 68.5L17.9 68.3L17.4 68.2L17.0 68.0L16.6 67.8L16.3 67.6L15.9 67.4L15.5 67.2L15.2 66.9L14.9 66.7L14.6 66.4L14.3 66.1L14.0 65.8L13.7 65.5L13.5 65.1L13.3 64.8L13.1 64.4L12.9 64.1L12.7 63.7L12.5 63.3L12.4 62.9L12.3 62.5L12.2 62.1L12.1 61.7L12.1 61.3L12.0 60.8L12.0 60.4L12.0 60.0L12.0 59.5L12.1 59.1L12.1 58.6L12.2 58.2L12.3 57.7L12.4 57.3L12.5 56.8L12.7 56.4L12.9 55.9L13.0 55.5L13.2 55.1L13.5 54.6L13.7 54.1L14.0 53.7L14.2 53.3L14.5 52.8L14.8 52.4L15.1 51.9L15.4 51.5L15.7 51.0L16.1 50.6L16.4 50.1L16.8 49.7L17.2 49.3L17.6 48.8L17.9 48.4L18.3 47.9L18.7 47.5L19.1 47.0L19.6 46.6L20.0 46.1L20.4 45.6L20.9 45.2L21.3 44.8L21.8 44.3L22.2 43.9L22.7 43.4L23.2 43.0L23.8 42.6L24.3 42.2L24.8 41.8L25.4 41.4L25.9 41.0L26.5 40.6L27.1 40.2L27.7 39.9L28.3 39.5L28.9 39.2L29.5 38.8L30.2 38.5L30.8 38.2L31.5 37.9L32.1 37.6L32.8 37.3L33.5 37.0L34.2 36.8L34.9 36.5L35.6 36.3L36.3 36.1L37.1 35.9L37.8 35.7L38.5 35.5L39.3 35.4L40.0 35.2L40.8 35.1L41.6 35.0L42.4 34.9L43.1 34.8L43.9 34.7L44.7 34.7L45.5 34.7L46.3 34.7L47.1 34.7L47.9 34.7L48.7 34.7L49.5 34.8L50.4 34.8L51.2 34.9L52.0 35.1L52.8 35.2L53.6 35.4L54.4 35.5L55.2 35.7L56.0 35.9L56.9 36.1L57.7 36.3L58.5 36.4L59.3 36.6L60.2 36.7L61.0 36.8L61.8 37.0L62.6 37.1L63.5 37.2L64.3 37.2L65.1 37.3L65.9 37.4L66.8 37.4L67.6 37.4L68.5 37.3L69.3 37.3L70.1 37.2L71.0 37.1L71.8 37.0L72.6 36.9" fill="none" stroke="#d2232a" stroke-width="4.5" stroke-linejoin="round"/>
+    <circle cx="73.5" cy="36.7" r="7.5" fill="#F5F7FA" stroke="#0c0d0e" stroke-width="2"/>
+  </g>
+  <text x="967.76" y="381.12" text-anchor="end" font-family="Barlow Condensed" font-weight="600" font-size="21.08" letter-spacing="2" fill="rgba(245,247,250,0.62)">DONINGTON NATIONAL</text>
+  <text x="967.76" y="52.08" text-anchor="end" font-family="Barlow Condensed" font-weight="700" font-size="24.8" letter-spacing="2.6" fill="rgba(245,247,250,0.42)">RDM</text>
+</svg></div>
+  <div class="grow"></div>
+  <div style="display:flex;gap:20px;align-items:flex-start;padding-bottom:10px">
+    <div style="flex:none;width:322px;border:1px solid rgba(29,31,32,0.16);background:#f2f2f3">
+      <div style="background:#1d1f20;color:#fff;font-family:'Barlow Condensed';font-weight:700;font-size:22px;letter-spacing:.18em;text-transform:uppercase;padding:9px 12px">Layers</div>
+      <div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid rgba(29,31,32,0.08);background:#ffffff">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#b7b7ba"><circle cx="8" cy="5" r="2"/><circle cx="16" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="19" r="2"/><circle cx="16" cy="19" r="2"/></svg>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#d2232a" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+      <div style="font-family:'Barlow Condensed';font-weight:600;font-size:25px;letter-spacing:.04em;text-transform:uppercase;color:#1d1f20">Speed and gear</div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid rgba(29,31,32,0.08);background:#ffffff">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#b7b7ba"><circle cx="8" cy="5" r="2"/><circle cx="16" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="19" r="2"/><circle cx="16" cy="19" r="2"/></svg>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#d2232a" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+      <div style="font-family:'Barlow Condensed';font-weight:600;font-size:25px;letter-spacing:.04em;text-transform:uppercase;color:#1d1f20">Lap time and delta</div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid rgba(29,31,32,0.08);background:#ffffff">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#b7b7ba"><circle cx="8" cy="5" r="2"/><circle cx="16" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="19" r="2"/><circle cx="16" cy="19" r="2"/></svg>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#d2232a" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+      <div style="font-family:'Barlow Condensed';font-weight:600;font-size:25px;letter-spacing:.04em;text-transform:uppercase;color:#1d1f20">Grip circle</div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid rgba(29,31,32,0.08);background:#ffffff">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#b7b7ba"><circle cx="8" cy="5" r="2"/><circle cx="16" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="19" r="2"/><circle cx="16" cy="19" r="2"/></svg>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#d2232a" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+      <div style="font-family:'Barlow Condensed';font-weight:600;font-size:25px;letter-spacing:.04em;text-transform:uppercase;color:#1d1f20">Minimap</div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid rgba(29,31,32,0.08);background:#ffffff">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#b7b7ba"><circle cx="8" cy="5" r="2"/><circle cx="16" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="19" r="2"/><circle cx="16" cy="19" r="2"/></svg>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#d2232a" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+      <div style="font-family:'Barlow Condensed';font-weight:600;font-size:25px;letter-spacing:.04em;text-transform:uppercase;color:#1d1f20">Track and date</div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid rgba(29,31,32,0.08);background:#ffffff">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#b7b7ba"><circle cx="8" cy="5" r="2"/><circle cx="16" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="19" r="2"/><circle cx="16" cy="19" r="2"/></svg>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#d2232a" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+      <div style="font-family:'Barlow Condensed';font-weight:600;font-size:25px;letter-spacing:.04em;text-transform:uppercase;color:#1d1f20">RDM mark</div>
+    </div>
+    </div>
+    <div style="flex:none;width:322px;border:1px solid rgba(29,31,32,0.16);background:#f2f2f3;margin-top:41px">
+      <div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid rgba(29,31,32,0.08);background:transparent">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#b7b7ba"><circle cx="8" cy="5" r="2"/><circle cx="16" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="19" r="2"/><circle cx="16" cy="19" r="2"/></svg>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#b7b7ba" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><path d="M4 20L20 4"/></svg>
+      <div style="font-family:'Barlow Condensed';font-weight:600;font-size:25px;letter-spacing:.04em;text-transform:uppercase;color:rgba(29,31,32,0.55)">Throttle and brake</div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid rgba(29,31,32,0.08);background:transparent">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#b7b7ba"><circle cx="8" cy="5" r="2"/><circle cx="16" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="19" r="2"/><circle cx="16" cy="19" r="2"/></svg>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#b7b7ba" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><path d="M4 20L20 4"/></svg>
+      <div style="font-family:'Barlow Condensed';font-weight:600;font-size:25px;letter-spacing:.04em;text-transform:uppercase;color:rgba(29,31,32,0.55)">Tacho</div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid rgba(29,31,32,0.08);background:transparent">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#b7b7ba"><circle cx="8" cy="5" r="2"/><circle cx="16" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="19" r="2"/><circle cx="16" cy="19" r="2"/></svg>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#b7b7ba" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><path d="M4 20L20 4"/></svg>
+      <div style="font-family:'Barlow Condensed';font-weight:600;font-size:25px;letter-spacing:.04em;text-transform:uppercase;color:rgba(29,31,32,0.55)">Slip angle</div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid rgba(29,31,32,0.08);background:transparent">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#b7b7ba"><circle cx="8" cy="5" r="2"/><circle cx="16" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="19" r="2"/><circle cx="16" cy="19" r="2"/></svg>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#b7b7ba" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><path d="M4 20L20 4"/></svg>
+      <div style="font-family:'Barlow Condensed';font-weight:600;font-size:25px;letter-spacing:.04em;text-transform:uppercase;color:rgba(29,31,32,0.55)">Counter-steer</div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid rgba(29,31,32,0.08);background:transparent">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#b7b7ba"><circle cx="8" cy="5" r="2"/><circle cx="16" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="19" r="2"/><circle cx="16" cy="19" r="2"/></svg>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#b7b7ba" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><path d="M4 20L20 4"/></svg>
+      <div style="font-family:'Barlow Condensed';font-weight:600;font-size:25px;letter-spacing:.04em;text-transform:uppercase;color:rgba(29,31,32,0.55)">Drift run</div>
+    </div>
+    </div>
+    <div style="flex:1;padding-top:41px">
+      <div class="unit" style="font-size:21px;letter-spacing:.16em">Eleven instruments</div>
+      <div style="font-size:24px;line-height:1.34;margin-top:10px;font-weight:500">Drag one anywhere on the picture. Reorder them, and <b>nothing moves</b> — the order decides what covers what, never where a thing belongs.</div>
+    </div>
+  </div>
+</div>
+<div class="foot"><div><div class="l">Exports queue and run in the background</div><div class="s">No pedal bars here: this car reports no throttle or brake, and an empty tube beside a working one is a lie about the driving.</div></div><div class="r">RDM Studio</div></div>
+</div>

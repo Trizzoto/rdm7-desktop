@@ -1,0 +1,125 @@
+<!doctype html><meta charset="utf-8"><title>Trust</title>
+<style>
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-400.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Barlow';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/Barlow-700.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Barlow Condensed';src:url('file:///C:/Users/ruuva/workspace/rdm7-desktop/src/fonts/BarlowCondensed-700.woff2') format('woff2');font-weight:700}
+*{margin:0;padding:0;box-sizing:border-box;border-radius:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{background:#f2f2f3;color:#1d1f20;font-family:'Barlow',system-ui,sans-serif;
+     -webkit-font-smoothing:antialiased;position:relative}
+.page{width:1080px;height:1350px;position:relative;display:flex;flex-direction:column}
+
+/* the black brand bar, exactly as the workspace wears it */
+.bar{height:96px;background:#0c0d0e;color:#fff;display:flex;align-items:center;
+     gap:18px;padding:0 40px;flex:none}
+.bar img{height:38px;display:block}
+.bar .ws{font-family:'Barlow Condensed';font-weight:700;font-size:31px;letter-spacing:.06em;
+         text-transform:uppercase;color:#fff;line-height:1}
+.bar .sep{width:1px;height:38px;background:#26282a}
+.bar .tag{font-family:'Barlow Condensed';font-weight:600;font-size:23px;letter-spacing:.17em;
+          text-transform:uppercase;color:#9a9a9e;line-height:1}
+.bar .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.bar .rec{width:11px;height:11px;border-radius:50%;background:#d2232a}
+
+.body{flex:1;display:flex;flex-direction:column;padding:0 40px;min-height:0;position:relative}
+
+.kicker{font-family:'Barlow Condensed';font-weight:600;font-size:24px;letter-spacing:.2em;
+        text-transform:uppercase;color:#d2232a;margin-top:34px}
+.kicker.mut{color:rgba(29,31,32,0.55)}
+h1{font-family:'Barlow Condensed';font-weight:700;font-size:88px;line-height:.92;
+   letter-spacing:.005em;text-transform:uppercase;margin-top:10px}
+h1.sm{font-size:70px}
+h1.xs{font-size:58px}
+.sub{font-size:25px;line-height:1.34;color:rgba(29,31,32,0.72);margin-top:16px;max-width:850px;font-weight:400}
+.rule{height:1px;background:rgba(29,31,32,0.16);margin:24px 0}
+.grow{flex:1 1 auto;min-height:0}
+.rule.hard{background:#1d1f20;height:2px}
+
+/* the huge readouts */
+.big{font-family:'Barlow Condensed';font-weight:700;line-height:.84;letter-spacing:-.005em;
+     font-variant-numeric:tabular-nums}
+.unit{font-family:'Barlow Condensed';font-weight:600;color:rgba(29,31,32,0.55);letter-spacing:.06em;
+      text-transform:uppercase}
+
+/* ruled tables: one fact per column, labelled — never prose */
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-family:'Barlow Condensed';font-weight:600;font-size:20px;letter-spacing:.15em;
+   text-transform:uppercase;color:rgba(29,31,32,0.55);text-align:left;padding:0 0 9px;
+   border-bottom:2px solid #1d1f20}
+td{font-size:29px;padding:13px 0;border-bottom:1px solid rgba(29,31,32,0.08);font-weight:500}
+td.n{font-family:'Barlow Condensed';font-weight:700;font-size:34px}
+.r{text-align:right}
+
+.foot{flex:none;border-top:1px solid rgba(29,31,32,0.16);padding:20px 40px 30px;display:flex;
+      align-items:flex-end;gap:20px;background:#f2f2f3}
+.foot .l{font-family:'Barlow Condensed';font-weight:600;font-size:22px;letter-spacing:.16em;
+         text-transform:uppercase;color:#1d1f20}
+.foot .s{font-size:19px;color:rgba(29,31,32,0.55);margin-top:3px;line-height:1.3;font-weight:400}
+.foot .r{margin-left:auto;text-align:right;font-family:'Barlow Condensed';font-weight:600;
+         font-size:22px;letter-spacing:.16em;text-transform:uppercase;color:#d2232a;
+         white-space:nowrap;flex:none}
+
+.chip{display:inline-block;font-family:'Barlow Condensed';font-weight:600;font-size:20px;
+      letter-spacing:.13em;text-transform:uppercase;padding:5px 11px 4px;
+      background:#1d1f20;color:#fff}
+.chip.red{background:#d2232a}
+.chip.line{background:transparent;color:rgba(29,31,32,0.55);border:1px solid rgba(29,31,32,0.16)}
+</style>
+<div class="page">
+<div class="bar">
+  <img src="file:///C:/Users/ruuva/workspace/rdm7-desktop/src/rdm_logo.png" alt="RDM">
+  <div class="ws">Studio</div>
+  <div class="sep"></div>
+  <div class="tag">GPS Lap Timer</div>
+  <div class="right"><span class="chip">Trust</span></div>
+</div>
+<div class="body">
+  <div class="kicker">The trust panel</div>
+  <h1 class="sm">It tells you when<br>not to believe it</h1>
+  <div class="sub">Three times in this session the fix dropped out. The app finds every gap, marks it, and says how far the car travelled while it was not looking — because a lap timed across a hole reads <b>seconds fast</b>.</div>
+  <div style="margin:22px 0 0 -14px"><svg width="1000" height="424" viewBox="0 0 1000 424">
+  <line x1="0" y1="274.8160377358491" x2="1000" y2="274.8160377358491" stroke="rgba(29,31,32,0.08)" stroke-width="1"/>
+    <text x="3" y="267.8160377358491" font-family="Barlow Condensed" font-weight="600" font-size="19" fill="#b7b7ba">50 km/h</text><line x1="0" y1="171.63207547169813" x2="1000" y2="171.63207547169813" stroke="rgba(29,31,32,0.08)" stroke-width="1"/>
+    <text x="3" y="164.63207547169813" font-family="Barlow Condensed" font-weight="600" font-size="19" fill="#b7b7ba">100 km/h</text><line x1="0" y1="68.44811320754718" x2="1000" y2="68.44811320754718" stroke="rgba(29,31,32,0.08)" stroke-width="1"/>
+    <text x="3" y="61.44811320754718" font-family="Barlow Condensed" font-weight="600" font-size="19" fill="#b7b7ba">150 km/h</text>
+  <path d="M8.0 355.1L8.4 354.7L8.8 355.1L9.3 354.9L9.7 354.3L10.2 353.6L10.6 353.4L11.0 352.0L11.5 351.2L11.9 350.6L12.3 349.7L12.8 351.2L13.2 354.3L13.6 353.9L14.1 355.1L14.5 353.6L14.9 352.2L15.3 352.2L15.8 352.0L16.2 350.8L16.6 349.9L17.1 349.5L17.5 350.3L17.9 351.8L18.4 352.8L18.8 352.8L19.2 354.7L19.6 355.3L20.1 356.3L20.5 355.9L20.9 357.0L21.4 356.7L21.8 355.9L22.2 356.7L22.7 356.7L23.1 356.7L23.5 357.0L23.9 359.2L30.0 360.5L30.4 359.0L30.9 357.6L31.3 357.2L31.7 357.0L32.2 357.0L32.6 357.4L33.0 356.5L33.4 357.0L33.9 356.5L34.3 357.6L34.7 357.8L35.2 357.2L35.6 358.4L36.0 358.0L36.5 359.8L36.9 359.6L37.3 358.8L37.7 357.2L38.2 355.5L38.6 354.5L39.0 354.3L39.5 356.1L39.9 356.3L40.3 356.7L40.8 356.3L41.2 356.7L41.6 357.0L190.5 263.5L190.9 264.5L191.4 265.1L191.8 274.6L192.2 280.2L192.6 281.4L193.1 273.0L193.5 258.3L194.0 241.8L194.4 218.1L194.8 195.2L195.2 175.1L195.7 175.1L196.1 161.7L196.5 146.9L196.9 133.5L197.4 142.7L197.8 155.7L198.3 168.5L198.7 178.0L199.1 187.7L199.5 196.4L200.0 204.9L200.4 212.7L200.8 218.1L201.2 218.1L201.7 216.8L202.1 215.0L202.6 213.1L203.0 211.3L203.4 220.3L203.8 226.3L204.3 215.6L204.7 207.5L205.1 213.7L205.5 223.2L206.0 232.5L206.4 238.5L206.9 240.6L207.3 249.4L207.7 261.2L208.1 270.5L208.6 282.2L209.0 286.4L209.4 288.2L209.8 303.5L210.3 309.1L210.7 306.6L211.2 295.2L211.6 278.1L212.0 260.0L212.4 247.8L212.9 264.1L213.3 278.9L213.7 288.4L214.1 296.7L214.6 309.9L215.0 314.9L215.5 317.3L215.9 312.0L216.3 292.2L216.7 278.9L217.2 281.6L217.6 282.0L218.0 281.8L218.4 283.7L218.9 286.4L219.3 290.7L219.8 296.5L220.2 302.3L220.6 305.2L221.0 303.9L221.5 299.8L221.9 295.2L222.3 290.7L222.7 286.0L223.2 280.2L223.6 274.2L224.1 269.0L224.5 265.5L224.9 258.1L225.3 243.2L225.8 249.4L226.2 254.2L226.6 249.4L227.0 259.5L227.5 251.3L227.9 252.9L228.4 256.2L228.8 245.7L229.2 256.2L229.6 265.5L230.1 278.1L230.5 290.1L230.9 302.5L231.3 311.1L231.8 315.1L232.2 316.5L232.7 317.3L233.1 319.6L233.5 327.0L233.9 336.3L234.4 346.0L234.8 356.1L309.3 140.1L309.7 127.9L310.1 114.1L310.6 102.7L311.0 136.1L311.4 160.3L311.9 176.0L312.3 188.6L312.7 201.3L313.2 205.1L313.6 202.8L314.0 214.8L314.4 233.3L314.9 248.8L315.3 249.2L315.7 241.2L316.2 230.7L316.6 227.6L317.0 231.3L317.5 229.8L317.9 215.0L318.3 200.3L318.7 181.7L319.2 165.6L319.6 164.6L320.0 165.4L320.5 170.8L320.9 174.1L321.3 177.4L321.8 182.6L322.2 197.4L322.6 218.5L323.0 235.0L323.5 250.1L323.9 258.7L324.3 265.9L324.8 274.8L325.2 279.4L325.6 280.0L326.1 273.0L326.5 262.2L326.9 248.6L327.3 229.0L327.8 206.3L328.2 185.3L328.6 181.3L329.1 165.9L329.5 150.8L329.9 135.9L330.4 134.5L330.8 144.2L331.2 154.5L331.6 163.4L332.1 171.8L332.5 177.4L332.9 180.5L333.4 181.7L333.8 181.3L334.2 173.3L334.7 161.3L335.1 160.7L335.5 148.9L335.9 158.4L336.4 164.8L336.8 176.0L337.2 189.2L337.7 199.3L338.1 211.9L338.5 224.5L339.0 234.8L339.4 243.9L339.8 256.2L340.2 281.2L340.7 291.3L341.1 293.8L341.5 286.4L342.0 281.6L342.4 261.2L342.8 240.1L343.3 234.8L343.7 239.3L344.1 247.8L344.5 257.7L345.0 266.8L345.4 273.6L345.8 279.8L346.3 284.9L346.7 288.8L347.1 290.5L347.6 291.9L348.0 293.8L348.4 294.4L348.8 296.7L349.3 300.4L349.7 302.5L350.1 303.7L350.6 303.9L351.0 303.5L351.4 301.6L351.9 300.0L352.3 296.5L352.7 292.2L353.1 285.3L353.6 275.0L354.0 265.3L354.4 254.2L354.9 242.0L355.3 229.0L355.7 233.7L356.2 239.5L356.6 245.5L357.0 251.1L357.4 260.0L357.9 268.8L358.3 275.4L358.7 280.4L359.2 285.3L359.6 290.7L360.0 295.7L360.5 300.6L360.9 306.4L361.3 313.0L361.7 320.0L362.2 326.8L362.6 333.0L363.0 340.9L363.5 351.2L363.9 356.7L364.3 358.2L364.8 357.8L365.2 356.3L365.6 353.6L366.0 355.5L366.5 358.0L367.7 354.9L368.1 326.2L368.5 300.6L369.0 270.9L369.4 265.7L369.8 246.3L370.2 247.2L370.7 255.2L371.1 262.8L371.5 274.6L372.0 279.1L372.4 269.9L372.8 252.7L373.3 232.1L373.7 209.6L374.1 187.3L374.5 166.3L375.0 147.3L375.4 131.0L375.8 122.9L376.3 108.9L376.7 130.4L377.1 152.4L377.6 159.7L378.0 182.4L378.4 182.6L378.8 180.3L379.3 190.4L379.7 213.3L380.1 222.6L380.6 237.3L381.0 245.5L381.4 242.6L381.9 236.6L382.3 237.9L382.7 239.3L383.1 231.7L383.6 212.5L384.0 199.9L384.4 189.8L384.9 177.8L385.3 173.1L385.7 160.7L386.2 156.6L386.6 146.7L387.0 155.7L387.4 179.3L387.9 203.6L388.3 227.8L388.7 244.7L389.2 258.3L389.6 267.6L390.0 275.4L390.5 279.4L390.9 280.6L391.3 277.3L391.7 265.9L392.2 252.3L392.6 237.1L393.0 222.6L393.5 208.4L393.9 204.4L394.3 212.1L394.8 218.3L395.2 215.8L395.6 213.1L396.0 209.6L396.5 206.5L396.9 203.8L397.3 205.9L397.8 215.2L398.2 220.5L398.6 217.9L399.1 213.9L399.5 198.7L399.9 208.6L400.3 217.2L400.8 224.5L401.2 223.4L401.6 223.4L402.1 231.5L402.5 238.7L402.9 237.5L403.4 235.4L403.8 234.2L404.2 233.7L404.6 237.1L405.1 237.3L405.5 236.4L405.9 238.3L406.4 244.5L406.8 250.1L407.2 256.2L407.7 260.6L408.1 261.6L408.5 265.1L408.9 271.5L409.4 277.9L409.8 285.5L410.2 293.0L410.7 296.9L411.1 297.5L411.5 287.6L412.0 274.4L412.4 263.1L412.8 264.1L413.2 260.2L413.7 253.8L414.1 250.7L414.5 248.4L415.0 251.1L415.4 256.4L415.8 257.5L416.3 247.0L416.7 227.4L417.1 224.7L417.5 232.7L418.0 239.9L418.4 247.2L418.8 252.7L419.3 250.9L419.7 253.1L420.1 252.9L420.6 252.7L421.0 256.2L421.4 256.7L421.8 255.8L422.3 255.6L422.7 262.2L423.1 266.8L423.6 261.6L424.0 268.0L424.4 274.4L424.9 280.2L425.3 284.1L425.7 287.0L426.1 289.3L426.6 292.8L427.0 297.3L427.4 301.4L427.9 303.9L428.3 308.7L428.7 314.2L429.2 321.2L429.6 326.0L430.0 333.2L430.4 341.1L430.9 344.8L431.3 343.9L431.7 339.2L432.2 336.5L432.6 336.5L433.0 340.2L433.5 346.0L433.9 351.4L434.3 355.9L434.7 358.0L436.3 352.6L436.7 323.5L437.2 294.4L437.6 263.9L438.1 252.1L438.5 236.2L438.9 224.7L439.3 243.9L439.7 258.7L440.2 250.1L440.6 234.8L441.0 212.9L441.5 190.8L441.9 170.0L442.4 151.0L442.8 134.3L443.2 125.2L443.6 110.1L444.0 99.6L444.5 128.3L444.9 148.5L445.3 174.5L445.8 190.6L446.2 200.5L446.7 208.8L447.1 209.0L447.5 213.1L447.9 223.4L448.3 238.1L448.8 244.1L449.2 241.2L449.6 234.4L450.1 234.6L450.5 233.1L451.0 228.6L451.4 213.9L451.8 199.7L452.2 183.2L452.6 175.3L453.1 164.2L453.5 151.0L453.9 156.6L454.4 170.4L454.8 184.0L455.3 199.9L455.7 216.0L456.1 228.6L456.5 236.6L456.9 245.3L457.4 254.0L457.8 262.2L458.2 270.5L458.7 279.1L459.1 280.4L459.6 270.1L460.0 259.3L460.4 248.8L460.8 237.3L461.2 226.1L461.7 215.0L462.1 198.7L462.5 178.4L463.0 159.0L463.4 156.6L463.9 169.4L464.3 182.8L464.7 197.8L465.1 211.9L465.5 228.2L466.0 239.1L466.4 245.5L466.8 242.4L467.3 232.5L467.7 223.2L468.2 213.1L468.6 213.1L469.0 213.9L469.4 210.2L469.8 202.2L470.3 191.2L470.7 177.2L471.1 165.4L471.6 173.1L472.0 180.1L472.4 187.3L472.9 194.5L473.3 208.2L473.7 216.2L474.1 230.4L474.6 239.1L475.0 250.3L475.4 262.6L475.9 291.5L476.3 295.7L476.7 293.0L477.2 281.8L477.6 260.6L478.0 244.5L478.4 245.1L478.9 241.4L479.3 238.5L479.7 243.2L480.2 248.6L480.6 252.7L481.0 254.4L481.5 252.5L481.9 249.6L482.3 244.9L482.7 239.7L483.2 234.6L483.6 229.4L484.0 224.0L484.5 217.9L484.9 206.9L485.3 199.7L485.8 206.1L486.2 209.0L486.6 198.9L487.0 204.9L487.5 210.2L487.9 221.8L488.3 234.8L488.8 245.7L489.2 257.3L489.6 270.1L490.1 281.8L490.5 293.0L490.9 303.1L491.3 313.2L491.8 325.0L492.2 332.4L492.6 337.3L493.1 345.2L493.5 351.8L493.9 354.3L494.4 356.3L494.8 358.0L495.2 359.8L496.2 360.9L496.6 342.1L497.0 321.2L497.5 296.7L497.9 292.4L498.3 292.4L498.8 295.2L499.2 293.2L499.6 294.8L500.0 298.5L500.5 297.7L500.9 294.4L501.3 288.2L501.8 285.8L502.2 285.8L502.6 283.1L503.1 275.0L503.5 263.7L503.9 253.4L504.3 247.0L504.8 251.3L505.2 252.9L505.6 253.8L506.1 253.8L506.5 253.4L506.9 253.8L507.4 253.4L507.8 253.4L508.2 255.0L508.7 260.2L509.1 264.9L509.5 267.2L509.9 270.9L510.4 276.3L510.8 279.6L511.2 281.6L511.7 283.7L512.1 287.8L512.5 289.7L513.0 290.3L513.4 295.2L513.8 299.2L514.2 298.8L514.7 294.2L515.1 289.7L515.5 293.4L516.0 300.6L516.4 306.6L516.8 310.9L517.3 311.8L517.7 312.6L518.1 314.2L518.5 320.4L519.0 329.5L519.4 335.7L519.8 336.3L520.3 334.5L520.7 329.9L521.1 324.6L521.6 320.0L522.0 311.1L522.4 307.4L522.8 309.7L523.3 309.5L523.7 311.3L524.1 315.5L524.6 317.9L525.0 318.2L525.4 314.6L525.9 309.3L526.3 308.9L526.7 315.3L527.1 319.8L527.6 325.6L528.0 331.6L528.4 336.3L528.9 339.0L529.3 341.5L529.7 346.8L530.2 354.1L530.6 357.2L531.1 353.2L531.5 347.5L531.9 343.1L532.3 339.8L532.7 338.0L533.2 336.3L533.6 336.7L534.0 338.8L534.5 338.4L534.9 336.9L535.4 335.9L535.8 337.1L536.2 340.6L536.6 345.4L537.0 345.8L537.5 345.4L537.9 343.7L538.3 341.3L538.8 335.3L539.2 330.1L539.7 329.9L540.1 334.9L540.5 340.6L540.9 347.7L541.3 346.6L541.8 354.3L776.6 348.3L777.0 350.3L777.4 350.1L777.9 346.6L778.3 330.5L778.7 332.8L779.2 336.5L779.6 342.5L780.0 348.1L780.4 348.9L780.9 348.5L781.3 348.9L781.7 347.9L782.2 348.3L782.6 348.5L783.0 348.7L783.5 349.5L783.9 350.3L784.3 353.6L784.7 355.7L785.2 355.1L785.6 355.5L786.0 355.5L786.5 356.3L786.9 358.4L787.3 357.2L787.8 357.0L788.2 356.1L788.6 356.3L789.0 356.1L789.5 354.7L789.9 352.8L790.3 350.3L790.8 349.1L791.2 348.5L791.6 346.8L792.1 344.8L792.5 343.7L792.9 346.8L793.3 347.0L793.8 345.4L794.2 342.7L794.6 338.0L795.1 331.2L795.5 320.2L795.9 304.9L796.4 312.6L796.8 318.2L797.2 325.6L797.6 333.0L798.1 339.6L798.5 346.4L798.9 352.6L799.4 358.6L804.6 356.3L805.1 354.5L805.5 345.6L805.9 333.8L806.3 318.4L806.8 299.8L807.2 273.8L807.6 247.4L808.1 242.6L808.5 226.7L808.9 234.0L809.4 243.0L809.8 252.1L810.2 259.8L810.6 268.8L811.1 275.2L811.5 272.1L811.9 263.9L812.4 249.8L812.8 232.9L813.2 211.9L813.7 189.8L814.1 168.7L814.5 151.0L814.9 135.3L815.4 131.0L815.8 117.2L816.2 104.4L816.7 92.4L817.1 81.7L817.5 76.9L818.0 78.6L818.4 71.8L818.8 65.4L819.2 61.0L819.7 62.9L820.1 84.8L820.5 108.1L821.0 137.8L821.4 170.8L821.8 203.2L822.3 219.7L822.7 239.9L823.1 261.4L823.5 280.0L824.0 288.6L824.4 294.2L824.8 288.4L825.3 270.9L825.7 250.9L826.1 234.2L826.6 229.8L827.0 233.3L827.4 238.7L827.8 244.9L828.3 249.4L828.7 255.6L829.1 261.6L829.6 263.1L830.0 262.2L830.4 260.4L830.9 260.6L831.3 261.8L831.7 265.5L832.1 270.1L832.6 275.0L833.0 278.1L833.4 279.4L833.8 280.0L834.3 278.9L834.7 277.5L835.2 273.2L835.6 267.4L836.0 262.4L836.4 256.0L836.9 240.6L837.3 235.0L837.7 246.1L838.1 256.0L838.6 267.2L839.0 278.7L839.5 289.3L839.9 298.5L840.3 307.6L840.7 317.1L841.2 327.0L841.6 332.6L842.0 340.2L842.4 347.0L842.9 360.5L871.8 357.2L872.3 354.9L872.7 357.0L873.2 357.6L874.6 345.0L875.0 314.9L875.4 288.2L875.9 257.5L876.3 238.1L876.8 226.1L877.2 230.0L877.6 222.4L878.0 237.7L878.5 254.4L878.9 249.0L879.3 232.3L879.7 210.2L880.2 187.3L880.6 179.3L881.1 169.6L881.5 154.9L881.9 139.4L882.3 123.5L882.8 111.0L883.2 137.6L883.6 159.7L884.0 181.5L884.5 194.5L884.9 203.0L885.4 203.8L885.8 214.8L886.2 217.0L886.6 222.6L887.1 248.6L887.5 244.1L887.9 234.6L888.3 227.8L888.8 233.1L889.2 239.1L889.7 232.5L890.1 211.3L890.5 193.9L890.9 197.0L891.4 199.7L891.8 201.8L892.2 207.1L892.6 212.3L893.1 217.7L893.5 222.6L894.0 224.9L894.4 217.9L894.8 222.8L895.2 227.4L895.7 229.8L896.1 240.6L896.5 249.4L896.9 257.5L897.4 263.5L897.8 269.9L898.3 276.5L898.7 281.2L899.1 281.8L899.5 278.7L900.0 272.3L900.4 264.9L900.8 255.8L901.2 245.1L901.7 231.7L902.1 218.5L902.5 204.9L903.0 193.7L903.4 190.2L903.8 187.9L904.3 187.7L904.7 191.9L905.1 197.8L905.5 204.4L906.0 209.4L906.4 212.1L906.8 217.2L907.3 223.6L907.7 229.2L908.1 229.2L908.6 226.3L909.0 224.9L909.4 222.6L909.8 221.0L910.3 219.9L910.7 219.1L911.1 223.4L911.6 226.1L912.0 224.0L912.4 222.4L912.9 225.1L913.3 230.0L913.7 235.2L914.1 239.9L914.6 243.4L915.0 248.4L915.4 250.7L915.9 251.9L916.3 262.0L916.7 273.0L917.2 282.9L917.6 292.4L918.0 301.4L918.4 306.8L918.9 298.3L919.3 289.3L919.7 281.2L920.2 274.0L920.6 267.8L921.0 262.4L921.5 260.4L921.9 259.5L922.3 259.5L922.7 259.5L923.2 258.9L923.6 258.9L924.0 259.1L924.5 259.8L924.9 261.2L925.3 263.1L925.8 266.1L926.2 267.6L926.6 270.3L927.0 272.5L927.5 273.4L927.9 275.6L928.3 276.5L928.8 277.7L929.2 277.7L929.6 276.9L930.1 275.2L930.5 274.6L930.9 274.8L931.3 274.2L931.8 274.6L932.2 275.8L932.6 276.3L933.1 277.3L933.5 281.4L933.9 285.5L934.4 289.9L934.8 294.6L935.2 299.4L935.6 301.4L936.1 303.7L936.5 305.6L936.9 307.8L937.4 312.0L937.8 317.5L938.2 325.2L938.7 333.2L939.1 340.2L939.5 347.3L939.9 351.2L940.4 353.9L940.8 354.3L941.2 357.8L945.6 360.0L946.0 357.4L946.4 355.5L946.9 351.0L947.3 340.6L947.7 337.3L948.2 333.2L948.6 324.6L949.0 316.9L949.4 310.9L949.9 308.9L950.3 307.6L950.7 306.4L951.2 303.5L951.6 298.3L952.0 287.0L952.5 276.5L952.9 277.9L953.3 281.8L953.7 286.0L954.2 288.8L954.6 286.6L955.0 280.6L955.5 270.9L955.9 262.2L956.3 253.4L956.8 245.9L957.2 238.7L957.6 232.1L958.0 226.1L958.5 219.9L958.9 213.7L959.3 209.0L959.8 205.7L960.2 210.8L960.6 218.5L961.1 226.1L961.5 234.8L961.9 245.5L962.3 256.4L962.8 268.4L963.2 279.8L963.6 291.3L964.1 295.7L964.5 290.5L964.9 286.4L965.4 291.1L965.8 299.6L966.2 306.4L966.6 312.4L967.1 314.0L967.5 313.8L967.9 313.4L968.4 315.3L968.8 321.0L969.2 326.8L969.7 331.2L970.1 332.0L970.5 329.7L970.9 325.0L971.4 320.4L971.8 317.7L972.2 317.5L972.7 321.0L973.1 323.9L973.5 325.2L974.0 325.4L974.4 323.3L974.8 322.7L975.2 322.9L975.7 322.9L976.1 320.2L976.5 317.5L977.0 316.5L977.4 319.2L977.8 323.7L978.3 329.3L978.7 334.5L979.1 339.0L979.5 342.1L980.0 343.3L980.4 343.3L980.8 342.3L981.3 341.1L981.7 339.8L982.1 339.4L982.6 338.2L983.0 337.3L983.4 336.3L983.8 335.1L984.3 336.3L984.7 337.6L985.1 340.6L985.6 342.7L986.0 344.2L986.4 347.3L986.9 349.3L987.3 348.3L987.7 345.6L988.1 343.1L988.6 340.6L989.0 339.0L989.4 338.2L989.9 341.7L990.3 344.6L990.7 347.7L991.2 350.6L991.6 356.3L992.0 360.0" fill="none" stroke="#1d1f20" stroke-width="1.9" stroke-linejoin="round" opacity="0.85"/>
+  <line x1="0" y1="378" x2="1000" y2="378" stroke="#1d1f20" stroke-width="2"/>
+  
+    <line x1="190.3" y1="14" x2="190.3" y2="378" stroke="#d2232a" stroke-width="2.5"/>
+    <rect x="158.3" y="14" width="64" height="26" fill="#d2232a"/>
+    <text x="190.3" y="33" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="20" fill="#fff">124 M</text>
+    <text x="190.3" y="400" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="21" letter-spacing="1.2" fill="#d2232a">GAP 1</text>
+    <line x1="309.1" y1="14" x2="309.1" y2="378" stroke="#d2232a" stroke-width="2.5"/>
+    <rect x="277.1" y="14" width="64" height="26" fill="#d2232a"/>
+    <text x="309.1" y="33" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="20" fill="#fff">226 M</text>
+    <text x="309.1" y="400" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="21" letter-spacing="1.2" fill="#d2232a">GAP 2</text>
+    <line x1="871.5" y1="14" x2="871.5" y2="378" stroke="#d2232a" stroke-width="2.5"/>
+    <rect x="839.5" y="14" width="64" height="26" fill="#d2232a"/>
+    <text x="871.5" y="33" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="20" fill="#fff">36 M</text>
+    <text x="871.5" y="400" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="21" letter-spacing="1.2" fill="#d2232a">GAP 3</text>
+  <text x="2" y="420" font-family="Barlow Condensed" font-weight="600" font-size="19" letter-spacing="1.5" fill="rgba(29,31,32,0.55)">0:00</text>
+  <text x="998" y="420" text-anchor="end" font-family="Barlow Condensed" font-weight="600" font-size="19" letter-spacing="1.5" fill="rgba(29,31,32,0.55)">35:05 · WHOLE SESSION</text>
+</svg></div>
+  <div class="rule hard" style="margin:2px 0 22px"></div>
+  <div style="display:flex;gap:34px">
+    <div style="flex:1"><div class="unit" style="font-size:21px">Gaps found</div>
+    <div class="big" style="font-size:62px;margin-top:5px;height:62px;display:flex;align-items:flex-end;white-space:nowrap">3</div>
+    <div style="font-size:20px;color:rgba(29,31,32,0.55);margin-top:9px;line-height:1.28">Marked on the map, the graph and the report</div></div>
+    <div style="flex:1"><div class="unit" style="font-size:21px">Unseen distance</div>
+    <div class="big" style="font-size:52px;margin-top:5px;height:62px;display:flex;align-items:flex-end;white-space:nowrap">124 · 226 · 36<span style="font-size:26px;color:rgba(29,31,32,0.55)"> m</span></div>
+    <div style="font-size:20px;color:rgba(29,31,32,0.55);margin-top:9px;line-height:1.28">How far the car went while the fix was gone</div></div>
+    <div style="flex:1"><div class="unit" style="font-size:21px">Angle reading</div>
+    <div class="big" style="font-size:62px;margin-top:5px;height:62px;display:flex;align-items:flex-end;white-space:nowrap">±10.2°</div>
+    <div style="font-size:20px;color:rgba(29,31,32,0.55);margin-top:9px;line-height:1.28">Worst case the engine will admit to</div></div>
+  </div>
+  <div class="grow"></div>
+  <div style="background:#ffffff;border:1px solid rgba(29,31,32,0.16);padding:22px 26px;margin-bottom:22px">
+    <div style="font-size:24px;line-height:1.4;font-weight:500">The car's yaw sensor sat <b>0.41°/s</b> off zero and read <b>2.6%</b> short, found from 152 places in this drive where the car was demonstrably straight. Corrected — and the correction is printed, not hidden inside the number.</div>
+  </div>
+</div>
+<div class="foot"><div><div class="l">Mallala Motor Sport Park · 23 August 2026 · 25,720 samples</div><div class="s">A real session with real dropouts. This is the recording the trust panel was built for.</div></div><div class="r">RDM Studio</div></div>
+</div>
