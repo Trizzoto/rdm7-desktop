@@ -5227,8 +5227,13 @@
         /* ...and A stays visible in the pair even while the tile thinks there
            is no film up, which it does whenever the playhead sits in a gap. */
         #gpWorkspace .gp-vtile.sbs #gpVideo { visibility: visible; }
+        /* At the BOTTOM of each half, not the top. The HUD / Export / Beside
+           buttons float over the top-right of the tile and are wider than half
+           of it on a small panel, so B's plate — pinned to the middle, which
+           is B's left edge — sat underneath them. The bottom of the tile is
+           letterbox on both halves and belongs to nothing else. */
         #gpWorkspace .gp-vlab {
-            position: absolute; top: 6px; left: 8px; z-index: 6;
+            position: absolute; bottom: 6px; left: 8px; z-index: 6;
             padding: 2px 7px; background: rgba(10,12,14,0.72); color: #f2f4f6;
             font-family: var(--gpb-head); font-weight: 600; font-size: 10px;
             letter-spacing: 0.08em; text-transform: uppercase;
@@ -5239,9 +5244,18 @@
            label sat behind them. Symmetric with A's now — each picture is
            named at its own top-left. */
         #gpWorkspace .gp-vlab.b { left: calc(50% + 8px); right: auto; }
+        /* Only in the pair: with one picture the plate would be a caption
+           nobody asked for over footage that is already named everywhere. */
+        #gpWorkspace .gp-vtile:not(.sbs) .gp-vlab { display: none !important; }
         #gpWorkspace .gp-vlab .d { font-variant-numeric: tabular-nums; margin-left: 6px; }
         #gpWorkspace .gp-vlab .d.up { color: #ff8b85; }
         #gpWorkspace .gp-vlab .d.dn { color: #7fd18b; }
+        /* The quicker of the two, named rather than inferred from a sign. */
+        #gpWorkspace .gp-vlab .bst {
+            display: inline-block; margin-right: 6px; padding: 1px 5px;
+            background: #8b4ac9; color: #fff; font-size: 9px; font-weight: 700;
+            letter-spacing: 0.1em; border-radius: 2px; vertical-align: 1px;
+        }
         #gpWorkspace .gp-vtile.sbs #gpVideoBg { display: none; }
 
         #gpWorkspace .gpb-vidctl {
@@ -6064,6 +6078,11 @@
                     <span class="gp-vlab" id="gpVLabA" style="display:none"></span>
                     <span class="gp-vlab b" id="gpVLabB" style="display:none"></span>
                     <canvas id="gpVideoOv"></canvas>
+                    <!-- The reference picture's own gauges. A second canvas
+                         rather than one across both, because each is sized and
+                         placed on ITS OWN picture rect — two clips of the same
+                         camera still letterbox differently in half a tile. -->
+                    <canvas id="gpVideoOvB" style="display:none"></canvas>
                     <div class="gp-vtile-btns">
                         <button class="gp-mapbtn" id="gpBtnHud" onclick="gpHudPop(event)"
                                 title="Which gauges are drawn over the footage">HUD</button>
@@ -19820,6 +19839,32 @@
             return { sel: sel, ref: ref, match: match, selFrom: sel.from, ghost: ghost, bPath: bPath };
         }
 
+        /* Diagnostic hook: what the pairing actually resolves to right now.
+           Kept because "the second picture is on the wrong lap" is invisible
+           from outside — both halves are the same camera and the same road,
+           and only the numbers say which lap you are looking at. */
+        window.gpSbsDebug = function () {
+            var r = gpSbsResolve();
+            if (r.why) return { why: r.why };
+            var k = Math.max(0, Math.min(r.match.length - 1, gp.playIdx - r.selFrom));
+            var bIdx = r.match[k];
+            var lapOf = function (i) {
+                for (var q = 0; q < gp.traceLaps.length; q++) {
+                    var L = gp.traceLaps[q];
+                    if (L && i >= L.from && i <= L.to) return q + 1;
+                }
+                return null;
+            };
+            return {
+                selLap: gp.selLap + 1, cmpLap: gp.cmpLap + 1,
+                playIdx: gp.playIdx, k: k, matchLen: r.match.length,
+                selFrom: r.selFrom, selTo: r.sel.to, refFrom: r.ref.from, refTo: r.ref.to,
+                bIdx: bIdx, playIdxLap: lapOf(gp.playIdx), bIdxLap: lapOf(bIdx),
+                aVideoT: gpVideoTimeFor(gp.playIdx), bVideoT: gpAnyVideoTimeFor(bIdx),
+                deltaKey: gp.deltaKey
+            };
+        };
+
         window.gpSbsToggle = function () {
             if (gp.sbs) { gp.sbs = false; gpSbsApply(); return; }
             var r = gpSbsResolve();
@@ -19867,11 +19912,25 @@
                    there is something to seek. */
                 if (!b._gpOnce) {
                     b._gpOnce = true;
-                    b.addEventListener("loadeddata", function () { gpSbsSync(); });
+                    b.addEventListener("loadeddata", function () {
+                        gpSbsSync();
+                        /* ...and the gauges, which were skipped on the pass
+                           that ran while this element still had no decoded
+                           frame: with videoWidth 0 there is no picture rect to
+                           put them on, so B's overlay stayed hidden until
+                           something else moved the playhead. */
+                        gpVideoDrawOverlay();
+                    });
                 }
             }
             b.style.display = "";
             gpSbsSync();
+            /* And repaint the gauges NOW. The overlay is drawn from the frame
+               loop, and turning Beside on does not move the playhead — so the
+               canvas kept whatever it last drew: one HUD, sized for the full
+               tile, stretched across both halves until something happened to
+               scrub. */
+            gpVideoDrawOverlay();
         }
 
         /* Called from the playhead. Seeks B to the same PLACE, and writes both
@@ -19943,17 +20002,31 @@
                     }
                 }
             }
+            /* Both plates, and which of the two is the quicker lap.
+               "The best being the main, a way to recognise it": the quicker
+               lap wears a filled marker, so you can tell at a glance which
+               picture you are chasing — without having to work it out from the
+               sign of a delta. */
             var la = document.getElementById("gpVLabA"), lb = document.getElementById("gpVLabB");
-            if (la) la.textContent = gpRunWord(true) + " " + (gp.selLap + 1);
-            if (lb) {
-                var d = null;
-                try { var ds = gpDeltaSeries(); d = ds ? ds[k] : null; } catch (e) { }
-                var nm = (function () { try { return gpRefName(); } catch (e) { return gpRunWord(true) + " " + (gp.cmpLap + 1); } })();
-                lb.innerHTML = gpEsc(nm) +
-                    (d !== null && isFinite(d)
-                        ? "<span class='d " + (d > 0 ? "up" : d < 0 ? "dn" : "") + "'>" +
-                          (d > 0 ? "+" : "") + d.toFixed(2) + "</span>"
+            var d = null;
+            try { var ds = gpDeltaSeries(); d = ds ? ds[k] : null; } catch (e) { }
+            var tA = gpSpanSecs(gp.trace, r.sel), tB = gpSpanSecs(gp.trace, r.ref);
+            var bestIsA = tA > 0 && tB > 0 && tA <= tB;
+            var plate = function (name, delta, isBest) {
+                return (isBest ? "<b class='bst'>BEST</b>" : "") + gpEsc(name) +
+                    (delta !== null && isFinite(delta)
+                        ? "<span class='d " + (delta > 0 ? "up" : delta < 0 ? "dn" : "") + "'>" +
+                          (delta > 0 ? "+" : "") + delta.toFixed(2) + "</span>"
                         : "");
+            };
+            if (la) la.innerHTML = plate(gpRunWord(true) + " " + (gp.selLap + 1), d, bestIsA);
+            if (lb) {
+                var nm = (function () { try { return gpRefName(); } catch (e) { return gpRunWord(true) + " " + (gp.cmpLap + 1); } })();
+                /* MIRRORED. The delta is one number about two laps: if this
+                   one is 0.06 down, the other is 0.06 up. Printing the same
+                   sign on both plates says they are both behind, which cannot
+                   be true of a pair. */
+                lb.innerHTML = plate(nm, (d === null || !isFinite(d)) ? null : -d, !bestIsA);
             }
         }
 
@@ -41929,6 +42002,91 @@
             return { x: (bw - w) / 2, y: (bh - h) / 2, w: w, h: h };
         }
 
+        /* One picture's gauges: size the canvas to that picture's rect, place
+           it over that picture, and render the HUD into it. Pulled out of
+           gpVideoDrawOverlay so the reference picture gets exactly the same
+           treatment as the analysed one — two renderers that are supposed to
+           look the same drift within a week, which is the reason gpHudRender
+           takes its size as an argument in the first place. */
+        function gpHudPaint(el, cv, rect, idx, snap) {
+            var dpr = Math.min(2.5, window.devicePixelRatio || 1);
+            var pw = Math.round(rect.w * dpr), ph = Math.round(rect.h * dpr);
+            if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
+            cv.style.left = rect.x + "px"; cv.style.top = rect.y + "px";
+            cv.style.width = rect.w + "px"; cv.style.height = rect.h + "px";
+            var g = cv.getContext("2d");
+            g.setTransform(dpr, 0, 0, dpr, 0, 0);
+            g.clearRect(0, 0, rect.w, rect.h);
+            if (gp.cam && !gp.cam.overlay) return;
+            if (snap) gpSbsWithB(function () { gpHudRender(g, rect.w, rect.h, idx); });
+            else gpHudRender(g, rect.w, rect.h, idx);
+        }
+
+        /* A picture's rect in TILE coordinates. gpVideoPictureRect measures
+           inside the element, which is the same thing only while the element
+           fills the tile — side by side it does not, and B's gauges landed on
+           A's half. */
+        function gpPictureRectInTile(el) {
+            var r = gpVideoPictureRect(el);
+            if (!r) return null;
+            return { x: el.offsetLeft + r.x, y: el.offsetTop + r.y, w: r.w, h: r.h };
+        }
+
+        /* ---- B's HUD reads B's lap ------------------------------------------
+           The same trick the comparison export uses: swap which lap is the
+           subject and which is the reference, and let every derived answer —
+           the lap clock, the delta, the coach's spans — recompute off that.
+           The delta then comes out MIRRORED on the reference picture, which is
+           the honest reading: if you are 0.06 down, the lap beside you is 0.06
+           up. Both pictures showing +0.06 says one of them is lying.
+
+           Borrowed and given back per render, and the caches the render fills
+           are kept ON the snapshot rather than thrown away — otherwise the
+           delta series is recomputed twenty-five times a second. */
+        function gpSbsSnapB() {
+            var s = {};
+            gpSbsKeys().forEach(function (k) { s[k] = gp[k]; });
+            s.selLap = gp.cmpLap; s.cmpLap = gp.selLap;
+            s.delta = null; s.deltaKey = ""; s.deltaMatch = null;
+            return s;
+        }
+        /* deltaMatch is NOT in GP_SNAP_KEYS, and has to be borrowed by hand.
+           The export never noticed: gpComparePlan reads the pairing ONCE and
+           carries it in the plan, so nothing later cares what the live slot
+           holds. Rendering B's HUD does care. gpDeltaSeries writes the pairing
+           into gp.deltaMatch as a side effect, so B's render — which runs with
+           the two laps swapped — replaced the live 4-to-6 pairing with the
+           6-to-4 one and left it there. Everything downstream then indexed a
+           684-long array built for the other lap: the reference picture jumped
+           to a point in the ANALYSED lap, two laps from where it belonged,
+           while gp.deltaKey still read "3:5" and looked perfectly healthy.
+           Borrowed and restored with the rest.
+
+           Built ON DEMAND, not at load: GP_SNAP_KEYS is declared twenty-odd
+           thousand lines further down this file, so a top-level
+           GP_SNAP_KEYS.concat() here reads the hoisted `undefined` and throws
+           while the script is still being evaluated — taking every definition
+           after it with it, _gpOpen included, and leaving an app whose GPS
+           workspace simply would not open. Syntax-checking cannot see this;
+           only running it can. */
+        function gpSbsKeys() {
+            if (!gp._sbsKeys) gp._sbsKeys = GP_SNAP_KEYS.concat(["deltaMatch"]);
+            return gp._sbsKeys;
+        }
+
+        function gpSbsWithB(fn) {
+            var key = gp.selLap + ":" + gp.cmpLap + ":" + (gp.trace && gp.trace.length) +
+                      ":" + (gp.sessionId || "");
+            if (!gp._sbsSnap || gp._sbsSnapKey !== key) {
+                gp._sbsSnap = gpSbsSnapB();
+                gp._sbsSnapKey = key;
+            }
+            var snap = gp._sbsSnap, was = {}, keys = gpSbsKeys();
+            keys.forEach(function (k) { was[k] = gp[k]; gp[k] = snap[k]; });
+            try { return fn(); }
+            finally { keys.forEach(function (k) { snap[k] = gp[k]; gp[k] = was[k]; }); }
+        }
+
         /* The gauges, painted over the footage from the mapped sample. */
         function gpVideoDrawOverlay() {
             var el = document.getElementById("gpVideo");
@@ -41950,16 +42108,29 @@
                                       ? { x: 0, y: 0, w: t.clientWidth, h: t.clientHeight } : null;
                               })();
             if (!rect || rect.w < 40) return;
-            var dpr = Math.min(2.5, window.devicePixelRatio || 1);
-            var pw = Math.round(rect.w * dpr), ph = Math.round(rect.h * dpr);
-            if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
-            cv.style.left = rect.x + "px"; cv.style.top = rect.y + "px";
-            cv.style.width = rect.w + "px"; cv.style.height = rect.h + "px";
-            var g = cv.getContext("2d");
-            g.setTransform(dpr, 0, 0, dpr, 0, 0);
-            g.clearRect(0, 0, rect.w, rect.h);
-            if (gp.cam && !gp.cam.overlay) return;
-            gpHudRender(g, rect.w, rect.h, gp.playIdx);
+            var cvB = document.getElementById("gpVideoOvB");
+            var sbs = gpSbsOn();
+            /* Side by side: each picture is measured on its own element, in
+               tile coordinates. Otherwise the single overlay keeps the whole
+               tile to itself exactly as before. */
+            if (sbs) {
+                var rA = gpPictureRectInTile(el);
+                if (rA && rA.w >= 40) gpHudPaint(el, cv, rA, gp.playIdx, null);
+            } else {
+                gpHudPaint(el, cv, rect, gp.playIdx, null);
+            }
+            if (!cvB) return;
+            if (!sbs) { cvB.style.display = "none"; return; }
+            var elB = document.getElementById("gpVideoB");
+            var r2 = gpSbsResolve();
+            if (!elB || r2.why || !elB.videoWidth) { cvB.style.display = "none"; return; }
+            var rB = gpPictureRectInTile(elB);
+            if (!rB || rB.w < 40) { cvB.style.display = "none"; return; }
+            cvB.style.display = "";
+            var k2 = gp.playIdx - r2.selFrom;
+            if (k2 < 0) k2 = 0;
+            if (k2 >= r2.match.length) k2 = r2.match.length - 1;
+            gpHudPaint(elB, cvB, rB, r2.match[k2], true);
         }
 
         /* ════════════════════════════════════════════════════════════════
