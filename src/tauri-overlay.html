@@ -3952,9 +3952,17 @@
            at all. */
         #gpWorkspace .gp-splits tr.best td { background: transparent; }
         #gpWorkspace .gp-splits tr.best td:first-child { box-shadow: inset 3px 0 0 var(--gpb-red-600); }
+        /* PURPLE, which is what a session best is on every timing screen ever
+           built — and, more to the point, the one colour that cannot be read
+           as a position on the green-to-red scale the rest of the column
+           uses. In the red family the quickest sector in the session was
+           wearing the colour of the slowest: on the Donington grid the three
+           session bests came out pale pink between a green field and a red
+           one, and read as the worst cells on the page. The base sheet had
+           this right; only the workspace override was wrong. */
         #gpWorkspace .gp-splits tr td.p {
-            background: var(--gpb-red-100); color: var(--gpb-red-700); font-weight: 600;
-            box-shadow: inset 0 -2px 0 var(--gpb-red-600);
+            background: rgba(139, 74, 201, 0.28); color: #5b2a8c; font-weight: 700;
+            box-shadow: inset 0 -2px 0 #8b4ac9;
         }
         #gpWorkspace .gp-splits tr.on td:first-child { color: var(--gpb-red-700); }
         #gpWorkspace .gp-splits tr.sum td { border-bottom-color: var(--gpb-div); }
@@ -24991,11 +24999,33 @@
         /* Green at the best of a column, red at the worst, straight-line
            between — the same green/red gpSectorChips already uses against a
            comparison lap, continuous here instead of binary. */
+        /* A diverging scale needs a NEUTRAL middle, not a muddy one.
+           This mixed green straight into red across the whole range, in RGB —
+           so a mid-pack sector, which is most of them, came out
+           [167,142,98]: olive-brown. Every cell was tinted something, the
+           something meant nothing in the middle, and at alpha 0.28 the ends
+           were too faint to pick out anyway. The table was a wash.
+
+           Now the hue is chosen by WHICH SIDE of the middle the time falls,
+           and the strength says how far — so an ordinary sector is nearly
+           white and the quick and slow ones are the only coloured things on
+           screen. That is the whole job: not "colour everything", but "make
+           the two that matter obvious".
+
+           Green for quick and red for slow is the convention this app uses
+           everywhere and a driver reads without thinking. It is also the
+           one pair a deuteranope cannot separate — which is why the number
+           is in the cell too, and why the fastest is additionally named on
+           the Best row. The colour is never the only carrier. */
         function gpHeatColour(frac, alpha) {
             var x = Math.max(0, Math.min(1, frac));
-            var g = [111, 191, 115], r = [224, 93, 82];
-            var c = [0, 1, 2].map(function (i) { return Math.round(g[i] + (r[i] - g[i]) * x); });
-            return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + (alpha === undefined ? 1 : alpha) + ")";
+            var t = (x - 0.5) * 2;                 /* -1 quickest … +1 slowest */
+            var k = Math.abs(t);
+            var end = t < 0 ? [46, 125, 70] : [192, 39, 45];
+            /* A floor so a mid sector is still faintly on the scale rather
+               than looking like a cell nobody measured. */
+            var a = (alpha === undefined ? 1 : alpha) * (0.18 + 0.82 * k);
+            return "rgba(" + end[0] + "," + end[1] + "," + end[2] + "," + a.toFixed(3) + ")";
         }
 
         /* One row per real lap — its total (always available, it only needs
@@ -25173,7 +25203,11 @@
                        datum. */
                     var frac = cr.hi > cr.lo ? (v - cr.lo) / (cr.hi - cr.lo) : 0;
                     h += "<td class='" + (isBest ? "p" : "") + "' data-gp-split-cell='" + row.li + ":" + s2 + "'" +
-                         (isBest ? "" : " style='background:" + gpHeatColour(frac, 0.28) + "'") +
+                         /* 0.55, not 0.28: the strength now falls away toward
+                            the middle on its own, so the ends can afford to be
+                            seen. Dark text on the strongest tint still clears
+                            7:1. */
+                         (isBest ? "" : " style='background:" + gpHeatColour(frac, 0.55) + "'") +
                          ">" + cell(v, s2) + "</td>";
                 }
                 h += "<td class='tot'>" +
