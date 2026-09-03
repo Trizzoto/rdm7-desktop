@@ -39135,6 +39135,225 @@
             return f;
         }
 
+        /* ---- what fills the tile when there is no picture --------------------
+         * There is footage for part of a session and not for the rest, and the
+         * gap is most of what you look at on a long drive. What was here drew
+         * four channel traces stacked along the top edge, a motion field, and
+         * a vignette, all UNDER the HUD — three graphics competing in one box,
+         * none of them the thing you wanted. It read as debug output.
+         *
+         * What you actually want to know in a gap is WHERE YOU WERE. That is
+         * the one question the missing picture would have answered, and the
+         * recording can answer it: the lap is a shape, and the car is a point
+         * on it. So the default draws the circuit, big, with the road already
+         * driven picked out in the brand red and the car on it.
+         *
+         * Four grounds, because a video is a thing people show other people:
+         *
+         *   circuit  the lap, large, driven road in red, the car on it
+         *   trace    the lap's speed as one long waveform, the car on it
+         *   night    the motion field — speed as streaks, leaning into corners
+         *   plain    the plate and one line of text, nothing else
+         */
+        var GP_BG_STYLES = [
+            ["circuit", "Circuit"],
+            ["trace",   "Speed trace"],
+            ["night",   "Motion"],
+            ["plain",   "Plain"]
+        ];
+        function gpVideoBgStyle() {
+            var v = gp.cam && gp.cam.bgStyle;
+            for (var i = 0; i < GP_BG_STYLES.length; i++)
+                if (GP_BG_STYLES[i][0] === v) return v;
+            return "circuit";
+        }
+
+        /* The plate every style sits on: near black, with the brand's own red
+           breathed into one corner so the box belongs to this app and not to a
+           default <video> element. */
+        function gpBgPlate(g, W, H, glowOn) {
+            var plate = g.createLinearGradient(0, 0, 0, H);
+            plate.addColorStop(0, "#0a0c0e");
+            plate.addColorStop(1, "#12171b");
+            g.fillStyle = plate;
+            g.fillRect(0, 0, W, H);
+            /* The glow is for the empty box only. With film up this plate is
+               just the letterbox bars either side of the picture, and a red
+               wash in one of them reads as a coloured block stuck to the edge
+               of the footage rather than as anything deliberate. */
+            if (!glowOn) return;
+            var glow = g.createRadialGradient(W * 0.82, H * 0.86, 0, W * 0.82, H * 0.86, Math.max(W, H) * 0.6);
+            glow.addColorStop(0, "rgba(210,35,42,0.10)");
+            glow.addColorStop(1, "rgba(210,35,42,0)");
+            g.fillStyle = glow;
+            g.fillRect(0, 0, W, H);
+        }
+
+        /* The lap, drawn to fill the box, with the road already driven picked
+           out in the brand red and the car on it.
+
+           The points come straight from gp.trace over gpLapRange() rather than
+           from gpHudTrackShape(), on purpose. That helper prefers a STORED
+           track outline when the session has a trackId, and a stored outline is
+           a different set of points from the drive — nothing maps a sample
+           index onto it, so the car would have to be projected separately and
+           could land beside the road. That is exactly the "the dot is in the
+           wrong place" bug from the minimap. Here the road and the dot are the
+           same array indexed twice, so they cannot disagree. */
+        /* Which stretch the empty box draws.
+           gpLapRange() answers "the lap the LIST has selected", and with
+           nothing selected that is the whole recording — at Mallala, 35 minutes
+           including the paddock, the out-laps and the drive home, which is a
+           scribble rather than a circuit. What the box wants is the lap you are
+           WATCHING, so the playhead picks it. Only outside every lap does it
+           fall back to the whole thing, which for a road drive is the honest
+           answer anyway. */
+        function gpBgRange() {
+            var rr = null;
+            try { rr = gpLapRange(); } catch (e) { return null; }
+            if (gp.selLap >= 0) return rr;
+            var laps = gp.traceLaps || [], i = gp.playIdx;
+            for (var q = 0; q < laps.length; q++) {
+                var L = laps[q];
+                if (L && !L.ghost && i >= L.from && i <= L.to && L.to - L.from > 40) return L;
+            }
+            return rr;
+        }
+
+        function gpBgCircuit(g, W, H) {
+            var rows = gp.trace;
+            if (!rows || rows.length < 8) return false;
+            var rr = gpBgRange();
+            if (!rr || rr.to - rr.from < 8) return false;
+
+            /* A lap is thousands of samples and this box is a few hundred
+               pixels wide; every nth is the same shape for a fraction of the
+               work, and the step is kept so the car's index maps back onto it. */
+            var step = Math.max(1, Math.floor((rr.to - rr.from + 1) / 500));
+            var la = 0, lo = 0, n = 0, i;
+            var lats = [], lons = [];
+            for (i = rr.from; i <= rr.to; i += step) {
+                var r = rows[i];
+                if (!r || !isFinite(r.lat) || !isFinite(r.lon)) continue;
+                lats.push(r.lat); lons.push(r.lon); la += r.lat; lo += r.lon; n++;
+            }
+            if (n < 8) return false;
+            la /= n; lo /= n;
+
+            var mpd = gpMetresPerDeg(la), xs = [], ys = [];
+            for (i = 0; i < n; i++) {
+                xs.push((lons[i] - lo) * mpd.lo);
+                ys.push(-(lats[i] - la) * mpd.la);
+            }
+            var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
+            var y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+            var spanX = Math.max(1e-6, x1 - x0), spanY = Math.max(1e-6, y1 - y0);
+            var pad = Math.min(W, H) * 0.17;
+            var sc = Math.min((W - pad * 2) / spanX, (H - pad * 2) / spanY);
+            var ox = pad + ((W - pad * 2) - spanX * sc) / 2 - x0 * sc;
+            var oy = pad + ((H - pad * 2) - spanY * sc) / 2 - y0 * sc;
+            var PX = function (k) { return ox + xs[k] * sc; };
+            var PY = function (k) { return oy + ys[k] * sc; };
+
+            /* Where the car is, in the SAME reduced indexing. */
+            var pi = Math.max(rr.from, Math.min(rr.to, gp.playIdx || rr.from));
+            var upto = Math.max(0, Math.min(n - 1, Math.round((pi - rr.from) / step)));
+
+            var stroke = function (a, b, w, col) {
+                if (b <= a) return;
+                g.beginPath();
+                for (var k = a; k <= b; k++) { if (k === a) g.moveTo(PX(k), PY(k)); else g.lineTo(PX(k), PY(k)); }
+                g.lineWidth = w; g.lineJoin = "round"; g.lineCap = "round";
+                g.strokeStyle = col; g.stroke();
+            };
+            var road = Math.max(3, Math.min(W, H) * 0.014);
+            /* Casing first: the line has to read whatever it crosses. */
+            stroke(0, n - 1, road * 2.3, "rgba(0,0,0,0.55)");
+            stroke(0, n - 1, road, "rgba(226,234,240,0.30)");
+            stroke(0, upto, road, "#d2232a");
+
+            var cx = PX(upto), cy = PY(upto), dot = Math.max(4, Math.min(W, H) * 0.016);
+            g.beginPath(); g.arc(cx, cy, dot * 2.1, 0, Math.PI * 2);
+            g.fillStyle = "rgba(210,35,42,0.20)"; g.fill();
+            g.beginPath(); g.arc(cx, cy, dot, 0, Math.PI * 2);
+            g.fillStyle = "#fff"; g.fill();
+            g.lineWidth = Math.max(1.5, dot * 0.42); g.strokeStyle = "#d2232a"; g.stroke();
+            return true;
+        }
+
+        /* The lap's speed, one waveform across the box, filled underneath, with
+           the car's place on it. The same idea as the timeline's own trace so
+           the two read as one family. */
+        function gpBgTrace(g, W, H) {
+            var rows = gp.trace;
+            if (!rows || rows.length < 8) return false;
+            var rr = gpBgRange();
+            if (!rr || rr.to - rr.from < 8) return false;
+            var padX = W * 0.08, padT = H * 0.30, padB = H * 0.22;
+            var lo = Infinity, hi = -Infinity, i;
+            for (i = rr.from; i <= rr.to; i++) {
+                var v = rows[i].kph;
+                if (!isFinite(v)) continue;
+                if (v < lo) lo = v; if (v > hi) hi = v;
+            }
+            if (!(hi > lo)) return false;
+            var X = function (i2) { return padX + ((i2 - rr.from) / (rr.to - rr.from)) * (W - padX * 2); };
+            var Y = function (v2) { return H - padB - ((v2 - lo) / (hi - lo)) * (H - padT - padB); };
+            g.beginPath();
+            g.moveTo(X(rr.from), H - padB);
+            for (i = rr.from; i <= rr.to; i++) if (isFinite(rows[i].kph)) g.lineTo(X(i), Y(rows[i].kph));
+            g.lineTo(X(rr.to), H - padB);
+            g.closePath();
+            var fill = g.createLinearGradient(0, padT, 0, H - padB);
+            fill.addColorStop(0, "rgba(210,35,42,0.30)");
+            fill.addColorStop(1, "rgba(210,35,42,0.02)");
+            g.fillStyle = fill; g.fill();
+            var pi = Math.max(rr.from, Math.min(rr.to, gp.playIdx));
+            /* Played and not yet played, the same split the circuit makes, so
+               the two grounds say the same thing in two shapes. */
+            var run = function (a, b, col) {
+                if (b <= a) return;
+                g.beginPath();
+                var started = false;
+                for (var k = a; k <= b; k++) {
+                    if (!isFinite(rows[k].kph)) continue;
+                    if (!started) { g.moveTo(X(k), Y(rows[k].kph)); started = true; }
+                    else g.lineTo(X(k), Y(rows[k].kph));
+                }
+                g.strokeStyle = col; g.lineWidth = Math.max(1.5, W / 420);
+                g.lineJoin = "round"; g.stroke();
+            };
+            run(pi, rr.to, "rgba(226,234,240,0.30)");
+            run(rr.from, pi, "#ff6b63");
+            var px = X(pi), py = isFinite(rows[pi].kph) ? Y(rows[pi].kph) : H - padB;
+            g.strokeStyle = "rgba(226,234,240,0.28)"; g.lineWidth = 1;
+            g.beginPath(); g.moveTo(px, padT * 0.6); g.lineTo(px, H - padB); g.stroke();
+            g.beginPath(); g.arc(px, py, Math.max(3, W / 200), 0, Math.PI * 2);
+            g.fillStyle = "#fff"; g.fill();
+            return true;
+        }
+
+        /* What the empty box decided to draw, and from what. Kept because the
+           two failure modes here look identical on screen — "the style drew
+           nothing" and "the style drew off the edge" are both a black box. */
+        window.gpBgDebug = function () {
+            var rr = null, err = null;
+            try { rr = gpLapRange(); } catch (e) { err = String(e); }
+            var rows = gp.trace, n = 0, bad = 0, i;
+            if (rows && rr) for (i = rr.from; i <= rr.to; i++) {
+                var r = rows[i];
+                if (r && isFinite(r.lat) && isFinite(r.lon)) n++; else bad++;
+            }
+            var cv = document.getElementById("gpVideoBg");
+            return {
+                style: gpVideoBgStyle(), range: rr, err: err,
+                traceLen: rows ? rows.length : 0, good: n, bad: bad,
+                selLap: gp.selLap, playIdx: gp.playIdx,
+                canvas: cv ? cv.clientWidth + "x" + cv.clientHeight : "none",
+                film: !!(gp.video && gp.video.src)
+            };
+        };
+
         function gpVideoBgDraw(film) {
             var cv = document.getElementById("gpVideoBg");
             if (!cv) return;
@@ -39150,14 +39369,22 @@
             /* The plate. Painted whatever is happening, because the tile's own
                background is what shows through the letterbox bars of a
                portrait clip and a flat black there is a hole in the picture. */
-            var plate = g.createLinearGradient(0, 0, 0, H);
-            plate.addColorStop(0, "#0a0c0e");
-            plate.addColorStop(1, "#12171b");
-            g.fillStyle = plate;
-            g.fillRect(0, 0, W, H);
+            gpBgPlate(g, W, H, !film);
             /* With film up, that is all: a moving field in the letterbox bars
                would compete with the footage, which is the subject. */
             if (film) return;
+
+            var style = gpVideoBgStyle();
+            if (style !== "night") {
+                var drew = false;
+                if (style === "circuit") drew = gpBgCircuit(g, W, H);
+                else if (style === "trace") drew = gpBgTrace(g, W, H);
+                /* A style that has nothing to draw from — no lap, no shape —
+                   falls through to the plate and its one line rather than to an
+                   empty box that looks broken. */
+                gpVideoBgSay(g, W, H);
+                return;
+            }
 
             var d = null;
             try { d = gpHudData(gp.playIdx); } catch (e) { }
@@ -39215,84 +39442,12 @@
             g.fillStyle = vg;
             g.fillRect(0, 0, W, H);
 
-            gpVideoBgTraces(g, W, H);
+            /* The stacked channel traces that used to go here are gone. Four
+               plots along the top edge, under the HUD, at 42% opacity, is not
+               a backdrop — it is a second instrument panel arguing with the
+               first. The speed trace has a style of its own now for anyone who
+               wants it as the subject. */
             gpVideoBgSay(g, W, H);
-        }
-
-        /* The last twelve seconds of the channels this car actually reports,
-           stacked along the top edge where the HUD is not. Thin, low contrast,
-           and labelled — it is the answer to "what was happening here", which
-           is the question the missing footage would have answered. */
-        function gpVideoBgTraces(g, W, H) {
-            var rows = gp.trace;
-            if (!rows || rows.length < 4 || W < 200) return;
-            var series = [];
-            var ch = null;
-            try { ch = gpHudChans(); } catch (e) { }
-            series.push({ lab: "SPEED", get: function (r) { return r.kph; }, col: "#7fb2ff" });
-            if (ch && ch.rpm) series.push({ lab: "RPM", key: "rpm", col: "#ffb454" });
-            if (ch && ch.thr) series.push({ lab: "THROTTLE", key: "thr", col: "#6fd08c" });
-            if (ch && ch.brk) series.push({ lab: "BRAKE", key: "brk", col: "#ff8b85" });
-            series = series.slice(0, 4);
-
-            var rr = gpLapRange();
-            var i1 = Math.max(rr.from, Math.min(rr.to, gp.playIdx));
-            /* Twelve seconds either side, in samples, off the real timestamps
-               rather than an assumed rate — a VBO import is 10 Hz and a puck
-               download is 25. */
-            var t1 = rows[i1].t;
-            var back = i1, fwd = i1;
-            if (t1 !== undefined) {
-                while (back > rr.from && rows[back].t > t1 - 12000) back--;
-                while (fwd < rr.to && rows[fwd].t < t1 + 4000) fwd++;
-            } else {
-                back = Math.max(rr.from, i1 - 300);
-                fwd = Math.min(rr.to, i1 + 100);
-            }
-            if (fwd - back < 3) return;
-
-            var padX = Math.max(10, W * 0.04);
-            var top = Math.max(8, H * 0.05);
-            var hEach = Math.min(30, (H * 0.42) / series.length);
-            var plotW = W - padX * 2;
-            series.forEach(function (s, si) {
-                var y0 = top + si * (hEach + 7), lo = Infinity, hi = -Infinity, vals = [];
-                for (var k = back; k <= fwd; k++) {
-                    var v = null;
-                    if (s.key) { try { v = gpHudChan(ch, s.key, k); } catch (e) { v = null; } }
-                    else v = s.get(rows[k]);
-                    if (v === null || v === undefined || !isFinite(v)) v = null;
-                    vals.push(v);
-                    if (v !== null) { if (v < lo) lo = v; if (v > hi) hi = v; }
-                }
-                if (!isFinite(lo) || hi - lo < 1e-6) { hi = lo + 1; }
-                g.beginPath();
-                var started = false;
-                for (var q = 0; q < vals.length; q++) {
-                    if (vals[q] === null) continue;
-                    var x = padX + (q / (vals.length - 1)) * plotW;
-                    var y = y0 + hEach - ((vals[q] - lo) / (hi - lo)) * hEach;
-                    if (!started) { g.moveTo(x, y); started = true; } else g.lineTo(x, y);
-                }
-                g.strokeStyle = s.col;
-                g.globalAlpha = 0.65;
-                g.lineWidth = 1.4;
-                g.stroke();
-                g.globalAlpha = 1;
-                g.font = "600 9px " + (typeof GP_HUD_SANS === "string" ? GP_HUD_SANS : "sans-serif");
-                g.fillStyle = "rgba(220,232,240,0.42)";
-                g.textAlign = "left";
-                g.fillText(s.lab, padX, y0 - 1);
-            });
-            /* Where "now" is in that window. */
-            var fnow = (i1 - back) / Math.max(1, fwd - back);
-            var xn = padX + fnow * plotW;
-            g.strokeStyle = "rgba(210,35,42,0.55)";
-            g.lineWidth = 1;
-            g.beginPath();
-            g.moveTo(xn, top - 6);
-            g.lineTo(xn, top + series.length * (hEach + 7));
-            g.stroke();
         }
 
         /* One line saying why there is no picture. Small and out of the HUD's
@@ -39307,11 +39462,14 @@
                 msg = gpTlReadout() || "no footage here";
                 msg = msg.charAt(0).toUpperCase() + msg.slice(1);
             }
-            g.font = "600 " + Math.max(10, Math.min(14, W / 42)) + "px " +
-                     (typeof GP_HUD_SANS === "string" ? GP_HUD_SANS : "sans-serif");
-            g.textAlign = "center";
-            g.fillStyle = "rgba(228,236,242,0.34)";
-            g.fillText(msg, W / 2, H * 0.5);
+            /* Along the bottom, not across the middle. Dead centre it sat on
+               top of whatever the style was drawing — the circuit, the trace —
+               and the two fought. */
+            var S = Math.max(10, Math.min(13, W / 46));
+            g.font = "600 " + S + "px " + (typeof GP_HUD_SANS === "string" ? GP_HUD_SANS : "sans-serif");
+            g.textAlign = "right";
+            g.fillStyle = "rgba(228,236,242,0.40)";
+            g.fillText(msg, W - Math.max(10, W * 0.045), H - Math.max(12, H * 0.07));
             g.textAlign = "left";
         }
 
@@ -45363,6 +45521,17 @@
                     "<small>" + (hsug
                         ? gpEsc(GP_HUD_PRESETS[hsug.n][0]) + " layout suits this recording"
                         : "move and resize what is on the picture") + "</small></button>";
+            html += "<div class='gph'>When there is no footage</div>";
+            GP_BG_STYLES.forEach(function (m) {
+                html += "<button data-bg='" + m[0] + "' class='" +
+                        (gpVideoBgStyle() === m[0] ? "sel" : "") + "'>" + gpEsc(m[1]) +
+                        "<small>" + gpEsc(
+                            m[0] === "circuit" ? "the lap, with the road you have driven lit"
+                          : m[0] === "trace" ? "the lap's speed, and where you are on it"
+                          : m[0] === "night" ? "speed as motion, leaning into the corners"
+                          : "the plate and one line, nothing else") +
+                        "</small></button>";
+            });
             html += "<div class='gph'>Minimap ground</div>";
             GP_HUD_MAP_STYLES.forEach(function (m) {
                 html += "<button data-m='" + m[0] + "' class='" +
@@ -45381,6 +45550,16 @@
             var r = ev.target.getBoundingClientRect();
             pop.style.top = (r.bottom + 6) + "px";
             pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+            Array.prototype.forEach.call(pop.querySelectorAll("[data-bg]"), function (b) {
+                b.addEventListener("click", function () {
+                    gpCamPut("bgStyle", b.getAttribute("data-bg"));
+                    Array.prototype.forEach.call(pop.querySelectorAll("[data-bg]"), function (o) {
+                        o.classList.toggle("sel", o === b);
+                    });
+                    gpVideoBgDraw(false);
+                    gpVideoDrawOverlay();
+                });
+            });
             Array.prototype.forEach.call(pop.querySelectorAll("[data-h]"), function (b) {
                 b.addEventListener("click", function () {
                     var k = b.getAttribute("data-h");

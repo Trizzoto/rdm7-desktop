@@ -340,3 +340,59 @@ strip. Roughly a third of the window is chrome and two thirds is data, and
 none of it scrolls. The next thing worth attacking, if it comes up, is the
 report panel's whole-session state — a 32 px heading and a sentence above the
 first number — and the graph's lane-label column.
+
+## The empty video box is a picture too (ADR-0065)
+
+A session with footage over 3% of it spends 97% of its time showing whatever
+the Video panel puts in the tile when there is no film. That box used to draw
+three things at once: a moving field of speed streaks leaning into the corners,
+a vignette, and four channel traces (speed, RPM, throttle, brake) stacked along
+the top edge at low opacity. All three sat under the HUD, which draws its own
+speed, tacho, minimap and grip circle over the top. The result was two
+instrument panels arguing with each other, and it read as debug output rather
+than as a deliberate part of the app.
+
+The question the missing picture would have answered is **where you were**. The
+recording can answer that, so the box now answers it.
+
+**Four grounds**, picked in the HUD popover under "When there is no footage",
+persisted per camera via `gpCamPut("bgStyle", …)` the same way `hudMapStyle` is:
+
+| Ground | What it draws |
+| --- | --- |
+| `circuit` (default) | the lap, filling the box, driven road in brand red, the rest in grey, the car on the join |
+| `trace` | the lap's speed as one waveform, split at the playhead the same way |
+| `night` | the old motion field, kept as an option |
+| `plain` | the plate and one line, nothing else |
+
+The stacked channel traces are gone; `gpVideoBgTraces` was deleted.
+
+**The road and the dot come from one array.** `gpBgCircuit` builds its points
+straight from `gp.trace`, *not* from `gpHudTrackShape()`. That helper prefers a
+stored track outline whenever the session has a `trackId`, and a stored outline
+is a different set of points from the drive — nothing maps a sample index onto
+it, so the car would have to be projected separately and could land beside the
+road. That is exactly the "the dot is in the wrong place" bug the minimap had.
+Here the road and the dot are the same array indexed twice, so they cannot
+disagree.
+
+**The range follows the playhead, not the list.** `gpLapRange()` answers "the
+lap the list has selected", and with nothing selected that is the whole
+recording — at Mallala, 35 minutes including the paddock, the out-laps and the
+drive home, which is a scribble rather than a circuit. `gpBgRange()` prefers the
+lap the playhead is *inside*, and only falls back to the whole recording when
+the playhead is outside every lap, which for a road drive is the honest answer.
+
+Two smaller things fell out of building it. The plate's brand-red corner glow is
+drawn **only** when the box is empty: with film up that plate is just the
+letterbox bars either side of the picture, and a red wash in one of them reads
+as a coloured block stuck to the edge of the footage. And the "no footage here"
+caption moved from dead centre to the bottom right, because centred it sat on
+top of whatever the ground was drawing.
+
+There is no identity mark on the plate. The HUD already has a "Track and date"
+widget; a second one landed on the speed gauge.
+
+`window.gpBgDebug()` reports what the box decided and from what — the two
+failure modes here ("the style drew nothing" and "the style drew off the edge")
+are both a black box on screen.
