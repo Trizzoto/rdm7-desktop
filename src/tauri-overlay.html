@@ -26269,8 +26269,25 @@
                 var b = rng.from + Math.floor((c + 1) * per) - 1;
                 if (b < a) b = a;
                 if (b > rng.to) b = rng.to;
+                /* ...and the LAST SAMPLE OF THE PREVIOUS COLUMN, which is what
+                   makes the line a line.
+                   Each column is drawn as one vertical segment from its own
+                   lo to its own hi. Where the signal moves faster than the
+                   spread inside a single column — which is most of a speed
+                   trace, and all of a steep one — consecutive columns cover
+                   disjoint ranges: 100..105 then 112..117, with nothing
+                   joining them. The result is a trace drawn as a field of
+                   short vertical dashes with white between them, which is
+                   what it looked like at 6x on a whole-session view.
+                   Including the boundary sample puts one shared value in both
+                   columns, so their ranges are guaranteed to touch and the
+                   stroke is continuous. It costs one extra sample per column
+                   and changes no value that was already being reported: the
+                   envelope can only grow to cover ground the line really
+                   crossed. */
+                var a0 = (a > rng.from) ? a - 1 : a;
                 var lo = Infinity, hi = -Infinity;
-                for (i = a; i <= b; i++) {
+                for (i = a0; i <= b; i++) {
                     v = lane.get(i);
                     if (v === null || v === undefined || !isFinite(v)) continue;
                     if (v < lo) lo = v;
