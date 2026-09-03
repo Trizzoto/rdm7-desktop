@@ -19853,6 +19853,14 @@
                     var a = document.getElementById("gpVideo");
                     if (a && (a.currentSrc || a.src)) use(a.currentSrc || a.src);
                 }
+                /* The seek below happens before any of this has loaded, and a
+                   seek into an empty element is dropped — B then sat on frame
+                   zero until something moved the playhead. Ask again once
+                   there is something to seek. */
+                if (!b._gpOnce) {
+                    b._gpOnce = true;
+                    b.addEventListener("loadeddata", function () { gpSbsSync(); });
+                }
             }
             b.style.display = "";
             gpSbsSync();
@@ -19870,14 +19878,61 @@
             var k = gp.playIdx - r.selFrom;
             if (k < 0) k = 0;
             if (k >= r.match.length) k = r.match.length - 1;
-            var bIdx = r.match[k];
-            var t = gpAnyVideoTimeFor(bIdx);
-            if (t !== null && isFinite(t) && t >= 0) {
-                /* Only when it has actually drifted: a seek per frame to a
-                   time it is already at makes the decoder thrash and the
-                   picture stutter. A quarter of a frame is the tolerance. */
-                if (!isFinite(b.currentTime) || Math.abs(b.currentTime - t) > 0.01) {
-                    try { b.currentTime = t; } catch (e) { }
+            var a = document.getElementById("gpVideo");
+            var t = gpAnyVideoTimeFor(r.match[k]);
+            if (t !== null && isFinite(t) && t >= 0 && isFinite(b.duration)) {
+                t = Math.max(0, Math.min(b.duration, t));
+                /* ---- paused: put it exactly there ---------------------------
+                   Scrubbing wants the frame, and a seek is how you get one. */
+                if (!a || a.paused) {
+                    if (!b.paused) { try { b.pause(); } catch (e) { } }
+                    b.playbackRate = 1;
+                    if (!isFinite(b.currentTime) || Math.abs(b.currentTime - t) > 0.01) {
+                        try { b.currentTime = t; } catch (e) { }
+                    }
+                } else {
+                    /* ---- playing: B RUNS, it is not seeked -------------------
+                       A is the clock while it plays — gpVideoFollowSeek says
+                       so, and refuses to seek it for exactly this reason: a
+                       seek per frame into a decoder that is busy decoding
+                       stutters the picture. Seeking B 25 times a second did
+                       the same to B, which is why only one of them appeared
+                       to play.
+                       So B plays too, at the rate its own road runs at. That
+                       rate is not 1: over the same stretch the analysed lap
+                       took 30.0 s and the reference took 26.2, so B must run
+                       at 0.87x or it walks away from the pairing. The ratio is
+                       measured a second ahead (feedforward) and the remaining
+                       error is fed back in, which is a following controller —
+                       ratio alone would drift, feedback alone would lag. */
+                    if (b.paused) {
+                        b.muted = true;                 /* two engines a beat apart is a phaser */
+                        var pr = b.play();
+                        if (pr && pr.catch) pr.catch(function () { });
+                    }
+                    var drift = t - b.currentTime;
+                    if (Math.abs(drift) > 0.4) {
+                        /* Too far gone to catch by rate — a jump cut, or the
+                           picture was hidden while the playhead ran on. */
+                        try { b.currentTime = t; } catch (e) { }
+                        b.playbackRate = 1;
+                    } else {
+                        var N = Math.min(25, r.match.length - 1 - k);
+                        var ratio = 1;
+                        if (N > 2) {
+                            var ta0 = gpVideoTimeFor(r.selFrom + k),
+                                ta1 = gpVideoTimeFor(r.selFrom + k + N),
+                                tb1 = gpAnyVideoTimeFor(r.match[k + N]);
+                            if (ta0 !== null && ta1 !== null && tb1 !== null &&
+                                isFinite(ta0) && isFinite(ta1) && isFinite(tb1) && ta1 - ta0 > 0.05)
+                                ratio = (tb1 - t) / (ta1 - ta0);
+                        }
+                        if (!isFinite(ratio) || ratio <= 0) ratio = 1;
+                        /* A's own speed multiplies through: at 2x the road
+                           goes past twice as fast for both of them. */
+                        ratio *= (a.playbackRate || 1);
+                        b.playbackRate = Math.max(0.25, Math.min(4, ratio + drift));
+                    }
                 }
             }
             var la = document.getElementById("gpVLabA"), lb = document.getElementById("gpVLabB");
@@ -36448,6 +36503,11 @@
             if (gp.playTimer) { clearInterval(gp.playTimer); gp.playTimer = null; }
             var el = document.getElementById("gpVideo");
             if (el && !el.paused) { try { el.pause(); } catch (e) { } }
+            /* ...and the picture beside it. gpSbsSync only runs from the frame
+               loop, and after this there are no more frames — so B was left
+               playing on its own, forever, against a stopped playhead. */
+            var elB = document.getElementById("gpVideoB");
+            if (elB && !elB.paused) { try { elB.pause(); } catch (e) { } }
             gp.playing = false;
             /* A stop point belongs to one press of Play corner. Leaving it
                armed would make the next plain Play stop somewhere nobody
