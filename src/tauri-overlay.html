@@ -3014,6 +3014,19 @@
         .gp-maplegend:empty { display: none; }
         .gp-maplegend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
         .gp-maplegend i { width: 13px; height: 0; border-top-style: solid; display: inline-block; }
+        /* ---- the lap key, when there are a lot of laps --------------------
+           One lap per line is right for two or three. For seven it was 160 px
+           of stacked rows down the side of a 403 px map — a third of the panel
+           spent on a key, on the screen size where the panel could least
+           afford it. Past four they wrap instead, and the word goes: the
+           swatch is the identity, and "Lap" seven times over is the same word
+           seven times over. */
+        .gp-maplegend .gp-maplaps { display: flex; flex-direction: column; gap: 3px; }
+        .gp-maplegend .gp-maplaps.tight {
+            flex-direction: row; flex-wrap: wrap; gap: 2px 8px; max-width: 138px;
+        }
+        .gp-maplegend .gp-maplaps.tight span { gap: 3px; }
+        .gp-maplegend .gp-maplaps.tight i { width: 11px; }
         .gp-maplegend .me { font-weight: 600; color: #fff; }
         /* The colour key. Laid out as a grid so the two end labels sit under
            the ends of the bar they belong to and the live reading sits apart
@@ -3575,37 +3588,157 @@
         }
         #gpWorkspace .gpb-navacts {
             margin-left: auto; display: flex; align-items: center; gap: 8px;
+            padding-left: 12px;
         }
 
-        /* ---- band three: the page's own name ------------------------------
-           Not chrome. A headline the page owns, at a size that says what you
-           are looking at from across the room — and one that can wrap rather
-           than being deleted by a media query when the window narrows. */
-        /* display is stated, not left to inherit: as a flex item of .ws this
-           box came out `display:flex` from the cascade and laid the name, the
-           meta line and the sub-tabs out side by side in one 48 px strip. */
-        #gpWorkspace .gpb-page {
-            flex: none; display: block; padding: 16px 18px 0; background: var(--gpb-bg);
+        /* ---- focus mode: give the chrome's height to the data -------------
+           1366 x 768 is the machine this class of software is expected to run
+           on, and after ADR-0061 it still spent 219 px of 768 — 29% — before a
+           single number was drawn. Ninety-five of those are these two bars,
+           and neither is what you are reading while a lap plays: one says what
+           is open, the other how to leave.
+
+           So they LIFT rather than shrink. Out of the flow, off the top, and
+           back the moment the pointer goes near the edge or anything in them
+           takes focus. Nothing is deleted, nothing is made smaller, nothing
+           has to be re-learned at a second size — the mosaic simply gets the
+           height, and the bottom dock keeps its place because THAT bar is live
+           numbers you read while the car moves.
+
+           What stays behind is a 12 px strip: a red hairline that says there
+           is something above it, and the way out. A full screen with no
+           visible way out is the bug ADR-0061 already names for panels; it
+           would be worse for the whole window. */
+        /* No `position` of its own here. `.ws` is already `fixed; inset: 0`,
+           which is a containing block for the two absolute bars below — and
+           overriding it to `relative` dropped the workspace out of that fixed
+           box and into normal flow, 50 px down the page behind the suite
+           header. Focus mode then COST 50 px of height instead of giving 95.
+           Measured, or it would have shipped looking almost right. */
+        #gpWorkspace.gpb-zen > .ws-topbar,
+        #gpWorkspace.gpb-zen > .gpb-nav {
+            position: absolute; left: 0; right: 0; z-index: 2400;
+            transition: transform 120ms ease-out;
+            box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
         }
-        #gpWorkspace .gpb-page.empty { display: none; }
-        #gpWorkspace .gpb-page .row { display: flex; align-items: flex-end; gap: 16px; }
-        #gpWorkspace .gpb-page .nm {
-            font-family: var(--gpb-head); font-weight: 700; font-size: 30px;
-            line-height: 1; letter-spacing: 0.01em; text-transform: uppercase;
-            color: var(--gpb-ink);
+        /* Each bar has to clear the WORKSPACE's top edge, not merely its own
+           height — the workspace does not always start at the top of the
+           window, and a -100% on the second bar left it hanging 43 px down,
+           covering the strip and the first row of panels. So the lower bar
+           moves by its own height PLUS the one above it. 44px is .ws-topbar's
+           min-height, the same number its `top` is set from below. */
+        #gpWorkspace.gpb-zen > .ws-topbar { top: 0; transform: translateY(-100%); }
+        #gpWorkspace.gpb-zen > .gpb-nav { top: 44px; transform: translateY(calc(-100% - 44px)); }
+        #gpWorkspace.gpb-zen.peek > .ws-topbar,
+        #gpWorkspace.gpb-zen.peek > .gpb-nav { transform: none; }
+
+        /* The strip left in their place. It is IN the flow on purpose: an
+           absolutely-positioned hint would overlap the top row's own header
+           controls, which are the split/fill/close buttons ADR-0061 says must
+           never be the part that disappears. */
+        #gpWorkspace .gpb-zenbar { display: none; }
+        #gpWorkspace.gpb-zen .gpb-zenbar {
+            display: flex; align-items: center; justify-content: flex-end;
+            gap: 8px; flex: none; height: 12px; padding: 0 10px;
+            background: var(--gpb-bar);
+            border-bottom: 1px solid var(--gpb-red);
+            cursor: pointer; user-select: none;
         }
-        #gpWorkspace .gpb-page .tags { display: flex; gap: 6px; padding-bottom: 3px; }
-        #gpWorkspace .gpb-page .pact { margin-left: auto; padding-bottom: 2px; }
-        #gpWorkspace .gpb-page .m {
-            font-size: 13px; color: var(--gpb-muted); margin-top: 6px;
+        #gpWorkspace.gpb-zen .gpb-zenbar span {
+            font-family: var(--gpb-head); font-weight: 600; font-size: 8px;
+            letter-spacing: 0.16em; text-transform: uppercase;
+            color: var(--gpb-muted); line-height: 1;
         }
+        #gpWorkspace.gpb-zen .gpb-zenbar:hover span { color: var(--gpb-ink); }
+
+        /* Two more places the same 768 px was going. The panel headers keep
+           every control — only the padding goes — and the "+ Row" strip is a
+           thing you use while arranging, which is not what focus mode is for.
+           Both are measured by gpGridAvail through offsetHeight, so the rows
+           get the difference without a second number to keep in step. */
+        #gpWorkspace.gpb-zen .gpb-phead { padding-top: 1px; padding-bottom: 1px; }
+        #gpWorkspace.gpb-zen .gpb-addrow { display: none; }
+
+        /* ---- the page's own name, IN the black bar ------------------------
+           It was a third band of its own: a 30 px headline, a meta line and
+           the sub-tabs, ~100 px of chrome above every screen of data. On a
+           laptop that is a whole panel's worth of height spent saying what the
+           window title already says.
+           It sits in the black bar now, beside the app and the device, where
+           the whole line reads as context: what is open, and what it is worth.
+           That leaves the light bar to navigation and actions alone — the two
+           bars carry one job each instead of one bar carrying three.
+           It keeps everything it ever carried — the circuit, the date, the
+           rate, the channel count, the three tags — as one line that
+           ellipsises rather than a block that grows. And the reason it can
+           live here now, when the same bar used to DELETE it at 1440 px, is
+           that the bar has three controls in it instead of twelve: identity is
+           the flexible thing here, not the thing that gets pushed out.
+           Nothing is lost at any width — see gpIdFit, and the tooltip. */
+        #gpWorkspace .gpb-id {
+            flex: 1; min-width: 0; display: flex; align-items: center;
+            gap: 10px; overflow: hidden; padding: 0 4px 0 12px;
+            border-left: 1px solid var(--gpb-bar-div); margin: 8px 0;
+        }
+        /* Empty on the sections that have no identity to state — and then it
+           must not draw its divider over nothing. */
+        #gpWorkspace .gpb-id:empty { border-left: none; }
+        #gpWorkspace .gpb-id .nm {
+            flex: none; font-family: var(--gpb-head); font-weight: 700; font-size: 15px;
+            line-height: 1; letter-spacing: 0.06em; text-transform: uppercase;
+            color: #fff; white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis; max-width: 42%;
+        }
+        /* The tags come after the sentence and never shrink: when the bar runs
+           short it is the DATE and the channel count that ellipsise, one
+           character at a time, and the session best is still whole at the end
+           of it. A tag that shrinks does not ellipsise, it gets sliced — half
+           a lap time is worse than no lap time. */
+        #gpWorkspace .gpb-id .tags { flex: none; display: flex; gap: 6px; }
+        #gpWorkspace .gpb-id .pact { flex: none; margin-left: 10px; }
+        /* Shrinks, never grows: the three parts stay one group beside the
+           workspace name instead of the tags drifting off to the far end of a
+           wide window, and the slack lands between the identity and the
+           device controls where it belongs. */
+        #gpWorkspace .gpb-id .m {
+            flex: 0 1 auto; font-size: 12px; color: var(--gpb-bar-muted);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            min-width: 0;
+        }
+        /* The tags were drawn for a light ground and are read on a black one
+           here: the same three ranks — the best in red, the ideal outlined,
+           the spread quiet — restated in the bar's own palette rather than
+           three pale blocks punched out of it. */
+        #gpWorkspace .gpb-id .gpb-tag {
+            background: rgba(255,255,255,0.05); color: #d6d7d9;
+            border: 1px solid var(--gpb-bar-div);
+        }
+        #gpWorkspace .gpb-id .gpb-tag.red {
+            background: rgba(210,35,42,0.16); border-color: rgba(210,35,42,0.55);
+            color: #ff8079;
+        }
+        #gpWorkspace .gpb-id .gpb-tag.line {
+            background: transparent; border-color: #3a3d40; color: #c9cacc;
+        }
+        #gpWorkspace .gpb-id .gpb-tag.grey {
+            background: transparent; border-color: var(--gpb-bar-div);
+            color: var(--gpb-bar-muted);
+        }
+        /* Setup's way back out, on the dark ground it now sits on. */
+        #gpWorkspace .gpb-id .gpb-done {
+            background: transparent; border-color: #3a3d40; color: #e6e6e8;
+        }
+        #gpWorkspace .gpb-id .gpb-done:hover { background: rgba(255,255,255,0.08); }
+        /* The sub-tabs sit beside the section tabs now, primary then
+           secondary, so all the navigation is one cluster on the left. */
         #gpWorkspace .gpb-subnav {
-            display: flex; gap: 20px; margin-top: 12px;
-            border-bottom: 1px solid var(--gpb-div);
+            flex: none; display: flex; align-items: stretch; gap: 16px;
+            padding-left: 14px; border-left: 1px solid var(--gpb-div);
         }
+        #gpWorkspace .gpb-subnav:empty { border-left: none; padding-left: 0; }
         #gpWorkspace .gpb-subnav button {
-            background: transparent; border: none; cursor: pointer; padding: 0 0 8px;
-            font-family: var(--gpb-head); font-weight: 600; font-size: 14px;
+            background: transparent; border: none; cursor: pointer; padding: 0;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 13px;
             letter-spacing: 0.11em; text-transform: uppercase; color: var(--gpb-muted);
             border-bottom: 2px solid transparent; margin-bottom: -1px;
         }
@@ -4232,6 +4365,32 @@
         #gpWorkspace .gpb-cornlegend { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--gpb-muted); }
         #gpWorkspace .gpb-cornlegend i { width: 10px; height: 10px; display: inline-block; }
         #gpWorkspace .gpb-avail { margin-left: auto; }
+        /* Too many columns for the room (gpCornersFit): the Opportunity bar
+           goes, because it is a picture of Time lost and Time lost is already
+           a number in the same row. Column 8 of nine. */
+        #gpWorkspace table.gpb-table.gpb-narrow th:nth-child(8),
+        #gpWorkspace table.gpb-table.gpb-narrow td:nth-child(8) { display: none; }
+        /* And a backstop, so nothing can ever be cut off with no way to reach
+           it again if the table still overruns. */
+        #gpWorkspace #gpCorners { overflow-x: auto; }
+        /* The grip target sits at the end of the A/B strip, beside the number
+           it is the denominator of. Small, typed into directly. */
+        #gpWorkspace .gpb-griptgt {
+            display: inline-flex; align-items: center; gap: 5px; margin-left: 14px;
+            font-size: 11px; color: var(--gpb-muted); white-space: nowrap;
+        }
+        #gpWorkspace .gpb-griptgt input {
+            width: 56px; font: inherit; font-size: 11px; text-align: right;
+            background: var(--gpb-bg); border: 1px solid var(--gpb-div);
+            color: var(--gpb-ink); padding: 2px 4px;
+        }
+        #gpWorkspace .gpb-griptgt em { font-style: normal; opacity: 0.75; }
+        #gpWorkspace .gpb-griptgt button {
+            background: transparent; border: 1px solid var(--gpb-div);
+            color: var(--gpb-muted); font: inherit; font-size: 10px;
+            padding: 1px 6px; cursor: pointer;
+        }
+        #gpWorkspace .gpb-griptgt button:hover { border-color: var(--gpb-red); color: var(--gpb-red); }
         #gpWorkspace .gpb-corner-badge {
             display: flex; align-items: center; justify-content: center;
             width: 100%; height: 100%; font-family: var(--gpb-body); font-weight: 600;
@@ -5004,6 +5163,35 @@
         #gpWorkspace .gpb-vidctl button:hover, #gpWorkspace .gpb-vidctl .pick:hover { border-color: #8a8f94; }
         #gpWorkspace .gpb-vidctl button.on { border-color: var(--gpb-red); color: #ff8b85; }
         #gpWorkspace .gpb-vidctl .nt { opacity: 0.7; }
+        /* The one destructive control in this row, held away from the two it
+           used to sit flush against. A gap you can see is the difference
+           between "the next button along" and "a different kind of button". */
+        #gpWorkspace .gpb-vidctl .gp-vsep {
+            width: 1px; height: 15px; margin: 0 3px;
+            background: #3a3d40; flex: none;
+        }
+        #gpWorkspace .gpb-vidctl button.gp-vdrop { border-color: transparent; opacity: 0.72; }
+        #gpWorkspace .gpb-vidctl button.gp-vdrop:hover {
+            border-color: var(--gpb-red); color: #ff8b85; opacity: 1;
+        }
+        /* ---- the controls get out of the picture --------------------------
+           This row wraps to two lines at panel width and the tile was given a
+           matching bottom margin, so on a laptop it was taking ~56 px off the
+           only panel whose whole content is a picture. Now that the transport
+           lives in the bottom bar and nothing here is needed while you watch,
+           it behaves like every media player's control bar: out of the way,
+           and back under the pointer. Nothing is removed, and :focus-within
+           keeps it up for anyone reaching it by keyboard. */
+        #gpWorkspace .gpb-vidctl {
+            transform: translateY(100%); opacity: 0; pointer-events: none;
+            transition: transform 120ms ease-out, opacity 120ms ease-out;
+        }
+        #gpWorkspace [data-gp-panel]:hover > .gpb-pbody .gpb-vidctl,
+        #gpWorkspace [data-gp-panel]:focus-within > .gpb-pbody .gpb-vidctl,
+        #gpWorkspace .gp-viewer:hover .gpb-vidctl,
+        #gpWorkspace .gp-viewer:focus-within .gpb-vidctl {
+            transform: none; opacity: 1; pointer-events: auto;
+        }
         /* ---- Moments -----------------------------------------------------
            A row is a button because every one of them goes somewhere. Four
            columns, fixed in place: what it was, how big, and when — one fact
@@ -5647,10 +5835,13 @@
             </div>
             <div class="gpb-arrpop" id="gpArrPop" style="display:none"></div>
         </div>
-        <!-- Whose drive this is (ADR-0026), promoted out of the chrome. It was
-             a chip in a nowrap bar, which is why a media query had to delete
-             it; as a headline it can wrap and nothing can evict it. -->
-        <div class="gpb-page empty" id="gpPageHead"></div>
+        <!-- All that is left of the two bars in focus mode: a hairline saying
+             there is something above it, and the way back. Hovering it brings
+             the bars down; clicking it leaves focus mode for good. -->
+        <div class="gpb-zenbar" id="gpZenBar" onclick="gpZenToggle()"
+             title="Focus mode — the bars are above this line. Hover to bring them back, click (or Esc, or F) to leave.">
+            <span>Focus &middot; Esc</span>
+        </div>
         <div class="ws-body">
             <div class="ws-rail" id="gpRail"></div>
             <div class="ws-stage" id="gpStageCol">
@@ -5765,6 +5956,9 @@
                        <span class='k'>&larr; &rarr;</span> one sample<br>
                        <span class='k'>Shift + &larr; &rarr;</span> one second<br>
                        <span class='k'>&uarr; &darr;</span> step through the coach findings<br>
+                       <span class='k'>F</span> focus mode &mdash; the top bars lift and the panels get the height<br>
+                       <span class='k'>M</span> drop the second cursor &mdash; or <b>Shift-click</b> the graph. It measures
+                       time, distance and every channel back to the playhead; <span class='k'>Esc</span> clears it<br>
                        <span class='k'>Double-click</span> the rack to leave a corner"></i>
                 </div>
                 <div class="gp-grid" id="gpStage"></div>
@@ -17703,6 +17897,42 @@
                       "or double-click a divider to release just those two.") +
                 "</div>";
 
+            /* The working panel, said where the other height rules are said.
+               A feature that moves the layout under you has to be findable
+               and switchable off in the same breath — ADR-0061. */
+            var fo = gpFocusOpt(), fn = gpFocusNode();
+            h += "<div class='hd' style='margin-top:2px'>Working panel</div>" +
+                seg([["on", "GETS THE ROOM"], ["off", "EQUAL SHARES"]],
+                    fo.size ? "on" : "off", "gpFocusSizeSet") +
+                seg([["on", "BAR FOLLOWS IT"], ["off", "BAR IS FIXED"]],
+                    fo.dock ? "on" : "off", "gpFocusDockSet") +
+                "<div class='note'>The panel you last clicked is the working panel &mdash; " +
+                (fn ? "<b>" + gpEsc(gpPanelTypeLabel(fn.type)) + "</b>" : "none yet") +
+                ", right now. It is the one wearing its own controls. " +
+                "<b>Gets the room</b> lets it keep the height it needs and takes the " +
+                "difference from the panels you are not looking at, rather than making the " +
+                "page scroll &mdash; it changes nothing at all on a screen where the whole " +
+                "arrangement already fits, and it never touches a row you dragged by hand. " +
+                "<b>Bar follows it</b> puts the video's timeline along the bottom while you " +
+                "are working in the picture, and the lap readouts back when you are not &mdash; " +
+                "off by default, because a transport that moves when you click a different panel " +
+                "is harder to use than one that never does. The footage timeline is a panel of " +
+                "its own either way (<b>Timeline</b>, on the picture)." +
+                "</div>";
+
+            /* Focus mode belongs here too, and for the same reason: it is the
+               third rule that decides how much height the panels get, and the
+               only one that acts on the chrome rather than on the rows. */
+            h += "<div class='hd' style='margin-top:2px'>The window</div>" +
+                seg([["on", "FOCUS"], ["off", "FULL BARS"]],
+                    gpZenOn() ? "on" : "off", "gpZenSeg") +
+                "<div class='note'><b>Focus</b> lifts the two top bars off the screen and gives " +
+                "the mosaic their height &mdash; 95 px of 768 on a laptop, which is most of a " +
+                "panel. They come back the moment the pointer reaches the top edge, and " +
+                "<span class='k'>F</span> or <span class='k'>Esc</span> leaves. The bottom bar " +
+                "stays either way: that one is numbers you read while the car is moving." +
+                "</div>";
+
             h += "<div class='hd' style='margin-top:2px'>Saved arrangements</div>" +
                 "<div style='display:flex;gap:6px'>" +
                 "<input class='ws-field' id='gpLayName' type='text' placeholder='Name this arrangement…' " +
@@ -19834,6 +20064,30 @@
             c.moveTo(cx, cy - R); c.lineTo(cx, cy + R);
             c.stroke();
 
+            /* The grip target, where the g actually is. The Corners table
+               states it as a percentage; here it is the ring the dots are
+               either reaching or not, which is the same fact in the form this
+               picture is good at. Dashed, so it is never read as one of the
+               plain half-g scale rings. */
+            var tgt = gpGripTarget();
+            if (tgt && tgt <= full * 1.02) {
+                c.save();
+                c.strokeStyle = "rgba(210,35,42,0.85)";
+                c.lineWidth = 1.4;
+                c.setLineDash([5, 4]);
+                c.beginPath(); c.arc(cx, cy, R * (tgt / full), 0, Math.PI * 2); c.stroke();
+                c.setLineDash([]);
+                c.font = "9.5px 'Barlow', system-ui";
+                var tl = tgt.toFixed(2) + " g target";
+                var tw2 = c.measureText(tl).width;
+                var ty2 = cy - R * (tgt / full) - 3;
+                c.fillStyle = "rgba(255,255,255,0.9)";
+                c.fillRect(cx - tw2 / 2 - 2, ty2 - 9, tw2 + 4, 11);
+                c.fillStyle = "rgba(210,35,42,0.95)";
+                c.fillText(tl, cx - tw2 / 2, ty2 - 1);
+                c.restore();
+            }
+
             /* Dots. Longitudinal g is negative under brakes and the picture
                reads the way the car feels, so braking goes DOWN the screen. */
             for (i = r.from; i <= r.to && i < rows.length; i++) {
@@ -20096,6 +20350,39 @@
             }
         };
 
+        /* One grip figure, as a table cell. Colour says how much was left on
+           the table and nothing else: at or over the target is the car being
+           used, and the further under, the more there is to go and find. Over
+           100% is not an error and is not hidden — it means the target is set
+           lower than this car actually pulls, and seeing that is how you know
+           to raise it. */
+        function gpGripCell(f) {
+            if (f === null || f === undefined || !isFinite(f))
+                return "<td class='n mut'>&mdash;</td>";
+            var pc = Math.round(f * 100);
+            var cls = pc >= 97 ? "" : pc >= 88 ? "mut" : "red";
+            return "<td class='n " + cls + "' title='" + pc + "% of the grip target'>" + pc + "%</td>";
+        }
+
+        /* Nine columns do not fit 575 px, which is what this table gets beside
+           the map on a 1280 px screen. Measured: it wanted 601 and the
+           container did not scroll, so the last column — the written
+           instruction, the most useful thing in the row — was simply cut off.
+
+           The column that goes is the Opportunity bar, because it is the only
+           one that says nothing new: it is a bar chart of Time lost, which is
+           printed as a number two columns to its left. Dropped only when the
+           table actually does not fit, so a wide window keeps it. */
+        function gpCornersFit(el) {
+            var t = el.querySelector("table.gpb-table");
+            if (!t) return;
+            t.classList.remove("gpb-narrow");
+            /* Re-measured after the class comes off, or a table that once went
+               narrow could never come back on a window that had been widened. */
+            var room = el.clientWidth;
+            if (room > 0 && t.scrollWidth > room) t.classList.add("gpb-narrow");
+        }
+
         function gpRenderCorners() {
             var el = document.getElementById("gpCorners");
             if (!el || gp.view !== "corners") return;
@@ -20147,13 +20434,40 @@
                  "<span class='sw'><select data-gp-csel>" + lapOpts(gp.selLap, true) + "</select></span>" +
                  "<span class='w'>against</span>" +
                  "<span class='sw ink'><select data-gp-cref>" + lapOpts(gp.cmpLap, false) + "</select></span>" +
-                 "<span class='gpb-tag red gpb-avail'>" + avail.toFixed(2) + " s available" +
-                 (ranked.length && ranked[0].total_s > 0 ? " · " + ranked[0].total_s.toFixed(2) + " s in one corner" : "") +
-                 "</span></div>";
+                 "<span class='gpb-tag " + (avail > 0.005 ? "red" : "grey") + " gpb-avail'>" +
+                 (avail > 0.005
+                    ? avail.toFixed(2) + " s available" +
+                      (ranked[0].total_s > 0 ? " · " + ranked[0].total_s.toFixed(2) + " s in one corner" : "")
+                    : "faster in every corner") +
+                 "</span>" +
+                 /* The number the two grip columns are a percentage OF, said
+                    where they are read and editable in the same place. A
+                    percentage whose denominator is off-screen is a number you
+                    cannot check. Typed into directly — prompt() never returns
+                    in this webview. */
+                 (gpGripTarget() !== null
+                    ? "<span class='gpb-griptgt' title='What this car can pull when everything is " +
+                      "working — the two grip columns are a percentage of it. Set it for the car " +
+                      "and it sticks; clear it and it goes back to the most this recording has " +
+                      "actually been seen to reach.'>Grip target " +
+                      "<input type='number' step='0.05' min='0.3' max='5' value='" +
+                      gpGripTarget().toFixed(2) + "' oninput='gpGripTargetInput(this.value)'> g" +
+                      (gpGripIsAuto()
+                         ? " <em>from this recording</em>"
+                         : " <button onclick='gpGripTargetAuto()'>auto</button>") +
+                      "</span>"
+                    : "") +
+                 "</div>";
             h += "<table class='gpb-table' style='margin-top:10px'><thead><tr>" +
                  "<th>Rank</th><th>Corner</th><th class='n'>Time lost</th>" +
                  "<th class='n' title='slowest point through the corner, this " + gpRunWord() + " then the reference'>Min speed</th>" +
                  "<th class='n'>Brake point</th>" +
+                 "<th class='n' title='The most grip the car was asked for while braking into this " +
+                 "corner, as a share of the grip target. Short here means there was braking left " +
+                 "in it.'>Braking grip</th>" +
+                 "<th class='n' title='The most grip the car was asked for between the end of " +
+                 "braking and the apex, as a share of the grip target. Short here is usually the " +
+                 "line rather than the confidence.'>Turn-in grip</th>" +
                  "<th style='width:96px'>Opportunity</th><th style='min-width:150px'>What to change</th></tr></thead><tbody>";
             var mx = Math.max(0.01, ranked[0] ? ranked[0].total_s : 0);
             ranked.forEach(function (o, ri) {
@@ -20185,6 +20499,8 @@
                      "<td class='n' style='white-space:nowrap'>" + (minSel === null ? "—" : minSel) +
                      (minRef === null ? "" : " <span style='color:var(--gpb-muted)'>· " + minRef + "</span>") + "</td>" +
                      "<td class='n mut' style='white-space:nowrap'>" + brake + "</td>" +
+                     gpGripCell(gpGripUsed(o.selEntry, o.selBrakeEnd)) +
+                     gpGripCell(gpGripUsed(o.selBrakeEnd, o.selApex)) +
                      "<td><span style='display:block;height:6px;background:var(--gpb-n200)'>" +
                      "<i style='display:block;height:100%;width:" + barW + "%;background:" +
                      (lost > 0.25 ? "var(--gpb-red)" : lost > 0.08 ? "var(--gpb-red-400)" : "var(--gpb-n400)") +
@@ -20207,6 +20523,7 @@
                  "<i style='background:var(--gpb-n200);margin-left:8px'></i>on pace" +
                  "<span class='gpb-avail'>speeds in " + gpSpdU() + " · numbers vs " + gpEsc(gpRefName()) + "</span></div>";
             el.innerHTML = h;
+            gpCornersFit(el);
             Array.prototype.forEach.call(el.querySelectorAll("[data-gp-corner]"), function (tr) {
                 tr.addEventListener("click", function () {
                     window.gpCornerPick(parseInt(tr.getAttribute("data-gp-corner"), 10));
@@ -20463,13 +20780,47 @@
            red as the lap being analysed. Ordered so NEIGHBOURS are far apart on
            the wheel, because consecutive laps are the usual case — 207°, 45°,
            265°, 80°, 317°, 177°, 134°. */
-        var GP_LAP_COLOURS = ["#4DABF7",   /* blue   */
-                              "#FFC533",   /* amber  */
-                              "#B197FC",   /* violet */
-                              "#A9E34B",   /* lime   */
+        /* ---- telling one lap from another ---------------------------------
+           Seven hues was one hue per lap and no more thought than that, and
+           measured against the map's own surface it did not work. Run through
+           the palette validator on every PAIR — which is the right test, since
+           any two ticked laps can end up side by side in a corner — the old
+           set failed twice over: lime against amber came out ΔE 2.5 for a
+           deuteranope (the same line, effectively) and violet against blue
+           11.9 for everyone else. Six laps ticked really were six shades of
+           one thing.
+
+           Five hues, re-stepped until every pair clears the normal-vision
+           floor (worst 15.8) and the contrast floor over the map. That leaves
+           the CVD worst pair at 6.8, which is the band that is only allowed
+           WITH a second encoding — so there is one, below, and it is not
+           decoration: it is what makes the palette legal.
+
+           They are deliberately all bright. The lightness-band check wants a
+           narrower spread than this, but these are drawn over satellite
+           imagery that runs from wet tarmac to white gravel, and a line that
+           is dark enough to sit in a tight band is a line that disappears on
+           half of Donington. */
+        var GP_LAP_COLOURS = ["#5BB8FF",   /* blue   */
+                              "#E8B22E",   /* amber  */
                               "#E064B8",   /* pink   */
-                              "#20C8C0",   /* teal   */
-                              "#40C057"];  /* green  */
+                              "#4ED17A",   /* green  */
+                              "#FF7043"];  /* orange */
+
+        /* The second channel. Lap 6 is blue again — but blue DASHED, and lap
+           11 blue dotted, so identity is never carried by hue alone (which
+           also means it survives a colourblind reader, a black-and-white
+           print of the share card, and two laps a metre apart in a corner).
+           Long runs of the same pattern read as one line at circuit zoom, so
+           the dashes are short and open. */
+        var GP_LAP_DASHES = [null, [10, 6], [2.5, 4.5], [12, 5, 2.5, 5]];
+
+        function gpLapDash(i) {
+            if (!(i >= 0)) return null;
+            return GP_LAP_DASHES[Math.floor(i / GP_LAP_COLOURS.length) % GP_LAP_DASHES.length];
+        }
+        /* The same fact as CSS, for the legend swatch and the lap list. */
+        function gpLapDashCss(i) { return gpLapDash(i) ? "dashed" : "solid"; }
 
         function gpLapRole(i) {
             if (i === gp.selLap) return "subject";
@@ -21257,9 +21608,102 @@
                the whole workspace. A full screen with no way out is worse than
                no full screen. Found live: Esc shut the workspace and left the
                panel full. */
+            /* The measuring band, before full screen and before focus mode:
+               it is the smallest thing on screen Escape can mean, and the one
+               you most often want gone without losing anything else. */
+            if (gp.view === "session" && window.gpMarkClear && window.gpMarkClear()) return true;
             if (gp.full && gp.view === "session") { window.gpPanelFull(null); return true; }
+            /* Focus mode last: it is the OUTERMOST of the things Escape can
+               mean here, so a full-screened panel inside it comes back first
+               and the second Escape gives the bars back. Same reasoning as the
+               line above, one level out — hiding chrome with no way back is
+               the same bug at window scale. */
+            if (gpZenOn()) { window.gpZenSet(false); return true; }
             return false;
         };
+
+        /* ---- focus mode: the window is the instrument ----------------------
+           Why the two top bars and not something else: see the CSS. This is
+           the state and the two ways in and out of it.
+
+           Deliberately NOT a re-render. The bars leave the flow and a strip
+           takes their place, which is a class on the workspace and nothing
+           else; the mosaic is then re-fitted through the same call the
+           window's own resize makes. Rebuilding the grid to change the height
+           of the chrome above it would throw away the panel you were working
+           in (ADR-0061) for no reason. */
+        function gpZenOn() {
+            try { return localStorage.getItem("rdm7_gp_zen") === "1"; } catch (e) { return false; }
+        }
+
+        window.gpZenSet = function (on) {
+            var ws = document.getElementById("gpWorkspace");
+            if (!ws) return;
+            on = !!on;
+            try { localStorage.setItem("rdm7_gp_zen", on ? "1" : "0"); } catch (e) { }
+            ws.classList.toggle("gpb-zen", on);
+            if (!on) ws.classList.remove("peek");
+            gpZenInit();
+            /* The port just changed height by ~95 px. These are exactly what
+               the resize handler calls, for the same reason: the rows re-fit,
+               the rack repaints at its new height, and the identity line
+               re-measures for the width it now has. */
+            if (gp.view === "session") gpGridApplyFlex();
+            gpDrawStrip();
+            gpIdFit();
+            gpArrPopRender();   /* Arrange has to show which way it is set */
+        };
+
+        window.gpZenToggle = function () { window.gpZenSet(!gpZenOn()); };
+        /* The Arrange segment hands its buttons' own value in, the same shape
+           the two working-panel segments beside it use. */
+        window.gpZenSeg = function (v) { window.gpZenSet(v === "on" || v === true); };
+
+        /* The pointer near the top edge brings the bars back, and takes them
+           away again once it is clear of them. Two rules keep that from
+           fighting the user:
+             - anything in the bars holding keyboard focus pins them open. A
+               bar you can Tab into but cannot see is a trap for anyone not
+               using a mouse.
+             - an open popover pins them open too. A menu that closes as you
+               reach for it is not a menu — and Arrange, the device pill and
+               the channel list all hang off these two bars. */
+        var GP_ZEN_EDGE = 14;    /* px from the top that counts as "at the edge" */
+        var GP_ZEN_BARS = 104;   /* px; below this the pointer has left them */
+
+        function gpZenPinned(ws) {
+            return !!(gp.layoutsOpen || gp.splitMenu || gp.chanPop ||
+                      document.getElementById("gpDevPopEl") ||
+                      ws.querySelector(".ws-topbar:focus-within, .gpb-nav:focus-within"));
+        }
+
+        function gpZenInit() {
+            var ws = document.getElementById("gpWorkspace");
+            if (!ws || ws._zenWired) return;
+            ws._zenWired = true;
+            var peek = function (on) {
+                if (!ws.classList.contains("gpb-zen")) return;
+                if (!on && gpZenPinned(ws)) return;
+                ws.classList.toggle("peek", !!on);
+            };
+            ws.addEventListener("pointermove", function (e) {
+                if (!ws.classList.contains("gpb-zen")) return;
+                var y = e.clientY - ws.getBoundingClientRect().top;
+                if (y <= GP_ZEN_EDGE) peek(true);
+                else if (y > GP_ZEN_BARS) peek(false);
+            });
+            ws.addEventListener("pointerleave", function () { peek(false); });
+            ws.addEventListener("focusin", function (e) {
+                var t = e.target;
+                if (t && t.closest && t.closest(".ws-topbar, .gpb-nav")) peek(true);
+            });
+            /* After the browser has moved focus, not while it is between the
+               two elements — focusout fires with the new one not yet focused,
+               and :focus-within would read false for a Tab WITHIN the bar. */
+            ws.addEventListener("focusout", function () {
+                setTimeout(function () { peek(false); }, 0);
+            });
+        }
         function gpPopDismissInit() {
             if (gp._popDismiss) return;
             gp._popDismiss = true;
@@ -22600,10 +23044,17 @@
                      "<button title='Show the sections of footage and where each one sits against " +
                      "this recording, as a timeline you can drag them along' " +
                      "onclick='gpClipsPanelReveal()'>Timeline</button>" +
-                     "<button title='" + (gpClips().length > 1
-                        ? "Take this section off the recording. The others stay."
+                     /* Set apart from the two beside it, and no longer called
+                        "Close". It never closed anything — it took the footage
+                        off the recording — and sitting flush against Timeline,
+                        the button you press to go and arrange that footage, it
+                        got pressed by accident repeatedly. A divider, the name
+                        of what it actually does, and a quieter weight. */
+                     "<span class='gp-vsep'></span>" +
+                     "<button class='gp-vdrop' title='" + (gpClips().length > 1
+                        ? "Take this section off the recording. The others stay, and the file is not touched."
                         : "Take this footage off the recording. The file is not touched.") +
-                     "' onclick='gpVideoClose()'>Close</button>";
+                     "' onclick='gpVideoClose()'>Remove</button>";
                 /* Two or more sections and the strip comes with the picture:
                    which one you are watching, and what is either side of it,
                    is part of watching it. One section has nothing to arrange,
@@ -23046,18 +23497,44 @@
                  "<svg viewBox='0 0 12 12'><path d='M3 1.5v9L9 6z'/></svg></button>" +
                  "<button class='gp-tbtn' title='Jump to end'" + dis + " onclick=\"gpTransport('end')\">" +
                  "<svg viewBox='0 0 12 12'><path d='M8.9 1.5h1.6v9H8.9zM1.5 1.5v9L8 6z'/></svg></button></div>";
-            if (d.pos) {
+            if (d.pos && ctx !== "video") {
                 h += "<div style='min-width:118px'><div class='k'>Position</div>" +
                      "<div class='v' data-dv='pos'></div></div>";
             }
+            /* What the second cursor measures, in the bar rather than only on
+               the rack's axis. The axis label is drawn inside a 15 px strip at
+               the bottom of the graph, which is the first thing to go when the
+               panel is short — and on a laptop it usually is. The headline
+               number of a two-cursor measurement cannot be the one that
+               disappears when the window gets small. */
+            var ms = ctx !== "video" ? gpMarkStats() : null;
+            if (ms) {
+                h += "<div class='gp-dockband' style='min-width:112px'>" +
+                     "<div class='k'>Between cursors</div><div class='v'>" +
+                     (ms.dt >= 0 ? "+" : "") + ms.dt.toFixed(2) + " <small>s</small>" +
+                     (ms.dist >= 1 ? " <small style='opacity:0.75'>&middot; " +
+                                     gpEsc(gpMarkDist(ms.dist)) + "</small>" : "") +
+                     "</div></div>";
+            }
+            if (ctx === "video") {
+                /* The same compact strip the video panel's own control row
+                   carries, rendered once more down here — gpTlHtml is the one
+                   description of a timeline in this file, and gpTlSync writes
+                   the playhead into every copy of it that is on screen. */
+                h += "<span class='dockwhat'>Footage</span>" +
+                     "<div class='gpb-docktl'>" + gpTlHtml(true) + "</div>";
+            } else {
             h += "<input type='range' id='gpDockScrub' min='0' max='" + Math.max(0, r.to - r.from) +
                  "' value='" + Math.max(0, i - r.from) + "' step='1' oninput='gpScrubTo(this.value)'" +
                  (have ? "" : " disabled") + ">";
+            }
             /* In Drift the live number worth watching is the angle, not the
                lap delta: a drifter is not chasing the clock, and the delta
                would be the one readout on screen answering a question nobody
                in this view is asking. */
-            if (d.delta && gp.view === "drift") {
+            if (ctx === "video") {
+                /* nothing: the readouts belong to the mosaic, not to the film */
+            } else if (d.delta && gp.view === "drift") {
                 var da = gpDriftAngle();
                 if (da) h += "<div style='min-width:84px'><div class='k'>Angle</div>" +
                              "<div class='v' data-dv='dangle'></div></div>";
@@ -24539,6 +25016,12 @@
                     return "corner";
                 }
             }
+            /* F for the chrome, ahead of the transport keys: it is about the
+               window rather than the recording, and it is the one key here
+               that is worth pressing before you start reading anything. */
+            if (key === "f" || key === "F") { window.gpZenToggle(); return "zen"; }
+            /* M for mark: the second cursor, on the playhead. */
+            if (key === "m" || key === "M") { window.gpMarkToggle(); return "mark"; }
             if (key === " " || key === "k" || key === "K") { window.gpPlayToggle(); return "play"; }
             if (key === "Home") { window.gpTransport("start"); return "jump"; }
             if (key === "End") { window.gpTransport("end"); return "jump"; }
@@ -24593,7 +25076,15 @@
         }
 
         if (document.addEventListener) {
+            /* The other half of gp._kbdNav. Capture, so it is recorded even
+               when the thing being clicked stops the event going further. */
+            document.addEventListener("pointerdown", function () { gp._kbdNav = false; }, true);
             document.addEventListener("keydown", function (e) {
+                /* Which way the user is driving the app right now. Tab means
+                   they are on the keyboard and a focused button is theirs to
+                   press; a pointer press means focus is just wherever they
+                   last clicked, and Space belongs to the transport. */
+                if (e.key === "Tab") gp._kbdNav = true;
                 /* Drift plays back exactly like Analyse — same transport, same
                    keys. A view where Space did nothing would be a view where
                    playback looked broken. */
@@ -24603,12 +25094,35 @@
                            tg.tagName === "SELECT")) return;
                 /* Only when the GPS workspace is actually on screen — gp.view
                    is workspace-local state and survives switching away.
-                   Ask the element that this view actually shows: the rack is
-                   Analyse's, and it is display:none everywhere else, so using
-                   it as the proxy meant every transport key was swallowed in
-                   Drift — Space did nothing and playback looked broken. */
-                var host = document.getElementById(gp.view === "drift" ? "gpDriftWrap" : "gpStrip");
-                if (!host || host.offsetParent === null) return;
+                   Asked of the WORKSPACE, not of a panel inside it. This used
+                   to ask gpStrip, which is the rack — and the rack is only in
+                   the document when a GRAPH panel happens to be in the
+                   arrangement. Arrange map + video + moments, as you would on
+                   a laptop, and gpStrip is display:none: every transport key
+                   died, Space included, on the view whose whole job is
+                   playback. Drift hit the identical bug and was patched by
+                   adding a second panel to ask; the actual fix is to stop
+                   asking a panel at all.
+                   Not offsetParent: `.ws` is position:fixed, and a fixed
+                   element's offsetParent is null even when it is on screen. */
+                var ws = document.getElementById("gpWorkspace");
+                if (!ws || !ws.getBoundingClientRect().height) return;
+                /* One exception, and only for the keys a control also uses: a
+                   button reached by TAB keeps its Space and Enter, or the
+                   keyboard path through this workspace stops working. A button
+                   that has focus only because it was CLICKED does not — after
+                   clicking Lap, Space has to still be play/pause, not "press
+                   Lap again".
+                   Told apart by gp._kbdNav, not by :focus-visible. Measured:
+                   Chromium leaves :focus-visible true on a button after a real
+                   mouse click once the keyboard has been used at all, so the
+                   pseudo-class answers "yes" for both cases and Space became
+                   "press whatever I clicked last" — the bug this is here to
+                   prevent. Tab sets the flag, any pointer press clears it. */
+                var act = document.activeElement;
+                if ((e.key === " " || e.key === "Enter") && gp._kbdNav &&
+                    act && act !== document.body && ws.contains(act) &&
+                    /^(BUTTON|A|SUMMARY)$/.test(act.tagName)) return;
                 if (gpSessionKey(e.key, e.shiftKey)) e.preventDefault();
             });
         }
@@ -26368,7 +26882,175 @@
                     });
                 }
             }
+            gpDrawMark(g, w, h, wDev, rng, n);
         }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * The second cursor (the "dual cursor")
+         *
+         * Every desktop analysis package has this and Studio did not. One
+         * cursor answers "what was happening HERE". Two answer "what happened
+         * BETWEEN here and here" — how long that took, how far it ran, and
+         * what each channel did across it. It is the move you make to measure
+         * a braking zone, a straight, or the bit of a corner you are arguing
+         * about, and without it the answer is read off the axis by eye.
+         *
+         * The playhead stays the playhead: it plays, it follows the video, it
+         * is where the car is. The mark is a second, still line you drop
+         * somewhere and measure back to. Shift-click puts it under the
+         * pointer, M drops it on the playhead, Escape takes it away.
+         * ═════════════════════════════════════════════════════════════════ */
+
+        /* Everything the band knows, or null when there is no band. Kept as
+           one function so the drawing and any future readout cannot disagree
+           about which samples are inside it. */
+        function gpMarkStats() {
+            var rows = gp.trace;
+            if (!rows || !rows.length || gp.markIdx === null || gp.markIdx === undefined) return null;
+            var a = Math.min(gp.markIdx, gp.playIdx), b = Math.max(gp.markIdx, gp.playIdx);
+            if (b <= a) return null;
+            /* Signed from the MARK to the playhead, so dragging the playhead
+               back over the mark reads negative — the sign is the direction
+               you measured in, and flipping it silently would be a lie. */
+            var dt = gpSecs(rows, gp.markIdx, gp.playIdx);
+            var dist = 0, i;
+            for (i = a; i < b; i++) {
+                if (rows[i + 1] && rows[i + 1].brk) continue;   /* no line across a gap */
+                if (rows[i] && rows[i + 1]) dist += gpMetres(rows[i], rows[i + 1]);
+            }
+            return { a: a, b: b, dt: dt, dist: dist };
+        }
+
+        /* Per lane, across the band: what it changed by, and its mean. Min and
+           max are deliberately not printed — the gutter is 116 px and four
+           numbers in it is a table, not a label. The two that answer "how much
+           did this move, and what was it doing" are the two that fit. */
+        function gpMarkLane(lane, s) {
+            var sum = 0, cnt = 0, i, v;
+            for (i = s.a; i <= s.b; i++) {
+                v = lane.get(i);
+                if (v === null || v === undefined || !isFinite(v)) continue;
+                sum += v; cnt++;
+            }
+            var va = lane.get(gp.markIdx), vb = lane.get(gp.playIdx);
+            var dv = (isFinite(va) && isFinite(vb)) ? (vb - va) : null;
+            return { dv: dv, avg: cnt ? sum / cnt : null };
+        }
+
+        function gpDrawMark(g, w, h, wDev, rng, n) {
+            var s = gpMarkStats();
+            if (!s) return;
+            var plotX = GP_LANE_LBL, plotW = w - GP_LANE_LBL - 6;
+            var top = 2, bot = h - GP_AXIS_H;
+            var xOf = function (i) { return plotX + (i - rng.from) / (n - 1) * plotW; };
+            /* Clamped rather than skipped: with the rack zoomed in, one end of
+               the band is often off-screen, and a band that vanishes whenever
+               you zoom into the thing you are measuring is no use. */
+            var inView = !(s.b < rng.from || s.a > rng.to);
+            if (!inView) return;
+            var xa = Math.max(plotX, Math.min(xOf(s.a), plotX + plotW));
+            var xb = Math.max(plotX, Math.min(xOf(s.b), plotX + plotW));
+
+            g.save();
+            /* The band under the traces would mean re-drawing the static
+                layer; over them at this alpha it tints without hiding. */
+            g.fillStyle = "rgba(45,140,235,0.13)";
+            g.fillRect(xa, top, Math.max(1, xb - xa), bot - top);
+
+            /* The mark itself: dashed, so it is never mistaken for the
+               playhead in a screenshot or by someone who just arrived. */
+            var mx = xOf(gp.markIdx);
+            if (mx >= plotX - 1 && mx <= plotX + plotW + 1) {
+                var mxs = (Math.round(mx * wDev / w) + 0.5) / (wDev / w);
+                g.strokeStyle = "rgba(45,140,235,0.95)";
+                g.lineWidth = w / wDev;
+                g.setLineDash([4, 3]);
+                g.beginPath(); g.moveTo(mxs, top); g.lineTo(mxs, bot); g.stroke();
+                g.setLineDash([]);
+            }
+
+            /* What the band measures, on the axis line between the two ends —
+               the one place it cannot be read as belonging to either cursor. */
+            var lab = (s.dt >= 0 ? "+" : "") + s.dt.toFixed(2) + " s";
+            if (s.dist >= 1) lab += "  ·  " + gpMarkDist(s.dist);
+            g.font = "10px 'Barlow', system-ui";
+            var lw = g.measureText(lab).width;
+            var lx = Math.max(plotX, Math.min((xa + xb) / 2 - lw / 2, plotX + plotW - lw));
+            g.fillStyle = "rgba(45,140,235,0.95)";
+            g.fillRect(lx - 4, h - GP_AXIS_H + 1, lw + 8, 12);
+            g.fillStyle = "#fff";
+            g.fillText(lab, lx, h - GP_AXIS_H + 10);
+
+            /* Per lane, beside the MARK — the same idea as the playhead's own
+               readings sitting beside the playhead, so each cursor carries its
+               own numbers and there is never a question of which line a figure
+               belongs to.
+               Drawn on the side of the mark facing AWAY from the playhead, so
+               the two sets cannot land on top of each other however narrow the
+               band gets. The first attempt put these in the label gutter,
+               where at real lane heights they sat straight on top of the
+               channel names. Combined mode stacks its readings in the gutter
+               already and has no room for a second set. */
+            if (gp.plotMode !== "over" && mx >= plotX - 1 && mx <= plotX + plotW + 1) {
+                var LY = gpLaneLayout();
+                var away = gp.markIdx <= gp.playIdx ? -1 : 1;
+                gpLaneRows().forEach(function (lane, li) {
+                    if (lane.pending || !LY.lanes[li]) return;
+                    var m = gpMarkLane(lane, s);
+                    if (m.dv === null && m.avg === null) return;
+                    var ln = LY.lanes[li];
+                    var parts = [];
+                    if (m.dv !== null) parts.push((m.dv >= 0 ? "+" : "") + m.dv.toFixed(lane.dp));
+                    if (m.avg !== null) parts.push("av " + m.avg.toFixed(lane.dp));
+                    var txt = parts.join("  ");
+                    g.font = "9.5px 'Barlow', system-ui";
+                    var tw = g.measureText(txt).width;
+                    var bx = away < 0 ? mx - tw - 5 : mx + 5;
+                    bx = Math.max(plotX + 2, Math.min(bx, plotX + plotW - tw - 2));
+                    var ty = ln.top + 14;
+                    if (ty > bot) return;              /* lane squeezed off the bottom */
+                    g.fillStyle = "rgba(45,140,235,0.92)";
+                    g.fillRect(bx - 3, ty - 11, tw + 6, 13);
+                    g.fillStyle = "#fff";
+                    g.fillText(txt, bx, ty - 1);
+                });
+            }
+            g.restore();
+        }
+
+        /* The band's length in the user's own units, which is the only form
+           worth printing next to a time in seconds. */
+        function gpMarkDist(m) {
+            var v = gpDistN(m);
+            if (v === null) return "";
+            return (v >= 100 ? v.toFixed(0) : v.toFixed(1)) + " " + gpDistU();
+        }
+
+        window.gpMarkSet = function (idx) {
+            if (!gp.trace || !gp.trace.length) return;
+            gp.markIdx = Math.max(0, Math.min(gp.trace.length - 1, Math.round(idx)));
+            gp.stripCache = null;
+            gpDrawStrip();
+            /* Render, not update: the band cell appears and disappears with
+               the mark, and gpUpdateDock only writes values into cells that
+               are already there. */
+            gpRenderDock();
+        };
+        window.gpMarkClear = function () {
+            if (gp.markIdx === null || gp.markIdx === undefined) return false;
+            gp.markIdx = null;
+            gp.stripCache = null;
+            gpDrawStrip();
+            gpRenderDock();
+            return true;
+        };
+        /* M drops it on the playhead, and M again where it already is takes it
+           away — the same key in and out, like every other toggle here. */
+        window.gpMarkToggle = function () {
+            if (gp.markIdx !== null && gp.markIdx !== undefined &&
+                Math.abs(gp.markIdx - gp.playIdx) < 2) { window.gpMarkClear(); return; }
+            window.gpMarkSet(gp.playIdx);
+        };
 
         /* ══════════════════════════════════════════════════════════════════
          * The navigator
@@ -26678,6 +27360,10 @@
                 if (plotW <= 0) return;
                 var f = Math.max(0, Math.min(1, (ev.clientX - r.left - GP_LANE_LBL) / plotW));
                 var idx = rng.from + Math.round(f * (rng.to - rng.from));
+                /* Shift drops the SECOND cursor here and leaves the playhead
+                   alone — measuring from where you are to somewhere else is
+                   the whole gesture, and it would be undone by a seek. */
+                if (ev.shiftKey) { window.gpMarkSet(idx); return; }
                 var lap = gpLapRange();
                 gpPlayStop();
                 window.gpScrubTo(Math.max(0, Math.min(lap.to - lap.from, idx - lap.from)));
@@ -32060,6 +32746,11 @@
                     n: out.length + 1,
                     entry: corners[ci].entry, apex: ph.apexIdx, exit: corners[ci].exit,
                     selEntry: mapped[0], selApex: mapped[2], selExit: mapped[4],
+                    /* Where braking stopped, on each lap. The phase split
+                       already knows it; without it on the op there is no way
+                       to ask "how much grip did the BRAKING use" separately
+                       from "how much did the turn-in use" — see gpGripUsed. */
+                    selBrakeEnd: selPh.bounds[1], refBrakeEnd: ph.bounds[1],
                     phases: phases, total_s: total, clipped: clipped,
                     brakeLater_m: brakeLater_m,
                     minKph_d: selPh.minKph - ph.minKph,
@@ -32069,6 +32760,100 @@
             }
             return out;
         }
+
+        /* ══════════════════════════════════════════════════════════════════
+         * Grip used, as a share of what the car has
+         *
+         * "You pulled 1.31 g here" is a fact about physics. "You used 78% of
+         * the grip you have" is a fact about DRIVING, and it is the one a
+         * driver can act on: the missing 22% is the thing to go and find.
+         * Circuit Tools puts it exactly this way, against a grip target you
+         * set for the car, and splits it into the braking and the turn-in
+         * because they fail for different reasons — braking short is a
+         * confidence problem, turning in short is usually a line problem.
+         *
+         * The target is the CAR's number, not the session's, so it is
+         * configurable and it persists. Until it is set it is derived from
+         * what the car has actually been seen to do, which is a better
+         * starting point than a constant somebody guessed: a road car on
+         * street tyres and a slick-shod GT car do not share a default.
+         * ═════════════════════════════════════════════════════════════════ */
+        var GP_GRIP_LS = "rdm7_gp_griptarget";
+
+        function gpGripTargetSet_(v) {
+            try {
+                if (v === null) window.localStorage.removeItem(GP_GRIP_LS);
+                else window.localStorage.setItem(GP_GRIP_LS, String(v));
+            } catch (e) { }
+        }
+        function gpGripTargetRaw() {
+            try {
+                var v = parseFloat(window.localStorage.getItem(GP_GRIP_LS));
+                return (isFinite(v) && v > 0.2 && v <= 5) ? v : null;
+            } catch (e) { return null; }
+        }
+
+        /* The highest combined g the car is actually seen to reach, taken at
+           the 99.5th percentile rather than the single peak — one bad fix on a
+           kerb should not become the standard every corner is judged against.
+           Cached against the trace, because it walks the whole recording. */
+        function gpGripAuto() {
+            var rows = gp.trace;
+            if (!rows || !rows.length) return null;
+            var key = rows.length + ":" + (rows[0] && rows[0].t);
+            if (gp._gripAutoKey === key) return gp._gripAuto;
+            var ch = null;
+            try { ch = gpChannels(); } catch (e) { }
+            if (!ch || !ch.glat) return null;
+            var a = [], i;
+            for (i = 0; i < rows.length; i++) {
+                if (rows[i].kph < 25) continue;      /* not cornering or braking: noise */
+                var m = Math.sqrt(ch.glat[i] * ch.glat[i] + rows[i].g * rows[i].g);
+                if (isFinite(m)) a.push(m);
+            }
+            if (a.length < 20) return null;
+            a.sort(function (x, y) { return x - y; });
+            var p = a[Math.floor(a.length * 0.995)] || a[a.length - 1];
+            /* Rounded to the nearest 0.05 so it reads as a target somebody
+               chose rather than as a measurement with five decimal places. */
+            gp._gripAutoKey = key;
+            gp._gripAuto = Math.max(0.4, Math.round(p * 20) / 20);
+            return gp._gripAuto;
+        }
+
+        function gpGripTarget() { return gpGripTargetRaw() || gpGripAuto(); }
+        function gpGripIsAuto() { return gpGripTargetRaw() === null; }
+
+        /* The most grip used anywhere in [a,b], as a fraction of the target.
+           Peak, not mean: the question is whether the car was ever asked for
+           everything it had through this phase, and an average over a phase
+           that includes the straight bit before it answers a different one. */
+        function gpGripUsed(a, b) {
+            var rows = gp.trace, t = gpGripTarget();
+            if (!rows || !t || !(b > a)) return null;
+            var ch = null;
+            try { ch = gpChannels(); } catch (e) { }
+            if (!ch || !ch.glat) return null;
+            var peak = 0, i;
+            for (i = Math.max(0, a); i <= Math.min(rows.length - 1, b); i++) {
+                var m = Math.sqrt(ch.glat[i] * ch.glat[i] + rows[i].g * rows[i].g);
+                if (isFinite(m) && m > peak) peak = m;
+            }
+            return peak > 0 ? peak / t : null;
+        }
+
+        window.gpGripTargetInput = function (v) {
+            var n = parseFloat(v);
+            gpGripTargetSet_(isFinite(n) && n > 0.2 && n <= 5 ? n : null);
+            gpRenderCorners();
+            gpDrawGrip();
+        };
+        /* Back to "whatever this car has been seen to do". */
+        window.gpGripTargetAuto = function () {
+            gpGripTargetSet_(null);
+            gpRenderCorners();
+            gpDrawGrip();
+        };
 
         /* Turn a loss into something to try next session.
            Driver61's own coaching on braking too early contains no telemetry at
@@ -32609,6 +33394,14 @@
                    second line twice as wide — exactly the fattening this
                    scaling exists to undo. Below a useful thickness, drop it. */
                 if (sc < 0.6) sc = 0;
+                /* Unless the casing is carrying the lap's IDENTITY. Then it is
+                   not decoration under the line, it is the half of the line
+                   that says whose it is, and thinning it to 0.3 px — which is
+                   what the circuit-zoom scale factor of 0.19 does to it — is
+                   the same as not drawing it. Floored in SCREEN pixels, like
+                   minW does for the core, so there is always a rim of colour
+                   wide enough to have a colour. */
+                if (st.caseMinW && sc < st.caseMinW) sc = st.caseMinW;
                 /* A circuit is far bigger than the window at corner zoom and
                    most of it is off-screen, so segments with both ends past
                    the same edge are dropped before they reach the context. */
@@ -32650,11 +33443,18 @@
                     }
                     if (has) ctx.stroke();
                 };
-                var flat = function () { return GP_TRACE_CASE; };
+                /* The casing is normally near-black, which is what lets a
+                   saturated line read over gravel. A strand can ask for a
+                   COLOURED one instead: in the data modes the core of the line
+                   is spoken for — it is saying pace, or speed, or where time
+                   went — so identity has nowhere left to go but the rim.
+                   See gpLapCase. */
+                var caseCol = st.caseCol || GP_TRACE_CASE;
+                var flat = function () { return caseCol; };
                 var own = typeof st.col === "function" ? st.col
                                                       : function () { return st.col; };
                 if (phase === 0) {
-                    if (sc) pass(sw + sc, flat, st.caseAlpha || 0.5, null);
+                    if (sc) pass(sw + sc, flat, st.caseAlpha || 0.5, st.caseDash || null);
                     return;
                 }
                 pass(sw, own, st.alpha === undefined ? 1 : st.alpha, st.dash);
@@ -32719,6 +33519,40 @@
            photo of gravel is a coin toss; the same line with a hairline of
            near-black under it reads on anything. */
         var GP_LAP_CASE = 1.8;
+        var GP_LAP_CASE_ID = 3.2;   /* wider: a rim you can actually see a colour in */
+        /* ...and never thinner than this on SCREEN, whatever the zoom. 2.2 is
+           roughly 1.1 px of colour down each side of the line: the least that
+           still reads as a colour rather than as an artefact. */
+        var GP_LAP_CASE_MINW = 2.2;
+
+        /* ---- which lap is this, in a mode that is already saying something --
+           In Lap mode the line's own colour answers "whose line is this". In
+           Pace, Speed, vs Ref and Line it cannot: the core is coloured by the
+           data, so every lap on the map comes out the same green through the
+           same corner, which is exactly the "I can't tell the laps apart"
+           this exists to fix.
+
+           So in those modes the lap's identity moves OUT to the casing, and
+           its dash comes with it. The core still says what the car was doing;
+           the rim says who was doing it. One line, two facts, no legend
+           lookup — and it costs nothing, because a casing was being drawn
+           under every one of these lines anyway.
+
+           `many` is the whole condition: with one lap on the map there is
+           nothing to tell apart, and a coloured rim would just be a second
+           colour competing with the data ramp for no reason. */
+        function gpLapCase(st, li, mode, many) {
+            st.casing = GP_LAP_CASE;
+            st.caseAlpha = 0.45;
+            if (mode !== "lap" && many && li >= 0) {
+                st.casing = GP_LAP_CASE_ID;
+                st.caseMinW = GP_LAP_CASE_MINW;
+                st.caseAlpha = 0.95;
+                st.caseCol = gpMapLapColour(li);
+                st.caseDash = gpLapDash(li);
+            }
+            return st;
+        }
 
         /* ---- a line is a width on the GROUND, not on the screen ------------
          * A 4 px stroke is about a car's width at corner zoom, which is what
@@ -32808,16 +33642,29 @@
             var key = gpMapKeyHtml();
             if (shown.length < 2) { el.innerHTML = key; gpMapKeyCursor(); return; }
             var word = gpRunWord(true);
-            el.innerHTML = key + shown.map(function (li) {
+            /* Past four, the key wraps and drops the word — see .gp-maplaps. */
+            var tight = shown.length > 4;
+            el.innerHTML = key + "<div class='gp-maplaps" + (tight ? " tight" : "") + "'>" +
+                shown.map(function (li) {
                 var me = li === gp.selLap;
                 var ref = li === gp.cmpLap && !me;
                 var w = me ? 4 : 2.5;
-                var col = (me && gpEffectiveMapMode() !== "lap") ? "#9aa0a6" : gpMapLapColour(li);
-                return "<span class='" + (me ? "me" : "") + "'><i style='border-top-width:" + w +
-                       "px;border-top-color:" + col + ";border-top-style:" +
-                       (ref ? "dashed" : "solid") + "'></i>" +
-                       gpEsc(word) + " " + (li + 1) + (me ? "" : ref ? " · ref" : "") + "</span>";
-            }).join("");
+                /* The swatch shows what is actually on the map. In a data mode
+                   that is the lap's RIM — so the analysed lap stopped being
+                   grey here the moment its rim started carrying a colour, and
+                   the dash is the lap's own, not merely "is this the ref". A
+                   key that disagrees with the line is worse than no key. */
+                var col = gpMapLapColour(li);
+                var dsh = ref ? "dashed" : gpLapDashCss(li);
+                /* The ref keeps its tag even when tight — "which one am I
+                   comparing against" is the one thing a number cannot say. */
+                return "<span class='" + (me ? "me" : "") + "' title='" +
+                       gpEsc(word) + " " + (li + 1) + (ref ? " · ref" : "") + "'>" +
+                       "<i style='border-top-width:" + w +
+                       "px;border-top-color:" + col + ";border-top-style:" + dsh + "'></i>" +
+                       (tight ? "" : gpEsc(word) + " ") + (li + 1) +
+                       (me ? "" : ref ? (tight ? " ref" : " · ref") : "") + "</span>";
+            }).join("") + "</div>";
             gpMapKeyCursor();
         }
 
@@ -33345,6 +34192,22 @@
             }
 
             var span = gpGScale();
+            /* Read once, up here: every lap drawn below needs to know whether
+               the line's own colour is already spoken for. It used to be read
+               after the ticked laps had been pushed, which is fine when they
+               are all a flat colour and wrong the moment they are not. */
+            var mode = gpEffectiveMapMode();
+
+            /* How many lines end up on this map — which is what decides
+               whether identity has to be encoded at all (gpLapCase). With one
+               lap there is nothing to tell apart. The whole recording counts
+               as its laps, because that is what it is drawn as below. */
+            var onMap = gp.view === "session"
+                ? gpShownList().filter(function (li) { return !!gp.traceLaps[li]; }).length
+                : 0;
+            if (gp.selLap < 0 && gp.traceLaps && gp.traceLaps.length > 1)
+                onMap = Math.max(onMap, gp.traceLaps.length);
+            var manyLaps = onMap > 1;
 
             /* Every OTHER ticked lap (ADR-0025), full resolution, in its own
                colour. Underneath the analysed lap, so ticking a sixth lap can
@@ -33356,9 +34219,10 @@
                     if (li === gp.selLap || li === gp.cmpLap) return;
                     var lp = gp.traceLaps[li];
                     if (!lp) return;
-                    strands.push({ from: lp.from, to: lp.to, width: 2.4,
-                                   casing: GP_LAP_CASE, caseAlpha: 0.45,
-                                   col: gpMapLapColour(li), alpha: 0.95 });
+                    strands.push(gpLapCase({ from: lp.from, to: lp.to, width: 2.4,
+                                             col: gpMapLapColour(li), alpha: 0.95,
+                                             dash: gpLapDash(li) },
+                                           li, mode, manyLaps));
                 });
             }
 
@@ -33372,13 +34236,13 @@
                apart still drew as one line. */
             if (gp.cmpLap >= 0 && gp.traceLaps[gp.cmpLap] && gp.cmpLap !== gp.selLap) {
                 var c = gp.traceLaps[gp.cmpLap];
-                strands.push({ from: c.from, to: c.to, width: 2.6,
-                               casing: GP_LAP_CASE, caseAlpha: 0.45,
-                               col: gpMapLapColour(gp.cmpLap), alpha: 1, dash: [9, 5] });
+                strands.push(gpLapCase({ from: c.from, to: c.to, width: 2.6,
+                                         col: gpMapLapColour(gp.cmpLap), alpha: 1,
+                                         dash: [9, 5] },
+                                       gp.cmpLap, mode, manyLaps));
             }
 
             var r = gpLapRange();
-            var mode = gpEffectiveMapMode();
             var value, colour;
             if (mode === "lap") {
                 /* One colour per lap, the analysed one included. The other
@@ -33485,11 +34349,38 @@
                 caseAlpha: subject ? 0.45 : 0.52,
                 col: function (i) { return colour((value(i - 1) + value(i)) / 2); }
             };
+            /* ---- the whole recording, lap by lap -----------------------------
+               With no lap selected the subject is the whole drive, and it used
+               to be drawn as ONE strand from the first sample to the last. In
+               Lap mode that is fine — it is deliberately one neutral line. In
+               a data mode it is the bug you can see on any multi-lap
+               recording: ten minutes of Donington laid down as a single
+               pace-coloured line, every lap on top of every other lap, all of
+               them the same green through the same corner. Nothing on the map
+               said which line was which, because as far as the renderer was
+               concerned there was only one.
+
+               So it is cut at the lap boundaries and each piece carries its
+               own lap's rim and dash. Same pixels, same colours, same cost —
+               the line just knows which lap each part of it belongs to now.
+               The gaps between laps (out-laps, the trip to the pits) stay on
+               the neutral whole-recording strand underneath. */
+            if (gp.selLap < 0 && mode !== "lap" && manyLaps) {
+                strands.unshift(subjectStrand);
+                gp.traceLaps.forEach(function (lp, li) {
+                    if (!lp) return;
+                    strands.push(gpLapCase({
+                        from: lp.from, to: lp.to,
+                        width: subjectStrand.width, minW: subjectStrand.minW,
+                        col: subjectStrand.col
+                    }, li, mode, true));
+                });
+            }
             /* On top when it is a LAP — the thing being studied wins. At the
                bottom when it is the whole recording, because then it is the
                ground the ticked laps are drawn on, not a subject competing
                with them. */
-            if (gp.selLap < 0) strands.unshift(subjectStrand);
+            else if (gp.selLap < 0) strands.unshift(subjectStrand);
             else strands.push(subjectStrand);
 
             cv.setStrands(strands);
@@ -47596,6 +48487,18 @@
         }
 
         window.gpMyChanDelete = function (id) {
+            var pre = gpMyChans(), pi = -1, pk;
+            for (pk = 0; pk < pre.length; pk++) if (pre[pk].id === id) pi = pk;
+            if (pi < 0) return;
+            /* A channel definition is an id, a scale and a unit worked out
+               against a real bus — not something to lose to one stray click
+               in a list you are scrolling. */
+            gpConfirm("Delete the channel “" + (pre[pi].name || id) + "”?\n\n" +
+                      "Its definition goes — the id, how it is scaled and what it is called. " +
+                      "Recordings that already have it keep their data.")
+                .then(function (yes) { if (yes) gpMyChanDeleteNow(id); });
+        };
+        function gpMyChanDeleteNow(id) {
             var list = gpMyChans();
             var i = -1, k;
             for (k = 0; k < list.length; k++) if (list[k].id === id) i = k;
@@ -50401,6 +51304,12 @@
             _wsCloseAll("gpWorkspace");
             var ws = document.getElementById("gpWorkspace");
             if (ws) ws.style.display = "flex";
+            /* Focus mode is restored as a CLASS here rather than through
+               gpZenSet: everything that call does after the class — re-fitting
+               the mosaic, repainting the rack — is about to happen anyway on
+               the way in, and doing it now would measure a workspace that has
+               not been laid out yet. */
+            if (ws) { ws.classList.toggle("gpb-zen", gpZenOn()); gpZenInit(); }
             gp.open = true;
             gp.openedAt = Date.now();
             /* Counters, rates and any in-flight connect belong to one session
