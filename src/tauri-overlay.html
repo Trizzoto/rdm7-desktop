@@ -5209,49 +5209,6 @@
         }
         #gpWorkspace .gpb-vidctl label > button.gp-nudge + .nudgebox { margin: 0 2px; }
         /* The alignment strip: its own line, full width. */
-        /* ---- the same controls, on the footage timeline's light panel ----- */
-        /* The footage timeline panel is DARK — it is a film strip, not a
-           document — so these take their colours from .gp-tl-bar beside them,
-           not from the light-panel tokens. Styled for the light surface first,
-           the whole row came out near-black on near-black: the buttons were
-           there, sized and clickable, and invisible. */
-        #gpWorkspace .gp-tl-align {
-            display: flex; flex-direction: column; gap: 4px;
-            padding: 6px 8px 7px; border-bottom: 1px solid #23282c; flex: none;
-            color: #e6e6e8;
-        }
-        #gpWorkspace .gp-tl-alignrow {
-            display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
-            font-size: 11px; color: #e6e6e8;
-        }
-        #gpWorkspace .gp-tl-alignrow .lb { font-size: 10.5px; color: #e6e6e8; opacity: 0.75; }
-        #gpWorkspace .gp-tl-alignrow button {
-            min-width: 24px; padding: 2px 6px; font: inherit; font-size: 11px; line-height: 1.2;
-            background: transparent; border: 1px solid #3a3d40; color: #e6e6e8; cursor: pointer;
-        }
-        #gpWorkspace .gp-tl-alignrow button:hover { border-color: #8a8f94; }
-        #gpWorkspace .gp-tl-alignrow .nudgebox {
-            width: 70px; text-align: right; font: inherit; font-size: 11px;
-            background: #14181b; border: 1px solid #3a3d40;
-            color: #e6e6e8; padding: 2px 5px; margin: 0 3px;
-        }
-        #gpWorkspace .gp-tl-align canvas { width: 100%; height: 54px; display: block; }
-        #gpWorkspace .gp-tl-align .nt { font-size: 10px; line-height: 1.35; color: #e6e6e8; opacity: 0.62; }
-        #gpWorkspace .gp-tl-align .gpb-alignwarn { color: #ff8b85; opacity: 1; }
-        #gpWorkspace .gp-tl-align .gpb-alignwarn button {
-            margin-left: 6px; border-color: #ff8b85; color: #ff8b85;
-        }
-        #gpWorkspace .gpb-align {
-            width: 100%; display: flex; flex-direction: column; gap: 3px;
-            padding-top: 5px; border-top: 1px solid #2a2c2e;
-        }
-        #gpWorkspace .gpb-align canvas { width: 100%; height: 54px; display: block; }
-        #gpWorkspace .gpb-align .nt { font-size: 10px; line-height: 1.35; }
-        #gpWorkspace .gpb-align .gpb-alignwarn { color: #ff8b85; opacity: 1; }
-        #gpWorkspace .gpb-align .gpb-alignwarn button {
-            margin-left: 6px; padding: 1px 6px; font-size: 10px;
-            border-color: #ff8b85; color: #ff8b85;
-        }
         #gpWorkspace .gpb-vidctl .gp-vsep {
             width: 1px; height: 15px; margin: 0 3px;
             background: #3a3d40; flex: none;
@@ -5380,6 +5337,46 @@
         #gpWorkspace .gp-tl-bar button.on { border-color: var(--gpb-red); color: #ff8b85; }
         #gpWorkspace .gp-tl-bar .nt { opacity: 0.62; }
         #gpWorkspace .gp-tl-bar .rd { font-variant-numeric: tabular-nums; opacity: 0.85; }
+        /* The zoom is a pair, read as one control. */
+        #gpWorkspace .gp-tl-zoom { display: inline-flex; }
+        #gpWorkspace .gp-tl-zoom button { border-radius: 0; }
+        #gpWorkspace .gp-tl-zoom button + button { margin-left: -1px; }
+        /* The nudge cluster: square, tight, one thing. */
+        #gpWorkspace .gp-tl-nudge { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; }
+        #gpWorkspace .gp-tl-nudge button { min-width: 24px; padding: 2px 5px; line-height: 1.2; }
+        #gpWorkspace .gp-tl-nudge .nudgebox {
+            width: 66px; text-align: right; font: inherit; font-size: 11px;
+            background: #14181b; border: 1px solid #3a3d40; color: #e6e6e8;
+            padding: 2px 5px; margin: 0 3px; font-variant-numeric: tabular-nums;
+        }
+        #gpWorkspace .gp-tl-bar button.sm { font-size: 9.5px; padding: 1px 6px; opacity: 0.75; letter-spacing: 0.06em; }
+        #gpWorkspace .gp-tl-bar button.sm.on { opacity: 1; }
+        #gpWorkspace .gp-tl-bar .gpb-alignwarn { color: #ff8b85; opacity: 1; }
+        #gpWorkspace .gp-tl-bar .gpb-alignwarn button { border-color: #ff8b85; color: #ff8b85; margin-left: 6px; }
+        /* The data row: the recording as a waveform, on the film's own axis. */
+        /* The film gets its height first and the waveform takes what is left.
+           The other way round — a fixed 46 px waveform and a flexible view —
+           clipped the clip blocks to a green sliver on a short panel, which is
+           the one thing this panel exists to show. The waveform is context; it
+           can be 30 px when there is no room and 200 px when there is. */
+        #gpWorkspace .gp-tl-data {
+            position: relative; height: 46px; flex: none; overflow: hidden;
+            border-bottom: 1px solid #23282c; background: #0b0d0f;
+        }
+        #gpWorkspace .gp-tl.panel .gp-tl-data { flex: 1 1 auto; height: auto; min-height: 30px; }
+        #gpWorkspace .gp-tl.panel .gp-tl-view { flex: none; }
+        /* And if the lanes still do not fit — a short panel with a spare drop
+           lane on the end — the column scrolls rather than hiding one. Same
+           rule the mosaic keeps (ADR-0061): never hide what you could not
+           fit. gpPanelWantH counts the data row, so FULL sizes this away. */
+        #gpWorkspace .gp-tl.panel { overflow-y: auto; overflow-x: hidden; }
+        #gpWorkspace .gp-tl-data canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+        #gpWorkspace .gp-tl-dataval {
+            position: absolute; top: 3px; margin-left: 5px; padding: 1px 5px;
+            background: var(--gpb-red); color: #fff; font-size: 10.5px; font-weight: 700;
+            font-variant-numeric: tabular-nums; pointer-events: none; z-index: 8; white-space: nowrap;
+        }
+        #gpWorkspace .gp-tl-dataval:empty { display: none; }
         /* The scroller is the drag surface, so it must not scroll under the
            pointer while a clip is being dragged — panning is the drag on the
            BACKGROUND, and the wheel zooms. Hence overflow hidden and a
@@ -22199,7 +22196,7 @@
                 var view = el.querySelector(".gp-tl-view");
                 if (view) {
                     var bands = 0;
-                    Array.prototype.forEach.call(el.querySelectorAll(".gp-tl-bar, .gp-tl-ruler, .gp-tl-align"),
+                    Array.prototype.forEach.call(el.querySelectorAll(".gp-tl-bar, .gp-tl-ruler, .gp-tl-data"),
                         function (b) { bands += b.offsetHeight || 0; });
                     var wantV = parseFloat(view.style.minHeight) || view.offsetHeight || 0;
                     return Math.min(GP_PANEL_MAX, chrome + bands + wantV + 4);
@@ -23434,6 +23431,8 @@
             /* The document, not the mosaic: since ADR-0061 the bottom bar
                can be carrying the timeline while no panel is. */
             gp._tlLive = !!document.querySelector("[data-gp-tl]");
+            gpTlDataDraw();
+            gpAlignWarnSync();
             gpPopDismissInit();
             /* The markup above was built from the numbers as they stood; the
                measurement that turns them into the numbers this window can
@@ -23708,6 +23707,7 @@
             } else {
                 gp._tlLive = !!document.querySelector("[data-gp-tl]");
             }
+            gpTlDataDraw();
             gpUpdateDock();
             el.oncontextmenu = function (e) {
                 e.preventDefault();
@@ -37800,7 +37800,11 @@
          * markup serves the strip under the picture and the full panel.
          * ═════════════════════════════════════════════════════════════════ */
         function gpTl() {
-            if (!gp.tl) gp.tl = { from: null, to: null, snap: true };
+            /* `close` is the second zoom: a window either side of the playhead
+               that FOLLOWS it. It is how the alignment job gets done on the
+               same axis as the placement job, instead of on a strip of its
+               own with a second time scale to keep in your head. */
+            if (!gp.tl) gp.tl = { from: null, to: null, snap: true, close: false };
             return gp.tl;
         }
 
@@ -37831,8 +37835,14 @@
             return { from: a - pad, to: b + pad };
         }
 
+        var GP_TL_CLOSE_S = 10;     /* seconds either side of the playhead in Close-up */
+
         function gpTlView() {
             var t = gpTl(), ex = gpTlExtent();
+            if (t.close) {
+                var ph0 = gpTlSec(gpSampleUtc(gp.playIdx));
+                if (ph0 !== null) return { from: ph0 - GP_TL_CLOSE_S, to: ph0 + GP_TL_CLOSE_S };
+            }
             if (t.from === null || t.to === null || !(t.to > t.from)) return ex;
             /* Never so far out that the work disappears, never so far in that
                a frame is a mile wide. */
@@ -37843,7 +37853,12 @@
 
         window.gpTlFit = function () {
             var t = gpTl();
-            t.from = null; t.to = null;
+            t.from = null; t.to = null; t.close = false;
+            gpRenderGridSoft();
+        };
+        window.gpTlCloseUp = function () {
+            var t = gpTl();
+            t.close = true;
             gpRenderGridSoft();
         };
         window.gpTlSnapToggle = function () {
@@ -37895,23 +37910,48 @@
                second row of the same buttons under the first would be eating
                picture to say nothing new. */
             if (!compact) {
+            /* ---- the bar: three groups, at three weights ------------------
+               What you can DO on the left; the fine control in the middle,
+               only when there is a section under the playhead for it to act
+               on; what is HAPPENING on the right, quieter. "Remove all" is no
+               longer up here: each block carries its own x, the picture has
+               Remove, and a destructive button at the top of the panel you
+               reach for most is how footage kept going missing. */
+            var tclose = gpTl().close;
             h += "<div class='gp-tl-bar'>";
             h += "<button onclick='gpVideoPick()' title='Add another section of footage to this recording'>+ Footage</button>";
-            h += "<button onclick='gpTlFit()' title='Fit every section and the whole recording in the window'>Fit</button>";
-            h += "<button class='" + (gpTl().snap ? "on" : "") + "' onclick='gpTlSnapToggle()' " +
-                 "title='Snap a dragged section to the start of the recording, to the playhead, and to the edges of the other sections. Hold Alt while dragging to ignore it once.'>Snap</button>";
-            if (cs.length)
-                h += "<button onclick='gpClipsClear()' title='Take every section off this recording. The files are not touched.'>Remove all</button>";
-            h += "<span class='nt'>" + cs.length + " section" + (cs.length === 1 ? "" : "s") + "</span>";
-            var cov = gpTlCoverage();
-            if (cov !== null && gpTlSessDur() > 0)
-                h += "<span class='nt' title='How much of this recording has film against it'>&middot; covers " +
-                     Math.round(cov * 100) + "% of the recording</span>";
+            h += "<span class='gp-tl-zoom'>" +
+                 "<button class='" + (tclose ? "" : "on") + "' onclick='gpTlFit()' " +
+                 "title='The whole recording and every section on it'>Whole</button>" +
+                 "<button class='" + (tclose ? "on" : "") + "' onclick='gpTlCloseUp()' " +
+                 "title='Ten seconds either side of the playhead, following it. The speed trace at this " +
+                 "zoom is what you line the picture up against: park the film on a braking point, " +
+                 "and nudge until the cliff in the trace is under the red line.'>Close-up</button>" +
+                 "</span>";
+            if (gp.video && gp.video.t0 !== null && gp.video.t0 !== undefined &&
+                gp.trace && gp.trace.length) {
+                var vo = (gp.video.offsetMs / 1000);
+                h += "<span class='gp-tl-nudge' title='Move the section under the playhead against the data. " +
+                     "A frame is 0.04 s.'>" +
+                     gpNudgeBtn(-1, "&#9668;&#9668;", "A second earlier") +
+                     gpNudgeBtn(-0.1, "&#9668;", "A tenth earlier") +
+                     gpNudgeBtn(-0.04, "&#8249;", "One frame earlier") +
+                     "<input type='number' class='nudgebox' step='0.01' data-gp-offbox='1' " +
+                     "value='" + vo.toFixed(2) + "' onchange='gpVideoOffset(this.value)' " +
+                     "title='Seconds the video is later than the data. Type any value.'>" +
+                     gpNudgeBtn(0.04, "&#8250;", "One frame later") +
+                     gpNudgeBtn(0.1, "&#9658;", "A tenth later") +
+                     gpNudgeBtn(1, "&#9658;&#9658;", "A second later") +
+                     "</span>";
+            }
             h += "<span style='flex:1'></span>";
+            h += "<span class='nt gpb-alignwarn' data-gp-alignwarn='1' style='display:none'></span>";
             /* A data attribute, not an id: the strip under the picture and
                 the panel are the same markup rendered twice, and two elements
                 sharing one id is a document that getElementById answers wrong. */
             h += "<span class='rd' data-gp-tlread='1'>" + gpEsc(gpTlReadout()) + "</span>";
+            h += "<button class='sm " + (gpTl().snap ? "on" : "") + "' onclick='gpTlSnapToggle()' " +
+                 "title='Snap a dragged section to the start of the recording, to the playhead, and to the edges of the other sections. Hold Alt while dragging to ignore it once.'>snap</button>";
             h += "</div>";
             }
 
@@ -37925,49 +37965,35 @@
             }
             h += "</div>";
 
-            /* ---- lanes, clips, the recording, the playhead ---- */
-            /* The panel's view fills what it is given; the strip inside the
-               control bar is given nothing, so it states its own height —
-               lanes, plus the band the recording is drawn on. */
-            var viewH = lanes * LH + (sdur > 0 ? 20 : 6) + (compact ? 0 : 14);
-            /* ---- lining the footage up, HERE -------------------------------
-               This is the panel about where footage sits against the
-               recording, so this is where the control for it belongs. It was
-               first built into the video panel's own control row, over the
-               picture — and the one thing you cannot do without while lining
-               footage up is see the footage. */
-            if (!compact && gp.video && gp.video.t0 !== null && gp.video.t0 !== undefined &&
-                gp.trace && gp.trace.length) {
-                var vo = (gp.video.offsetMs / 1000);
-                h += "<div class='gp-tl-align'>" +
-                     "<div class='gp-tl-alignrow'>" +
-                     "<span class='lb'>Nudge</span>" +
-                     gpNudgeBtn(-1, "&#9668;&#9668;", "A second earlier") +
-                     gpNudgeBtn(-0.1, "&#9668;", "A tenth earlier") +
-                     gpNudgeBtn(-0.04, "&#8249;", "One frame earlier") +
-                     "<input type='number' class='nudgebox' step='0.01' data-gp-offbox='1' " +
-                     "value='" + vo.toFixed(2) + "' onchange='gpVideoOffset(this.value)' " +
-                     "title='Seconds the video is later than the data. Type any value.'>" +
-                     gpNudgeBtn(0.04, "&#8250;", "One frame later") +
-                     gpNudgeBtn(0.1, "&#9658;", "A tenth later") +
-                     gpNudgeBtn(1, "&#9658;&#9658;", "A second later") +
-                     "<span class='lb' data-gp-offlab='1'>" + vo.toFixed(2) + " s</span>" +
-                     "<span class='nt' data-gp-alignwarn='1'></span>" +
-                     "</div>" +
-                     "<canvas id='gpAlignCv'></canvas>" +
-                     "<span class='nt'>The speed for eight seconds either side of the frame on screen, " +
-                     "that moment on the red line. Park the picture on something you can name &mdash; a " +
-                     "braking point, an apex &mdash; then nudge until the shape under the line is the " +
-                     "one that belongs to it.</span>" +
+            /* ---- the recording, as a waveform ------------------------------
+               This is what the film is lined up WITH, so it is drawn on the
+               same axis as the film, the way an editor draws the audio under
+               the picture. It used to be a hatched grey bar with lap ticks:
+               you were lining footage up against a grey bar, and the trace
+               you actually needed sat in a strip of its own with a second
+               time scale. Tagged as a ruler so a click on it seeks and a drag
+               on it pans, exactly like the surfaces either side of it. The
+               canvas is painted by gpTlDataDraw once this markup is in the
+               document. */
+            if (!compact && sdur > 0) {
+                var ph2 = gpTlSec(gpSampleUtc(gp.playIdx));
+                h += "<div class='gp-tl-data' data-gp-tlruler='1' data-gp-tldatarow='1'>" +
+                     "<canvas data-gp-tldata='1'></canvas>" +
+                     (ph2 !== null ? "<div class='gp-tl-head' data-gp-tlhead='1' style='left:" + X(ph2).toFixed(4) + "%'></div>" : "") +
+                     "<span class='gp-tl-dataval' data-gp-tlval='1'></span>" +
                      "</div>";
             }
 
+            /* ---- lanes, clips, the playhead ---- */
+            /* The panel's view fills what it is given; the strip inside the
+               control bar is given nothing, so it states its own height. The
+               recording itself is no longer drawn down here — it is the data
+               row above — so a lane is all a lane costs. */
+            var viewH = lanes * LH + (compact ? (sdur > 0 ? 20 : 6) : 4);
             h += "<div class='gp-tl-view' data-gp-tlview='1' style='min-height:" + viewH + "px" +
                  (compact ? ";height:" + viewH + "px;flex:none" : "") + "'>";
             for (var L = 0; L < lanes; L++) {
-                h += "<div class='gp-tl-lane' data-gp-tllane='" + L + "' style='top:" + (L * LH) + "px'>" +
-                     (compact ? "" : "<span class='lab'>" + (L === 0 ? "TOP" : "L" + (L + 1)) + "</span>") +
-                     "</div>";
+                h += "<div class='gp-tl-lane' data-gp-tllane='" + L + "' style='top:" + (L * LH) + "px'></div>";
             }
             cs.forEach(function (c) {
                 var s = gpTlSec(gpClipStart(c)), d = gpClipDur(c);
@@ -37984,8 +38010,9 @@
                      "<button class='x' data-gp-tlx='" + c.id + "' title='Take this section off the recording'>&times;</button>" +
                      "</div>";
             });
-            /* The recording itself, under the film it carries. */
-            var sd = sdur;
+            /* The recording itself, under the film it carries — in the COMPACT
+               strip only. The panel draws it as the data row instead. */
+            var sd = compact ? sdur : 0;
             if (sd > 0) {
                 var sy = lanes * LH + 3;
                 h += "<div class='gp-tl-sess' style='left:" + X(0).toFixed(4) + "%;width:" +
@@ -38084,10 +38111,177 @@
                 var pc = (((ph - vw.from) / span) * 100).toFixed(4) + "%";
                 Array.prototype.forEach.call(document.querySelectorAll("[data-gp-tlhead]"),
                     function (e) { e.style.left = pc; });
+                Array.prototype.forEach.call(document.querySelectorAll("[data-gp-tlval]"),
+                    function (e) { e.style.left = pc; });
             }
             var txt = gpTlReadout();
             Array.prototype.forEach.call(document.querySelectorAll("[data-gp-tlread]"),
                 function (e) { e.textContent = txt; });
+            /* In Close-up the window itself moves with the playhead, so the
+               ruler and the clip blocks are stale the moment it does. A full
+               re-render per frame would rebuild the block being dragged; the
+               ruler ticks and block positions are rewritten in place instead,
+               and the waveform repainted. Whole zoom never enters here. */
+            if (gpTl().close) gpTlFollowWrite(vw, span);
+            gpTlDataDraw();
+            gpAlignWarnSync();
+        }
+
+        /* Close-up, following: everything positioned in percent of the window
+           is re-positioned for the window the playhead has just moved. */
+        function gpTlFollowWrite(vw, span) {
+            var X = function (sec) { return (((sec - vw.from) / span) * 100).toFixed(4) + "%"; };
+            Array.prototype.forEach.call(document.querySelectorAll("[data-gp-tl]:not(.compact)"), function (tl) {
+                var ruler = tl.querySelector("[data-gp-tlruler].gp-tl-ruler");
+                if (ruler) {
+                    var step = gpTlStep(span), t0 = Math.ceil(vw.from / step) * step, hh = "";
+                    for (var sq = t0; sq <= vw.to; sq += step)
+                        hh += "<div class='gp-tl-tick' style='left:" + X(sq) + "'>" + gpEsc(gpTlClock(sq)) + "</div>";
+                    if (ruler._gpTicks !== hh) { ruler.innerHTML = hh; ruler._gpTicks = hh; }
+                }
+                Array.prototype.forEach.call(tl.querySelectorAll("[data-gp-tlclip]"), function (b) {
+                    if (b.classList.contains("dragging")) return;
+                    var c = gpClipById(b.getAttribute("data-gp-tlclip"));
+                    if (!c) return;
+                    var sc = gpTlSec(gpClipStart(c)), d = gpClipDur(c);
+                    if (sc === null) return;
+                    b.style.left = X(sc);
+                    b.style.width = Math.max(0.15, (d / span) * 100).toFixed(4) + "%";
+                });
+            });
+        }
+
+        /* The sample nearest a moment on the timeline. */
+        function gpTlIdxAt(sec) {
+            var meta = gpCurSessionMeta();
+            if (!meta || !gp.trace || !gp.trace.length) return null;
+            var want = meta.recordedAt + sec * 1000;
+            var lo = 0, hi = (gp.ghostFence !== null && gp.ghostFence !== undefined
+                                ? gp.ghostFence : gp.trace.length) - 1;
+            if (hi < 0) return null;
+            while (hi - lo > 1) {
+                var mid = (lo + hi) >> 1;
+                if (gpSampleUtc(mid) <= want) lo = mid; else hi = mid;
+            }
+            return lo;
+        }
+
+        /* ---- the waveform ----------------------------------------------------
+         * Speed, over the visible window, one column per device pixel: the
+         * min and max of the samples in that column, drawn as a filled band so
+         * a whole-session view reads as a shape and a Close-up reads as a
+         * line. Lap starts are ticks. The value at the playhead is printed
+         * beside the head in the DOM (gpTlSync moves it), not on the canvas,
+         * so the canvas only repaints when the window changes.
+         */
+        function gpTlDataDraw() {
+            var cvs = document.querySelectorAll("[data-gp-tldata]");
+            if (!cvs.length) return;
+            var rows = gp.trace;
+            var vw = gpTlView(), span = vw.to - vw.from;
+            var key = rows && rows.length ? [vw.from.toFixed(3), vw.to.toFixed(3), rows.length].join(":") : "";
+            var v = (rows && rows.length && gp.playIdx < rows.length) ? rows[gp.playIdx].kph : null;
+            Array.prototype.forEach.call(document.querySelectorAll("[data-gp-tlval]"), function (e) {
+                e.textContent = (v !== null && isFinite(v)) ? Math.round(gpSpdN(v)) + " " + gpSpdU() : "";
+            });
+            Array.prototype.forEach.call(cvs, function (cv) {
+                var box = cv.parentNode.getBoundingClientRect();
+                var w = Math.floor(box.width), h = Math.floor(box.height);
+                if (w < 10 || h < 10) return;
+                var dpr = window.devicePixelRatio || 1;
+                var wD = Math.round(w * dpr), hD = Math.round(h * dpr);
+                var k2 = key + ":" + wD + "x" + hD;
+                if (cv._gpKey === k2) return;
+                cv._gpKey = k2;
+                if (cv.width !== wD || cv.height !== hD) { cv.width = wD; cv.height = hD; }
+                var g = cv.getContext("2d");
+                g.setTransform(1, 0, 0, 1, 0, 0);
+                g.clearRect(0, 0, wD, hD);
+                if (!rows || !rows.length) return;
+
+                var i0 = gpTlIdxAt(vw.from), i1 = gpTlIdxAt(vw.to);
+                if (i0 === null || i1 === null || i1 <= i0) return;
+                /* Speed range from what is on screen, floored at 20 km/h of
+                   span so a stationary stretch is not blown up into noise. */
+                var lo = Infinity, hi = -Infinity, i;
+                for (i = i0; i <= i1; i++) {
+                    var sp = rows[i].kph;
+                    if (!isFinite(sp)) continue;
+                    if (sp < lo) lo = sp; if (sp > hi) hi = sp;
+                }
+                if (!(hi > lo)) return;
+                if (hi - lo < 20) { var mid2 = (hi + lo) / 2; lo = mid2 - 10; hi = mid2 + 10; }
+                var pad = Math.round(4 * dpr);
+                var Y = function (sp2) { return hD - pad - (sp2 - lo) / (hi - lo) * (hD - pad * 2); };
+                var colOf = function (idx) {
+                    return Math.floor(((gpTlSec(gpSampleUtc(idx)) - vw.from) / span) * wD);
+                };
+                var mn = new Float32Array(wD), mx = new Float32Array(wD), has = new Uint8Array(wD);
+                for (i = 0; i < wD; i++) { mn[i] = Infinity; mx[i] = -Infinity; }
+                var last = -1;
+                for (i = i0; i <= i1; i++) {
+                    var s2 = rows[i].kph;
+                    if (!isFinite(s2)) continue;
+                    var c = colOf(i);
+                    if (c < 0 || c >= wD) continue;
+                    if (s2 < mn[c]) mn[c] = s2; if (s2 > mx[c]) mx[c] = s2; has[c] = 1;
+                    /* ...and the previous sample's value into this column, so
+                       a steep edge is drawn continuous rather than as stacked
+                       dashes — the rack learned this the hard way. */
+                    if (last >= 0 && last !== c && c === last + 1) {
+                        var ps = rows[i - 1].kph;
+                        if (isFinite(ps)) { if (ps < mn[c]) mn[c] = ps; if (ps > mx[c]) mx[c] = ps; }
+                    }
+                    last = c;
+                }
+                /* Only the columns that hold a sample, in order. An EMPTY
+                   column is not a gap in the recording — at Close-up there
+                   are two hundred samples across two thousand columns, so
+                   most columns are empty and the line simply runs through
+                   them. Breaking the path at every empty column, which is
+                   what this did first, turned the top edge into two hundred
+                   disconnected points and left closePath() to fill whatever
+                   polygon the bottom edge and the last point made: a wedge
+                   the height of the row. */
+                var cols = [];
+                for (i = 0; i < wD; i++) if (has[i]) cols.push(i);
+                if (cols.length < 2) return;
+                /* Filled band between min and max, then a bright line along
+                   the max so the shape has an edge to read at Whole zoom. At
+                   Close-up min and max are the same sample and the band is a
+                   hairline under the line, which is right. */
+                var q2;
+                g.beginPath();
+                for (q2 = 0; q2 < cols.length; q2++) {
+                    i = cols[q2];
+                    if (!q2) g.moveTo(i, Y(mx[i])); else g.lineTo(i, Y(mx[i]));
+                }
+                for (q2 = cols.length - 1; q2 >= 0; q2--) {
+                    i = cols[q2];
+                    g.lineTo(i, Y(mn[i]) + 1);
+                }
+                g.closePath();
+                g.fillStyle = "rgba(91,184,255,0.28)";
+                g.fill();
+                g.beginPath();
+                for (q2 = 0; q2 < cols.length; q2++) {
+                    i = cols[q2];
+                    if (!q2) g.moveTo(i, Y(mx[i])); else g.lineTo(i, Y(mx[i]));
+                }
+                g.strokeStyle = "#5BB8FF"; g.lineWidth = Math.max(1, dpr); g.lineJoin = "round";
+                g.stroke();
+                /* Lap starts. */
+                g.strokeStyle = "rgba(216,221,225,0.28)"; g.lineWidth = Math.max(1, dpr);
+                (gp.traceLaps || []).forEach(function (l, li) {
+                    if (l.ghost) return;
+                    var a = gpSampleUtc(l.from);
+                    if (a === null) return;
+                    var x = Math.round(((gpTlSec(a) - vw.from) / span) * wD) + 0.5;
+                    if (x < 0 || x > wD) return;
+                    g.strokeStyle = li === gp.selLap ? "rgba(210,35,42,0.9)" : "rgba(216,221,225,0.28)";
+                    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, hD); g.stroke();
+                });
+            });
         }
 
         /* ---- picking one ---------------------------------------------------
@@ -38322,6 +38516,7 @@
                     if (!panned && Math.abs(dx) < 3) return;
                     if (!panned) { panned = true; view.classList.add("panning"); }
                     var t = gpTl();
+                    t.close = false;              /* you took the window; it stops following */
                     t.from = vwA.from - dx / kk;
                     t.to = t.from + (vwA.to - vwA.from);
                     gpRenderGridSoft();
@@ -38347,6 +38542,7 @@
                 if (!view) return;
                 ev.preventDefault();
                 var vw = gpTlView(), span = vw.to - vw.from, t = gpTl();
+                t.close = false;
                 var r = view.getBoundingClientRect();
                 var f = Math.max(0, Math.min(1, (ev.clientX - r.left) / Math.max(1, r.width)));
                 if (ev.shiftKey) {
@@ -38791,121 +38987,13 @@
                 " of the recording outside the footage — there is no picture there. " +
                 "<button onclick='gpVideoOffset(0)'>Back to 0.00</button>";
             Array.prototype.forEach.call(els, function (e) {
+                if (e._gpHtml === html) return;
+                e._gpHtml = html;
                 e.innerHTML = html;
-                e.className = html ? "nt gpb-alignwarn" : "nt";
                 e.style.display = html ? "" : "none";
             });
         }
 
-
-        /* The data index the frame on screen is currently claiming to be.
-           The inverse of gpVideoTimeFor, found by bisection rather than by
-           inverting the arithmetic: the sample clock is not perfectly regular
-           (a dropped fix leaves a longer step), so walking the real timestamps
-           is the only answer that stays true across a gap. */
-        function gpAlignIndexForVideo() {
-            var v = gp.video, rows = gp.trace;
-            if (!v || !rows || !rows.length || v.t0 === null || v.t0 === undefined) return null;
-            var el = document.getElementById("gpVideo");
-            if (!el) return null;
-            var want = Number(el.currentTime);
-            if (!isFinite(want)) return null;
-            var lo = 0, hi = (gp.ghostFence !== null && gp.ghostFence !== undefined
-                                ? gp.ghostFence : rows.length) - 1;
-            if (hi <= lo) return null;
-            var tv = function (i) { var t = gpVideoTimeFor(i); return t === null ? NaN : t; };
-            if (!isFinite(tv(lo)) || !isFinite(tv(hi))) return null;
-            while (hi - lo > 1) {
-                var mid = (lo + hi) >> 1;
-                if (tv(mid) <= want) lo = mid; else hi = mid;
-            }
-            return lo;
-        }
-
-        function gpAlignDraw() {
-            var cv = document.getElementById("gpAlignCv");
-            if (!cv) return;
-            var box = cv.parentNode.getBoundingClientRect();
-            var w = Math.max(120, Math.floor(box.width)), h = 54;
-            var dpr = window.devicePixelRatio || 1;
-            if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
-                cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-            }
-            cv.style.width = w + "px"; cv.style.height = h + "px";
-            var g = cv.getContext("2d");
-            g.setTransform(dpr, 0, 0, dpr, 0, 0);
-            g.clearRect(0, 0, w, h);
-            g.fillStyle = "rgba(10,12,14,0.55)";
-            g.fillRect(0, 0, w, h);
-
-            var rows = gp.trace, i = gpAlignIndexForVideo();
-            var say = function (t) {
-                g.fillStyle = "rgba(245,247,250,0.6)";
-                g.font = "11px 'Barlow', system-ui";
-                g.textAlign = "center";
-                g.fillText(t, w / 2, h / 2 + 4);
-                g.textAlign = "left";
-            };
-            if (i === null || !rows || !rows.length) {
-                say("No data at this point in the footage");
-                return;
-            }
-
-            /* Eight seconds either side: long enough to hold a whole braking
-               zone and the corner after it, short enough that a tenth is a
-               visible distance on the strip. */
-            var SPAN = 8;
-            var t0 = gpSecs(rows, 0, i);
-            var lo = 0, hi = rows.length - 1, k;
-            for (k = i; k > 0 && gpSecs(rows, k, i) < SPAN; k--) lo = k;
-            for (k = i; k < rows.length - 1 && gpSecs(rows, i, k) < SPAN; k++) hi = k;
-            var X = function (k2) {
-                return w / 2 + (gpSecs(rows, i, k2) / SPAN) * (w / 2);
-            };
-            var vmin = Infinity, vmax = -Infinity;
-            for (k = lo; k <= hi; k++) {
-                var s = rows[k].kph;
-                if (!isFinite(s)) continue;
-                if (s < vmin) vmin = s; if (s > vmax) vmax = s;
-            }
-            if (!(vmax > vmin)) { say("No speed here"); return; }
-            var pad = 9;
-            var Y = function (s) { return h - pad - (s - vmin) / (vmax - vmin) * (h - pad * 2); };
-
-            g.beginPath();
-            for (k = lo; k <= hi; k++) {
-                var sp = rows[k].kph;
-                if (!isFinite(sp)) continue;
-                var x = X(k);
-                if (k === lo) g.moveTo(x, Y(sp)); else g.lineTo(x, Y(sp));
-            }
-            g.strokeStyle = "#5BB8FF"; g.lineWidth = 1.6;
-            g.lineJoin = "round"; g.lineCap = "round";
-            g.stroke();
-
-            /* The frame you are looking at, pinned to the middle. Nudging
-               slides the trace under it — which is the whole gesture. */
-            g.strokeStyle = "rgba(210,35,42,0.95)"; g.lineWidth = 1;
-            g.beginPath(); g.moveTo(w / 2 + 0.5, 0); g.lineTo(w / 2 + 0.5, h); g.stroke();
-
-            var now = rows[i].kph;
-            var lab = isFinite(now) ? Math.round(gpSpdN(now)) + " " + gpSpdU() : "—";
-            g.font = "700 12px 'Barlow', system-ui";
-            var tw = g.measureText(lab).width;
-            g.fillStyle = "rgba(210,35,42,0.95)";
-            g.fillRect(w / 2 + 4, 3, tw + 8, 15);
-            g.fillStyle = "#fff";
-            g.fillText(lab, w / 2 + 8, 14);
-
-            gpAlignWarnSync();
-
-            g.fillStyle = "rgba(245,247,250,0.45)";
-            g.font = "9px 'Barlow', system-ui";
-            g.fillText("−" + SPAN + " s", 4, h - 4);
-            g.textAlign = "right";
-            g.fillText("+" + SPAN + " s", w - 4, h - 4);
-            g.textAlign = "left";
-        }
 
         window.gpVideoOffset = function (v) {
             if (!gp.video) return;
@@ -38928,11 +39016,7 @@
             gpVideoLinkSync();
             gpVideoFollowSeek();
             gpVideoXportSync();
-            /* The strip is the feedback for this control, so it has to move
-               with it — nudging with a stale trace under the line would be
-               worse than no trace at all. */
-            gpAlignDraw();
-            gpTlSync();
+            gpTlSync();       /* repaints the waveform and the overrun note */
         };
 
         window.gpVideoAuto = function () {
@@ -41513,10 +41597,6 @@
         }
 
         /* The gauges, painted over the footage from the mapped sample. */
-        /* Kept next to the overlay draw because it answers the same question
-           — what moment is on screen — and has to stay in step with it. */
-        function gpAlignTick() { gpAlignDraw(); }   /* a no-op when the strip is not up */
-
         function gpVideoDrawOverlay() {
             var el = document.getElementById("gpVideo");
             var cv = document.getElementById("gpVideoOv");
@@ -41526,7 +41606,6 @@
             var film = gpVideoFilmSync();
             gpVideoBgDraw(film);
             if (!film) gpVideoBgTick();
-            gpAlignTick();
             if (!el || !cv || !gp.trace || !gp.trace.length) return;
             /* With no film up there is no PICTURE, so there is no picture rect
                to sit in: the gauges take the whole tile rather than hugging
