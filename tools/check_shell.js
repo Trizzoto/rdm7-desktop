@@ -1,14 +1,18 @@
-/* The lap timer's shell: three bands, four sections, and nothing deleted.
+/* The lap timer's shell: two bands, four sections, and nothing deleted.
  *
  * One bar was doing navigation, identity, device status and actions at once.
  * When it ran out of room the rule that fired deleted IDENTITY — the circuit
  * name and whose drive it was — so at 1440 px the one fact worth reading was
- * gone and twelve controls remained. The bar is three bands now: the black one
- * carries the app and the device, the light one carries the four sections and
- * this section's actions, and the page carries its own name.
+ * gone and twelve controls remained. The bar is two bands now: the black one
+ * carries the app, the device AND what is open, and the light one carries the
+ * four sections, this section's views and its actions. One job each, one line
+ * each — the height above the data belongs to the data. Identity is back in
+ * the black bar, which is only safe because that bar has three controls in it
+ * now: it is the flexible thing in there, not the thing that gets pushed out,
+ * and gpIdFit decides what gives before anything is clipped.
  *
  * What is pinned here is the part a later change could quietly undo:
- *   - the three bands still exist, in order
+ *   - the two bands still exist, in order, and identity is IN the black one
  *   - the black bar has not started collecting controls again
  *   - nothing deletes the session identity at any width
  *   - the four sections still cover every view gpSetView knows
@@ -32,15 +36,26 @@ const wsStart = SRC.indexOf('<div id="gpWorkspace"');
 const wsBody = SRC.indexOf('<div class="ws-body">', wsStart);
 const HEAD = SRC.slice(wsStart, wsBody);
 
-console.log('three bands, one job each');
-const bands = ['<div class="ws-topbar">', '<div class="gpb-nav">', 'class="gpb-page'];
+console.log('two bands, one job each');
+const bands = ['<div class="ws-topbar">', 'class="gpb-id"', '<div class="gpb-nav">', 'class="gpb-subnav"'];
 let at = 0, order = true;
 bands.forEach(function (b) {
     const i = HEAD.indexOf(b, at);
     if (i < 0) order = false; else at = i;
 });
-ok('the black bar, the nav band and the page head are all there, in order', order,
+ok('the black bar carrying the identity, then the nav band and its views', order,
    'expected ' + bands.join(' then ') + ' between #gpWorkspace and .ws-body');
+/* The band that was deleted, and the reason this file exists: identity rides
+   in a bar that is already there, not in a strip of its own above the data. */
+const blackBand = HEAD.slice(HEAD.indexOf('<div class="ws-topbar">'),
+                             HEAD.indexOf('<div class="gpb-nav">'));
+ok('the identity is inside the black bar, not a band of its own',
+   /class="gpb-id"/.test(blackBand) && !/class="gpb-page/.test(HEAD),
+   'a third band costs ~100 px of height on every screen');
+ok('it can flex, so a full bar shortens it instead of deleting it',
+   /#gpWorkspace \.gpb-id \{[^}]*flex:\s*1/.test(SRC) &&
+   /#gpWorkspace \.gpb-id \{[^}]*min-width:\s*0/.test(SRC),
+   'this is the whole difference from #gpCtx, which was flex: none in a nowrap bar');
 
 /* The regression this whole change exists to prevent: the bar filling up
    again. Counting elements rather than characters, because a long comment is
@@ -72,14 +87,21 @@ const mq = /@media[^{]*\{([\s\S]*?)\n        \}/g;
 let m;
 while ((m = mq.exec(gpCss))) {
     if (/display:\s*none/.test(m[1]) &&
-        /\.ws-brand|\.gpb-sesbar|\.gpb-page|\.gpb-secs|\.gpb-subnav/.test(m[1]))
+        /\.ws-brand|\.gpb-sesbar|\.gpb-id|\.gpb-secs|\.gpb-subnav/.test(m[1]))
         hides.push(m[0].slice(0, 90).replace(/\s+/g, ' '));
 }
 ok('no width hides the brand, the page name or the navigation', hides.length === 0,
    hides.join('\n         '));
-ok('the session identity is a page headline, not a bar chip',
-   /class="gpb-page/.test(HEAD) && !/id="gpCtx"/.test(SRC),
-   'gpCtx was the chip in the bar; it should be gone');
+ok('the session identity is a named strip, not the old bar chip',
+   /class="gpb-id"/.test(HEAD) && !/id="gpCtx"/.test(SRC),
+   'gpCtx was the chip the bar deleted when it ran out of room; it should be gone');
+ok('what does not fit stays readable in the tooltip',
+   /el\.title = \[name, meta, tags/.test(SRC) && /function gpIdFit\(/.test(SRC),
+   'the line ellipsises and drops its lowest tags, so the whole of it has to ' +
+   'live in the tooltip');
+ok('the tag that never drops is the session best',
+   /for \(i = tags\.length - 1; i >= 1; i--\)/.test(SRC),
+   'gpIdFit drops from the right and stops before the first tag');
 
 console.log('\nfour sections, covering every view');
 const secBlock = /var GP_SECTIONS = \[([\s\S]*?)\n        \];/.exec(SRC);
@@ -141,12 +163,12 @@ console.log('\nthe page head is not the panel head');
    Reusing the name gave the page head `display:flex` from the panel rules and
    laid its name, meta line and sub-tabs out side by side in one 48 px strip,
    and pushed the page head's own rules onto every panel in the mosaic. */
-ok('the page head has a class of its own', /class="gpb-page/.test(HEAD));
+ok('the page head has a class of its own', /class="gpb-id"/.test(HEAD));
 ok('it does not reuse the panel header class', !/class="gpb-phead/.test(HEAD),
    'gpb-phead is the Analyse panel drag header — see gpRenderGrid');
 ok('the page head states its own display',
-   /#gpWorkspace \.gpb-page \{[^}]*display:\s*block/.test(SRC),
-   'as a flex item of .ws it inherits row layout otherwise');
+   /#gpWorkspace \.gpb-id \{[^}]*display:\s*flex/.test(SRC),
+   'it is a flex item of the nav band and lays its own contents out in a row');
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

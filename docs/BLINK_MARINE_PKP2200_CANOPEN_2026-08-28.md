@@ -7,14 +7,30 @@ REV1.4` and `PKP2200SI_J1939_UM_REV1.4` (both from blinkmarine.com), plus
 
 ## End state: DONE
 
-- Protocol: **CANopen**
-- Baud rate: **500 kbit/s** (matches the dash and the rest of the live ECU bus)
-- Node ID: **0x15** (factory default, never changed)
-- Verified live: `4F 10 20 00 02 00 00 00` (baud=500k) and
-  `4F 13 20 00 15 00 00 00` (node ID=0x15), bus health afterward
-  `bus_errors: 0, rx_errors: 0, tx_errors: 0`.
-- Backlight set to solid red @ 100% as a visible end-to-end proof (NMT start
-  `01 15` to id 0, then `3F 01 00 00 00 00 00 00` to id 0x515).
+**The keypad is on J1939, 500 kbit/s, source address 0x21.**
+
+That is not where this log first ended, and the difference matters. The bench
+work below finished with the keypad on **CANopen @ 500k, node 0x15** — correct,
+verified, and *wrong for the actual goal*, which only came out afterwards:
+MaxxECU is what will drive this keypad day to day, and MaxxECU's keypad
+integration speaks J1939 only. So it was switched over, which reset it to
+J1939's own factory 250k (see §5 — the same trap, a second time), and then
+raised to 500k with the J1939 baud command `6Fh`.
+
+Verified live at each stage:
+
+| Stage | Evidence |
+|---|---|
+| CANopen @ 500k | `4F 10 20 00 02 00 00 00` (baud=500k), `4F 13 20 00 15 00 00 00` (node 0x15), bus `bus_errors: 0` |
+| CANopen, visibly alive | backlight forced solid red @ 100% (NMT start `01 15` to id 0, then `3F 01 00 00 00 00 00 00` to `0x515`) |
+| J1939 @ 250k | live keypress broadcast captured on `18EFFF21h` |
+| J1939 @ 500k | second live keypress captured, source `0x21`, 140 ms old, with the dash and MaxxECU both at 500k |
+
+MaxxECU's CAN Analyzer sees the key presses, which was the acceptance test.
+
+**This is now a Studio feature, not a bench procedure** — see "What shipped"
+at the bottom. The rest of this document is the log of finding all this out
+the hard way, kept because the wizard's design is a direct response to it.
 
 ## The story, in order
 
@@ -183,12 +199,31 @@ Objects relevant to a Studio keypad-setup panel:
 | 2013h | 00 | Node ID (01h-7Fh, default 15h) |
 | 2011h | 00 | Boot-up message on power-up |
 | 2012h | 00 | Device active without NMT start |
+| 2003h | 04 | Default backlight colour (`01`-`09`, the same index as the PDO) |
+| 2003h | 05 | Default LED brightness — **one** level for every ring, 00-3Fh |
+| 2003h | 06 | Default backlight brightness, 00-3Fh |
 | 1000h/1008h/1009h/100Ah | — | Standard identity objects (device type, manufacturer, HW/FW rev) |
 
 PDO (needs NMT start first): backlight = `500h + node_id`, byte0=brightness
 (00-3Fh), byte1=color (`01`=red `02`=green `03`=blue ... `08`=amber). LED-on
 = `200h + node_id`, LED-blink = `300h + node_id`, same red/green/blue bitmask
 byte layout.
+
+Those two LED PDOs are what Studio's **Lightshow** section streams to animate
+the keypad — see `docs/KEYPAD_LIGHTSHOW_2026-09.md` and ADR-0058. Worth knowing
+here: a ring is three BITS, so seven colours and dark, with no per-key dimmer;
+and above eight keys each colour channel is two bytes wide, keys 9-16 in the
+high byte. The manual's LED-brightness object at `400h + node_id` is
+deliberately unused — unverified on this bench, and `0x400-0x43F` is the range
+reserved for RDM GPS nodes.
+
+Those three `2003h` sub-objects are the whole of the keypad's own lighting, and
+Studio's Lighting panel is exactly them: **Button brightness** (05), **Legend
+backlight** colour (04) and **Legend brightness** (06). There is deliberately no
+fourth control, because there is no fourth object — in particular the part has
+no night brightness, so the "night" value Studio used to offer was never sent
+anywhere (ADR-0063). Day/night dimming, if it is ever wanted, is the dash
+re-sending the `500h` PDO, not a value the keypad stores.
 
 ### J1939 (29-bit extended frames)
 
@@ -207,31 +242,54 @@ CANopen → J1939:  615h (std)      : 2B FF 20 01 01
 Baud rate (J1939 command 6Fh): `18EF2100h : 04 1B 6F <rate> FF FF FF FF`
 (rate byte codes match the CANopen ones — `02`=500k).
 
-## Debug tooling added for this (temporary)
+## The dash as a CAN gateway (shipped 2026-09-02)
 
-`RDM-7_Dash/main/net/web_server_test.c` gained `POST /api/can/send` — unlike
-`/api/can/inject` (decode-path only, never touches the wire), this calls
-`can_transmit_frame_ext` and puts a real frame on the physical bus:
+The bench work needed a way to put a raw frame on the wire, and got one as a
+temporary hook in `web_server_test.c`. That file's own contract is "read-mostly
+or inject-only; none change persisted config", which a raw transmitter is not,
+so the write side now lives in **`RDM-7_Dash/main/net/web_server_can.c`** as a
+permanent, guarded API:
+
+| Endpoint | Does |
+|---|---|
+| `POST /api/can/send` | transmit one frame on the physical bus |
+| `POST /api/can/monitor/reset` | wipe the per-ID tracker |
+| `POST /api/can/promiscuous` | `{enable}` — accept every ID regardless of the loaded layout |
 
 ```
 POST http://<dash-ip>/api/can/send
 { "id": 1557, "extd": false, "data": "2F10200002000000", "dlc": 8 }
 ```
-`id`/`dlc` decimal, `data` hex (spaces ignored) or a byte array. Response:
-`{"ok": true/false, "id":, "dlc":, "error"?: "<esp_err name>"}`. `extd: true`
-for 29-bit J1939-style IDs.
+`id`/`dlc` decimal, `data` hex (spaces ignored) or a byte array. `extd: true`
+for 29-bit J1939 IDs. Response `{"ok":…, "id":…, "dlc":…}`, or `ok:false` with
+`error` and a plain-English `detail`.
 
-Marked temporary in the file header — **still on the dash as of 2026-08-28**.
-Decide whether to keep it for further hands-on work or pull it in the next
-build.
+It refuses, with a reason the UI shows verbatim:
+
+- the **RDM device-bus block** (`rdm_bus_get_base()` + 16) and the discovery ID
+  `0x4FF` — a stray frame there is not noise, it is a valid message to the
+  dash's own protocol handler, which will act on it;
+- **OBD2 request IDs** `0x7DF` / `0x7E0-0x7E7` — if the dash is polling a car,
+  an extra request interleaves with its own transaction and corrupts both;
+- more than **24 frames a second**, because a caller that has lost its wait
+  loop is putting sustained traffic on a bus a car is running on.
+
+`POST /api/can/config` also changed: it now actually **applies** the bitrate
+(`can_change_bitrate()`) instead of only writing it to NVS, and takes
+`"persist": false` for a caller that is walking rates and will put the dash
+back. `GET` reports `bitrate` (saved) and `live` separately, because during a
+probe they legitimately differ. See the gotcha below — this was the single most
+expensive false lead in the whole exercise.
 
 ## Gotchas hit along the way (worth knowing before touching this again)
 
-- `POST /api/can/config` only writes the bitrate to NVS — it does **not**
-  re-arm the TWAI driver. A bitrate change needs a real
-  `POST /api/system/reboot` to take effect. (There's a live-apply function,
-  `can_change_bitrate()`, used by the on-device UI and the OBD2 bus-scan
-  path — the HTTP config endpoint just doesn't call it.)
+- ~~`POST /api/can/config` only writes the bitrate to NVS~~ — **fixed
+  2026-09-02**; it now calls `can_change_bitrate()`. Left here because of how
+  much this cost: the endpoint answered `{"status":"ok"}` while changing
+  nothing, so every probe at a "new" rate was really another probe at the old
+  one, and the keypad's silence looked like a dead keypad rather than a dash
+  that had not moved. If a bitrate change ever appears not to take, check
+  whether `live` in the GET response actually followed `bitrate`.
 - The dash's reported `serial` in `/api/device/info` is **not stable across
   reboots** on this unit (`RDM-E806-90A2` one boot, `RDM-90A2-19B4` the
   next) — don't key anything off it staying constant. Untriaged, unrelated
@@ -248,22 +306,63 @@ build.
   ECU/tool on the bus that manages it, e.g. MaxxECU's keypad setup panel)
   before assuming it's broken.
 
-## For later: a Studio "Blink Marine keypad setup" feature
+## What shipped — "Set it up for me" (2026-09-02)
 
-1. **A permanent, scoped raw-CAN-TX primitive** on the dash — today's
-   `/api/can/send` is a fine starting shape but should reject IDs that
-   collide with the RDM device-bus or dash's own transmit ranges before it's
-   a permanent always-on API rather than a bench debug tool.
-2. **A bitrate/protocol hunt**: try each rate (and both protocols) in turn,
-   probing with a read after each. Much less disruptive to a shared bus if
-   `POST /api/can/config` is changed to call `can_change_bitrate()` live
-   instead of requiring a reboot per attempt.
-3. **Serialize every SDO/J1939 request** — one at a time, wait for the reply
-   or a generous multi-second timeout. This was the actual root cause of
-   "writes silently fail" — a real UI must never fire a second request while
-   one is outstanding.
-4. **Detect and warn about protocol switches from other bus participants** —
-   if another ECU on the bus can flip this keypad's protocol out from under
-   a saved Studio config (as happened here), the panel should probably
-   re-verify before trusting a cached "keypad is configured" state.
-5. Reuse the object/command tables above directly as the panel's field list.
+The five points this section used to list as future work are built. ADR-0055
+records the reasoning; this is what exists.
+
+**Where**: the keypad workspace's Connection panel, and the ECU guide's MaxxECU
+tab. Code is `kpw*` in `src/tauri-overlay.html`, one contiguous block.
+
+**What it does**, in the order it does it:
+
+1. **Borrows the dash** — reads its current bitrate, turns promiscuous mode on
+   so the loaded dashboard's acceptance filter cannot decide which IDs are
+   audible, and promises to give both back. Every flow takes and restores
+   independently; Find hands the dash back when it finishes, so Apply cannot
+   inherit a saved rate from it.
+2. **Hunts.** Each bit rate in turn — the dash's current one first, then 125k
+   (CANopen's factory rate), 250k (J1939's), 500k, 1M — clearing the tracker
+   between each. At each rate it reads object `2013h` at the node IDs that can
+   plausibly be right (factory `0x15`, plus whatever Studio last configured),
+   then confirms identity by reading `1009h`, which comes back as four ASCII
+   characters. An SDO **abort** counts as found: it proves a live,
+   protocol-correct server, which silence never does.
+3. **J1939 is a second, opt-in phase**, because J1939 has no read side at all —
+   nothing in the manual asks a J1939 keypad anything. It speaks when a key is
+   pressed, so the wizard asks the user to hold one and listens for
+   `18EFFF<sa>h` carrying the `04 1B` command prefix.
+4. **Shows a diff** — what each setting is now, what it will become, and why —
+   before writing anything.
+5. **Writes**, strictly one request at a time, waiting for each reply and then
+   waiting longer. Settings first, then the address, then the bit rate last,
+   so a failure part-way leaves the keypad somewhere still reachable.
+6. **Looks, rather than assumes**, after each move: the manual says a new
+   address and bit rate apply after a power-cycle and this unit applied them
+   immediately, so the wizard checks the new place *and* the old one and
+   believes whoever answers. If the change is pending it says "power-cycle the
+   keypad" instead of claiming success.
+7. **Gives the dash back** — original bitrate, promiscuous off — on success,
+   on failure, and on cancel.
+
+**A file is still produced** for anyone with a USB-CAN dongle and no dash, and
+both paths now come out of the same `kpProvisionSteps()`, so they cannot drift
+apart. That refactor fixed a real bug in the file: the bit-rate frame used to
+be sent **first**, which works only if the keypad defers it to a power-cycle —
+and this one does not, so every frame after it went out at the wrong speed.
+
+**Tested** by `tools/check_keypad.js`: 69 assertions, running the shipped code
+(extracted, never copied) against a simulated dash and keypad on a virtual
+clock. The simulation is deliberately meaner than the real unit — it goes deaf
+on overlapping requests, it is invisible unless the dash's rate matches, and it
+resets itself to the destination protocol's factory rate when switched. Among
+the things pinned: a stale tracker entry from a previous bit rate is not read
+as an answer; the dash is restored after success, failure and cancel; no two
+frames ever go out closer together than `KPW_SETTLE_MS`; and a keypad that
+needs more quiet than the wizard allows is reported as unanswered rather than
+written.
+
+Three real bugs were found by that harness before this shipped, all of them in
+the "looks like it works" family: Apply left the dash on whatever rate its last
+probe used, Apply sent its first frame at the dash's normal rate instead of the
+keypad's, and the J1939→CANopen round trip therefore never completed.

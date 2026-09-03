@@ -10,6 +10,17 @@ This repo (rdm7-desktop) is one part of a larger project that includes: **Web St
 
 **Where to look for what** — this file is architecture and build mechanics, kept short on purpose. For a live feature initiative, read the doc, not this file:
 - GPS lap timing / telemetry analysis (Studio side) — `docs/LAP_ANALYSIS_REDESIGN_2026-07.md`
+- Why the Analyse mosaic resizes itself as you click around it (the working
+  panel, ADR-0061) — `docs/ANALYSE_SPACE_2026-09.md`
+- The keypad's lights — the boot, what it rests in, what a press does (the
+  Lights section, `kpfx*`) — and holding more than one keypad —
+  `docs/KEYPAD_LIGHTSHOW_2026-09.md`
+- Why the keypad Design page has no Live tab, why a ring is dark until its
+  button is on, and how a control demonstrates itself (`kpDemo*`, the
+  `data-demo` hooks) — `../RDM-7_Dash/docs/adr/0062-the-picture-is-the-simulator.md`
+- Which three lighting settings a PKP actually has, why there is no night
+  brightness, and why a warning is drawn as a layer over the button's own
+  colour — `../RDM-7_Dash/docs/adr/0063-the-lighting-the-part-actually-has.md`
 - The whole device family's roadmap, and which repo owns which workspace — `../RDM-7_Dash/docs/PLATFORM_PLAN_2026-07.md`
 - Where new workspace UI gets authored (firmware-first vs desktop-first) — `../RDM-7_Dash/docs/STUDIO_SHELL_PLAN_2026-07.md` §2.0
 - CAN channel logging on the GPS puck itself (node firmware, unbuilt) — `../rdm-gps-node/docs/TRACE_V2_CAN_CHANNELS.md`
