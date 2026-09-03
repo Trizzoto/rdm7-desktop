@@ -26446,13 +26446,16 @@
                    box it was fitted into — which is a scrollbar. */
                 var edge = Math.max(0, cv.offsetHeight - cv.clientHeight);
                 var free = wrap.clientHeight - other - edge - 4 - GP_AXIS_H;
-                /* GP_LANE_MAX stops one lane hogging a shared panel. Full
-                   screen is the case where hogging is the entire request: you
-                   gave the window to this graph, so the lanes get the window.
-                   Capped here would leave half a screen of grey under a
-                   trace you just asked to see bigger. */
-                var cap = gp.full ? 1e4 : GP_LANE_MAX;
-                return Math.max(26, Math.min(cap, Math.floor(free / rows)));
+                /* No cap in a panel. GP_LANE_MAX exists to stop one lane
+                   hogging the STAGE, where the rack shares a column with the
+                   map and the transport and nobody chose how to divide it.
+                   A mosaic panel is not that: its height is a size you set by
+                   dragging the divider, so it is already the answer to "how
+                   much room should this get" — and capping the lanes at 92 px
+                   inside it left a 400 px Graph panel showing a 92 px trace
+                   over 250 px of grey. Same reasoning full screen already
+                   used; full screen is just the largest case of it. */
+                return Math.max(26, Math.floor(free / rows));
             }
             var stage = document.getElementById("gpStageCol");
             if (!stage || !stage.clientHeight || !cv || !stage.children) return GP_LANE_H;
