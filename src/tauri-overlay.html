@@ -5199,6 +5199,43 @@
         #gpWorkspace .gpb-seg button.wide { flex: 1; }
 
         /* video panel: the controls that came back out of the inspector */
+        /* ---- two laps, side by side, live -----------------------------------
+           Each picture takes half the tile and keeps its aspect (object-fit),
+           so neither is stretched to meet the other. The divider is a hairline
+           rather than a gap: they are two views of one piece of road, and a
+           gap would read as two unrelated players. */
+        #gpWorkspace .gp-vtile.sbs #gpVideo,
+        #gpWorkspace .gp-vtile.sbs #gpVideoB {
+            position: absolute; top: 0; height: 100%; width: 50%;
+            object-fit: contain; background: #000;
+        }
+        #gpWorkspace .gp-vtile.sbs #gpVideo { left: 0; border-right: 1px solid #2a2c2e; }
+        /* visibility, not just display: the tile hides every <video> that is
+           not the ACTIVE clip (.gp-vtile video.on is the only visible one), so
+           B was decoded, positioned and painting nothing. */
+        #gpWorkspace .gp-vtile.sbs #gpVideoB {
+            left: 50%; display: block !important; visibility: visible !important;
+        }
+        /* ...and A stays visible in the pair even while the tile thinks there
+           is no film up, which it does whenever the playhead sits in a gap. */
+        #gpWorkspace .gp-vtile.sbs #gpVideo { visibility: visible; }
+        #gpWorkspace .gp-vlab {
+            position: absolute; top: 6px; left: 8px; z-index: 6;
+            padding: 2px 7px; background: rgba(10,12,14,0.72); color: #f2f4f6;
+            font-family: var(--gpb-head); font-weight: 600; font-size: 10px;
+            letter-spacing: 0.08em; text-transform: uppercase;
+            pointer-events: none; white-space: nowrap;
+        }
+        /* At the left edge of B's own half, not the right edge of the tile:
+           that corner belongs to the HUD / Export / Beside buttons, and the
+           label sat behind them. Symmetric with A's now — each picture is
+           named at its own top-left. */
+        #gpWorkspace .gp-vlab.b { left: calc(50% + 8px); right: auto; }
+        #gpWorkspace .gp-vlab .d { font-variant-numeric: tabular-nums; margin-left: 6px; }
+        #gpWorkspace .gp-vlab .d.up { color: #ff8b85; }
+        #gpWorkspace .gp-vlab .d.dn { color: #7fd18b; }
+        #gpWorkspace .gp-vtile.sbs #gpVideoBg { display: none; }
+
         #gpWorkspace .gpb-vidctl {
             position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
             display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -6011,12 +6048,24 @@
                          id="gpVideo" (gpClipActivate), so every reader of that
                          id gets the clip currently in the picture. -->
                     <video id="gpVideo" class="on" playsinline></video>
+                    <!-- The reference lap's picture, beside this one. Its own
+                         element rather than a second clip on the same one: the
+                         two are at different moments in the file at the same
+                         moment on the track, which is the entire point. -->
+                    <video id="gpVideoB" playsinline muted style="display:none"></video>
+                    <span class="gp-vlab" id="gpVLabA" style="display:none"></span>
+                    <span class="gp-vlab b" id="gpVLabB" style="display:none"></span>
                     <canvas id="gpVideoOv"></canvas>
                     <div class="gp-vtile-btns">
                         <button class="gp-mapbtn" id="gpBtnHud" onclick="gpHudPop(event)"
                                 title="Which gauges are drawn over the footage">HUD</button>
                         <button class="gp-mapbtn" id="gpBtnVExport" onclick="gpVideoExport()"
                                 title="Write the footage and the HUD out as one video file you can watch anywhere">Export video</button>
+                        <!-- Beside = here, now, live. Compare = write a file.
+                             Same pairing underneath; the difference is whether
+                             you are looking at it or sending it to someone. -->
+                        <button class="gp-mapbtn" id="gpBtnVBeside" onclick="gpSbsToggle()"
+                                title="Put the reference lap's footage beside this one, paired by where the car was on the track rather than by the clock">Beside</button>
                         <button class="gp-mapbtn" id="gpBtnVCompare" onclick="gpCompareAsk()"
                                 title="This lap and the reference in one video, paired by where the car was rather than by the clock, with the delta running">Compare</button>
                         <button class="gp-mapbtn" onclick="gpViewFocus('video')"
@@ -19721,6 +19770,130 @@
                 });
         }
 
+        /* ══════════════════════════════════════════════════════════════════
+         * Two laps, side by side, live
+         *
+         * The comparison EXPORT already solved the hard half: gp.deltaMatch
+         * pairs every sample of the analysed lap with the sample of the
+         * reference lap at the same PLACE on the track — not the same time,
+         * which is what makes the two pictures show the same corner while one
+         * car is half a second up the road. gpCompareFast drives that pairing
+         * with an encoder. This drives it with the playhead.
+         *
+         * So: one extra <video>, seeked on every playhead move to the paired
+         * moment. Muted, because two soundtracks of the same engine a beat
+         * apart is not a comparison, it is a phaser.
+         * ═════════════════════════════════════════════════════════════════ */
+        function gpSbsOn() { return !!gp.sbs; }
+
+        /* What a live comparison needs, or why it cannot have one. Deliberately
+           NOT gpComparePlan: that one also builds an encoder plan — bitrates,
+           a frame box, two HUD snapshots — and refuses when the file cannot be
+           re-encoded, which has nothing to do with watching two pictures. */
+        function gpSbsResolve() {
+            if (!gp.trace || !gp.trace.length) return { why: "Nothing loaded." };
+            if (gp.selLap < 0 || gp.cmpLap < 0 || gp.selLap === gp.cmpLap)
+                return { why: "Pick a lap and a REF in the lap list — a comparison is two laps." };
+            var sel = gp.traceLaps[gp.selLap], ref = gp.traceLaps[gp.cmpLap];
+            if (!sel || !ref) return { why: "Pick a lap and a REF in the lap list." };
+            if (!gp.video || gp.video.t0 === null || gp.video.t0 === undefined)
+                return { why: "Open the footage for this recording first." };
+            try { gpDeltaSeries(); } catch (e) { }
+            var match = gp.deltaMatch;
+            if (!match || !match.length)
+                return { why: "These two " + gpRunWord() + "s could not be paired up." };
+            /* A ghost reference is another day, and that day has its own file. */
+            var ghost = !!ref.ghost, bPath = null;
+            if (ghost) {
+                var gm = gp.ghostSrc && gp.ghostSrc.meta;
+                bPath = (gm && gm.videoPath) || null;
+                if (!bPath) return { why: "That day has no footage of its own to show beside this." };
+            }
+            return { sel: sel, ref: ref, match: match, selFrom: sel.from, ghost: ghost, bPath: bPath };
+        }
+
+        window.gpSbsToggle = function () {
+            if (gp.sbs) { gp.sbs = false; gpSbsApply(); return; }
+            var r = gpSbsResolve();
+            if (r.why) { if (typeof showToast === "function") showToast(r.why, "info"); return; }
+            gp.sbs = true;
+            gpSbsApply();
+        };
+
+        /* Point B's element at the right file and show or hide the pair. The
+           source is set ONCE per file — assigning src on every playhead move
+           restarts the load and the picture never settles. */
+        function gpSbsApply() {
+            var tile = document.getElementById("gpVideoTile");
+            var b = document.getElementById("gpVideoB");
+            var la = document.getElementById("gpVLabA"), lb = document.getElementById("gpVLabB");
+            var btn = document.getElementById("gpBtnVBeside");
+            var on = gpSbsOn();
+            if (tile) tile.classList.toggle("sbs", on);
+            if (btn) btn.classList.toggle("on", on);
+            [la, lb].forEach(function (e) { if (e) e.style.display = on ? "" : "none"; });
+            if (!b) return;
+            if (!on) { b.style.display = "none"; try { b.pause(); } catch (e) { } return; }
+            var r = gpSbsResolve();
+            if (r.why) { gp.sbs = false; gpSbsApply(); return; }
+            var want = r.ghost ? r.bPath : (gp.video && gp.video.path) || null;
+            if (want && b._gpWant !== want) {
+                b._gpWant = want;
+                var use = function (u) { b.src = u; try { b.load(); } catch (e) { } };
+                if (r.ghost) {
+                    gpTauriCall("video_allow", { path: want }).then(function () {
+                        var conv = (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) ||
+                                   (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.convertFileSrc);
+                        if (conv) use(conv(want));
+                    }).catch(function () { });
+                } else {
+                    /* Same file, second decoder: the element already up has a
+                       resolved URL, and reusing it skips the permission round
+                       trip entirely. */
+                    var a = document.getElementById("gpVideo");
+                    if (a && (a.currentSrc || a.src)) use(a.currentSrc || a.src);
+                }
+            }
+            b.style.display = "";
+            gpSbsSync();
+        }
+
+        /* Called from the playhead. Seeks B to the same PLACE, and writes both
+           labels. Cheap enough to run per frame: an index lookup, a seek, and
+           two strings. */
+        function gpSbsSync() {
+            if (!gpSbsOn()) return;
+            var b = document.getElementById("gpVideoB");
+            if (!b) return;
+            var r = gpSbsResolve();
+            if (r.why) return;
+            var k = gp.playIdx - r.selFrom;
+            if (k < 0) k = 0;
+            if (k >= r.match.length) k = r.match.length - 1;
+            var bIdx = r.match[k];
+            var t = gpAnyVideoTimeFor(bIdx);
+            if (t !== null && isFinite(t) && t >= 0) {
+                /* Only when it has actually drifted: a seek per frame to a
+                   time it is already at makes the decoder thrash and the
+                   picture stutter. A quarter of a frame is the tolerance. */
+                if (!isFinite(b.currentTime) || Math.abs(b.currentTime - t) > 0.01) {
+                    try { b.currentTime = t; } catch (e) { }
+                }
+            }
+            var la = document.getElementById("gpVLabA"), lb = document.getElementById("gpVLabB");
+            if (la) la.textContent = gpRunWord(true) + " " + (gp.selLap + 1);
+            if (lb) {
+                var d = null;
+                try { var ds = gpDeltaSeries(); d = ds ? ds[k] : null; } catch (e) { }
+                var nm = (function () { try { return gpRefName(); } catch (e) { return gpRunWord(true) + " " + (gp.cmpLap + 1); } })();
+                lb.innerHTML = gpEsc(nm) +
+                    (d !== null && isFinite(d)
+                        ? "<span class='d " + (d > 0 ? "up" : d < 0 ? "dn" : "") + "'>" +
+                          (d > 0 ? "+" : "") + d.toFixed(2) + "</span>"
+                        : "");
+            }
+        }
+
         window.gpCompareAsk = function () {
             if (!gpFastAvailable()) {
                 if (typeof showToast === "function")
@@ -23490,6 +23663,9 @@
             /* The document, not the mosaic: since ADR-0061 the bottom bar
                can be carrying the timeline while no panel is. */
             gp._tlLive = !!document.querySelector("[data-gp-tl]");
+            /* The tile is rebuilt by this render, so B's element is new and
+               its class, source and labels have to be put back. */
+            if (gpSbsOn()) gpSbsApply();
             gpTlDataDraw();
             gpAlignWarnSync();
             gpPopDismissInit();
@@ -36088,6 +36264,7 @@
 
         function gpDrawPlayhead() {
             gpVideoFollowSeek();
+            gpSbsSync();              /* the reference picture follows the place */
             gpVideoDrawOverlay();
             /* Before the strip, not after: this is the one funnel every
                playhead move goes through — the ticker, the scrub, the
