@@ -2157,6 +2157,13 @@
             try {
                 return await _tauriInvoke('serial_auto_detect');
             } catch (e) {
+                /* A scan that found nothing and a scan that was never allowed
+                 * to run are different answers. Swallowing the second one made
+                 * the app say "no device found on USB" while the device sat
+                 * there plugged in — with USB deliberately switched off for
+                 * the session. Say the real reason instead. */
+                const msg = (e && e.message) ? e.message : String(e);
+                if (msg.indexOf('RDM_USB_OFF') !== -1) throw new Error(msg);
                 console.warn('Auto-detect failed:', e);
                 return null;
             }

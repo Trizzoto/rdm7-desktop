@@ -606,6 +606,24 @@ const KNOWN_CDC: &[(u16, u16)] = &[
     (0x303A, 0x1001), // Espressif TinyUSB CDC
 ];
 
+/// USB kill switch. With `RDM_USB_OFF=1` in the environment, every command
+/// that would OPEN a serial port refuses instead. Studio holds a port for the
+/// whole session, and merely probing one reboots the GPS puck — so when the
+/// puck is being flashed from another tool, the app has to be able to run
+/// without ever reaching for the port. Off by default; nothing changes unless
+/// the variable is set.
+fn usb_disabled() -> bool {
+    match std::env::var("RDM_USB_OFF") {
+        Ok(v) => {
+            let v = v.trim().to_ascii_lowercase();
+            !(v.is_empty() || v == "0" || v == "false" || v == "no")
+        }
+        Err(_) => false,
+    }
+}
+
+const USB_OFF_MSG: &str = "USB is turned off for this session (RDM_USB_OFF) - the serial port is left free for another tool";
+
 fn classify_port(vid: u16, pid: u16) -> &'static str {
     if KNOWN_CDC.iter().any(|&(v, p)| v == vid && p == pid) {
         "usb_cdc"
@@ -616,6 +634,9 @@ fn classify_port(vid: u16, pid: u16) -> &'static str {
 
 #[tauri::command]
 async fn serial_list_ports() -> Result<Vec<SerialPortInfo>, String> {
+    if usb_disabled() {
+        return Err(USB_OFF_MSG.to_string());
+    }
     let ports = serialport::available_ports()
         .map_err(|e| format!("Failed to list ports: {e}"))?;
 
@@ -765,6 +786,9 @@ fn probe_port(port_name: &str) -> Option<String> {
 /// Auto-detect RDM-7 device by probing all USB serial ports
 #[tauri::command]
 async fn serial_auto_detect() -> Result<Option<SerialPortInfo>, String> {
+    if usb_disabled() {
+        return Err(USB_OFF_MSG.to_string());
+    }
     // A port THIS process already holds can never pass the open-based probe
     // below — our own open() fails with access denied. A webview reload
     // forgets the frontend's link but keeps the backend handle, so auto-detect
@@ -858,6 +882,9 @@ async fn serial_auto_detect() -> Result<Option<SerialPortInfo>, String> {
 
 #[tauri::command]
 async fn serial_connect(app: tauri::AppHandle, port_name: String) -> Result<String, String> {
+    if usb_disabled() {
+        return Err(USB_OFF_MSG.to_string());
+    }
     // Close any existing port first so the OS releases the handle
     {
         let mut conn = SERIAL.lock().map_err(|e| format!("Lock error: {e}"))?;
@@ -1022,6 +1049,9 @@ async fn serial_disconnect() -> Result<(), String> {
 /// device never came back).
 #[tauri::command]
 async fn serial_pulse_reset(app: tauri::AppHandle) -> Result<String, String> {
+    if usb_disabled() {
+        return Err(USB_OFF_MSG.to_string());
+    }
     /* Take the port OUT for the whole ceremony. Line writes interleaved with
      * a serial_request mid-frame would corrupt both; and if this command ever
      * stalls, holding the MUTEX (rather than just the port) would freeze
