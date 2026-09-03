@@ -5209,6 +5209,38 @@
         }
         #gpWorkspace .gpb-vidctl label > button.gp-nudge + .nudgebox { margin: 0 2px; }
         /* The alignment strip: its own line, full width. */
+        /* ---- the same controls, on the footage timeline's light panel ----- */
+        /* The footage timeline panel is DARK — it is a film strip, not a
+           document — so these take their colours from .gp-tl-bar beside them,
+           not from the light-panel tokens. Styled for the light surface first,
+           the whole row came out near-black on near-black: the buttons were
+           there, sized and clickable, and invisible. */
+        #gpWorkspace .gp-tl-align {
+            display: flex; flex-direction: column; gap: 4px;
+            padding: 6px 8px 7px; border-bottom: 1px solid #23282c; flex: none;
+            color: #e6e6e8;
+        }
+        #gpWorkspace .gp-tl-alignrow {
+            display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+            font-size: 11px; color: #e6e6e8;
+        }
+        #gpWorkspace .gp-tl-alignrow .lb { font-size: 10.5px; color: #e6e6e8; opacity: 0.75; }
+        #gpWorkspace .gp-tl-alignrow button {
+            min-width: 24px; padding: 2px 6px; font: inherit; font-size: 11px; line-height: 1.2;
+            background: transparent; border: 1px solid #3a3d40; color: #e6e6e8; cursor: pointer;
+        }
+        #gpWorkspace .gp-tl-alignrow button:hover { border-color: #8a8f94; }
+        #gpWorkspace .gp-tl-alignrow .nudgebox {
+            width: 70px; text-align: right; font: inherit; font-size: 11px;
+            background: #14181b; border: 1px solid #3a3d40;
+            color: #e6e6e8; padding: 2px 5px; margin: 0 3px;
+        }
+        #gpWorkspace .gp-tl-align canvas { width: 100%; height: 54px; display: block; }
+        #gpWorkspace .gp-tl-align .nt { font-size: 10px; line-height: 1.35; color: #e6e6e8; opacity: 0.62; }
+        #gpWorkspace .gp-tl-align .gpb-alignwarn { color: #ff8b85; opacity: 1; }
+        #gpWorkspace .gp-tl-align .gpb-alignwarn button {
+            margin-left: 6px; border-color: #ff8b85; color: #ff8b85;
+        }
         #gpWorkspace .gpb-align {
             width: 100%; display: flex; flex-direction: column; gap: 3px;
             padding-top: 5px; border-top: 1px solid #2a2c2e;
@@ -22167,7 +22199,7 @@
                 var view = el.querySelector(".gp-tl-view");
                 if (view) {
                     var bands = 0;
-                    Array.prototype.forEach.call(el.querySelectorAll(".gp-tl-bar, .gp-tl-ruler"),
+                    Array.prototype.forEach.call(el.querySelectorAll(".gp-tl-bar, .gp-tl-ruler, .gp-tl-align"),
                         function (b) { bands += b.offsetHeight || 0; });
                     var wantV = parseFloat(view.style.minHeight) || view.offsetHeight || 0;
                     return Math.min(GP_PANEL_MAX, chrome + bands + wantV + 4);
@@ -22995,19 +23027,18 @@
                          gpNudgeBtn(-1, "&#9668;&#9668;", "A second earlier") +
                          gpNudgeBtn(-0.1, "&#9668;", "A tenth earlier") +
                          gpNudgeBtn(-0.04, "&#8249;", "One frame earlier") +
-                         "<input type='number' class='nudgebox' step='0.01' id='gpVideoOffBox' " +
+                         "<input type='number' class='nudgebox' step='0.01' data-gp-offbox='1' " +
                          "value='" + (v.offsetMs / 1000).toFixed(2) + "' " +
                          "onchange='gpVideoOffset(this.value)' " +
                          "title='Seconds the video is later than the data. Type any value.'>" +
                          gpNudgeBtn(0.04, "&#8250;", "One frame later") +
                          gpNudgeBtn(0.1, "&#9658;", "A tenth later") +
                          gpNudgeBtn(1, "&#9658;&#9658;", "A second later") +
-                         "<span id='gpVideoOffLab'>" + (v.offsetMs / 1000).toFixed(2) + " s</span></label>";
-                    /* The thing that tells you WHICH WAY to nudge. */
-                    h += "<button class='" + (gpAlignOpen() ? "on" : "") + "' onclick='gpAlignToggle()' " +
-                         "title='Show the speed trace around the frame you are looking at, so you can " +
-                         "line the picture up against the data — brake where the graph brakes.'>" +
-                         "Line it up</button>";
+                         "<span data-gp-offlab='1'>" + (v.offsetMs / 1000).toFixed(2) + " s</span></label>";
+                    /* The speed trace that says which WAY to nudge lives in the
+                       footage timeline panel, not here. On the picture it
+                       covered the picture — and the one thing you cannot do
+                       without while lining footage up is see the footage. */
                     h += "<button class='" + (v.follow ? "on" : "") + "' onclick='gpVideoFollowToggle()' " +
                          "title='" + (v.follow
                              ? "The picture is tied to the playhead. Turn off to drive the footage on its own."
@@ -23147,21 +23178,7 @@
                         ? "Take this section off the recording. The others stay, and the file is not touched."
                         : "Take this footage off the recording. The file is not touched.") +
                      "' onclick='gpVideoClose()'>Remove</button>";
-                /* The alignment strip: full width, under everything else, and
-                   only when asked for. See gpAlignDraw. */
-                if (tethered && gpAlignOpen()) {
-                    h += "<div class='gpb-align'>" +
-                         "<canvas id='gpAlignCv'></canvas>" +
-                         /* Empty, and filled by gpAlignDraw. Built into the
-                            markup it went stale the moment you nudged: the row
-                            is only rebuilt on a full render, and nudging is
-                            deliberately not one. */
-                         "<span class='nt gpb-alignwarn' id='gpAlignWarn'></span>" +
-                         "<span class='nt'>Park the picture on something you can name &mdash; a braking " +
-                         "point, an apex &mdash; then nudge until the trace under the red line is the " +
-                         "shape that belongs to it.</span>" +
-                         "</div>";
-                }
+
                 /* Two or more sections and the strip comes with the picture:
                    which one you are watching, and what is either side of it,
                    is part of watching it. One section has nothing to arrange,
@@ -37913,6 +37930,38 @@
                control bar is given nothing, so it states its own height —
                lanes, plus the band the recording is drawn on. */
             var viewH = lanes * LH + (sdur > 0 ? 20 : 6) + (compact ? 0 : 14);
+            /* ---- lining the footage up, HERE -------------------------------
+               This is the panel about where footage sits against the
+               recording, so this is where the control for it belongs. It was
+               first built into the video panel's own control row, over the
+               picture — and the one thing you cannot do without while lining
+               footage up is see the footage. */
+            if (!compact && gp.video && gp.video.t0 !== null && gp.video.t0 !== undefined &&
+                gp.trace && gp.trace.length) {
+                var vo = (gp.video.offsetMs / 1000);
+                h += "<div class='gp-tl-align'>" +
+                     "<div class='gp-tl-alignrow'>" +
+                     "<span class='lb'>Nudge</span>" +
+                     gpNudgeBtn(-1, "&#9668;&#9668;", "A second earlier") +
+                     gpNudgeBtn(-0.1, "&#9668;", "A tenth earlier") +
+                     gpNudgeBtn(-0.04, "&#8249;", "One frame earlier") +
+                     "<input type='number' class='nudgebox' step='0.01' data-gp-offbox='1' " +
+                     "value='" + vo.toFixed(2) + "' onchange='gpVideoOffset(this.value)' " +
+                     "title='Seconds the video is later than the data. Type any value.'>" +
+                     gpNudgeBtn(0.04, "&#8250;", "One frame later") +
+                     gpNudgeBtn(0.1, "&#9658;", "A tenth later") +
+                     gpNudgeBtn(1, "&#9658;&#9658;", "A second later") +
+                     "<span class='lb' data-gp-offlab='1'>" + vo.toFixed(2) + " s</span>" +
+                     "<span class='nt' data-gp-alignwarn='1'></span>" +
+                     "</div>" +
+                     "<canvas id='gpAlignCv'></canvas>" +
+                     "<span class='nt'>The speed for eight seconds either side of the frame on screen, " +
+                     "that moment on the red line. Park the picture on something you can name &mdash; a " +
+                     "braking point, an apex &mdash; then nudge until the shape under the line is the " +
+                     "one that belongs to it.</span>" +
+                     "</div>";
+            }
+
             h += "<div class='gp-tl-view' data-gp-tlview='1' style='min-height:" + viewH + "px" +
                  (compact ? ";height:" + viewH + "px;flex:none" : "") + "'>";
             for (var L = 0; L < lanes; L++) {
@@ -38731,32 +38780,23 @@
         }
 
         function gpAlignWarnSync() {
-            var el = document.getElementById("gpAlignWarn");
-            if (!el) return;
+            var els = document.querySelectorAll("[data-gp-alignwarn]");
+            if (!els.length) return;
             var o = gpAlignOverrun();
-            if (!o) { el.innerHTML = ""; el.style.display = "none"; return; }
-            el.style.display = "";
-            el.innerHTML = "This offset puts " +
+            var html = "";
+            if (o) html = "This offset puts " +
                 (o.after > 0.5 ? "the last " + o.after.toFixed(1) + " s" : "") +
                 (o.after > 0.5 && o.before > 0.5 ? " and " : "") +
                 (o.before > 0.5 ? "the first " + o.before.toFixed(1) + " s" : "") +
                 " of the recording outside the footage — there is no picture there. " +
                 "<button onclick='gpVideoOffset(0)'>Back to 0.00</button>";
+            Array.prototype.forEach.call(els, function (e) {
+                e.innerHTML = html;
+                e.className = html ? "nt gpb-alignwarn" : "nt";
+                e.style.display = html ? "" : "none";
+            });
         }
 
-        function gpAlignOpen() { return !!gp._alignOpen; }
-        window.gpAlignToggle = function () {
-            gp._alignOpen = !gp._alignOpen;
-            /* The strip lives in the VIDEO PANEL's control row, which
-               gpPanelVideoHtml builds — not in the inspector. Re-rendering the
-               inspector left the flag flipped and the markup untouched, so the
-               button lit up and nothing appeared. */
-            gpRenderGridSoft();
-            gpVideoXportSync();
-            /* After the row exists, not before: the canvas is created by that
-               render and cannot be drawn into until it is in the document. */
-            setTimeout(gpAlignDraw, 0);
-        };
 
         /* The data index the frame on screen is currently claiming to be.
            The inverse of gpVideoTimeFor, found by bisection rather than by
@@ -38870,16 +38910,17 @@
         window.gpVideoOffset = function (v) {
             if (!gp.video) return;
             gp.video.offsetMs = Math.round((parseFloat(v) || 0) * 1000);
-            var lab = document.getElementById("gpVideoOffLab");
-            if (lab) lab.textContent = (gp.video.offsetMs / 1000).toFixed(2) + " s";
+            var secs0 = (gp.video.offsetMs / 1000).toFixed(2);
+            /* Every copy. The nudge control is drawn in two places now — over
+               the picture and in the footage timeline — and an id can only
+               name one of them, so the other quietly showed a stale number. */
+            Array.prototype.forEach.call(document.querySelectorAll("[data-gp-offlab]"),
+                function (e) { e.textContent = secs0 + " s"; });
             /* Keep the two nudge controls agreeing — whichever was used, the
                other is now stale, and a slider showing one number beside a box
                showing another is worse than either alone. */
-            var secs = (gp.video.offsetMs / 1000).toFixed(2);
-            ["gpVideoOffBox", "gpVideoOffSlider"].forEach(function (id) {
-                var e = document.getElementById(id);
-                if (e && document.activeElement !== e) e.value = secs;
-            });
+            Array.prototype.forEach.call(document.querySelectorAll("[data-gp-offbox]"),
+                function (e) { if (document.activeElement !== e) e.value = secs0; });
             /* Nudged by hand is placed by hand: nothing may quietly move it
                again when its duration finally arrives. */
             gp.video.placed = true;
@@ -41474,7 +41515,7 @@
         /* The gauges, painted over the footage from the mapped sample. */
         /* Kept next to the overlay draw because it answers the same question
            — what moment is on screen — and has to stay in step with it. */
-        function gpAlignTick() { if (gpAlignOpen()) gpAlignDraw(); }
+        function gpAlignTick() { gpAlignDraw(); }   /* a no-op when the strip is not up */
 
         function gpVideoDrawOverlay() {
             var el = document.getElementById("gpVideo");
