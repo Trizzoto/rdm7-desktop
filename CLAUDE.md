@@ -12,6 +12,20 @@ This repo (rdm7-desktop) is one part of a larger project that includes: **Web St
 - GPS lap timing / telemetry analysis (Studio side) — `docs/LAP_ANALYSIS_REDESIGN_2026-07.md`
 - Why the Analyse mosaic resizes itself as you click around it (the working
   panel, ADR-0061) — `docs/ANALYSE_SPACE_2026-09.md`
+- Why the bus health, the channel-rate check, the "what to practise" panel, the
+  session verdict and the video auto-sync all exist, and what auto-sync refuses
+  to do — `../RDM-7_Dash/docs/adr/0066-the-app-says-what-it-knows.md`
+- How "Set it up for me" MEASURES the puck's mounting instead of asking, where a
+  corner's name is kept, and why the ring now warns before it wraps —
+  `../RDM-7_Dash/docs/adr/0067-measure-it-rather-than-asking.md`
+- What the car on the map is made of, why a custom one keeps its steering and
+  its brake lights, and where the paint-your-own template comes from —
+  `../RDM-7_Dash/docs/adr/0065-a-car-icon-is-a-body-and-the-parts-that-move.md`
+- Why the bottom bar carries the whole day, why the footage panel has a named
+  gutter, and how to change either (Setup → Analyse) —
+  `../RDM-7_Dash/docs/adr/0064-one-transport-and-it-carries-the-film.md`.
+  The five shapes were drawn first as a live prototype:
+  `tools/design/footage-timeline.html`
 - The keypad's lights — the boot, what it rests in, what a press does (the
   Lights section, `kpfx*`) — and holding more than one keypad —
   `docs/KEYPAD_LIGHTSHOW_2026-09.md`
@@ -21,6 +35,9 @@ This repo (rdm7-desktop) is one part of a larger project that includes: **Web St
 - Which three lighting settings a PKP actually has, why there is no night
   brightness, and why a warning is drawn as a layer over the button's own
   colour — `../RDM-7_Dash/docs/adr/0063-the-lighting-the-part-actually-has.md`
+- Why the dash, not Studio, plays a keypad's boot in the car (the tape, its
+  two refusals, and the cross-repo fixture) —
+  `../RDM-7_Dash/docs/adr/0068-the-dash-is-the-host-the-keypad-never-had.md`
 - The whole device family's roadmap, and which repo owns which workspace — `../RDM-7_Dash/docs/PLATFORM_PLAN_2026-07.md`
 - Where new workspace UI gets authored (firmware-first vs desktop-first) — `../RDM-7_Dash/docs/STUDIO_SHELL_PLAN_2026-07.md` §2.0
 - CAN channel logging on the GPS puck itself (node firmware, unbuilt) — `../rdm-gps-node/docs/TRACE_V2_CAN_CHANNELS.md`

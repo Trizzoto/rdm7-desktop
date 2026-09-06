@@ -180,18 +180,41 @@ ok('filling the window with a panel also makes it the working one',
    /if \(want\) gp\.focus = want;/.test(SRC),
    'otherwise the panel filling the screen is the one with its controls hidden');
 
-console.log('\nthe bottom bar follows the working panel');
-ok('there is a context for it', /function gpDockCtx\(\)/.test(SRC));
-ok('it is the video panel that changes it',
-   /gpDockCtx[\s\S]{0,400}n\.type !== "video"[\s\S]{0,200}return "readouts"/.test(SRC));
-ok('and only when there is film to show',
-   /gpClips\(\)\.length \|\| \(gp\.video && gp\.video\.url\)\) \? "video" : "readouts"/.test(SRC),
-   'an empty ruler where six live numbers used to be is a worse bar');
-ok('the timeline it draws is the same one the panel draws',
-   /gpb-docktl'>" \+ gpTlHtml\(true\)/.test(SRC),
-   'one description of a timeline in the file, rendered twice');
+/* The bottom bar used to change shape with the working panel, and then with a
+   stored preference on top of that. Both are gone: what the bar carries is a
+   fact about the RECORDING. This section pins the replacement, because the
+   thing that keeps coming back is a bar whose shape depends on a click. */
+console.log('\nthe bottom bar follows the RECORDING, not the working panel');
+ok('the working panel no longer has a say in it',
+   !/function gpDockCtx\(/.test(SRC) && !/gpFocusOpt\(\)\.dock/.test(SRC),
+   'play and the scrub sat in one place with the map focused and somewhere ' +
+   'else with the picture focused — the control you reach for most changing ' +
+   'shape depending on what you last clicked');
+ok('there are three film states and they are computed, not stored',
+   /function gpFilmState\(\)/.test(SRC) &&
+   /return \(gp\.video && gp\.video\.url\) \? "unaligned" : "none"/.test(SRC) &&
+   /if \(!cs\[i\]\.synced\) return "unaligned"/.test(SRC),
+   'none / unaligned / ready — the whole rule');
+ok('the bar is readouts unless the film is agreed',
+   /return \{ bar: gpFilmState\(\) === "ready" \? "one" : "classic", tl: "sheet" \};/.test(SRC),
+   'a ribbon captioned "no footage on this recording" over six live numbers ' +
+   'is a bar apologising in space it took from the panels');
+ok('and nothing can be picked instead',
+   !/GP_BARS/.test(SRC) && !/GP_TLS/.test(SRC) && !/gpLookSet/.test(SRC),
+   'four bar shapes and three timeline shapes were a preference made out of ' +
+   'a fact the app can read');
+ok('auto-placement from the camera clock is a proposal, not an agreement',
+   /synced: !!restore && restore\.synced !== false/.test(SRC),
+   'that clock has been wrong by 2212 days; it proposes, the sync step disposes');
+ok('and a section coming back off a saved recording keeps its agreement',
+   /synced: r\.synced !== false/.test(SRC) && /synced: c\.synced !== false/.test(SRC),
+   'including from builds that predate the flag — hence !== false, not a truth test');
+ok('the ask is asked once, where it can be answered',
+   /function gpAlignAskHtml\(\)/.test(SRC) && /window\.gpFilmAgree = function/.test(SRC) &&
+   /id="gpAlignAsk"/.test(SRC),
+   'ten alignment controls used to sit on screen for the life of the session');
 ok('the dock timeline is bound and marked live',
-   /if \(ctx === "video"\) \{[\s\S]{0,300}gpTlBind\(\);[\s\S]{0,120}gp\._tlLive = true;/.test(SRC),
+   /if \(drawsTime\) \{[\s\S]{0,300}gpTlBind\(\);[\s\S]{0,200}gp\._tlLive = true;/.test(SRC),
    'gpTlSync writes the playhead into every timeline on screen, but only while ' +
    'the flag says one is there');
 ok('and the flag is read off the document, not off the mosaic',
@@ -212,16 +235,22 @@ ok('the working panel is marked on its header, not round the whole panel',
    'a red box round a panel at this size reads as an error state');
 
 console.log('\nit can be switched off, where the other height rules are stated');
-ok('both toggles are in the Arrange popover',
-   /gpFocusSizeSet/.test(SRC) && /gpFocusDockSet/.test(SRC) &&
-   /'Working panel'|>Working panel</.test(SRC),
+ok('the height toggle is in the Arrange popover',
+   /gpFocusSizeSet/.test(SRC) && /'Working panel'|>Working panel</.test(SRC),
    'a feature that moves the layout under you has to be findable and ' +
    'switchable off in the same breath');
-ok('and both are remembered',
+ok('and it is remembered',
    /GP_FOCUS_LS = "rdm7_gp_focus_v1"/.test(SRC) && /function gpFocusOptSave/.test(SRC));
-ok('an absent setting reads as ON, not as off',
-   /size: !o \|\| o\.size !== false/.test(SRC) && /dock: !o \|\| o\.dock !== false/.test(SRC),
-   'a first run should show the feature, not hide it');
+ok('an absent size setting reads as ON — a first run should show the feature',
+   /size: !o \|\| o\.size !== false/.test(SRC));
+/* `dock` — BAR FOLLOWS IT — is deleted, not defaulted off. It was the second
+   attempt at a bar that changes shape on a click (ADR-0061 shipped it on,
+   ADR-0064 turned it off), and the third answer is that the recording decides.
+   Pinned as an absence so it cannot come back a third time. */
+ok('…and there is no second option beside it',
+   !/gpFocusDockSet/.test(SRC) && !/BAR FOLLOWS IT/.test(SRC) &&
+   !/o\.dock === true/.test(SRC),
+   (/dock: [^,}]*/.exec(SRC) || ['none — good'])[0]);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

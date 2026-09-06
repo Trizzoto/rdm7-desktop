@@ -1,0 +1,316 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Barlow', 'Segoe UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    * { box-sizing: border-box; border-radius: 0; }
+    a { color: {{p.ink}}; text-decoration: none; } a:hover { color: {{p.red}}; }
+    .head { font-family: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif; text-transform: uppercase; }
+    .mono { font-family: 'JetBrains Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .tab:hover { color: {{p.ink}} !important; }
+    .btn-red:hover { background: #c02026 !important; border-color: #c02026 !important; }
+    .btn-ink:hover { opacity: 0.86; }
+    .nav-link:hover { color: #fff !important; }
+    .pill:hover { border-color: #4a4e52 !important; color: #e6e6e8 !important; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; background: {{p.bg}}; color: {{p.ink}}; display: flex; flex-direction: column;">
+
+  <!-- band one: the black bar -->
+  <div style="display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 12px; background: #0c0d0e; color: #fff; flex: none;">
+    <div style="display: flex; align-items: center; gap: 9px; height: 30px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="2" width="20" height="20" stroke="#d2232a" stroke-width="2"/><path d="M7 16V8h5a2.5 2.5 0 0 1 0 5H7m5 0 4 3" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      <span class="head" style="font-weight: 700; font-size: 16px; letter-spacing: 0.07em; color: #fff;">RDM</span>
+    </div>
+    <div style="width: 1px; height: 20px; background: #26282a; flex: none;"></div>
+    <span class="head" style="font-weight: 600; font-size: 15px; letter-spacing: 0.14em; color: #cfcfd2; white-space: nowrap;">Realtime Data Monitoring</span>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+      <a class="pill" href="#" style="display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 1px solid #26282a; color: #9a9a9e; font-size: 12px; white-space: nowrap;"><i style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #4fae6b;"></i>Studio <b style="color: #e6e6e8; font-weight: 600;">v2.4.1</b></a>
+      <a class="pill" href="#" style="display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1px solid #26282a; color: #9a9a9e;" aria-label="Cart"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0"/></svg></a>
+      <a class="head btn-red" href="#" style="display: inline-flex; align-items: center; height: 28px; padding: 0 16px; background: #d2232a; border: 1px solid #d2232a; color: #fff; font-weight: 600; font-size: 12.5px; letter-spacing: 0.08em;">Buy RDM-7 · $599</a>
+    </div>
+  </div>
+
+  <!-- band two: the tab row -->
+  <div style="display: flex; align-items: stretch; gap: 4px; height: 50px; padding: 0 12px; background: {{p.surface}}; border-bottom: 1px solid {{p.div}}; flex: none;">
+    <div style="display: flex; align-items: stretch; gap: 2px;">
+      <a class="head tab" href="#" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: {{p.ink}}; border-bottom: 3px solid #d2232a; margin-bottom: -1px;">RDM-7</a>
+      <a class="head tab" href="#" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: {{p.muted}}; border-bottom: 3px solid transparent; margin-bottom: -1px;">RDM Lap</a>
+      <a class="head tab" href="#" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: {{p.muted}}; border-bottom: 3px solid transparent; margin-bottom: -1px;">Studio</a>
+      <a class="head tab" href="#" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: {{p.muted}}; border-bottom: 3px solid transparent; margin-bottom: -1px;">Marketplace</a>
+      <a class="head tab" href="#" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: {{p.muted}}; border-bottom: 3px solid transparent; margin-bottom: -1px;">Support</a>
+    </div>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 14px; padding-left: 12px; font-size: 12px; color: {{p.muted}};">
+      <span>Ships today from SA</span>
+      <span style="width: 1px; height: 14px; background: {{p.div}};"></span>
+      <span>30-day returns</span>
+      <span style="width: 1px; height: 14px; background: {{p.div}};"></span>
+      <span>No subscriptions</span>
+    </div>
+  </div>
+
+  <!-- hero -->
+  <div style="display: flex; justify-content: center; padding: 56px 40px 48px;">
+    <div style="width: 1200px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; align-items: center;">
+      <div style="display: flex; flex-direction: column; gap: 22px;">
+        <div class="head" style="display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: {{p.muted}};"><i style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #d2232a;"></i>A dash built by car people</div>
+        <h1 class="head" style="margin: 0; font-weight: 700; font-size: 84px; line-height: 0.94; letter-spacing: 0.005em; color: {{p.ink}};">Realtime data.<br><span style="color: #d2232a;">Zero compromise.</span></h1>
+        <p style="margin: 0; max-width: 520px; font-size: 18px; line-height: 1.5; color: {{p.soft}};">A 7-inch CAN dash, configured from any browser. Updated over Wi-Fi. No software to install. No licences. No dealer markup. Just open a tab and build it.</p>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <a class="head btn-red" href="#" style="display: inline-flex; align-items: center; height: 44px; padding: 0 24px; background: #d2232a; border: 1px solid #d2232a; color: #fff; font-weight: 600; font-size: 15px; letter-spacing: 0.08em;">Buy $599</a>
+          <a class="head btn-ink" href="#" style="display: inline-flex; align-items: center; height: 44px; padding: 0 22px; background: {{p.ink}}; border: 1px solid {{p.ink}}; color: {{p.bg}}; font-weight: 600; font-size: 15px; letter-spacing: 0.09em;">Try RDM Studio</a>
+        </div>
+        <div class="mono" style="display: flex; gap: 18px; font-size: 11px; letter-spacing: 0.06em; color: {{p.muted}};"><span>AUD $599</span><span>·</span><span>Shipping now</span><span>·</span><span>12-month warranty</span></div>
+      </div>
+
+      <!-- the product stage: a lap-timer panel holding the dash -->
+      <div style="display: flex; flex-direction: column; border: 1px solid {{p.div}}; background: {{p.surface}};">
+        <div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-bottom: 1px solid {{p.div}};">
+          <span class="head" style="font-weight: 600; font-size: 12px; letter-spacing: 0.12em; color: {{p.ink}};">RDM-7</span>
+          <span style="width: 1px; height: 14px; background: {{p.div}};"></span>
+          <span style="font-size: 12px; color: {{p.muted}};">Live preview · MaxxECU profile</span>
+          <span class="mono" style="margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; letter-spacing: 0.08em; color: {{p.muted}};"><i style="display: block; width: 7px; height: 7px; border-radius: 50%; background: #d2232a;"></i>LIVE</span>
+        </div>
+        <div style="background: #16181b; padding: 22px;">
+          <svg viewBox="0 0 560 322" width="100%" style="display: block;" aria-label="RDM-7 dash">
+            <rect x="0" y="0" width="560" height="322" fill="#000"/>
+            <rect x="0.5" y="0.5" width="559" height="321" fill="none" stroke="#2a2d31"/>
+            <rect x="55" y="38" width="450" height="252" fill="#0a0b0c"/>
+            <g font-family="'Barlow Condensed', 'Arial Narrow', sans-serif" font-weight="700" fill="#e8e8e8">
+              <rect x="70" y="52" width="420" height="14" fill="#1c1e21"/>
+              <rect x="70" y="52" width="300" height="14" fill="#e8433c"/>
+              <g font-size="11" font-weight="600" fill="#8a8d92"><text x="70" y="80">0</text><text x="175" y="80">2</text><text x="280" y="80">4</text><text x="385" y="80">6</text><text x="478" y="80">8</text></g>
+              <text x="280" y="196" font-size="112" text-anchor="middle" letter-spacing="-2">142</text>
+              <text x="280" y="218" font-size="14" font-weight="600" text-anchor="middle" fill="#8a8d92" letter-spacing="3">KM/H</text>
+              <g font-size="12" font-weight="600" fill="#8a8d92" letter-spacing="1.5">
+                <text x="86" y="122">COOLANT</text><text x="86" y="238">OIL PRESS</text>
+                <text x="474" y="122" text-anchor="end">BOOST</text><text x="474" y="238" text-anchor="end">LAMBDA</text>
+              </g>
+              <g font-size="34">
+                <text x="86" y="156">88<tspan font-size="14" fill="#8a8d92">°C</tspan></text>
+                <text x="86" y="272">4.2<tspan font-size="14" fill="#8a8d92"> bar</tspan></text>
+                <text x="474" y="156" text-anchor="end">1.4<tspan font-size="14" fill="#8a8d92"> bar</tspan></text>
+                <text x="474" y="272" text-anchor="end">0.98</text>
+              </g>
+            </g>
+            <line x1="70" y1="288" x2="490" y2="288" stroke="#2a2d31"/>
+          </svg>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-top: 1px solid {{p.div}}; font-size: 11.5px; color: {{p.muted}};">
+          <span>Tap · interact · swap layout</span>
+          <a class="head" href="#" style="margin-left: auto; font-weight: 600; font-size: 11.5px; letter-spacing: 0.08em; color: #d2232a;">Open the demo →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- the spec strip: one fact per column, ruled -->
+  <div style="display: flex; justify-content: center; padding: 0 40px 64px;">
+    <div style="width: 1200px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid {{p.div}}; border-left: 1px solid {{p.div}};">
+      <div style="padding: 16px 18px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; background: {{p.surface}};"><div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: {{p.muted}};">Screen</div><div class="head" style="margin-top: 6px; font-weight: 700; font-size: 34px; line-height: 1; color: {{p.ink}};">7"</div><div style="margin-top: 6px; font-size: 13px; color: {{p.soft}};">Sunlight-readable, capacitive touch</div></div>
+      <div style="padding: 16px 18px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; background: {{p.surface}};"><div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: {{p.muted}};">Refresh</div><div class="head" style="margin-top: 6px; font-weight: 700; font-size: 34px; line-height: 1; color: {{p.ink}};">50 fps</div><div style="margin-top: 6px; font-size: 13px; color: {{p.soft}};">Every needle moves with the engine</div></div>
+      <div style="padding: 16px 18px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; background: {{p.surface}};"><div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: {{p.muted}};">Layout</div><div class="head" style="margin-top: 6px; font-weight: 700; font-size: 34px; line-height: 1; color: {{p.ink}};">100%</div><div style="margin-top: 6px; font-size: 13px; color: {{p.soft}};">Yours. Every gauge, every page, every alert</div></div>
+      <div style="padding: 16px 18px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; background: {{p.surface}};"><div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: {{p.muted}};">Input</div><div class="head" style="margin-top: 6px; font-weight: 700; font-size: 34px; line-height: 1; color: {{p.ink}};">Any CAN</div><div style="margin-top: 6px; font-size: 13px; color: {{p.soft}};">Haltech, Link, MaxxECU, factory buses, DBC import</div></div>
+    </div>
+  </div>
+
+  <!-- RDM Lap: the analyse mosaic, as the product picture -->
+  <div style="display: flex; justify-content: center; padding: 64px 40px; background: {{p.surface}}; border-top: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}};">
+    <div style="width: 1200px; display: grid; grid-template-columns: 7fr 5fr; gap: 40px; align-items: center;">
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: 250px 150px; gap: 10px;">
+        <div style="grid-column: span 2; display: flex; flex-direction: column; border: 1px solid {{p.div}}; background: {{p.bg}};">
+          <div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 6px; border-bottom: 1px solid {{p.div}};"><span class="head" style="font-weight: 600; font-size: 11.5px; letter-spacing: 0.1em; color: {{p.ink}};">Track map</span><span style="font-size: 11px; color: {{p.muted}};">Mallala · lap 6 vs best</span><span class="head" style="margin-left: auto; font-weight: 600; font-size: 10.5px; letter-spacing: 0.1em; color: #d2232a; border-bottom: 2px solid #d2232a;">Pace</span><span class="head" style="font-weight: 600; font-size: 10.5px; letter-spacing: 0.1em; color: {{p.muted}};">Speed</span><span class="head" style="font-weight: 600; font-size: 10.5px; letter-spacing: 0.1em; color: {{p.muted}};">Line</span></div>
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; background: #16181b;">
+            <svg viewBox="0 0 200 200" height="200" aria-hidden="true">
+              <path d="M40 150 C 10 120, 20 60, 60 50 S 130 40, 150 70 S 195 110, 160 140 S 90 185, 60 165 S 50 160, 40 150 Z" fill="none" stroke="#3a3d42" stroke-width="7"/>
+              <path d="M40 150 C 10 120, 20 60, 60 50 S 130 40, 150 70" fill="none" stroke="#4fae6b" stroke-width="3"/>
+              <path d="M150 70 S 195 110, 160 140" fill="none" stroke="#e8433c" stroke-width="3"/>
+              <path d="M160 140 S 90 185, 60 165 S 50 160, 40 150" fill="none" stroke="#e8e8e8" stroke-width="3"/>
+              <circle cx="150" cy="70" r="4.5" fill="#fff" stroke="#e8433c" stroke-width="2"/>
+              <line x1="34" y1="150" x2="46" y2="150" stroke="#e8e8e8" stroke-width="2"/>
+            </svg>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; border: 1px solid {{p.div}}; background: {{p.bg}};">
+          <div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 6px; border-bottom: 1px solid {{p.div}};"><span class="head" style="font-weight: 600; font-size: 11.5px; letter-spacing: 0.1em; color: {{p.ink}};">Lap times</span></div>
+          <div class="mono" style="display: grid; grid-template-columns: 34px 1fr 64px; font-size: 12px; color: {{p.ink}};">
+            <div style="padding: 5px 8px; border-bottom: 1px solid {{p.divLt}}; color: {{p.muted}};">5</div><div style="padding: 5px 8px; border-bottom: 1px solid {{p.divLt}};">1:24.11</div><div style="padding: 5px 8px; border-bottom: 1px solid {{p.divLt}}; text-align: right; color: {{p.muted}};">+0.66</div>
+            <div style="padding: 5px 8px; border-bottom: 1px solid {{p.divLt}}; color: {{p.muted}};">6</div><div style="padding: 5px 8px; border-bottom: 1px solid {{p.divLt}}; font-weight: 600;">1:23.45</div><div style="padding: 5px 8px; border-bottom: 1px solid {{p.divLt}}; text-align: right; color: #d2232a; font-weight: 600;">best</div>
+            <div style="padding: 5px 8px; border-bottom: 1px solid {{p.divLt}}; color: {{p.muted}};">7</div><div style="padding: 5px 8px; border-bottom: 1px solid {{p.divLt}};">1:23.77</div><div style="padding: 5px 8px; border-bottom: 1px solid {{p.divLt}}; text-align: right; color: {{p.muted}};">+0.32</div>
+            <div style="padding: 5px 8px; color: {{p.muted}};">8</div><div style="padding: 5px 8px;">1:25.02</div><div style="padding: 5px 8px; text-align: right; color: {{p.muted}};">+1.57</div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; border: 1px solid {{p.div}}; background: {{p.bg}};">
+          <div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 6px; border-bottom: 1px solid {{p.div}};"><span class="head" style="font-weight: 600; font-size: 11.5px; letter-spacing: 0.1em; color: {{p.ink}};">Where the time went</span></div>
+          <div style="display: flex; flex-direction: column; font-size: 12.5px; color: {{p.ink}};">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid {{p.divLt}};"><span style="color: {{p.muted}}; width: 22px;">T3</span><span>Braked 14 m early</span><span class="mono" style="margin-left: auto; color: #d2232a;">+0.21</span></div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid {{p.divLt}};"><span style="color: {{p.muted}}; width: 22px;">T6</span><span>Late apex, slow exit</span><span class="mono" style="margin-left: auto; color: #d2232a;">+0.09</span></div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px;"><span style="color: {{p.muted}}; width: 22px;">T1</span><span>Carried 6 km/h more</span><span class="mono" style="margin-left: auto; color: #2e7d43;">−0.12</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+        <div class="head" style="display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: {{p.muted}};"><i style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #d2232a;"></i>New · pre-order</div>
+        <h2 class="head" style="margin: 0; font-weight: 700; font-size: 60px; line-height: 0.95; color: {{p.ink}};">Lap times.<br><span style="color: #d2232a;">On your dash.</span></h2>
+        <p style="margin: 0; font-size: 16.5px; line-height: 1.5; color: {{p.soft}};">RDM Lap is a CAN GPS node that drops lap times, sector splits and true GPS speed straight onto your RDM-7. No separate lap timer, no second screen. Plug it into the same CAN bus, then open the day in Studio and see where the time went.</p>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid {{p.div}}; border-left: 1px solid {{p.div}};">
+          <div style="padding: 10px 12px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}};"><div class="head" style="font-weight: 600; font-size: 10.5px; letter-spacing: 0.16em; color: {{p.muted}};">GPS</div><div style="margin-top: 2px; font-size: 14px; font-weight: 600;">10 Hz</div></div>
+          <div style="padding: 10px 12px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}};"><div class="head" style="font-weight: 600; font-size: 10.5px; letter-spacing: 0.16em; color: {{p.muted}};">Output</div><div style="margin-top: 2px; font-size: 14px; font-weight: 600;">CAN, same bus</div></div>
+          <div style="padding: 10px 12px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}};"><div class="head" style="font-weight: 600; font-size: 10.5px; letter-spacing: 0.16em; color: {{p.muted}};">On the dash</div><div style="margin-top: 2px; font-size: 14px; font-weight: 600;">Lap · split · speed</div></div>
+          <div style="padding: 10px 12px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}};"><div class="head" style="font-weight: 600; font-size: 10.5px; letter-spacing: 0.16em; color: {{p.muted}};">In Studio</div><div style="margin-top: 2px; font-size: 14px; font-weight: 600;">Laps, corners, video</div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <a class="head btn-red" href="#" style="display: inline-flex; align-items: center; height: 44px; padding: 0 24px; background: #d2232a; border: 1px solid #d2232a; color: #fff; font-weight: 600; font-size: 15px; letter-spacing: 0.08em;">Pre-order RDM Lap</a>
+          <span style="font-size: 12.5px; color: {{p.muted}};">First run limited · ships [QUARTER] 2026 · pairs with any RDM-7</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Studio -->
+  <div style="display: flex; justify-content: center; padding: 64px 40px;">
+    <div style="width: 1200px; display: flex; flex-direction: column; gap: 28px;">
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 40px;">
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div class="head" style="font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: {{p.muted}};">RDM Studio</div>
+          <h2 class="head" style="margin: 0; font-weight: 700; font-size: 60px; line-height: 0.95; color: {{p.ink}};">Your display,<br><span style="color: #d2232a;">your way.</span></h2>
+        </div>
+        <p style="margin: 0; max-width: 460px; font-size: 16.5px; line-height: 1.5; color: {{p.soft}};">A free editor for Mac, Windows and mobile. Build layouts, set alerts, import your DBC, and push to your dash over Wi-Fi. One app for the dash, the keypad and the lap timer. No subscriptions. Ever.</p>
+      </div>
+      <!-- the Studio shell, drawn as itself -->
+      <div style="display: flex; flex-direction: column; border: 1px solid {{p.div}};">
+        <div style="display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 12px; background: #0c0d0e; color: #fff;">
+          <span class="head" style="font-weight: 700; font-size: 16px; letter-spacing: 0.07em;">RDM Studio</span>
+          <span style="width: 1px; height: 20px; background: #26282a;"></span>
+          <span class="head" style="font-weight: 600; font-size: 15px; letter-spacing: 0.14em; color: #cfcfd2;">Dash</span>
+          <span style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 1px solid #26282a; color: #9a9a9e; font-size: 12px;"><i style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #4fae6b;"></i>RDM-7 <b style="color: #e6e6e8; font-weight: 600;">192.168.4.1</b></span>
+          <span class="head" style="display: inline-flex; align-items: center; height: 28px; padding: 0 16px; background: #e8433c; color: #fff; font-weight: 600; font-size: 12.5px; letter-spacing: 0.08em;">Save</span>
+        </div>
+        <div style="display: flex; align-items: stretch; gap: 2px; height: 50px; padding: 0 12px; background: #d9dadd; border-bottom: 1px solid rgba(29,31,32,0.2);">
+          <span class="head" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: rgba(29,31,32,0.6);">Setup</span>
+          <span class="head" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: rgba(29,31,32,0.6);">Channels</span>
+          <span class="head" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: #1d1f20; border-bottom: 3px solid #d2232a; margin-bottom: -1px;">Design</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 220px 1fr 260px; height: 380px; background: #303030; color: #e8e8e8;">
+          <div style="border-right: 1px solid rgba(255,255,255,0.14); padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px;">
+            <div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: rgba(232,232,232,0.62);">Widgets</div>
+            <div style="padding: 8px 10px; background: #393939; border: 1px solid rgba(255,255,255,0.14);">Bar gauge</div>
+            <div style="padding: 8px 10px; background: #393939; border: 1px solid rgba(255,255,255,0.14);">Number</div>
+            <div style="padding: 8px 10px; background: #393939; border: 1px solid rgba(255,255,255,0.14);">Round gauge</div>
+            <div style="padding: 8px 10px; background: #393939; border: 1px solid rgba(255,255,255,0.14);">Warning lamp</div>
+            <div style="padding: 8px 10px; background: #393939; border: 1px solid rgba(255,255,255,0.14);">Lap time</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: center; padding: 24px;">
+            <svg viewBox="0 0 400 230" width="400" aria-hidden="true">
+              <rect width="400" height="230" fill="#000"/><rect x="0.5" y="0.5" width="399" height="229" fill="none" stroke="#4a4d52" stroke-dasharray="4 3"/>
+              <rect x="20" y="18" width="360" height="12" fill="#1c1e21"/><rect x="20" y="18" width="250" height="12" fill="#e8433c"/>
+              <text x="200" y="150" font-family="'Barlow Condensed', sans-serif" font-weight="700" font-size="96" fill="#e8e8e8" text-anchor="middle">142</text>
+              <rect x="150" y="60" width="100" height="120" fill="none" stroke="#e8433c" stroke-width="1.5"/>
+              <rect x="146" y="56" width="8" height="8" fill="#e8433c"/><rect x="246" y="56" width="8" height="8" fill="#e8433c"/><rect x="146" y="176" width="8" height="8" fill="#e8433c"/><rect x="246" y="176" width="8" height="8" fill="#e8433c"/>
+            </svg>
+          </div>
+          <div style="border-left: 1px solid rgba(255,255,255,0.14); padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 12.5px;">
+            <div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: rgba(232,232,232,0.62);">Number</div>
+            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.07);"><span style="color: rgba(232,232,232,0.62);">Channel</span><span>Vehicle speed</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.07);"><span style="color: rgba(232,232,232,0.62);">Unit</span><span>km/h</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.07);"><span style="color: rgba(232,232,232,0.62);">Decimals</span><span>0</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.07);"><span style="color: rgba(232,232,232,0.62);">Warn above</span><span>—</span></div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 12px; background: {{p.surface}}; border-top: 1px solid {{p.div}}; font-size: 12px; color: {{p.muted}};">
+          <span class="mono" style="font-size: 11px; letter-spacing: 0.06em;">Studio v2.4.1</span><span>·</span><span>Mac · Win · Mobile</span>
+          <a class="head" href="#" style="margin-left: auto; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; color: #d2232a;">Open RDM Studio →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- honest comparison -->
+  <div style="display: flex; justify-content: center; padding: 64px 40px; background: {{p.surface}}; border-top: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}};">
+    <div style="width: 1200px; display: grid; grid-template-columns: 4fr 8fr; gap: 40px; align-items: start;">
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div class="head" style="font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: {{p.muted}};">Honest comparison</div>
+        <h2 class="head" style="margin: 0; font-weight: 700; font-size: 60px; line-height: 0.95; color: {{p.ink}};">All the data.<br><span style="color: #d2232a;">None of the lock-in.</span></h2>
+        <p style="margin: 0; font-size: 15.5px; line-height: 1.5; color: {{p.soft}};">We'd rather you fact-check us than take our word for it. Here's the RDM-7 next to a typical race dash, on the rows that matter most.</p>
+        <p style="margin: 0; font-size: 12px; line-height: 1.5; color: {{p.muted}};">"Typical race dash" reflects common AiM, Racepak, Haltech iC-7 and MoTeC setups. Prices and features vary by model. Check current specs before you buy.</p>
+      </div>
+      <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr; border-top: 1px solid {{p.div}}; border-left: 1px solid {{p.div}}; font-size: 14px;">
+        <div class="head" style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: {{p.muted}};">Row</div>
+        <div class="head" style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 3px solid #d2232a; font-weight: 700; font-size: 15px; letter-spacing: 0.1em; color: {{p.ink}};">RDM-7 <span style="font-weight: 500; color: {{p.muted}};">· AUD $599</span></div>
+        <div class="head" style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: {{p.muted}};">Typical race dash</div>
+
+        <div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Price</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; font-weight: 600; background: {{p.bg}};">AUD $599</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">~$900 – $3,000+</div>
+        <div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Configured from</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; font-weight: 600; background: {{p.bg}};">Any browser</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Proprietary desktop software</div>
+        <div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Software licence</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; font-weight: 600; background: {{p.bg}};">None, ever</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Often paid or dealer-locked</div>
+        <div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Firmware updates</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; font-weight: 600; background: {{p.bg}};">Free over Wi-Fi, lifetime</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Paid, cabled or version-locked</div>
+        <div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Custom CAN / DBC import</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; font-weight: 600; background: {{p.bg}};">Yes</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Sometimes, often gated</div>
+        <div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Setup</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; font-weight: 600; background: {{p.bg}};">20-minute in-browser wizard</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Dealer or tuner config</div>
+        <div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Try before you buy</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; font-weight: 600; background: {{p.bg}};">Yes, in the browser</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">No</div>
+        <div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Lap timing &amp; analysis</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; font-weight: 600; background: {{p.bg}};">RDM Lap + Studio, free</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Higher tiers only</div>
+        <div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Warranty</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; font-weight: 600; background: {{p.bg}};">12 months</div><div style="padding: 10px 14px; border-right: 1px solid {{p.div}}; border-bottom: 1px solid {{p.div}}; color: {{p.soft}};">Varies</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- final call -->
+  <div style="display: flex; justify-content: center; padding: 72px 40px;">
+    <div style="width: 1200px; display: flex; align-items: center; justify-content: space-between; gap: 40px;">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="head" style="font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: {{p.muted}};">Buy with zero risk</div>
+        <h2 class="head" style="margin: 0; font-weight: 700; font-size: 60px; line-height: 0.95; color: {{p.ink}};">Try it first.<br><span style="color: #d2232a;">Then trust it.</span></h2>
+        <p style="margin: 0; max-width: 560px; font-size: 16.5px; line-height: 1.5; color: {{p.soft}};">Build your exact layout in the browser demo before you pay a cent. Run the real dash for 30 days. We run the same kit in our own cars.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px; align-items: stretch; min-width: 260px;">
+        <a class="head btn-red" href="#" style="display: inline-flex; align-items: center; justify-content: center; height: 48px; padding: 0 24px; background: #d2232a; border: 1px solid #d2232a; color: #fff; font-weight: 600; font-size: 16px; letter-spacing: 0.08em;">Buy RDM-7 · $599</a>
+        <a class="head btn-ink" href="#" style="display: inline-flex; align-items: center; justify-content: center; height: 48px; padding: 0 22px; background: {{p.ink}}; border: 1px solid {{p.ink}}; color: {{p.bg}}; font-weight: 600; font-size: 16px; letter-spacing: 0.09em;">Try RDM Studio</a>
+        <div class="mono" style="text-align: center; font-size: 11px; letter-spacing: 0.06em; color: {{p.muted}};">30-day returns · free lifetime OTA · no subscriptions</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- footer: the black bar again -->
+  <div style="background: #0c0d0e; color: #9a9a9e; padding: 28px 40px 22px; display: flex; justify-content: center;">
+    <div style="width: 1200px; display: flex; flex-direction: column; gap: 22px;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 40px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <span class="head" style="font-weight: 700; font-size: 16px; letter-spacing: 0.07em; color: #fff;">RDM</span>
+          <span style="font-size: 12.5px; line-height: 1.5;">Realtime Data Monitoring.<br>Precision digital dashboards for automotive performance.</span>
+        </div>
+        <div class="head" style="display: flex; gap: 22px; font-weight: 600; font-size: 12.5px; letter-spacing: 0.12em;">
+          <a class="nav-link" href="#" style="color: #9a9a9e;">RDM-7</a><a class="nav-link" href="#" style="color: #9a9a9e;">RDM Lap</a><a class="nav-link" href="#" style="color: #9a9a9e;">Studio</a><a class="nav-link" href="#" style="color: #9a9a9e;">Marketplace</a><a class="nav-link" href="#" style="color: #9a9a9e;">Downloads</a><a class="nav-link" href="#" style="color: #9a9a9e;">Support</a><a class="nav-link" href="#" style="color: #9a9a9e;">About</a>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 14px; border-top: 1px solid #26282a; font-size: 11.5px;">
+        <span>© 2026 RDM — Realtime Data Monitoring. All rights reserved.</span>
+        <div style="display: flex; gap: 16px;"><a class="nav-link" href="#" style="color: #9a9a9e;">Privacy</a><a class="nav-link" href="#" style="color: #9a9a9e;">Terms</a><a class="nav-link" href="#" style="color: #9a9a9e;">Shipping &amp; returns</a></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"dark":{"editor":"boolean","default":false,"section":"Palette"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var dark = !!(this.props.dark);
+    // The two Industry palettes, lifted from src/tauri-overlay.html (:root --ind-*).
+    var light = { bg: '#c8c9cc', surface: '#d9dadd', elev: '#e4e5e8', ink: '#1d1f20',
+      muted: 'rgba(29,31,32,0.6)', soft: 'rgba(29,31,32,0.75)', div: 'rgba(29,31,32,0.2)',
+      divLt: 'rgba(29,31,32,0.1)', red: '#d2232a' };
+    var darkP = { bg: '#303030', surface: '#393939', elev: '#424242', ink: '#e8e8e8',
+      muted: 'rgba(232,232,232,0.62)', soft: 'rgba(232,232,232,0.8)', div: 'rgba(255,255,255,0.14)',
+      divLt: 'rgba(255,255,255,0.07)', red: '#e8433c' };
+    return { p: dark ? darkP : light };
+  }
+}
+</script>
+</body>
+</html>

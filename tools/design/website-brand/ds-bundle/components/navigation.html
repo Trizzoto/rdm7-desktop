@@ -1,0 +1,45 @@
+<!-- @dsCard group="Components" name="Navigation" subtitle="The tab-row header, standalone, with its meta strip" viewport="900x220" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDM — Navigation</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+.demo { max-width: 860px; margin: 0 auto; padding: var(--sp-8) var(--sp-6) var(--sp-16); }
+.demo-head { font-family: var(--font-heading); font-weight: 600; font-size: var(--fs-eyebrow); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); margin: var(--sp-10) 0 var(--sp-4); }
+.demo-head:first-child { margin-top: 0; }
+.bar { display: flex; align-items: center; gap: var(--sp-4); height: 44px; padding: 0 var(--sp-4); background: var(--bar-bg); color: #fff; border: 1px solid var(--border); border-bottom: none; }
+.bar .word { font-family: var(--font-heading); font-weight: 700; font-size: 16px; letter-spacing: 0.07em; text-transform: uppercase; }
+.bar .rule { width: 1px; height: 20px; background: var(--bar-border); flex: none; }
+.bar .cart { margin-left: auto; display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--bar-border); color: var(--bar-muted); }
+.bar .btn { display: inline-flex; align-items: center; height: 28px; padding: 0 16px; background: var(--rdm-red); color: #fff; font-family: var(--font-heading); font-weight: 600; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; }
+.tabs { display: flex; align-items: stretch; gap: 4px; height: 50px; padding: 0 var(--sp-4); background: var(--tabrow-bg); border: 1px solid var(--border); }
+.tabs a { display: flex; align-items: center; padding: 0 16px; font-family: var(--font-heading); font-weight: 600; font-size: var(--fs-tab); letter-spacing: var(--ls-tab); text-transform: uppercase; color: var(--tabrow-text-muted); border-bottom: 3px solid transparent; margin-bottom: -1px; text-decoration: none; }
+.tabs a.on { color: var(--tabrow-text); border-bottom-color: var(--tabrow-active); }
+.tabs .right { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--tabrow-text-muted); }
+.tabs .right .rule { width: 1px; height: 14px; background: var(--tabrow-border); }
+</style>
+</head>
+<body>
+<main class="demo">
+
+  <div class="demo-head">Identity bar</div>
+  <div class="bar">
+    <span class="word">RDM</span>
+    <span class="rule"></span>
+    <span style="font-family: var(--font-heading); font-weight:600; font-size:15px; letter-spacing:0.14em; text-transform:uppercase; color:#cfcfd2;">Realtime Data Monitoring</span>
+    <span class="btn" style="margin-left:auto;">Buy RDM-7 · $599</span>
+    <span class="cart" aria-label="Cart"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0"/></svg></span>
+  </div>
+
+  <div class="demo-head">Tab row + meta strip</div>
+  <div class="tabs">
+    <a class="on">RDM-7</a><a>RDM Lap</a><a>Studio</a><a>Marketplace</a><a>Support</a>
+    <div class="right">Ships today from SA<span class="rule"></span>30-day returns<span class="rule"></span>No subscriptions</div>
+  </div>
+
+</main>
+</body>
+</html>

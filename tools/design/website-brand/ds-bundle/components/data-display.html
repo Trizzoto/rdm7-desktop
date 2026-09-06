@@ -1,0 +1,62 @@
+<!-- @dsCard group="Components" name="Data display" subtitle="Lap-time lists, delta coloring, meta lines and status dots" viewport="900x560" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDM — Data display</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+.demo { max-width: 860px; margin: 0 auto; padding: var(--sp-8) var(--sp-6) var(--sp-16); }
+.demo-head { font-family: var(--font-heading); font-weight: 600; font-size: var(--fs-eyebrow); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); margin: var(--sp-10) 0 var(--sp-4); }
+.demo-head:first-child { margin-top: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: var(--sp-3); }
+.card { display: flex; flex-direction: column; border: 1px solid var(--border); background: var(--surface); }
+.chead { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 6px; border-bottom: 1px solid var(--border); font-family: var(--font-heading); font-weight: 600; font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; }
+.laprow { display: grid; grid-template-columns: 34px 1fr 64px; font-family: var(--font-mono); font-size: 12px; }
+.laprow > div { padding: 5px 8px; border-bottom: 1px solid var(--border-light); }
+.laprow .n { color: var(--text-muted); }
+.laprow .d { text-align: right; color: var(--text-muted); }
+.laprow.best .t { font-weight: 600; }
+.laprow.best .d { color: var(--action); font-weight: 600; }
+.timerow { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--border-light); font-size: 12.5px; }
+.timerow .corner { color: var(--text-muted); width: 22px; }
+.timerow .delta { margin-left: auto; font-family: var(--font-mono); }
+.timerow .delta.slow { color: var(--action); }
+.timerow .delta.fast { color: var(--ok); }
+.metabox { display: flex; flex-direction: column; gap: 8px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--border); }
+.metaline { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--text-muted); }
+.metaline .rule { width: 1px; height: 14px; background: var(--border); }
+.note { font-size: var(--fs-small); color: var(--text-secondary); max-width: 68ch; line-height: 1.5; }
+</style>
+</head>
+<body>
+<main class="demo">
+
+  <div class="demo-head">Lists</div>
+  <div class="grid2">
+    <div class="card">
+      <div class="chead">Lap times</div>
+      <div class="laprow"><div class="n">5</div><div>1:24.11</div><div class="d">+0.66</div></div>
+      <div class="laprow best"><div class="n">6</div><div class="t">1:23.45</div><div class="d">best</div></div>
+      <div class="laprow"><div class="n">7</div><div>1:23.77</div><div class="d">+0.32</div></div>
+    </div>
+    <div class="card">
+      <div class="chead">Where the time went</div>
+      <div class="timerow"><span class="corner">T3</span><span>Braked 14 m early</span><span class="delta slow">+0.21</span></div>
+      <div class="timerow"><span class="corner">T6</span><span>Late apex, slow exit</span><span class="delta slow">+0.09</span></div>
+      <div class="timerow" style="border-bottom:none;"><span class="corner">T1</span><span>Carried 6 km/h more</span><span class="delta fast">−0.12</span></div>
+    </div>
+  </div>
+
+  <div class="demo-head">Meta lines and status</div>
+  <div class="metabox">
+    <div class="metaline rdm-mono" style="letter-spacing:0.06em; font-size:11px;"><span>AUD $599</span><span>·</span><span>Shipping now</span><span>·</span><span>12-month warranty</span></div>
+    <div class="metaline"><span>Ships today from SA</span><span class="rule"></span><span>30-day returns</span><span class="rule"></span><span>No subscriptions</span></div>
+    <div class="metaline"><i class="rdm-dot ok"></i><span>In stock</span><span class="rule"></span><i class="rdm-dot rec"></i><span>Recording</span><span class="rule"></span><i class="rdm-dot off"></i><span>Offline</span></div>
+  </div>
+  <p class="note" style="margin-top: var(--sp-4);">A delta is red for slower, green (<code>--ok</code>) for faster, and the best lap is the word "best", not a number. Meta lines use middle dots in mono for facts, or 1px rules for a status line. A colored dot is one of exactly three states: live/ok (green), recording (red), off (grey) — nothing else earns a colored dot.</p>
+
+</main>
+</body>
+</html>

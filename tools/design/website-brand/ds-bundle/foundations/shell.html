@@ -1,0 +1,66 @@
+<!-- @dsCard group="Foundations" name="The shell" subtitle="The black bar + the light tab row, the two bands every RDM surface opens with" viewport="1000x760" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDM — The shell</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+.demo { max-width: 960px; margin: 0 auto; padding: var(--sp-8) 0 var(--sp-16); }
+.demo-head { font-family: var(--font-heading); font-weight: 600; font-size: var(--fs-eyebrow); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); margin: var(--sp-10) var(--sp-6) var(--sp-4); }
+.demo-head:first-child { margin-top: 0; }
+.shell { border: 1px solid var(--border); margin: 0 var(--sp-6); }
+.bar { display: flex; align-items: center; gap: var(--sp-4); height: 44px; padding: 0 var(--sp-4); background: var(--bar-bg); color: #fff; }
+.bar .word { font-family: var(--font-heading); font-weight: 700; font-size: 16px; letter-spacing: 0.07em; text-transform: uppercase; }
+.bar .rule { width: 1px; height: 20px; background: var(--bar-border); flex: none; }
+.bar .name { font-family: var(--font-heading); font-weight: 600; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #cfcfd2; }
+.bar .pill { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 1px solid var(--bar-border); color: var(--bar-muted); font-size: 12px; }
+.bar .btn { display: inline-flex; align-items: center; height: 28px; padding: 0 16px; background: var(--rdm-red); color: #fff; font-family: var(--font-heading); font-weight: 600; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; margin-left: var(--sp-3); }
+.tabs { display: flex; align-items: stretch; gap: 4px; height: 50px; padding: 0 var(--sp-4); background: var(--tabrow-bg); border-bottom: 1px solid var(--tabrow-border); }
+.tabs a { display: flex; align-items: center; padding: 0 16px; font-family: var(--font-heading); font-weight: 600; font-size: var(--fs-tab); letter-spacing: var(--ls-tab); text-transform: uppercase; color: var(--tabrow-text-muted); border-bottom: 3px solid transparent; margin-bottom: -1px; text-decoration: none; }
+.tabs a.on { color: var(--tabrow-text); border-bottom-color: var(--tabrow-active); }
+.tabs .right { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--tabrow-text-muted); }
+.tabs .right .rule { width: 1px; height: 14px; background: var(--tabrow-border); }
+.content-light { padding: var(--sp-6); background: var(--rdm-light-bg); color: var(--rdm-light-ink); }
+.content-dark { padding: var(--sp-6); background: var(--rdm-dark-bg); color: var(--rdm-dark-ink); }
+.note { font-size: var(--fs-small); color: var(--text-secondary); max-width: 68ch; line-height: 1.5; margin: var(--sp-3) var(--sp-6) 0; }
+</style>
+</head>
+<body>
+<main class="demo">
+
+  <div class="demo-head">On a light page</div>
+  <div class="shell">
+    <div class="bar">
+      <span class="word">RDM</span>
+      <span class="rule"></span>
+      <span class="name">Realtime Data Monitoring</span>
+      <span class="pill"><i class="rdm-dot ok" style="background:#4fae6b"></i>Studio <b style="color:#e6e6e8;">v2.4.1</b></span>
+      <span class="btn">Buy RDM-7 · $599</span>
+    </div>
+    <div class="tabs">
+      <a class="on">RDM-7</a><a>RDM Lap</a><a>Studio</a><a>Marketplace</a><a>Support</a>
+      <div class="right">Ships today from SA<span class="rule"></span>30-day returns</div>
+    </div>
+    <div class="content-light">Page content sits here — the ground the page uses is whatever theme it's in.</div>
+  </div>
+
+  <div class="demo-head">The same shell on a dark page</div>
+  <div class="shell">
+    <div class="bar">
+      <span class="word">RDM</span>
+      <span class="rule"></span>
+      <span class="name">Studio</span>
+      <span class="btn" style="margin-left:auto; background: var(--rdm-red-dark);">Download</span>
+    </div>
+    <div class="tabs">
+      <a>Dash</a><a class="on">Lap timer</a><a>Keypad</a>
+    </div>
+    <div class="content-dark">Ground <code class="rdm-mono">#303030</code>, red lifted to <code class="rdm-mono">#e8433c</code> — the tab row above stayed light either way.</div>
+  </div>
+  <p class="note">Four things live in the black bar and never more: the wordmark, the surface name, the device/connection state, and the one page-level action. Band two carries where you are (tabs, active underline in red) and the page's own right-aligned controls or meta — nothing else. There is no third band; a page's own headline belongs to the content below, not to the chrome.</p>
+
+</main>
+</body>
+</html>

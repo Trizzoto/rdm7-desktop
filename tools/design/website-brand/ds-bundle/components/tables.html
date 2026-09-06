@@ -1,0 +1,51 @@
+<!-- @dsCard group="Components" name="Tables" subtitle="Ruled tables and ruled fact-cells — one value per column, no zebra striping" viewport="900x620" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDM — Tables</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+.demo { max-width: 860px; margin: 0 auto; padding: var(--sp-8) var(--sp-6) var(--sp-16); }
+.demo-head { font-family: var(--font-heading); font-weight: 600; font-size: var(--fs-eyebrow); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); margin: var(--sp-10) 0 var(--sp-4); }
+.demo-head:first-child { margin-top: 0; }
+.note { font-size: var(--fs-small); color: var(--text-secondary); max-width: 68ch; line-height: 1.5; }
+
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border-top: 1px solid var(--border); border-left: 1px solid var(--border); }
+.grid3 > div { padding: var(--sp-5) var(--sp-6); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface); }
+.grid3 .lbl { font-family: var(--font-heading); font-weight: 600; font-size: 11px; letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); }
+.grid3 .stat { font-family: var(--font-heading); font-weight: 700; font-size: var(--fs-stat); line-height: 1; margin-top: 6px; }
+.grid3 .sub { margin-top: 6px; font-size: var(--fs-small); color: var(--text-secondary); }
+
+table.rdm-table { width: 100%; border-collapse: collapse; font-size: 14px; border-top: 1px solid var(--border); border-left: 1px solid var(--border); background: var(--surface); }
+table.rdm-table th, table.rdm-table td { padding: 10px 14px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); text-align: left; }
+table.rdm-table th { font-family: var(--font-heading); font-weight: 600; font-size: 11px; letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); }
+table.rdm-table th.us { font-weight: 700; font-size: 15px; letter-spacing: 0.1em; color: var(--text); border-bottom: 3px solid var(--action); }
+table.rdm-table td.us { font-weight: 600; background: var(--bg); }
+</style>
+</head>
+<body>
+<main class="demo">
+
+  <div class="demo-head">Fact cells</div>
+  <div class="grid3">
+    <div><div class="lbl">Screen</div><div class="stat">7"</div><div class="sub">Sunlight-readable, capacitive touch</div></div>
+    <div><div class="lbl">Refresh</div><div class="stat">50 fps</div><div class="sub">Every needle moves with the engine</div></div>
+    <div><div class="lbl">Input</div><div class="stat">Any CAN</div><div class="sub">Haltech, Link, MaxxECU, DBC import</div></div>
+  </div>
+
+  <div class="demo-head">Comparison table</div>
+  <table class="rdm-table">
+    <thead><tr><th>Row</th><th class="us">RDM-7</th><th>Typical race dash</th></tr></thead>
+    <tbody>
+      <tr><td>Software licence</td><td class="us">None, ever</td><td>Often paid or dealer-locked</td></tr>
+      <tr><td>Try before you buy</td><td class="us">Yes, in the browser</td><td>No</td></tr>
+      <tr><td>Firmware updates</td><td class="us">Free over Wi-Fi, lifetime</td><td>Paid, cabled or version-locked</td></tr>
+    </tbody>
+  </table>
+  <p class="note" style="margin-top: var(--sp-4);">Top and left border on the grid, right and bottom on every cell — never a full box-shadow table. No zebra striping, no row icons. The "our column" highlight is a 3px red header rule plus a ground-colored cell fill; that is the only emphasis a table is allowed.</p>
+
+</main>
+</body>
+</html>

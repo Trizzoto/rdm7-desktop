@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Barlow', 'Segoe UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    * { box-sizing: border-box; border-radius: 0; }
+    a { color: #1d1f20; text-decoration: none; } a:hover { color: #d2232a; }
+    .head { font-family: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif; text-transform: uppercase; }
+    .mono { font-family: 'JetBrains Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .tab:hover { color: #1d1f20 !important; }
+    .pill:hover { border-color: #4a4e52 !important; color: #e6e6e8 !important; }
+    .btn-red:hover { background: #c02026 !important; border-color: #c02026 !important; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; background: #c8c9cc; color: #1d1f20; display: flex; flex-direction: column;">
+
+  <div style="padding: 40px 48px 22px; display: flex; flex-direction: column; gap: 8px;">
+    <div class="head" style="font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: rgba(29,31,32,0.6);">RDM website · design style</div>
+    <h1 class="head" style="margin: 0; font-weight: 700; font-size: 56px; line-height: 0.95;">The shell</h1>
+    <p style="margin: 0; max-width: 620px; font-size: 14px; line-height: 1.5; color: rgba(29,31,32,0.75);">Every Studio surface opens with the same two bands. The website does too: the black bar says who we are, the light tab row says where you are. Copy this block to start any page.</p>
+  </div>
+
+  <!-- band one -->
+  <div style="display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 12px; background: #0c0d0e; color: #fff; flex: none;">
+    <div style="display: flex; align-items: center; gap: 9px; height: 30px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="2" width="20" height="20" stroke="#d2232a" stroke-width="2"/><path d="M7 16V8h5a2.5 2.5 0 0 1 0 5H7m5 0 4 3" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      <span class="head" style="font-weight: 700; font-size: 16px; letter-spacing: 0.07em; color: #fff;">RDM</span>
+    </div>
+    <div style="width: 1px; height: 20px; background: #26282a; flex: none;"></div>
+    <span class="head" style="font-weight: 600; font-size: 15px; letter-spacing: 0.14em; color: #cfcfd2; white-space: nowrap;">Realtime Data Monitoring</span>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+      <a class="pill" href="#" style="display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 1px solid #26282a; color: #9a9a9e; font-size: 12px; white-space: nowrap;"><i style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #4fae6b;"></i>Studio <b style="color: #e6e6e8; font-weight: 600;">v2.4.1</b></a>
+      <a class="pill" href="#" style="display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1px solid #26282a; color: #9a9a9e;" aria-label="Cart"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0"/></svg></a>
+      <a class="head btn-red" href="#" style="display: inline-flex; align-items: center; height: 28px; padding: 0 16px; background: #d2232a; border: 1px solid #d2232a; color: #fff; font-weight: 600; font-size: 12.5px; letter-spacing: 0.08em;">Buy RDM-7 · $599</a>
+    </div>
+  </div>
+
+  <!-- band two -->
+  <div style="display: flex; align-items: stretch; gap: 4px; height: 50px; padding: 0 12px; background: #d9dadd; border-bottom: 1px solid rgba(29,31,32,0.2); flex: none;">
+    <div style="display: flex; align-items: stretch; gap: 2px;">
+      <a class="head tab" href="#" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: #1d1f20; border-bottom: 3px solid #d2232a; margin-bottom: -1px;">RDM-7</a>
+      <a class="head tab" href="#" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: rgba(29,31,32,0.6); border-bottom: 3px solid transparent; margin-bottom: -1px;">RDM Lap</a>
+      <a class="head tab" href="#" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: rgba(29,31,32,0.6); border-bottom: 3px solid transparent; margin-bottom: -1px;">Studio</a>
+      <a class="head tab" href="#" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: rgba(29,31,32,0.6); border-bottom: 3px solid transparent; margin-bottom: -1px;">Marketplace</a>
+      <a class="head tab" href="#" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: rgba(29,31,32,0.6); border-bottom: 3px solid transparent; margin-bottom: -1px;">Support</a>
+    </div>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 14px; padding-left: 12px; font-size: 12px; color: rgba(29,31,32,0.6);">
+      <span>Ships today from SA</span>
+      <span style="width: 1px; height: 14px; background: rgba(29,31,32,0.2);"></span>
+      <span>30-day returns</span>
+      <span style="width: 1px; height: 14px; background: rgba(29,31,32,0.2);"></span>
+      <span>No subscriptions</span>
+    </div>
+  </div>
+
+  <!-- annotations -->
+  <div style="padding: 22px 48px 40px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+    <div style="display: grid; grid-template-columns: 150px 1fr; border-top: 1px solid rgba(29,31,32,0.2); border-left: 1px solid rgba(29,31,32,0.2); background: #d9dadd; font-size: 13px;">
+      <div class="head" style="grid-column: span 2; padding: 8px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-weight: 600; font-size: 12px; letter-spacing: 0.14em;">Band one · the black bar</div>
+      <div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.6);">Height</div><div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2);">44px, 12px side padding, 12px gaps. Background #0c0d0e.</div>
+      <div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.6);">Wordmark</div><div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2);">Condensed 700 16px, tracking 0.07em, white. Hover goes red #ec817b.</div>
+      <div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.6);">Rule + name</div><div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2);">1px × 20px rule #26282a, then Condensed 600 15px, tracking 0.14em, #cfcfd2.</div>
+      <div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.6);">Pills</div><div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2);">28px tall, 1px #26282a border, text #9a9a9e, Barlow 12px, bold value #e6e6e8. Dot 8px. Green only when live.</div>
+      <div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.6);">Carries</div><div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2);">Four things and never more. Nothing in it can be pushed out by a long name.</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 150px 1fr; border-top: 1px solid rgba(29,31,32,0.2); border-left: 1px solid rgba(29,31,32,0.2); background: #d9dadd; font-size: 13px;">
+      <div class="head" style="grid-column: span 2; padding: 8px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-weight: 600; font-size: 12px; letter-spacing: 0.14em;">Band two · the tab row</div>
+      <div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.6);">Height</div><div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2);">50px, surface #d9dadd, 1px divider underneath. Light even on a dark page.</div>
+      <div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.6);">Tabs</div><div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2);">Condensed 600 16px, tracking 0.10em, caps, 16px side padding, 2px apart. Muted ink at rest, full ink on hover.</div>
+      <div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.6);">Active</div><div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2);">Full ink with a 3px red underline sitting on the row's divider (margin-bottom −1px).</div>
+      <div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.6);">Right side</div><div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2);">The page's own controls or meta, hard right, Barlow 12px muted, split by 1px × 14px rules.</div>
+      <div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.6);">Not here</div><div style="padding: 7px 12px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2);">No third band. The headline belongs to the page below, not to the chrome.</div>
+    </div>
+  </div>
+
+  <!-- the dark variant -->
+  <div style="padding: 0 48px 16px;"><div class="head" style="font-weight: 600; font-size: 14px; letter-spacing: 0.14em;">The same shell on the dark ground</div></div>
+  <div style="margin: 0 48px 48px; border: 1px solid rgba(29,31,32,0.2); display: flex; flex-direction: column;">
+    <div style="display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 12px; background: #0c0d0e; color: #fff;">
+      <span class="head" style="font-weight: 700; font-size: 16px; letter-spacing: 0.07em;">RDM</span>
+      <span style="width: 1px; height: 20px; background: #26282a;"></span>
+      <span class="head" style="font-weight: 600; font-size: 15px; letter-spacing: 0.14em; color: #cfcfd2;">Studio</span>
+      <span class="head" style="margin-left: auto; display: inline-flex; align-items: center; height: 28px; padding: 0 16px; background: #e8433c; color: #fff; font-weight: 600; font-size: 12.5px; letter-spacing: 0.08em;">Download</span>
+    </div>
+    <div style="display: flex; align-items: stretch; gap: 2px; height: 50px; padding: 0 12px; background: #d9dadd; border-bottom: 1px solid rgba(29,31,32,0.2);">
+      <span class="head" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: rgba(29,31,32,0.6);">Dash</span>
+      <span class="head" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: #1d1f20; border-bottom: 3px solid #d2232a; margin-bottom: -1px;">Lap timer</span>
+      <span class="head" style="display: flex; align-items: center; padding: 0 16px; font-weight: 600; font-size: 16px; letter-spacing: 0.1em; color: rgba(29,31,32,0.6);">Keypad</span>
+    </div>
+    <div style="height: 120px; background: #303030; color: #e8e8e8; padding: 22px 24px; display: flex; flex-direction: column; gap: 8px;">
+      <div class="head" style="font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: rgba(232,232,232,0.62);">Page content</div>
+      <div class="head" style="font-weight: 700; font-size: 36px; line-height: 0.95;">Dark ground <span style="color: #e8433c;">#303030</span>, red lifted to <span style="color: #e8433c;">#e8433c</span></div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

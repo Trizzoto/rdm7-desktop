@@ -76,6 +76,19 @@ function grabVar(name) {
     }
     return 'var ' + name + ' = ' + SRC.slice(i, j) + ';';
 }
+/* window.NAME = function ... }; — the page's public verbs are assigned, not
+   declared, so grab() cannot see them. */
+function grabWin(name) {
+    const re = new RegExp('^        window\\.' + name + ' = (async )?function', 'm');
+    const m = re.exec(SRC);
+    if (!m) throw new Error('not found: window.' + name);
+    let i = SRC.indexOf('{', m.index), depth = 0, j = i;
+    for (; j < SRC.length; j++) {
+        if (SRC[j] === '{') depth++;
+        else if (SRC[j] === '}') { depth--; if (depth === 0) { j++; break; } }
+    }
+    return SRC.slice(m.index, j) + ';';
+}
 function line(re, what) {
     const m = re.exec(SRC);
     if (!m) throw new Error('not found: ' + what);
@@ -118,7 +131,10 @@ function build() {
         kpwDashRate: async () => ({ ok: true }), kpwRateIdx: () => 2,
         KPW_SETTLE_MS: 500,
         _wsDownload: (name, body, mime) => { sandbox.__saved = { name, body, mime }; },
-        kpSaveCfg: () => {}, kpRenderStage: () => {}, kpRenderInspector: () => {}, kpRenderPageHead: () => {}
+        kpSaveCfg: () => {}, kpRenderStage: () => {}, kpRenderInspector: () => {}, kpRenderPageHead: () => {},
+        kpAfterKeypadChange: () => {}, kpRenderConnection: () => {}, kpRenderLighting: () => {}, kpRenderBar: () => {},
+        kpUpdateChip: () => {}, kpRenderEcuPage: () => {},
+        localStorage: { getItem: () => null, setItem: () => {} }
     };
     const ctx = vm.createContext(sandbox);
     const pre = [
@@ -135,7 +151,11 @@ function build() {
         grab('kpBrightness'), grab('_kpHexMix'), grab('kpLegendLook'), grab('kpInsertColor'),
         grab('ledBase'), grab('_kpRing'),
         grab('kpFrameMap'), grab('kpIds'), grab('kpSigName'), grab('kpBuildSvg'),
-        grab('kpSlug')   /* every file is named after the keypad it describes (ADR-0060) */
+        grab('kpSlug'),   /* every file is named after the keypad it describes (ADR-0060) */
+        /* undo: one snapshot of the whole keypad, put back whole */
+        grabVar('KP_FIELDS'), grab('kpModelOf'),
+        line(/^\s*var kpUndoStack = \[\], KP_UNDO_MAX[^\n]*$/m, 'the undo stack'),
+        grab('kpSnapshot'), grab('kpUndoPush'), grab('kpUndoClear'), grab('kpRenderUndo'), grabWin('kpUndo')
     ].join('\n\n');
     const names = ['kpfxGeom', 'kpfxRim', 'kpfxQuant', 'kpfxCtx', 'kpfxDef', 'kpfxColours', 'kpfxKnobs',
         'kpfxRenderStep', 'kpfxStepsSecs', 'kpfxStepAt', 'kpfxCompose', 'kpfxFrame',
@@ -145,11 +165,19 @@ function build() {
         'kpfxHexRgb', 'kpfxRgbHex', 'kpfxRgb', 'kpfxBakeText', 'kpfxPreviewFrame', 'kpfxStepSpeed',
         'KPFX_PRESS', 'KPFX_PRESS_S', 'kpfxPressDef', 'kpfxPressAt', 'kpfxRestable', 'kpfxUsesColour',
         'kpfxSpeedVal', 'kpfxSpeedLabel',
+        'kpfxSel', 'kpfxOnRest', 'kpfxOnStart',
+        'kpfxWatchDecode', 'kpfxWatchApply', 'kpfxWatchHeld', 'kpfxWatch', 'KPFX_WATCH_MS',
+        'KPFX_DASH_MAX_FRAMES', 'KPFX_DASH_MAX_MS',
+        'kpfxDashTape', 'kpfxDashFits', 'kpfxDashLine',
+        'kpfxStepBl', 'kpfxShowDrivesBl', 'kpfxStandingBl', 'kpfxBlAt', 'KPFX_BL_MIN_MS',
         'KPFX', 'KPFX_PRESETS', 'KPFX_LEDS', 'KPFX_OFF_AT', 'KPFX_MAX_FPS', 'KPFX_BUDGET',
         'KPFX_REST_S', 'KPFX_MAX_STEPS', 'KPFX_DIRS', 'kp', 'kpfx',
         'KPFX_SPEED', 'KPFX_SPEED_MIN', 'KPFX_SPEED_MAX', 'KPFX_SETTLE',
-        'HEX', 'KP_COL', 'MODELS', 'kpBuildSvg', 'kpFrameMap'];
-    vm.runInContext(pre + '\n\n' + SHOW + '\n\nglobalThis.__api = { ' + names.map(n => n + ': ' + n).join(', ') + ' };',
+        'HEX', 'KP_COL', 'MODELS', 'DEFAULT_KEYS', 'kpBuildSvg', 'kpFrameMap',
+        'kpSnapshot', 'kpUndoPush', 'kpUndoClear', 'undoLen', 'KP_UNDO_MAX',
+        'KPFX_STARTUP', 'kpfxStartupDef', 'KPFX_START_I', 'KPFX_REST_I'];
+    vm.runInContext(pre + '\n\n' + SHOW + '\n\nfunction undoLen() { return kpUndoStack.length; }' +
+                    '\n\nglobalThis.__api = { ' + names.map(n => n + ': ' + n).join(', ') + ' };',
                     ctx, { timeout: 30000 });
     sandbox.__api.win = win;
     sandbox.__api.saved = () => sandbox.__saved;
@@ -164,7 +192,7 @@ function ledOf(f) { const out = []; for (let i = 0; i < f.n; i++) out.push(A.kpf
 function step(fx, o) { return Object.assign({ fx: fx, color: 'white' }, o || {}); }
 /* a step rendered with NO length loops; with one it is paced by it */
 function render(model, fx, t, o) { A.kp.model = model; return A.kpfxRenderStep(model, step(fx, o), t); }
-function boot(steps) { return A.kpfxNormalise({ steps: steps, idle: { fx: 'keys' } }); }
+function boot(steps) { return A.kpfxNormalise({ steps: steps, idle: { fx: 'buttons' } }); }
 
 /* === 1. every effect renders a legal frame, on every model ============== */
 console.log('\nevery effect renders a legal frame');
@@ -211,7 +239,7 @@ console.log('\nthe same moment is always the same frame');
 /* === 3. moving effects move, still ones hold ============================ */
 console.log('\nmoving effects move, still ones hold');
 {
-    const STILL = ['dark', 'keys', 'solid'];
+    const STILL = ['dark', 'keys', 'buttons', 'solid'];
     let stuck = [], drifted = [];
     A.KPFX.forEach(e => {
         const frames = TIMES.map(t => JSON.stringify(render(A.MODELS[2], e.id, t).out));
@@ -453,8 +481,268 @@ console.log('\nevery ready-made boot plays from cold on every keypad');
     ok('the first step plays first', at(0.5).moment === 'boot' && at(0.5).step === 0 && at(0.5).led[0] === 'blue');
     ok('then the second, from ITS OWN zero', at(1.05).moment === 'boot' && at(1.05).step === 1 &&
        JSON.stringify(at(1.05).led) === JSON.stringify(ledOf(A.kpfxRenderStep(A.kp.model, S.steps[1], 0.05))));
-    ok('after the last step, the keys settle', at(2.1).moment === 'rest' && at(2.1).led[0] === 'green');
-    ok('a boot with no steps is just the keys at rest', A.kpfxFrame(A.kp.model, boot([]), { t: 0.1 }).moment === 'rest');
+    ok('after the last step, the rings go back to the buttons', at(2.1).moment === 'rest');
+    ok('a boot with no steps is just the buttons', A.kpfxFrame(A.kp.model, boot([]), { t: 0.1 }).moment === 'rest');
+}
+
+/* === 8b. the legends, as part of the show ===============================
+   The rings are three bits and seven colours; the lamp behind the legends is
+   nine colours and sixty-four levels, and it used to be the one part of the
+   keypad the show was not allowed to touch. The rules that matter: a step
+   that says nothing changes nothing, a step that says something is on the
+   wire as 0x500+node, and whatever the show does it gives the legends back. */
+console.log('\nthe legends are part of the show now');
+{
+    A.kp.model = A.MODELS[3]; A.kp.node = 0x15;
+    A.kp.blColor = 'amber'; A.kp.blBright = 18;
+    const quiet = A.kpfxNormalise({ steps: [step('wipe', { secs: 1 })], idle: { fx: 'buttons' } });
+    ok('a step that says nothing about the legends leaves them on the keypad’s own default',
+       !A.kpfxShowDrivesBl(quiet) && A.kpfxFrame(A.kp.model, quiet, { t: 0.5 }).bl.color === 'amber' &&
+       A.kpfxFrame(A.kp.model, quiet, { t: 0.5 }).bl.drive === false);
+    const lit = A.kpfxNormalise({ steps: [step('wipe', { secs: 1, blc: 'lime', blv: 63 }), step('flash', { secs: 1 })],
+                                  idle: { fx: 'buttons' } });
+    ok('a step that sets them is what comes out during that step',
+       A.kpfxFrame(A.kp.model, lit, { t: 0.5 }).bl.color === 'lime' && A.kpfxFrame(A.kp.model, lit, { t: 0.5 }).bl.bright === 63);
+    ok('the step after it, which says nothing, is back on the keypad’s default',
+       A.kpfxFrame(A.kp.model, lit, { t: 1.5 }).bl.color === 'amber' && A.kpfxFrame(A.kp.model, lit, { t: 1.5 }).bl.bright === 18);
+    ok('and so is the rest — a show that borrows the legends gives them back',
+       A.kpfxFrame(A.kp.model, lit, { t: 3 }).bl.color === 'amber' && A.kpfxFrame(A.kp.model, lit, { t: 3 }).bl.bright === 18);
+    ok('once any step touches them the whole show drives them, so the way back is on the wire',
+       A.kpfxShowDrivesBl(lit) && A.kpfxFrame(A.kp.model, lit, { t: 3 }).bl.drive === true);
+    /* amber and lime are the point: no ring can make either */
+    ok('the legends can be the two colours a ring cannot',
+       ['amber', 'lime'].every(c => A.kpfxNormaliseStep({ fx: 'wipe', secs: 1, blc: c }).blc === c) &&
+       ['amber', 'lime'].every(c => !A.kpfxRingColour(c)));
+    ok('and a colour the lamp cannot make is dropped, not drawn',
+       !('blc' in A.kpfxNormaliseStep({ fx: 'wipe', secs: 1, blc: 'octarine' })));
+    ok('a level out of range is pulled back, and a missing one is full',
+       A.kpfxNormaliseStep({ fx: 'wipe', secs: 1, blc: 'red', blv: 900 }).blv === 63 &&
+       A.kpfxNormaliseStep({ fx: 'wipe', secs: 1, blc: 'red' }).blv === 63);
+    /* the wire */
+    const bf = A.kpfxBlFrame({ color: 'amber', bright: 0x3F }, 0x15);
+    ok('the legend frame is 0x500+node, brightness then colour — the one proved on the bench',
+       bf.id === 0x515 && bf.data[0] === 0x3F && bf.data[1] === 8, A.kpfxRgbHex ? bf.data.join(',') : '');
+    const baked = A.kpfxBakeBoot(lit, 0x15);
+    const blFrames = baked.filter(b => b.why === 'backlight');
+    ok('the baked file carries the legend frames', blFrames.length >= 2, blFrames.length + ' legend frames');
+    ok('and the last of them puts the legends back where the keypad keeps them',
+       blFrames[blFrames.length - 1].f.data[0] === 18 && blFrames[blFrames.length - 1].f.data[1] === 8,
+       blFrames[blFrames.length - 1].f.data.join(','));
+    let tooFast = 0, prev = -1e9;
+    blFrames.forEach(b => { if (b.ms - prev < A.KPFX_BL_MIN_MS) tooFast++; prev = b.ms; });
+    ok('and never asks the lamp to change faster than it is throttled to', tooFast === 0, tooFast + ' too close together');
+    ok('a boot that drives the legends is still inside the dash’s frame budget',
+       A.kpfxPeakRate(baked) <= A.KPFX_BUDGET, A.kpfxPeakRate(baked) + '/s');
+    ok('a boot that does not touch them puts no legend frame on the bus at all',
+       A.kpfxBakeBoot(quiet, 0x15).every(b => b.why !== 'backlight'));
+    /* the frame script says which of the two it is */
+    A.kp.show = lit;
+    ok('the frame script says the legends are driven, and what they end on', /0x515 sets the legend backlight/.test(A.kpfxBakeText()));
+    A.kp.show = quiet;
+    ok('and says plainly when they are not touched', /legend backlight is not touched/.test(A.kpfxBakeText()));
+    /* and the ready-mades demonstrate it */
+    ok('two of the ready-made boots drive the legends, so the lane is discoverable',
+       A.KPFX_PRESETS.filter(d => A.kpfxShowDrivesBl(A.kpfxPreset(d.id))).length === 2,
+       A.KPFX_PRESETS.filter(d => A.kpfxShowDrivesBl(A.kpfxPreset(d.id))).map(d => d.id).join(','));
+    ok('and every ready-made boot is still inside the budget with the legends in it',
+       A.KPFX_PRESETS.every(d => A.kpfxPeakRate(A.kpfxBakeBoot(A.kpfxPreset(d.id), 0x15)) <= A.KPFX_BUDGET));
+    A.kp.show = A.kpfxDefaultShow();
+}
+
+/* === 8c. taking it back, and the edits that need it =====================
+   There was no undo anywhere in this workspace, and three of its buttons are
+   one click from throwing work away. The snapshot is deliberately the whole
+   keypad rather than a diff: a keypad is a few kilobytes, and a partial undo
+   that puts back the steps but not the key you also changed is worse than
+   none, because it looks like it worked. */
+console.log('\nundo, duplicate, and reordering the row');
+{
+    A.kp.model = A.MODELS[3];
+    A.kpUndoClear();
+    A.kp.show = A.kpfxNormalise({ steps: [step('wipe', { secs: 0.6, color: 'red' })], idle: { fx: 'buttons' } });
+    ok('nothing to undo on a page nobody has touched', A.undoLen() === 0);
+    /* a ready-made boot replaces your steps — the one that stings */
+    A.win.kpfxUsePreset('rollcall');
+    ok('picking a ready-made boot is undoable', A.undoLen() === 1);
+    A.win.kpUndo();
+    ok('and undoing it puts YOUR steps back, exactly',
+       A.kp.show.steps.length === 1 && A.kp.show.steps[0].fx === 'wipe' && A.kp.show.steps[0].color === 'red',
+       JSON.stringify(A.kp.show.steps));
+    ok('and the stack is empty again', A.undoLen() === 0);
+    /* removing a step */
+    A.kp.show = A.kpfxNormalise({ steps: [step('wipe', { secs: 0.6 }), step('flash', { secs: 0.4, color: 'green' })],
+                                  idle: { fx: 'buttons' } });
+    A.kpfx.stepI = 1;
+    A.win.kpfxDelStep();
+    ok('removing a step removes it', A.kp.show.steps.length === 1);
+    A.win.kpUndo();
+    ok('and undo brings it back where it was',
+       A.kp.show.steps.length === 2 && A.kp.show.steps[1].fx === 'flash' && A.kp.show.steps[1].color === 'green',
+       JSON.stringify(A.kp.show.steps));
+    /* the keys, not just the boot: one snapshot covers the whole keypad */
+    const label = A.kp.keys[0].label;
+    A.kpUndoPush('a test');
+    A.kp.keys[0].label = 'ZZZ';
+    A.win.kpUndo();
+    ok('the snapshot is the whole keypad, so a cleared key comes back with the steps',
+       A.kp.keys[0].label === label, A.kp.keys[0].label);
+    /* the cap: a long session cannot eat the tab's memory */
+    A.kpUndoClear();
+    for (let i = 0; i < A.KP_UNDO_MAX + 12; i++) A.kpUndoPush('x' + i);
+    ok('the stack is capped rather than growing all session', A.undoLen() === A.KP_UNDO_MAX, String(A.undoLen()));
+    A.kpUndoClear();
+    ok('and switching keypads clears it — undo must never cross from one keypad to another', A.undoLen() === 0);
+    /* duplicate */
+    A.kp.show = A.kpfxNormalise({ steps: [step('flash', { secs: 0.4, color: 'red', blc: 'amber', blv: 40 })],
+                                  idle: { fx: 'buttons' } });
+    A.kpfx.stepI = 0;
+    A.win.kpfxDupStep();
+    ok('duplicate makes a copy in the next slot, with everything set the way it was',
+       A.kp.show.steps.length === 2 &&
+       JSON.stringify(A.kp.show.steps[0]) === JSON.stringify(A.kp.show.steps[1]), JSON.stringify(A.kp.show.steps));
+    ok('and opens the copy, not the original', A.kpfx.stepI === 1);
+    ok('it is a copy, not the same object', (A.kp.show.steps[1].color = 'green') && A.kp.show.steps[0].color === 'red');
+    A.kp.show.steps[1].color = 'red';
+    ok('and it is undoable like everything else', (A.win.kpUndo(), A.kp.show.steps.length === 1));
+    /* the row cannot grow past what the strip can show, duplicate included */
+    A.kp.show = A.kpfxNormalise({ steps: new Array(A.KPFX_MAX_STEPS).fill(step('flash', { secs: 0.4 })), idle: { fx: 'buttons' } });
+    A.kpfx.stepI = 0;
+    A.win.kpfxDupStep();
+    ok('duplicate stops at the same ceiling as Add', A.kp.show.steps.length === A.KPFX_MAX_STEPS);
+    A.kp.show = A.kpfxDefaultShow(); A.kpUndoClear();
+}
+
+/* === 8d. the lead-in: the show the KEYPAD plays on its own ==============
+   Two different things answer "what happens at ignition" — the keypad's own
+   start-up animation (2014h, written into the part) and the boot on this
+   page (streamed) — and they were three clicks and one broken button apart.
+   The Connection page's "Change" called kpfxGoLane(), which went away with
+   the lanes, so the only route to it threw. */
+console.log('\nthe lead-in: what the keypad does with nothing attached');
+{
+    ok('there are three choices, because the keypad has three (2014h)', A.KPFX_STARTUP.length === 3);
+    ok('their values are the object\u2019s own 0/1/2', A.KPFX_STARTUP.map(d => d.v).join(',') === '0,1,2');
+    ok('every one has a plain sentence saying what it does',
+       A.KPFX_STARTUP.every(d => d.name && d.blurb && d.blurb.length > 20));
+    ok('an unknown value reads as the first, not as undefined',
+       A.kpfxStartupDef(99).v === 0 && A.kpfxStartupDef(undefined).v === 0);
+    ok('the lead-in is its own block index, before the first step and apart from the rest',
+       A.KPFX_START_I === -2 && A.KPFX_REST_I === -1);
+    A.kp.show = A.kpfxNormalise({ steps: [step('wipe', { secs: 0.6 })], idle: { fx: 'buttons' } });
+    A.kpfx.stepI = A.KPFX_START_I;
+    ok('opening it selects no step — it is not one, and editing it must not edit the boot',
+       A.kpfxSel() === null, JSON.stringify(A.kpfxSel()));
+    ok('and the picture is the keypad before anything is talking to it: rings dark, legends on the keypad’s own default',
+       A.kpfxPreviewFrame(2).led.every(c => !c) && A.kpfxPreviewFrame(2).bl.color === A.kp.blColor);
+    /* the dead button */
+    ok('the Connection page\u2019s "Change" goes somewhere that exists now',
+       /onclick=\\"kpfxGoStartup\(\)\\">Change/.test(SRC) && /window\.kpfxGoStartup = function/.test(SRC) &&
+       !/kpfxGoLane\(/.test(SRC.replace(/\/\*[\s\S]*?\*\//g, '')));
+    ok('and it is written to the keypad with everything else — the setup file still carries 2014h',
+       /sdo1\(0x2014, 0x00, kp\.startShow/.test(SRC));
+    A.kpfx.stepI = 0;
+}
+
+/* === 8e. a real thumb on a real keypad ==================================
+   Studio streams blind — it decides what the rings do and is never told that
+   anyone touched the thing — so a reaction could only be previewed against
+   your own mouse. The dash's frame tracker already holds the keypad's key
+   frame, which is the same one the ECU reads, so the picture can be driven by
+   the actual keypad. Two things must stay true: it only ever changes a frame
+   marked `live`, and it never writes the Design page's own sim state. */
+console.log('\nwatching the real keypad through the dash');
+{
+    A.kp.model = A.MODELS[3];
+    A.kp.keys = JSON.parse(JSON.stringify(A.DEFAULT_KEYS));
+    A.kp.keyOn = {}; A.kp.keyPos = {};
+    const n = A.kp.model.rows * A.kp.model.cols;
+    /* CANopen: a bitmap, one byte per eight keys */
+    ok('a key frame with key 1 held decodes to key 1',
+       JSON.stringify(A.kpfxWatchDecode([0x01, 0, 0, 0, 0, 0, 0, 0], n, false)) === '{"0":1}');
+    ok('and key 9 lands in the second byte, not the first',
+       JSON.stringify(A.kpfxWatchDecode([0x00, 0x01, 0, 0, 0, 0, 0, 0], n, false)) === '{"8":1}');
+    ok('two at once are two at once',
+       JSON.stringify(A.kpfxWatchDecode([0x05, 0, 0, 0, 0, 0, 0, 0], n, false)) === '{"0":1,"2":1}');
+    ok('nothing held is nothing held', JSON.stringify(A.kpfxWatchDecode([0, 0, 0, 0, 0, 0, 0, 0], n, false)) === '{}');
+    /* J1939: the key NUMBER in byte 3, its state in byte 4 */
+    ok('J1939 sends a key number, not a bitmap',
+       JSON.stringify(A.kpfxWatchDecode([0x04, 0x1B, 0x01, 3, 1, 0, 0, 0], n, true)) === '{"2":1}');
+    ok('and a released J1939 key is not held',
+       JSON.stringify(A.kpfxWatchDecode([0x04, 0x1B, 0x01, 3, 0, 0, 0, 0], n, true)) === '{}');
+    ok('a key number outside this keypad is ignored rather than drawn off the end',
+       JSON.stringify(A.kpfxWatchDecode([0, 0, 0, 99, 1, 0, 0, 0], n, true)) === '{}');
+    /* the ring lights, and the reaction starts, on the frame the key went down */
+    const sh = A.kpfxNormalise({ steps: [], idle: { fx: 'buttons' }, press: { fx: 'none' } });
+    A.kpfxWatch.on = true; A.kpfxWatch.keys = {};
+    A.kpfx.t = 5;
+    A.kpfxWatchApply({ 12: 1 });                                  /* LOG: momentary, green, steady */
+    const live = A.kpfxFrame(A.kp.model, sh, { t: 5, live: true });
+    ok('a key held on the real keypad lights its ring in the preview', live.led[12] === 'green', String(live.led[12]));
+    ok('and it does NOT reach a baked frame — the file is the boot, not last Tuesday’s thumb',
+       !A.kpfxFrame(A.kp.model, sh, { t: 5 }).led[12]);
+    ok('a key going down starts a reaction, with no mouse anywhere near it',
+       A.kpfx.press && A.kpfx.press.i === 12 && A.kpfx.press.held === true, JSON.stringify(A.kpfx.press));
+    A.kpfxWatchApply({});
+    ok('and letting go of it lets go here', A.kpfx.press.held === false);
+    ok('the ring goes out with it', !A.kpfxFrame(A.kp.model, sh, { t: 5, live: true }).led[12]);
+    /* a key whose ring is set to blink blinks while it is held, at the rate
+       the Design page draws — the dash is what does this in the car */
+    A.kpfxWatchApply({ 6: 1 });                                   /* LAUNCH: momentary, red, fast blink */
+    const at = t => A.kpfxFrame(A.kp.model, sh, { t: t, live: true }).led[6];
+    ok('and a key set to blink blinks while it is held', at(5.0) !== at(5.0 + 0.21), at(5.0) + ' / ' + at(5.21));
+    A.kpfxWatchApply({});
+    ok('and the Design page’s own sim state was never touched',
+       Object.keys(A.kp.keyOn).length === 0, JSON.stringify(A.kp.keyOn));
+    A.kpfxWatch.on = false;
+    ok('with the watch off, a stale held key means nothing',
+       (A.kpfxWatch.keys = { 12: 1 }, !A.kpfxFrame(A.kp.model, sh, { t: 5, live: true }).led[12]));
+    A.kpfxWatch.keys = {};
+    A.kpfx.press = null;
+    ok('the poll rate is often enough to feel like a button and slow enough not to be a flood',
+       A.KPFX_WATCH_MS >= 60 && A.KPFX_WATCH_MS <= 250, A.KPFX_WATCH_MS + ' ms');
+    ok('playing takes the dash over from the watcher rather than deadlocking on it',
+       /kpw\.busy && kpw\.busyBy !== "watch"/.test(SRC) && /kpfxWatch\.own = false;/.test(SRC));
+}
+
+/* === 8f. the tape the dash plays =======================================
+   The handover that stops this page being a demo: Studio bakes the boot to
+   timed frames and the dash plays them at every power-up with no laptop in
+   the car. The file crosses a repo boundary, so its shape is checked here —
+   the reader is C in RDM-7_Dash/main/can/keypad_lights.c and it cannot ask
+   for clarification. */
+console.log('\nthe tape the dash plays');
+{
+    A.kp.model = A.MODELS[3]; A.kp.node = 0x15; A.kp.baud = 125;
+    A.kp.name = 'Wheel pad';
+    A.kp.show = A.kpfxNormalise({ steps: [step('crank', { secs: 1.8 }), step('sweep', { secs: 1.0 })],
+                                  idle: { fx: 'buttons' } });
+    const tape = A.kpfxDashTape();
+    ok('the tape says which document it is, and for which keypad',
+       tape.rdm_keypad_lights === 1 && tape.keypad === 'Wheel pad' && tape.node === 0x15 && tape.baud === 125);
+    ok('it carries frames, each with a time, an 11-bit id and eight hex bytes',
+       tape.frames.length > 2 && tape.frames.every(f =>
+           Number.isInteger(f.ms) && f.ms >= 0 && Number.isInteger(f.id) && f.id <= 0x7FF &&
+           /^[0-9A-F]{16}$/.test(f.d)), JSON.stringify(tape.frames[0]));
+    let backwards = 0, prev = -1;
+    tape.frames.forEach(f => { if (f.ms < prev) backwards++; prev = f.ms; });
+    ok('and its times only ever go forwards — the player sleeps on the difference', backwards === 0);
+    ok('a boot that hands the rings back does not loop, and the last frame is the hand-back',
+       tape.loop === false && tape.loop_from_ms === 0);
+    A.kp.show = A.kpfxNormalise({ steps: [step('crank', { secs: 1.8 })], idle: { fx: 'scan', speed: 1 } });
+    const loops = A.kpfxDashTape();
+    ok('a boot that rests on an animation says so, and says where one turn of it starts',
+       loops.loop === true && loops.loop_from_ms === 1800, JSON.stringify({ l: loops.loop, f: loops.loop_from_ms }));
+    /* the limits are the C player's, checked here because the C can only
+       truncate, and half a boot is worse than no boot */
+    ok('the frame ceiling matches the dash player’s array', A.KPFX_DASH_MAX_FRAMES === 384);
+    ok('and the length ceiling stays inside its uint16 milliseconds', A.KPFX_DASH_MAX_MS <= 65000);
+    ok('a boot the dash can hold is offered', !A.kpfxDashFits(A.kpfxBakeBoot(A.kpfxShow(), 0x15)));
+    const tooMany = new Array(A.KPFX_DASH_MAX_FRAMES + 1).fill({ ms: 0, f: { id: 0x215, data: [0, 0, 0, 0, 0, 0, 0, 0] } });
+    ok('one it cannot is refused with the number, not a shrug',
+       /385 frames and the dash holds 384/.test(A.kpfxDashFits(tooMany)), A.kpfxDashFits(tooMany));
+    const tooLong = [{ ms: 0, f: {} }, { ms: 61000, f: {} }];
+    ok('and one that runs too long is refused for that instead', /runs 61s/.test(A.kpfxDashFits(tooLong)));
+    A.kp.show = A.kpfxDefaultShow();
 }
 
 /* === 9. the bus budget ================================================== */
@@ -499,7 +787,7 @@ console.log('\na boot saved is a boot restored');
     ok('and a speed out of range is pulled back to the slider’s ends',
        spd.steps[0].speed === 4 && spd.steps[1].speed === 0.25 && spd.steps[2].speed === 2.5,
        spd.steps.map(s => s.speed).join(', '));
-    ok('the rest cannot be a once-through effect', junk.idle.fx === 'keys', junk.idle.fx);
+    ok('the rest cannot be a once-through effect', junk.idle.fx === 'buttons', junk.idle.fx);
     const v2 = A.kpfxNormalise({ preset: 'x', main: 'blue', accent: 'white', energy: 40, bl: 'hold',
         startup: [{ fx: 'crank', secs: 1.8 }, { fx: 'sweep', secs: 1.0, k1: 1 }], idle: { fx: 'keys' }, press: { fx: 'ripple' }, alert: { fx: 'alarm' } });
     ok('the shows-and-moments shape loads: its power-up steps, in its main colour',
@@ -530,7 +818,7 @@ console.log('\na boot saved is a boot restored');
     let doc = null;
     try { doc = JSON.parse(f.body); } catch (e) { doc = null; }
     ok('saving writes valid JSON, named after the keypad, with a format and version',
-       !!doc && doc.rdm_keypad_show === 4 && /wheel_pad/.test(f.name), f && f.name);
+       !!doc && doc.rdm_keypad_show === 5 && /wheel_pad/.test(f.name), f && f.name);
     ok('and the file is named for everything it holds, not just the boot', /_lights\.json$/.test(f.name), f && f.name);
     ok('and loading it back gives the same boot', doc && JSON.stringify(A.kpfxNormalise(doc.show)) === JSON.stringify(A.kp.show));
     const txt = A.kpfxBakeText();
@@ -550,10 +838,14 @@ console.log('\nafter the boot: a resting look, and what a press does over it');
     const rest = (fx, o) => A.kpfxNormalise(Object.assign({ steps: [step('flash', { secs: 0.5 })], idle: Object.assign({ fx: fx }, o || {}) }));
     /* the default is the honest one: hand the rings back to the buttons */
     ok('out of the box the keypad hands its rings back to the buttons',
-       A.kpfxDefaultShow().idle.fx === 'keys' && A.kpfxDefaultShow().press.fx === 'none');
-    ok('a resting look can only be an effect that loops', rest('crank').idle.fx === 'keys', rest('crank').idle.fx);
+       A.kpfxDefaultShow().idle.fx === 'buttons' && A.kpfxDefaultShow().press.fx === 'none');
+    ok('a resting look can only be an effect that loops', rest('crank').idle.fx === 'buttons', rest('crank').idle.fx);
     ok('and every looping effect is offered as one, with none of the once-through ones',
-       A.kpfxRestable().length === A.KPFX.filter(e => !e.once).length && A.kpfxRestable().every(d => !d.once),
+       A.kpfxRestable().every(d => !d.once) &&
+       A.kpfxRestable().length === A.KPFX.filter(e => !e.once && !e.boot).length,
+       A.kpfxRestable().map(d => d.id).join(','));
+    ok('handing the rings back is the first thing offered, and the only rest that is not an animation',
+       A.kpfxRestable()[0].id === 'buttons' && A.KPFX.filter(d => d.rest).length === 1,
        A.kpfxRestable().map(d => d.id).join(','));
     /* it has a colour and a speed of its own, like a step */
     const scan = rest('scan', { color: 'blue', speed: 2 });
@@ -637,6 +929,64 @@ console.log('\nafter the boot: a resting look, and what a press does over it');
     A.kp.show = A.kpfxDefaultShow();
 }
 
+/* === 10c. "back to the buttons" is the buttons ==========================
+   The one that sent this pass back: the boot ended and every assigned key
+   lit up in its design colour, on a keypad whose buttons are all momentary
+   and therefore all OFF. A rest that lights buttons nobody is holding is a
+   picture of a keypad that does not exist — and it is the resting look
+   nine boots out of ten end on, so it was the wrong answer nearly always. */
+console.log('\nthe rest that hands the rings back shows the BUTTONS');
+{
+    A.kp.model = A.MODELS[3];
+    A.kp.keys = JSON.parse(JSON.stringify(A.DEFAULT_KEYS));
+    A.kp.keyOn = {}; A.kp.keyPos = {};
+    const sh = A.kpfxNormalise({ steps: [step('flash', { secs: 0.5 })], idle: { fx: 'buttons' } });
+    const led = () => A.kpfxFrame(A.kp.model, sh, { t: 2 }).led;
+    ok('with every button at rest, nothing is lit', led().every(c => !c), led().join(','));
+    /* index 1 of the default keypad is PIT — latching, yellow */
+    A.kp.keyOn[1] = true;
+    ok('latch one on and that ring — only that ring — takes its colour',
+       led()[1] === 'yellow' && led().filter(Boolean).length === 1, led().join(','));
+    A.kp.keyOn[1] = false;
+    ok('let it go and the ring goes with it', !led()[1]);
+    /* index 10 is WIPER: a cycle key whose first position is OFF */
+    A.kp.keyPos[10] = 0;
+    ok('a multi-position key parked on OFF is dark', !led()[10], String(led()[10]));
+    A.kp.keyPos[10] = 2;
+    ok('and lit on the colour of the position it is parked on', led()[10] === 'cyan', String(led()[10]));
+    A.kp.keyPos = {};
+    /* a blinking key blinks on the SCREEN and holds in the FILE */
+    A.kp.keyOn[1] = true;                                  /* PIT: latching, yellow, slow blink */
+    const liveAt = t => A.kpfxFrame(A.kp.model, sh, { t: t, live: true }).led[1];
+    const bakedAt = t => A.kpfxFrame(A.kp.model, sh, { t: t }).led[1];
+    ok('a key set to blink blinks in the preview, at the Design page’s own rate',
+       liveAt(2.0) !== liveAt(2.0 + 0.75), liveAt(2.0) + ' / ' + liveAt(2.75));
+    ok('and does not blink in the file, which has to end on one frame that holds',
+       bakedAt(2.0) === 'yellow' && bakedAt(2.75) === 'yellow', bakedAt(2.0) + ' / ' + bakedAt(2.75));
+    const bareRest = A.kpfxBake(A.kpfxNormalise({ steps: [], idle: { fx: 'buttons' } }), 6, A.KPFX_MAX_FPS, 0x15);
+    ok('so handing the rings back is still ONE frame on the wire, not a stream, blinking key and all',
+       bareRest.filter(b => b.why === 'rings').length === 1, bareRest.length + ' frames');
+    A.kp.keyOn[1] = false;
+    /* the other half of the fix: "Hold your keys" lights every assigned key
+       whether its button is on or not, which is a fine way to END a boot and
+       a lie about what the keypad is doing afterwards */
+    ok('"Hold your keys" is still there for a boot step, and is not the same picture',
+       A.kpfxDef('keys').id === 'keys' &&
+       A.kpfxRenderStep(A.kp.model, step('keys', { secs: 1 }), 0.5).out.some(v => v > 0));
+    ok('but it is not offered as a resting look any more',
+       !A.kpfxRestable().some(d => d.id === 'keys'), A.kpfxRestable().map(d => d.id).join(','));
+    ok('and every boot ever saved, which spelled the handover "keys", is read as the buttons',
+       A.kpfxNormalise({ steps: [], idle: { fx: 'keys' } }).idle.fx === 'buttons');
+    ok('the handover cannot be used as a boot STEP — it would be a hole in the boot',
+       A.kpfxNormaliseStep({ fx: 'buttons', secs: 1 }).fx !== 'buttons',
+       A.kpfxNormaliseStep({ fx: 'buttons', secs: 1 }).fx);
+    /* it is what live streaming leaves behind, too */
+    ok('and it is what the file holds on its last frame',
+       /last frame is that, and it holds/i.test((A.kp.show = A.kpfxNormalise({ steps: [step('wipe', { secs: 0.6 })], idle: { fx: 'buttons' } }), A.kpfxBakeText())));
+    A.kp.show = A.kpfxDefaultShow();
+    A.kp.keyOn = {};
+}
+
 /* === 11. geometry ======================================================= */
 console.log('\nthe grid the effects are written against');
 {
@@ -687,7 +1037,7 @@ console.log('\nthe page keeps the keypad in front of you');
     ok('the sequence is laid out in time, each step as wide as it is long',
        /kpfx-tlseg/.test(SHOW) && /\/ loop\) \* 100/.test(SHOW));
     ok('there is a playhead, and dragging it scrubs', /id='kpFxHead'/.test(SHOW) && /kpfxScrubTo/.test(SHOW) && /mousedown/.test(SHOW));
-    const tick = SHOW.slice(SHOW.indexOf('function kpfxTick'), SHOW.indexOf('function kpfxStart'));
+    const tick = SHOW.slice(SHOW.indexOf('function kpfxTick'), SHOW.indexOf('function kpfxStart()'));
     ok('the clock only paints and moves the playhead — it never rebuilds a panel',
        tick.length > 200 && !/kpfxRender(Rail|Time|Props|All)\(/.test(tick) && /kpfxMoveHead\(\)/.test(tick),
        tick.length + ' chars');
@@ -697,6 +1047,25 @@ console.log('\nthe page keeps the keypad in front of you');
        /data-fxfx=/.test(SHOW) && /kpfxMiniDraw\(cv, kpfxRenderStep\(kp\.model/.test(SHOW));
     ok('the store’s hook after copying a boot between keypads still exists (ADR-0060)',
        /function kpfxRenderInsp\(\) \{ if \(kpfxVisible\(\)\) kpfxRenderAll\(\); \}/.test(SHOW));
+}
+
+/* --emit-tape <path>: write a real baked tape where the dash's own native
+   test can read it. The two repos meet at this file, and the only way that
+   contract stays true is if the C parses the bytes Studio actually produces
+   rather than a hand-typed lookalike. See RDM-7_Dash/tests/native/
+   test_keypad_lights.c. */
+{
+    const at = process.argv.indexOf('--emit-tape');
+    if (at > 0 && process.argv[at + 1]) {
+        A.kp.model = A.MODELS[3]; A.kp.node = 0x15; A.kp.baud = 125; A.kp.name = 'Wheel pad';
+        A.kp.blColor = 'amber'; A.kp.blBright = 18;
+        /* Start lights: two steps, and the one ready-made boot that drives the
+           legend backlight as well as the rings, so the fixture carries both
+           frame IDs the player will ever see. */
+        A.kp.show = A.kpfxPreset('startlights');
+        fs.writeFileSync(process.argv[at + 1], JSON.stringify(A.kpfxDashTape(), null, 1));
+        console.log('  wrote ' + process.argv[at + 1]);
+    }
 }
 
 console.log('');

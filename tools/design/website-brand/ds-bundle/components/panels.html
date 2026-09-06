@@ -1,0 +1,49 @@
+<!-- @dsCard group="Components" name="Panels" subtitle="A product picture: a header row, on the dark stage — never a bare photo" viewport="800x520" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDM — Panels</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+.demo { max-width: 760px; margin: 0 auto; padding: var(--sp-8) var(--sp-6) var(--sp-16); }
+.demo-head { font-family: var(--font-heading); font-weight: 600; font-size: var(--fs-eyebrow); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); margin: var(--sp-10) 0 var(--sp-4); }
+.demo-head:first-child { margin-top: 0; }
+.note { font-size: var(--fs-small); color: var(--text-secondary); max-width: 68ch; line-height: 1.5; }
+.panel { display: flex; flex-direction: column; border: 1px solid var(--border); background: var(--surface); }
+.phead { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-bottom: 1px solid var(--border); font-family: var(--font-heading); font-weight: 600; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+.phead .rule { width: 1px; height: 14px; background: var(--border); }
+.phead .meta { font-family: var(--font-body); font-weight: 400; font-size: 12px; letter-spacing: normal; text-transform: none; color: var(--text-muted); }
+.phead .seg { margin-left: auto; display: flex; gap: 12px; }
+.phead .seg span { font-size: 10.5px; letter-spacing: 0.1em; color: var(--text-muted); }
+.phead .seg span.on { color: var(--action); border-bottom: 2px solid var(--action); }
+.stage { height: 220px; display: flex; align-items: center; justify-content: center; background: var(--stage); }
+.pfoot { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-muted); }
+.pfoot a { margin-left: auto; font-family: var(--font-heading); font-weight: 600; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--action); }
+</style>
+</head>
+<body>
+<main class="demo">
+
+  <div class="demo-head">The product panel</div>
+  <div class="panel">
+    <div class="phead">
+      <span>Track map</span><span class="rule"></span><span class="meta">Mallala · lap 6 vs best</span>
+      <div class="seg"><span class="on">Pace</span><span>Speed</span><span>Line</span></div>
+    </div>
+    <div class="stage">
+      <svg viewBox="0 0 200 200" height="180" aria-hidden="true">
+        <path d="M40 150 C 10 120, 20 60, 60 50 S 130 40, 150 70 S 195 110, 160 140 S 90 185, 60 165 S 50 160, 40 150 Z" fill="none" stroke="#3a3d42" stroke-width="7"/>
+        <path d="M40 150 C 10 120, 20 60, 60 50 S 130 40, 150 70" fill="none" stroke="#4fae6b" stroke-width="3"/>
+        <path d="M150 70 S 195 110, 160 140" fill="none" stroke="#e8433c" stroke-width="3"/>
+        <circle cx="150" cy="70" r="4.5" fill="#fff" stroke="#e8433c" stroke-width="2"/>
+      </svg>
+    </div>
+    <div class="pfoot"><span>Tap · interact · swap layout</span><a href="#">Open the demo →</a></div>
+  </div>
+  <p class="note" style="margin-top: var(--sp-4);">Header: the panel's name, a rule, then meta in plain body type — its own controls sit hard right, the active one underlined red. Stage: always <code>--stage</code> (<code>#16181b</code>), even on the light page, because that's where the app draws a product. Footer: an optional caption, or the way out.</p>
+
+</main>
+</body>
+</html>

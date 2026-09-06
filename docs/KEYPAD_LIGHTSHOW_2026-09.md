@@ -1,7 +1,11 @@
 # The keypad's lights
 
 **Date:** 2026-09-02, laid out as a workspace 2026-09-03 (§1.1), rest and
-reactions added 2026-09-03 (§1.2) — third shape in one day, see §7
+reactions added 2026-09-03 (§1.2) — third shape in one day, see §7.
+2026-09-04: the rest told the truth about the buttons and the standing light
+came onto this page (§1.2, §1.3); the legends joined the show (§3.1); the
+keypad's own start-up show came out of hiding (§1.0); and **the dash plays the
+file** (§6), which is what the whole page was waiting for
 **Where:** RDM Studio → Keypad → **Lights**
 **Code:** `src/tauri-overlay.html`, `kpfx*`, one contiguous block
 **Tests:** `tools/check_lightshow.js`
@@ -22,6 +26,7 @@ block at the end of the row is everything after it.
 | You can | How |
 |---|---|
 | Watch it | the keypad in the middle plays the boot on a loop, then rests, then goes again |
+| Say what the keypad does on its own | the block above the row — §1.0 |
 | Add, remove, reorder steps | the timeline under the keypad; up to eight |
 | Change what a step does | pick from sixteen effects, on the left |
 | Change its colour | one swatch row — the seven colours a ring can make |
@@ -29,13 +34,36 @@ block at the end of the row is everything after it.
 | Change how long it lasts | one slider, 0.2–8 s |
 | Change how fast it runs | one slider, 0.25×–4× (§3) |
 | Say what happens after the boot | open the block at the end of the row (§1.2) |
+| Change the standing brightness and the legend backlight | the same block — §1.3 |
 | Say what a press does | same block — a reaction belongs to the rest |
 | Go to a moment | drag the playhead along the timeline |
 | Start from something | six ready-made boots; picking one replaces the steps, then it is yours |
-| Send it | play it on the keypad through the dash · save · load · frames for a USB-CAN tool |
+| Change what the legends do during a step | one swatch row on the step, §3.1 |
+| Watch a real thumb | **Watch the keypad** on the transport, with a dash on the bus |
+| Take it back | Ctrl+Z, or Undo in the black bar — every destructive edit is undoable |
+| Keep a boot to start from | **Keep**, under Start from; it is there on every keypad |
+| Send it | **put it on the dash** and it plays itself · play it live · save · load · frames |
 
 No alerts, energy dials or colour themes. Warnings are a per-key thing and
 live on the Design page (ADR-0062); the other two are not coming back.
+
+## 1.0 Before any of it: the keypad on its own
+
+The block above the row. A keypad has ONE animation it can play with nothing
+attached — its factory start-up show, CANopen `2014h`, three fixed choices —
+and it plays it before anything else at every power-up.
+
+| | |
+|---|---|
+| **Nothing** | dark until something tells it otherwise. The right answer if the dash or Studio is going to play your boot |
+| **Its own full show** | Blink's factory animation. The keypad ships this way |
+| **A quick flash** | one flash, so you can see it has power, then out of the way |
+
+It is here because this is the page where the question is asked, and because
+there are two answers to "what happens at ignition" — this and yours — that
+happen in that order. The panel prints the order as three rows. Studio does not
+draw the factory animation: it has never seen it, and a guess would be the one
+lie this page exists to avoid.
 
 ## 1.1 The page
 
@@ -60,10 +88,23 @@ Two questions, on the block at the end of the row, because that is when they
 are true. During the boot the boot is playing; once the rings are handed back
 to the buttons there is nothing left to react with.
 
-**What it rests in.** Any of the eight looping effects, with its own colour and
+**What it rests in.** Any of the seven looping effects, with its own colour and
 speed — or **Back to the buttons**, the default, which hands the rings over to
 what each button is actually doing. A once-through effect cannot be a resting
 look: it would settle and then hold one frame for the rest of the day.
+
+*Back to the buttons* means it: it reads the same button state the Design page
+paints. A momentary ring is **dark** until it is held, a latching one stays as
+you left it, and a multi-position one shows the position it is parked on — dark
+if that position is Off. The panel counts it off for you ("3 of 13 lit right
+now"), because on a keypad of momentary buttons the honest answer is a dark
+keypad, and a dark keypad looks like a bug until something says it is not.
+
+Until 2026-09-04 this was drawn with *Hold your keys*, which lights every
+assigned key whether its button is on or not — a fine way to END a boot and a
+lie about what the keypad does afterwards. *Hold your keys* is a boot step now
+and nothing else; every boot ever saved spells the handover `keys` and is read
+as the new one (§6).
 
 The panel is straight about the cost. Handing back streams nothing. Anything
 else means *the rings show the animation, not what your buttons are doing*, and
@@ -77,6 +118,24 @@ no seam. Press a key on the picture to try one.
 The honest part: in the car the **dash** does this. It is what reads the
 keypad's key frame and lights the ring, so a reaction lives in the file and in
 the dash, never in the keypad. Studio previews it against your own thumb.
+
+## 1.3 The standing light
+
+The three settings a PKP actually keeps (ADR-0063) — **button brightness**,
+**legend backlight** colour, **legend brightness** — are on this page's
+*After the boot* panel as well as on the Design page's rail. Not a copy: the
+same three `kp.*` values, so a change on either page is showing on the other
+before you get there, and both write the same setup file.
+
+They are here because this is the page where the question comes up. You are
+looking at the keypad at rest, wondering why it looks like that, and the answer
+is two of these three sliders. The panel carries the day/night room with them,
+because a backlight colour cannot be judged in daylight.
+
+Both panels read the levels as a **percentage**. The part stores 0-63; every
+other place in Studio that reports these — the wizard, the change list, the
+setup file's comments — already said "76%", and the rail was the only thing
+still showing "48".
 
 ## 2. What the hardware can actually do
 
@@ -101,6 +160,7 @@ drawn in them, and the harness asserts the quantiser never picks them.
 |---|---|
 | **Once** — play through and settle | Wipe · Sweep · Roll call · Start lights · Crank · Burst out · Flash · Colour check |
 | **For a while** — loop for as long as the step lasts | Scanner · Chequered flag · Fire · Rainbow · Sparkle · Hold the colour · Hold your keys · Wait |
+| **At rest only** | Back to the buttons — not a step, a handover (§1.2) |
 
 **A step has two knobs, and they answer different questions.** *How long* is
 the slot the step takes in the boot. *Speed* is how fast it runs inside that
@@ -132,15 +192,36 @@ nothing is worse than one that ends on white.
 
 Each effect carries one sentence about what quantising does to it.
 
+## 3.1 The legends, during a step
+
+A ring is three bits — seven colours and dark. The lamp behind the printed
+legends is **nine** colours and 64 levels, and amber and lime live only there.
+A step can set it or leave it alone:
+
+| | |
+|---|---|
+| **Leave them** (the default) | the step does not touch the legends; they stay on the keypad's own standing value |
+| **A colour + a level** | the legends are that, for as long as the step lasts |
+
+Whatever a boot does to them, **the rest puts them back** to the standing value
+(§1.3): the legends are a setting the keypad keeps, so a show that borrows them
+owes it a way back. The frame script's last legend frame is that restore, and it
+says so in its header.
+
+On the wire this is one frame, `0x500 + node`: byte 0 brightness, byte 1 colour.
+It is throttled to four a second — the lamp is one lamp for the whole keypad and
+nobody needs it twelve times a second — and counted in the same bus budget as
+the rings.
+
 ## 4. The ready-made boots
 
 | Boot | Steps |
 |---|---|
 | Ignition | Crank 1.8 s → Sweep 1.0 s |
 | Roll call | Roll call 1.5 s |
-| Start lights | Start lights 2.2 s (red) → Flash 0.5 s (green) |
+| Start lights | Start lights 2.2 s (red) → Flash 0.5 s (green), legends following |
 | Sweep | Wipe 0.6 s → Sweep 0.9 s |
-| Fire up | Fire 1.8 s → Burst out 0.6 s |
+| Fire up | Fire 1.8 s → Burst out 0.6 s, legends amber |
 | Colour check | Colour check 2.4 s |
 
 Each is tuned to look right on a 2×2 as well as a 3×5. The harness plays every
@@ -162,17 +243,28 @@ rolling one-second window; the page shows the busiest second before anyone
 presses play. The harness checks no ready-made boot and no effect held for six
 seconds exceeds the budget.
 
-## 6. The three ways the lights leave Studio
+## 6. The four ways the lights leave Studio
 
 | Route | What it is | Works today |
 |---|---|---|
+| **Put it on the dash** | the boot is stored on the dash, which plays it at every power-up with Studio shut | with a dash on WiFi |
 | **Play it on the keypad** | Studio streams the frames through your dash while the window is open | with a dash on WiFi |
-| **Save** (`rdm_keypad_<name>_lights.json`, format 4) | The boot, the resting look and the reaction, as a small readable file | yes |
+| **Save** (`rdm_keypad_<name>_lights.json`, format 5) | The boot, the resting look and the reaction, as a small readable file | yes |
 | **Frames** (`rdm_keypad_<name>_lights_frames.txt`) | Every frame with its timing, for a USB-CAN tool | yes |
 
-**A keypad cannot play any of this on its own.** The file is the handoff to
-dash firmware. Until then the only animation that runs with no host is the
-keypad's own built-in start-up show (CANopen object `2014h`, Connection page).
+**A keypad still cannot play any of this on its own** — the only animation it
+runs with nothing attached is its own start-up show (§1.0). What changed on
+2026-09-04 is that it no longer has to: the dash is the host now (ADR-0068).
+Studio bakes the boot to timed frames — the same ones the Frames export writes
+— and posts the tape to `/api/keypad/lights`. The dash stores it on its own
+filesystem and plays it at every power-up.
+
+The dash is a tape player and nothing more: no effect engine, no button logic.
+It refuses to play on a bus that is not on the bitrate the boot was made for,
+refuses while the bus scan owns the CAN peripheral, and is rate-capped like the
+gateway. Studio checks its two limits — 384 frames and 60 seconds — before
+sending, because the player's only other option is to truncate, and half a boot
+is worse than none.
 
 The frame script says which of two things its tail is: after the boot it either
 **holds** (the rings went back to the buttons — the last frame is that, and it
@@ -182,7 +274,9 @@ That distinction is the whole reason the header changed in format 4.
 
 Loading reads every shape this feature has had and carries across what still
 means something: the steps and their colours, the resting look, and the press
-lane where its name survived. Files are named after the keypad they describe
+lane where its name survived. Format 5 is that plus one rename: a file that
+rests on `keys` was written before the handover told the truth, and is read as
+`buttons`. Files are named after the keypad they describe
 (ADR-0060).
 
 ## 7. Why it is the third shape in one day
@@ -203,13 +297,16 @@ proves each of those.
 
 ## 8. Not done
 
-- **The dash does not play boots yet.** Today a boot needs Studio open.
-- **A resting animation needs Studio open.** Handing the rings back to the
-  buttons is the only resting look that costs nothing and survives Studio being
-  closed. Everything else is a stream, which makes an animated rest a bench and
-  show-off feature until the dash plays these files itself.
-- **A reaction is previewed here and played by the dash.** Studio streams
-  frames blind — it is not told about real key presses — so pressing a key on
-  the picture is the only way to see one until the dash reads the file.
+- **A reaction is still Studio's alone.** The dash plays the boot now, but not
+  the press: reacting means reading the keypad's key frame and re-rendering the
+  resting look over it, which is the LED engine, which is the keypad manager
+  (`docs/KEYPAD_WORKSPACE_PLAN.md` §4) and a separate piece of work. Studio can
+  watch real presses through the dash and preview them — that is what **Watch
+  the keypad** does — but the car cannot play one yet.
+- **A resting ANIMATION on the dash is untested on a car.** The player loops the
+  tail as the file asks it to, and the native tests cover the contract, but every
+  animated rest so far has been watched on a bench with Studio open.
+- **A warning is not in the file.** A tripped warning is live and per-key
+  (ADR-0062); the boot file is a boot. The rest panel says so.
 - **No per-frame LED dimmer.** The manual's `0x400 + node` object is deliberately
   unused: unverified on our bench, and `0x400-0x43F` is the RDM GPS node range.

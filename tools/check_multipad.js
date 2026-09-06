@@ -142,6 +142,10 @@ function build(seedOld, seedNew) {
         grab('kpNewId'), grab('kpBlank'), grab('kpSlug'), grab('kpModelOf'),
         grab('kpMigrate'), grab('kpStore'), grab('kpStoreWrite'), grab('kpEntry'),
         grab('kpNextFree'), grab('kpAddrClash'), grab('kpLoadCfg'), grab('kpSaveCfg'),
+        /* loading a keypad drops the undo history with it — the stack belongs
+           to one keypad, and this file is the one that switches between them */
+        line(/^\s*var kpUndoStack = \[\], KP_UNDO_MAX[^\n]*$/m, 'the undo stack'),
+        grab('kpSnapshot'), grab('kpUndoPush'), grab('kpUndoClear'), grab('kpRenderUndo'),
         grab('kpAfterKeypadChange'),
         grabWin('kpAddKeypad'), grabWin('kpPickKeypad'), grabWin('kpRenameKeypad'),
         grabWin('kpRemoveKeypad'), grabWin('kpCopyShowTo')

@@ -268,8 +268,11 @@ console.log('\nwhat the download does with it');
     ok('a failed download leaves it unmarked so the next connect retries',
        dl.lastIndexOf('gpNodeMark') < dl.indexOf('.catch('),
        'marking in the catch would swallow the drive silently');
+    /* The view it lands on is gpOpenView()'s call now — the corner feed where
+       the corners can be ranked, the mosaic where they cannot — but the guard
+       this assertion exists for is the `!auto`, not which view. */
     ok('an automatic download does not yank the view',
-       /if \(!auto\) window\.gpSetView\("session"\)/.test(dl),
+       /if \(!auto\) window\.gpSetView\(/.test(dl),
        'being thrown out of Setup mid-sentence is how people learn to turn a ' +
        'feature off');
     ok('but it does say out loud when it fails',

@@ -1,0 +1,180 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Barlow', 'Segoe UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    * { box-sizing: border-box; border-radius: 0; }
+    a { color: #1d1f20; text-decoration: none; } a:hover { color: #d2232a; }
+    .head { font-family: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif; text-transform: uppercase; }
+    .mono { font-family: 'JetBrains Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .btn-red:hover { background: #c02026 !important; border-color: #c02026 !important; }
+    .btn-ink:hover { opacity: 0.86; }
+    .btn-line:hover { border-color: #1d1f20 !important; color: #1d1f20 !important; }
+    .lnk:hover { border-bottom-color: #d2232a !important; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; background: #c8c9cc; color: #1d1f20; padding: 40px 48px 56px; display: flex; flex-direction: column; gap: 36px;">
+
+  <div style="display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid rgba(29,31,32,0.2); padding-bottom: 18px;">
+    <div class="head" style="font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: rgba(29,31,32,0.6);">RDM website · design style</div>
+    <h1 class="head" style="margin: 0; font-weight: 700; font-size: 56px; line-height: 0.95;">Components</h1>
+    <p style="margin: 0; max-width: 620px; font-size: 14px; line-height: 1.5; color: rgba(29,31,32,0.75);">The pieces a page is built from, at the sizes the app uses. Copy any of them onto a page artboard.</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px 40px;">
+
+    <!-- buttons -->
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div class="head" style="font-weight: 600; font-size: 14px; letter-spacing: 0.14em;">Buttons</div>
+      <div style="display: flex; flex-direction: column; gap: 14px; padding: 18px; background: #d9dadd; border: 1px solid rgba(29,31,32,0.2);">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <a class="head btn-red" href="#" style="display: inline-flex; align-items: center; height: 44px; padding: 0 24px; background: #d2232a; border: 1px solid #d2232a; color: #fff; font-weight: 600; font-size: 15px; letter-spacing: 0.08em;">Buy $599</a>
+          <a class="head btn-ink" href="#" style="display: inline-flex; align-items: center; height: 44px; padding: 0 22px; background: #1d1f20; border: 1px solid #1d1f20; color: #c8c9cc; font-weight: 600; font-size: 15px; letter-spacing: 0.09em;">Try RDM Studio</a>
+          <a class="head btn-line" href="#" style="display: inline-flex; align-items: center; height: 44px; padding: 0 22px; background: transparent; border: 1px solid rgba(29,31,32,0.38); color: rgba(29,31,32,0.75); font-weight: 600; font-size: 15px; letter-spacing: 0.09em;">Read the docs</a>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <a class="head btn-red" href="#" style="display: inline-flex; align-items: center; height: 28px; padding: 0 16px; background: #d2232a; border: 1px solid #d2232a; color: #fff; font-weight: 600; font-size: 12.5px; letter-spacing: 0.08em;">Export</a>
+          <a class="head btn-ink" href="#" style="display: inline-flex; align-items: center; height: 28px; padding: 0 15px; background: #1d1f20; border: 1px solid #1d1f20; color: #c8c9cc; font-weight: 600; font-size: 12.5px; letter-spacing: 0.09em;">Done</a>
+          <a class="head btn-line" href="#" style="display: inline-flex; align-items: center; height: 28px; padding: 0 15px; background: transparent; border: 1px solid rgba(29,31,32,0.38); color: rgba(29,31,32,0.75); font-weight: 600; font-size: 12.5px; letter-spacing: 0.09em;">Cancel</a>
+          <a class="head lnk" href="#" style="display: inline-flex; align-items: center; height: 28px; font-weight: 600; font-size: 12.5px; letter-spacing: 0.08em; color: #d2232a; border-bottom: 1px solid transparent;">Browse the marketplace →</a>
+        </div>
+        <div style="display: grid; grid-template-columns: 120px 1fr; font-size: 12.5px; border-top: 1px solid rgba(29,31,32,0.2);">
+          <div style="padding: 6px 0; color: rgba(29,31,32,0.6);">Primary</div><div style="padding: 6px 0;">Red fill, white text. One per view. Hover #c02026.</div>
+          <div style="padding: 6px 0; color: rgba(29,31,32,0.6);">Secondary</div><div style="padding: 6px 0;">Ink fill, ground-coloured text. The "inverted" button survives a palette flip unchanged.</div>
+          <div style="padding: 6px 0; color: rgba(29,31,32,0.6);">Quiet</div><div style="padding: 6px 0;">1px border at ink 38%, soft text. Hover darkens the border to ink.</div>
+          <div style="padding: 6px 0; color: rgba(29,31,32,0.6);">Sizes</div><div style="padding: 6px 0;">44px page buttons (15px type, 24px sides). 28px in bars and panel headers (12.5px type, 16px sides). Condensed 600, caps, tracking 0.08em.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- section head -->
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div class="head" style="font-weight: 600; font-size: 14px; letter-spacing: 0.14em;">Section opener</div>
+      <div style="display: flex; flex-direction: column; gap: 16px; padding: 18px; background: #d9dadd; border: 1px solid rgba(29,31,32,0.2);">
+        <div class="head" style="display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: rgba(29,31,32,0.6);"><i style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #d2232a;"></i>New · pre-order</div>
+        <h2 class="head" style="margin: 0; font-weight: 700; font-size: 60px; line-height: 0.95;">Lap times.<br><span style="color: #d2232a;">On your dash.</span></h2>
+        <p style="margin: 0; max-width: 520px; font-size: 16.5px; line-height: 1.5; color: rgba(29,31,32,0.75);">A two-line title. The first line says the thing, the second line in red says why you care. Then one paragraph, then one button.</p>
+        <div style="display: grid; grid-template-columns: 120px 1fr; font-size: 12.5px; border-top: 1px solid rgba(29,31,32,0.2);">
+          <div style="padding: 6px 0; color: rgba(29,31,32,0.6);">Eyebrow</div><div style="padding: 6px 0;">Condensed 600 12px, tracking 0.20em, muted. The red dot only when something is new or live.</div>
+          <div style="padding: 6px 0; color: rgba(29,31,32,0.6);">Title</div><div style="padding: 6px 0;">Condensed 700 60px, line 0.95. Hero is 84px. Sentence case in the source, caps on screen.</div>
+          <div style="padding: 6px 0; color: rgba(29,31,32,0.6);">Gap</div><div style="padding: 6px 0;">14–22px between the pieces, 64px section padding, 40px page sides, 1200px content width.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- panel -->
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div class="head" style="font-weight: 600; font-size: 14px; letter-spacing: 0.14em;">Panel · the product picture</div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2); background: #d9dadd;">
+        <div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-bottom: 1px solid rgba(29,31,32,0.2);">
+          <span class="head" style="font-weight: 600; font-size: 12px; letter-spacing: 0.12em;">Track map</span>
+          <span style="width: 1px; height: 14px; background: rgba(29,31,32,0.2);"></span>
+          <span style="font-size: 12px; color: rgba(29,31,32,0.6);">Mallala · lap 6 vs best</span>
+          <span class="head" style="margin-left: auto; font-weight: 600; font-size: 10.5px; letter-spacing: 0.1em; color: #d2232a; border-bottom: 2px solid #d2232a;">Pace</span>
+          <span class="head" style="font-weight: 600; font-size: 10.5px; letter-spacing: 0.1em; color: rgba(29,31,32,0.6);">Speed</span>
+          <span class="head" style="font-weight: 600; font-size: 10.5px; letter-spacing: 0.1em; color: rgba(29,31,32,0.6);">Line</span>
+        </div>
+        <div style="height: 210px; display: flex; align-items: center; justify-content: center; background: #16181b;">
+          <svg viewBox="0 0 200 200" height="180" aria-hidden="true">
+            <path d="M40 150 C 10 120, 20 60, 60 50 S 130 40, 150 70 S 195 110, 160 140 S 90 185, 60 165 S 50 160, 40 150 Z" fill="none" stroke="#3a3d42" stroke-width="7"/>
+            <path d="M40 150 C 10 120, 20 60, 60 50 S 130 40, 150 70" fill="none" stroke="#4fae6b" stroke-width="3"/>
+            <path d="M150 70 S 195 110, 160 140" fill="none" stroke="#e8433c" stroke-width="3"/>
+            <path d="M160 140 S 90 185, 60 165 S 50 160, 40 150" fill="none" stroke="#e8e8e8" stroke-width="3"/>
+            <circle cx="150" cy="70" r="4.5" fill="#fff" stroke="#e8433c" stroke-width="2"/>
+          </svg>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-top: 1px solid rgba(29,31,32,0.2); font-size: 11.5px; color: rgba(29,31,32,0.6);">
+          <span>Footer row: a caption, or the way out</span>
+          <a class="head" href="#" style="margin-left: auto; font-weight: 600; font-size: 11.5px; letter-spacing: 0.08em; color: #d2232a;">Open the demo →</a>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: 120px 1fr; font-size: 12.5px;">
+        <div style="padding: 4px 0; color: rgba(29,31,32,0.6);">Frame</div><div style="padding: 4px 0;">1px divider, surface fill. Header 26–30px with the name in Condensed 600 12px, tracking 0.12em; its own controls hard right, the active one underlined red.</div>
+        <div style="padding: 4px 0; color: rgba(29,31,32,0.6);">Stage</div><div style="padding: 4px 0;">The picture sits on #16181b. A dash, a map, a screenshot of Studio. Never a photo with a drop shadow.</div>
+      </div>
+    </div>
+
+    <!-- ruled table -->
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div class="head" style="font-weight: 600; font-size: 14px; letter-spacing: 0.14em;">Ruled table · one fact per column</div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid rgba(29,31,32,0.2); border-left: 1px solid rgba(29,31,32,0.2);">
+        <div style="padding: 16px 18px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); background: #d9dadd;"><div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: rgba(29,31,32,0.6);">Screen</div><div class="head" style="margin-top: 6px; font-weight: 700; font-size: 34px; line-height: 1;">7"</div><div style="margin-top: 6px; font-size: 13px; color: rgba(29,31,32,0.75);">Sunlight-readable, capacitive touch</div></div>
+        <div style="padding: 16px 18px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); background: #d9dadd;"><div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: rgba(29,31,32,0.6);">Refresh</div><div class="head" style="margin-top: 6px; font-weight: 700; font-size: 34px; line-height: 1;">50 fps</div><div style="margin-top: 6px; font-size: 13px; color: rgba(29,31,32,0.75);">Every needle moves with the engine</div></div>
+        <div style="padding: 16px 18px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); background: #d9dadd;"><div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: rgba(29,31,32,0.6);">Input</div><div class="head" style="margin-top: 6px; font-weight: 700; font-size: 34px; line-height: 1;">Any CAN</div><div style="margin-top: 6px; font-size: 13px; color: rgba(29,31,32,0.75);">Haltech, Link, MaxxECU, DBC import</div></div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr; border-top: 1px solid rgba(29,31,32,0.2); border-left: 1px solid rgba(29,31,32,0.2); font-size: 14px; background: #d9dadd;">
+        <div class="head" style="padding: 10px 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: rgba(29,31,32,0.6);">Row</div>
+        <div class="head" style="padding: 10px 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 3px solid #d2232a; font-weight: 700; font-size: 15px; letter-spacing: 0.1em;">RDM-7</div>
+        <div class="head" style="padding: 10px 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: rgba(29,31,32,0.6);">Typical race dash</div>
+        <div style="padding: 10px 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.75);">Software licence</div><div style="padding: 10px 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-weight: 600; background: #c8c9cc;">None, ever</div><div style="padding: 10px 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.75);">Often paid or dealer-locked</div>
+        <div style="padding: 10px 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.75);">Try before you buy</div><div style="padding: 10px 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-weight: 600; background: #c8c9cc;">Yes, in the browser</div><div style="padding: 10px 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); color: rgba(29,31,32,0.75);">No</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 120px 1fr; font-size: 12.5px;">
+        <div style="padding: 4px 0; color: rgba(29,31,32,0.6);">Rule</div><div style="padding: 4px 0;">Top and left border on the grid, right and bottom on every cell. Label in Condensed 600 11px, tracking 0.16em, muted. No zebra striping, no icons.</div>
+        <div style="padding: 4px 0; color: rgba(29,31,32,0.6);">Our column</div><div style="padding: 4px 0;">Ground-coloured cells under a 3px red rule in the header. That is the only highlight.</div>
+      </div>
+    </div>
+
+    <!-- data list + meta -->
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div class="head" style="font-weight: 600; font-size: 14px; letter-spacing: 0.14em;">Lists, numbers and meta lines</div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+        <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2); background: #d9dadd;">
+          <div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 6px; border-bottom: 1px solid rgba(29,31,32,0.2);"><span class="head" style="font-weight: 600; font-size: 11.5px; letter-spacing: 0.1em;">Lap times</span></div>
+          <div class="mono" style="display: grid; grid-template-columns: 34px 1fr 64px; font-size: 12px;">
+            <div style="padding: 5px 8px; border-bottom: 1px solid rgba(29,31,32,0.1); color: rgba(29,31,32,0.6);">5</div><div style="padding: 5px 8px; border-bottom: 1px solid rgba(29,31,32,0.1);">1:24.11</div><div style="padding: 5px 8px; border-bottom: 1px solid rgba(29,31,32,0.1); text-align: right; color: rgba(29,31,32,0.6);">+0.66</div>
+            <div style="padding: 5px 8px; border-bottom: 1px solid rgba(29,31,32,0.1); color: rgba(29,31,32,0.6);">6</div><div style="padding: 5px 8px; border-bottom: 1px solid rgba(29,31,32,0.1); font-weight: 600;">1:23.45</div><div style="padding: 5px 8px; border-bottom: 1px solid rgba(29,31,32,0.1); text-align: right; color: #d2232a; font-weight: 600;">best</div>
+            <div style="padding: 5px 8px; color: rgba(29,31,32,0.6);">7</div><div style="padding: 5px 8px;">1:23.77</div><div style="padding: 5px 8px; text-align: right; color: rgba(29,31,32,0.6);">+0.32</div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2); background: #d9dadd;">
+          <div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 6px; border-bottom: 1px solid rgba(29,31,32,0.2);"><span class="head" style="font-weight: 600; font-size: 11.5px; letter-spacing: 0.1em;">Where the time went</span></div>
+          <div style="display: flex; flex-direction: column; font-size: 12.5px;">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid rgba(29,31,32,0.1);"><span style="color: rgba(29,31,32,0.6); width: 22px;">T3</span><span>Braked 14 m early</span><span class="mono" style="margin-left: auto; color: #d2232a;">+0.21</span></div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid rgba(29,31,32,0.1);"><span style="color: rgba(29,31,32,0.6); width: 22px;">T6</span><span>Late apex, slow exit</span><span class="mono" style="margin-left: auto; color: #d2232a;">+0.09</span></div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px;"><span style="color: rgba(29,31,32,0.6); width: 22px;">T1</span><span>Carried 6 km/h more</span><span class="mono" style="margin-left: auto; color: #2e7d43;">−0.12</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px 18px; background: #d9dadd; border: 1px solid rgba(29,31,32,0.2);">
+        <div class="mono" style="display: flex; gap: 18px; font-size: 11px; letter-spacing: 0.06em; color: rgba(29,31,32,0.6);"><span>AUD $599</span><span>·</span><span>Shipping now</span><span>·</span><span>12-month warranty</span></div>
+        <div style="display: flex; align-items: center; gap: 14px; font-size: 12px; color: rgba(29,31,32,0.6);"><span>Ships today from SA</span><span style="width: 1px; height: 14px; background: rgba(29,31,32,0.2);"></span><span>30-day returns</span><span style="width: 1px; height: 14px; background: rgba(29,31,32,0.2);"></span><span>No subscriptions</span></div>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(29,31,32,0.6);"><i style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #4fae6b;"></i>In stock<span style="width: 1px; height: 14px; background: rgba(29,31,32,0.2);"></span><i style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #d2232a;"></i>Recording<span style="width: 1px; height: 14px; background: rgba(29,31,32,0.2);"></span><i style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #6a6d72;"></i>Offline</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 120px 1fr; font-size: 12.5px;">
+        <div style="padding: 4px 0; color: rgba(29,31,32,0.6);">Numbers</div><div style="padding: 4px 0;">JetBrains Mono, tabular. Deltas are red for slower, green #2e7d43 for faster, and the best is written as the word "best".</div>
+        <div style="padding: 4px 0; color: rgba(29,31,32,0.6);">Meta</div><div style="padding: 4px 0;">Middle dots in mono for facts, 1px rules in Barlow for a status line. Dots: green live, red recording, grey off. Nothing else is a coloured dot.</div>
+      </div>
+    </div>
+
+    <!-- inputs -->
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div class="head" style="font-weight: 600; font-size: 14px; letter-spacing: 0.14em;">Form field · newsletter</div>
+      <div style="display: flex; flex-direction: column; gap: 12px; padding: 18px; background: #d9dadd; border: 1px solid rgba(29,31,32,0.2);">
+        <div class="head" style="font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: rgba(29,31,32,0.6);">Signal in · 10% off · welcome</div>
+        <h3 class="head" style="margin: 0; font-weight: 700; font-size: 34px; line-height: 1;">Join the channel. <span style="color: #d2232a;">Save 10%.</span></h3>
+        <div style="display: flex; gap: 0; max-width: 520px;">
+          <div style="flex: 1; display: flex; align-items: center; height: 44px; padding: 0 14px; background: #c8c9cc; border: 1px solid rgba(29,31,32,0.38); border-right: none; font-size: 15px; color: rgba(29,31,32,0.6);">your@email.com</div>
+          <a class="head btn-red" href="#" style="display: inline-flex; align-items: center; height: 44px; padding: 0 22px; background: #d2232a; border: 1px solid #d2232a; color: #fff; font-weight: 600; font-size: 15px; letter-spacing: 0.08em;">Subscribe</a>
+        </div>
+        <div style="font-size: 12px; color: rgba(29,31,32,0.6);">No spam · unsubscribe any time</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 120px 1fr; font-size: 12.5px;">
+        <div style="padding: 4px 0; color: rgba(29,31,32,0.6);">Field</div><div style="padding: 4px 0;">44px, ground fill, 1px border at ink 38%, Barlow 15px. Focus ring is a 2px red outline inset, the same as the app's tabs.</div>
+        <div style="padding: 4px 0; color: rgba(29,31,32,0.6);">Button</div><div style="padding: 4px 0;">Butts straight onto the field. No gap, no radius.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

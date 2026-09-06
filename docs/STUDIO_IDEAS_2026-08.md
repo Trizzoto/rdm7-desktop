@@ -1,5 +1,10 @@
 # Things worth building next
 
+> **Closed 2026-09-04.** All eight were built (`EIGHT_FEATURES_PLAN_2026-09.md`),
+> and the seven things that came after them are in
+> `../RDM-7_Dash/docs/adr/0066-the-app-says-what-it-knows.md`. Kept as the record
+> of how the list was argued, not as a list of things to do.
+
 2026-08-31. Parked here rather than done — noted at his request while working
 on the video overlay. Ordered by what I think each is worth, with the reason,
 because a list of features without the argument for them is a list nobody can

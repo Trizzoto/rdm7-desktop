@@ -1,0 +1,50 @@
+<!-- @dsCard group="Foundations" name="Typography" subtitle="Barlow Condensed for headings, Barlow for reading, JetBrains Mono for numbers" viewport="900x820" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDM — Typography</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+.demo { max-width: 860px; margin: 0 auto; padding: var(--sp-8) var(--sp-6) var(--sp-16); }
+.demo-head { font-family: var(--font-heading); font-weight: 600; font-size: var(--fs-eyebrow); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); margin: var(--sp-10) 0 var(--sp-4); }
+.demo-head:first-child { margin-top: 0; }
+.row { display: grid; grid-template-columns: 220px 1fr; border-top: 1px solid var(--border); border-left: 1px solid var(--border); background: var(--surface); }
+.row > div { padding: var(--sp-4); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.spec { font-family: var(--font-mono); font-size: var(--fs-meta); line-height: 1.6; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<main class="demo">
+
+  <div class="demo-head">The ramp, at real sizes</div>
+  <div class="row">
+    <div class="spec">Display<br>Condensed 700 · up to 84px<br>line 0.94 · caps</div>
+    <div style="font-family:var(--font-heading); font-weight:700; font-size:var(--fs-display); line-height:0.94; text-transform:uppercase;">Realtime data. <span style="color:var(--action);">Zero compromise.</span></div>
+
+    <div class="spec">Section title<br>Condensed 700 · up to 60px<br>line 0.95</div>
+    <div style="font-family:var(--font-heading); font-weight:700; font-size:var(--fs-h1); line-height:0.95; text-transform:uppercase;">Lap times. <span style="color:var(--action);">On your dash.</span></div>
+
+    <div class="spec">Big fact<br>Condensed 700 · 34px</div>
+    <div style="font-family:var(--font-heading); font-weight:700; font-size:var(--fs-stat); line-height:1; text-transform:uppercase;">50 fps · 7&quot; · Any CAN</div>
+
+    <div class="spec">Tab / nav<br>Condensed 600 · 16px<br>tracking 0.10em</div>
+    <div style="font-family:var(--font-heading); font-weight:600; font-size:var(--fs-tab); letter-spacing:var(--ls-tab); text-transform:uppercase;">RDM-7 · RDM Lap · Studio · Marketplace</div>
+
+    <div class="spec">Eyebrow / label<br>Condensed 600 · 12px<br>tracking 0.20em</div>
+    <div style="font-family:var(--font-heading); font-weight:600; font-size:var(--fs-eyebrow); letter-spacing:var(--ls-eyebrow); text-transform:uppercase; color:var(--text-muted);">A dash built by car people</div>
+
+    <div class="spec">Lead copy<br>Barlow 400 · 18px · line 1.5</div>
+    <div style="font-size:var(--fs-lead); line-height:1.5; color:var(--text-secondary); max-width:52ch;">A 7-inch CAN dash, configured from any browser. Updated over Wi-Fi. No software to install.</div>
+
+    <div class="spec">Body / table<br>Barlow 400 · 14px · line 1.5</div>
+    <div style="font-size:var(--fs-body); line-height:1.5; color:var(--text-secondary); max-width:52ch;">Plug-and-play for Haltech, Link and MaxxECU. Reads any other CAN bus too, factory or aftermarket.</div>
+
+    <div class="spec">Numbers / meta<br>JetBrains Mono 500 · 11&ndash;12px<br>tracking 0.06em · tabular</div>
+    <div class="rdm-mono" style="font-size:12px; letter-spacing:var(--ls-meta);">AUD $599 · 1:23.45 · +0.32 · v2.4.1</div>
+  </div>
+
+</main>
+</body>
+</html>

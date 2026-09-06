@@ -1,0 +1,12 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Foundations", "x": 0, "y": 0, "w": 1440, "h": 1560 },
+    { "file": "Shell.dc.html", "title": "The shell", "x": 1560, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Components.dc.html", "title": "Components", "x": 0, "y": 1720, "w": 1440, "h": 1560 },
+    { "file": "Homepage.dc.html", "title": "Homepage, as an example", "x": 1560, "y": 1060, "w": 1440, "h": 3560 }
+  ],
+  "annotations": [
+    { "id": "how-to-use", "x": 1560, "y": 960, "w": 420, "text": "Homepage is one worked example of the style, not the design. Copy the shell and the components onto your own page artboards.\n\nEvery value here is lifted from RDM Studio's lap timer (src/tauri-overlay.html). Toggle 'dark' on the Homepage artboard to see the same page on the editor's dark ground." }
+  ],
+  "launch": { "view": "canvas" }
+}

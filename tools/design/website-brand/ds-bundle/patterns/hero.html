@@ -1,0 +1,58 @@
+<!-- @dsCard group="Patterns" name="Hero" subtitle="Eyebrow, display title, one CTA pair, a product panel — the homepage opener" viewport="1200x640" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDM — Hero</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+body { background: var(--bg); }
+.hero { display: flex; justify-content: center; padding: var(--sp-16) var(--sp-8); }
+.wrap { width: 100%; max-width: 1120px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: var(--sp-10); align-items: center; }
+.copy { display: flex; flex-direction: column; gap: var(--sp-6); }
+.title { font-family: var(--font-heading); font-weight: 700; font-size: var(--fs-display); line-height: 0.94; text-transform: uppercase; margin: 0; }
+.lead { font-size: var(--fs-lead); line-height: 1.5; color: var(--text-secondary); max-width: 34ch; }
+.row { display: flex; align-items: center; gap: 10px; }
+.btn { display: inline-flex; align-items: center; height: 44px; padding: 0 24px; font-family: var(--font-heading); font-weight: 600; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; }
+.btn-primary { background: var(--action); border: 1px solid var(--action); color: #fff; }
+.btn-secondary { background: var(--btn-secondary-bg); border: 1px solid var(--btn-secondary-bg); color: var(--btn-secondary-text); }
+.meta { font-family: var(--font-mono); display: flex; gap: 18px; font-size: 11px; letter-spacing: 0.06em; color: var(--text-muted); }
+.panel { display: flex; flex-direction: column; border: 1px solid var(--border); background: var(--surface); }
+.phead { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-bottom: 1px solid var(--border); font-family: var(--font-heading); font-weight: 600; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+.stage { background: var(--stage); padding: var(--sp-6); }
+.pfoot { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-muted); }
+.pfoot a { margin-left: auto; font-family: var(--font-heading); font-weight: 600; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--action); }
+</style>
+</head>
+<body>
+<section class="hero">
+  <div class="wrap">
+    <div class="copy">
+      <div class="rdm-eyebrow"><span class="dot"></span>A dash built by car people</div>
+      <h1 class="title">Realtime data.<br><span style="color: var(--action);">Zero compromise.</span></h1>
+      <p class="lead">A 7-inch CAN dash, configured from any browser. Updated over Wi-Fi. No software to install. No licences. No dealer markup.</p>
+      <div class="row">
+        <a class="btn btn-primary" href="#">Buy $599</a>
+        <a class="btn btn-secondary" href="#">Try RDM Studio</a>
+      </div>
+      <div class="meta"><span>AUD $599</span><span>·</span><span>Shipping now</span><span>·</span><span>12-month warranty</span></div>
+    </div>
+    <div class="panel">
+      <div class="phead">RDM-7 <span style="margin-left:8px; font-weight:400; text-transform:none; color:var(--text-muted); font-size:12px;">Live preview · MaxxECU profile</span></div>
+      <div class="stage">
+        <svg viewBox="0 0 560 322" width="100%" aria-hidden="true">
+          <rect width="560" height="322" fill="#000"/><rect x="0.5" y="0.5" width="559" height="321" fill="none" stroke="#2a2d31"/>
+          <rect x="55" y="38" width="450" height="252" fill="#0a0b0c"/>
+          <g font-family="'Barlow Condensed', sans-serif" font-weight="700" fill="#e8e8e8">
+            <text x="280" y="196" font-size="112" text-anchor="middle" letter-spacing="-2">142</text>
+            <text x="280" y="218" font-size="14" font-weight="600" text-anchor="middle" fill="#8a8d92" letter-spacing="3">KM/H</text>
+          </g>
+        </svg>
+      </div>
+      <div class="pfoot"><span>Tap · interact · swap layout</span><a href="#">Open the demo →</a></div>
+    </div>
+  </div>
+</section>
+</body>
+</html>

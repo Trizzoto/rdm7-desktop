@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Footage timeline &mdash; five designs</title>
+<!--
+   A DESIGN PROTOTYPE, not shipping code.
+
+   It is standalone on purpose: no Tauri, no WASM, no session library, no
+   video decode. A fake day is generated in ft-core.js — a real-shaped speed
+   trace, twelve laps with a pit stop in the middle, four sections of footage
+   with real gaps between them — so every design here is being judged against
+   data that behaves like the data does.
+
+   Everything is live. Play it, scrub it, drag a section, zoom.
+
+   When one of these is chosen, it gets rebuilt inside
+   src/tauri-overlay.html scoped under #gpWorkspace, using the --gpb-*
+   tokens that are mirrored at the top of this sheet.
+-->
+<style>
+/* ============================================================
+   Studio's own tokens, copied from tauri-overlay.html so the
+   prototypes are judged in the colours they will ship in.
+   Dark is the default for the GPS workspace.
+   ============================================================ */
+:root {
+    --ind-bg: #303030;
+    --ind-surface: #393939;
+    --ind-elev: #424242;
+    --ind-stage: #16181b;
+    --ind-ink: #e8e8e8;
+    --ind-muted: rgba(232,232,232,0.62);
+    --ind-soft: rgba(232,232,232,0.8);
+    --ind-ghost: rgba(232,232,232,0.4);
+    --ind-div: rgba(255,255,255,0.14);
+    --ind-div-lt: rgba(255,255,255,0.07);
+
+    --gpb-bg: var(--ind-bg);       --gpb-surface: var(--ind-surface);
+    --gpb-elev: var(--ind-elev);   --gpb-stage: var(--ind-stage);
+    --gpb-ink: var(--ind-ink);     --gpb-muted: var(--ind-muted);
+    --gpb-soft: var(--ind-soft);   --gpb-ghost: var(--ind-ghost);
+    --gpb-div: var(--ind-div);     --gpb-div-lt: var(--ind-div-lt);
+    --gpb-red: #e8433c;            --gpb-red-600: #f2635c;
+    --gpb-red-700: #f7938e;        --gpb-red-100: rgba(232,67,60,0.18);
+    --gpb-bar: #0c0d0e;            --gpb-bar-muted: #9a9a9e;
+    --gpb-bar-div: #26282a;
+    --gpb-ok: #4fa564;             --gpb-warn: #d99b2b;
+    --gpb-head: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
+    --gpb-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+
+    /* ONE hue for film, and state on top of it. The shipping timeline uses
+       four — steel blue for a clip, green for the live one, pink for the
+       selected one, red-brown for a dead one — and nothing on screen says
+       what any of them mean. */
+    --film: #6f9fba;
+    --film-dim: rgba(111,159,186,0.30);
+    --film-fill: rgba(111,159,186,0.42);
+    --film-live: #9ecde6;
+}
+
+@font-face { font-family: 'Barlow'; font-weight: 400; font-display: swap;
+             src: url('../../src/fonts/Barlow-400.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow'; font-weight: 500; font-display: swap;
+             src: url('../../src/fonts/Barlow-500.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow'; font-weight: 600; font-display: swap;
+             src: url('../../src/fonts/Barlow-600.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow Condensed'; font-weight: 600; font-display: swap;
+             src: url('../../src/fonts/BarlowCondensed-600.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow Condensed'; font-weight: 700; font-display: swap;
+             src: url('../../src/fonts/BarlowCondensed-700.woff2') format('woff2'); }
+
+* { box-sizing: border-box; border-radius: 0; }
+html, body { height: 100%; margin: 0; }
+body {
+    background: var(--gpb-bg); color: var(--gpb-ink);
+    font: 12.5px/1.45 var(--gpb-body);
+    -webkit-font-smoothing: antialiased; overflow: hidden;
+}
+button, input, select { font-family: inherit; }
+::selection { background: rgba(232,67,60,0.28); }
+
+/* ---- the shell ------------------------------------------------------ */
+#app { display: flex; flex-direction: column; height: 100%; }
+
+#topbar {
+    flex: none; height: 46px; display: flex; align-items: center; gap: 14px;
+    padding: 0 14px; background: var(--gpb-bar); border-bottom: 1px solid var(--gpb-bar-div);
+}
+#topbar .brand {
+    font-family: var(--gpb-head); font-weight: 700; font-size: 17px;
+    letter-spacing: 0.08em; color: #fff; white-space: nowrap;
+}
+#topbar .brand span { color: var(--gpb-red); }
+#topbar .vr { width: 1px; height: 20px; background: var(--gpb-bar-div); }
+#topbar .what { font-size: 11.5px; color: var(--gpb-bar-muted); white-space: nowrap; }
+#tabs { margin-left: auto; display: flex; align-items: stretch; height: 100%; }
+#tabs button {
+    background: none; border: 0; border-bottom: 2px solid transparent;
+    color: var(--gpb-bar-muted); cursor: pointer; padding: 0 11px;
+    font-family: var(--gpb-head); font-weight: 600; font-size: 12.5px;
+    letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap;
+}
+#tabs button:hover { color: #fff; }
+#tabs button.on { color: #fff; border-bottom-color: var(--gpb-red); }
+#tabs button i {
+    font-style: normal; color: var(--gpb-red); margin-right: 5px;
+    font-family: var(--gpb-body); font-size: 11px;
+}
+#tabs button.on i { color: var(--gpb-red-700); }
+
+#body { flex: 1; display: flex; min-height: 0; }
+#stage {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    padding: 10px; gap: 10px; background: var(--gpb-bg);
+}
+#side {
+    width: 322px; flex: none; border-left: 1px solid var(--gpb-div);
+    background: var(--gpb-surface); overflow-y: auto; padding: 14px;
+}
+
+/* ---- the mock mosaic above the bar ---------------------------------- */
+.mos { flex: 1; display: flex; gap: 10px; min-height: 0; }
+.pan {
+    flex: 1 1 0; background: var(--gpb-surface); border: 1px solid var(--gpb-div);
+    display: flex; flex-direction: column; min-width: 0; min-height: 0;
+}
+.mos .pan.vid { flex: 1.35 1 0; }
+.pan > .ph {
+    flex: none; display: flex; align-items: center; gap: 8px; padding: 5px 9px;
+    border-bottom: 1px solid var(--gpb-div-lt);
+    font-family: var(--gpb-head); font-weight: 600; font-size: 11.5px;
+    letter-spacing: 0.09em; text-transform: uppercase; color: var(--gpb-muted);
+}
+.pan > .ph .sub {
+    font-family: var(--gpb-body); font-weight: 400; letter-spacing: 0;
+    text-transform: none; font-size: 11px; color: var(--gpb-ghost);
+    margin-left: auto; font-variant-numeric: tabular-nums;
+}
+.pan > .pb { flex: 1; position: relative; min-height: 0; }
+.pan.vid > .pb { background: #000; }
+.pan.vid canvas, .pan.graph canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* the one thing the shipping build gets right: a HUD over the picture */
+.vhud {
+    position: absolute; left: 10px; bottom: 8px; display: flex; align-items: baseline;
+    gap: 6px; font-family: var(--gpb-head); font-weight: 700; color: #fff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8); pointer-events: none;
+}
+.vhud b { font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
+.vhud i { font-style: normal; font-size: 12px; opacity: 0.75; letter-spacing: 0.1em; }
+.vnofilm {
+    position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+    color: #6b7176; font-size: 12px; background:
+        repeating-linear-gradient(135deg, #0a0b0c 0 9px, #0d0f11 9px 18px);
+}
+
+/* ---- shared timeline atoms ------------------------------------------ */
+.surf {
+    position: relative; overflow: hidden; background: var(--gpb-stage);
+    user-select: none; cursor: text;
+}
+.surf canvas.back { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.head {
+    position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px;
+    background: var(--gpb-red); z-index: 9; pointer-events: none;
+}
+.head::before {
+    content: ''; position: absolute; left: -4px; top: 0;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 7px solid var(--gpb-red);
+}
+.head.grab { pointer-events: auto; cursor: ew-resize; }
+.head.grab::after {
+    content: ''; position: absolute; left: -6px; right: -6px; top: 0; bottom: 0;
+}
+.tickrow { position: absolute; left: 0; right: 0; top: 0; height: 15px; pointer-events: none; }
+.tick {
+    position: absolute; top: 0; padding-left: 4px; font-size: 9.5px; line-height: 15px;
+    color: #7d868d; font-variant-numeric: tabular-nums; white-space: nowrap;
+    border-left: 1px solid rgba(255,255,255,0.10);
+}
+.hovlab {
+    position: absolute; z-index: 12; top: 0; background: var(--gpb-ink); color: #16181b;
+    font-size: 10px; font-weight: 600; padding: 0 4px; line-height: 15px;
+    pointer-events: none; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* transport buttons — one definition, every design */
+.tbtn {
+    width: 27px; height: 27px; flex: none; display: inline-flex; align-items: center;
+    justify-content: center; background: transparent; border: 1px solid var(--gpb-div);
+    color: var(--gpb-soft); cursor: pointer; padding: 0;
+}
+.tbtn svg { width: 11px; height: 11px; fill: currentColor; }
+.tbtn:hover { border-color: var(--gpb-ink); color: var(--gpb-ink); }
+.tbtn.play { width: 34px; background: var(--gpb-ink); border-color: var(--gpb-ink); color: var(--gpb-stage); }
+.tbtn.play svg { width: 13px; height: 13px; }
+.tbtn.play:hover { background: #fff; border-color: #fff; }
+.tgrp { display: flex; align-items: center; gap: 4px; flex: none; }
+
+.big {
+    font-family: var(--gpb-head); font-weight: 700; font-size: 21px; line-height: 1;
+    font-variant-numeric: tabular-nums; color: var(--gpb-ink); white-space: nowrap;
+}
+.big small { font-size: 11.5px; font-family: var(--gpb-body); font-weight: 400;
+             color: var(--gpb-muted); margin-left: 2px; }
+.kap {
+    font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase;
+    color: var(--gpb-muted); white-space: nowrap;
+}
+.seg { display: inline-flex; border: 1px solid var(--gpb-div); flex: none; }
+.seg button {
+    background: none; border: 0; color: var(--gpb-muted); cursor: pointer;
+    font-size: 10.5px; padding: 3px 7px; font-variant-numeric: tabular-nums;
+}
+.seg button + button { border-left: 1px solid var(--gpb-div); }
+.seg button.on { background: var(--gpb-ink); color: var(--gpb-stage); font-weight: 600; }
+.seg button:hover:not(.on) { color: var(--gpb-ink); }
+.gbtn {
+    background: transparent; border: 1px solid var(--gpb-div); color: var(--gpb-soft);
+    font-size: 11px; padding: 3px 9px; cursor: pointer; white-space: nowrap; flex: none;
+}
+.gbtn:hover { border-color: var(--gpb-ink); color: var(--gpb-ink); }
+.gbtn.on { border-color: var(--gpb-red); color: var(--gpb-red-700); }
+.gbtn.prim { background: var(--gpb-ink); border-color: var(--gpb-ink); color: var(--gpb-stage); font-weight: 600; }
+.gbtn.prim:hover { background: #fff; }
+.vr2 { width: 1px; align-self: stretch; background: var(--gpb-div); flex: none; }
+
+/* the dock shell every design's bar sits in */
+.dock {
+    flex: none; background: var(--gpb-surface); border: 1px solid var(--gpb-div);
+    border-left: 0; border-right: 0; margin: 0 -10px -10px; padding: 8px 14px;
+}
+.dock.flush { margin-top: -10px; border-top: 0; }
+.slotlab {
+    flex: none; font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase;
+    color: var(--gpb-ghost); padding: 0 2px 1px;
+}
+
+/* ============================================================
+   1 — ONE BAR
+   ============================================================ */
+.d1 { display: flex; align-items: center; gap: 13px; }
+.d1 .strip { flex: 1; min-width: 0; height: 52px; border: 1px solid var(--gpb-div); }
+.d1 .lapband {
+    position: absolute; top: 0; height: 14px; border-right: 1px solid rgba(255,255,255,0.11);
+    font-size: 9px; line-height: 14px; padding-left: 4px; color: #8d959b;
+    overflow: hidden; white-space: nowrap; cursor: pointer;
+}
+.d1 .lapband:hover { background: rgba(255,255,255,0.06); color: var(--gpb-ink); }
+.d1 .lapband.on { background: rgba(232,67,60,0.16); color: var(--gpb-red-700); }
+.d1 .lapband.px { color: #5d656b; }
+.d1 .film {
+    position: absolute; height: 9px; background: var(--film-fill);
+    border-top: 1px solid var(--film); cursor: grab; z-index: 4;
+}
+/* A 4 px ribbon is a 4 px target, which is not a target. The block keeps its
+   size; the pointer gets ten pixels. */
+.d1 .film::after { content: ''; position: absolute; left: 0; right: 0; top: -3px; bottom: -3px; }
+.d1 .film:hover { background: rgba(111,159,186,0.62); }
+.d1 .film.on { background: rgba(158,205,230,0.6); border-top-color: var(--film-live); }
+.d1 .film.dragging { cursor: grabbing; background: rgba(158,205,230,0.75); }
+.d1 .film.dead {
+    background: repeating-linear-gradient(45deg, rgba(217,155,43,0.30) 0 3px, transparent 3px 6px);
+    border-top-color: var(--gpb-warn);
+}
+.d1 .camlab {
+    position: absolute; font-size: 8.5px; letter-spacing: 0.09em;
+    color: #6f787e; pointer-events: none;
+}
+.d1 .nofilm {
+    position: absolute; height: 1px; background: rgba(255,255,255,0.12); z-index: 3;
+}
+
+/* ============================================================
+   2 — TRACK SHEET
+   ============================================================ */
+.d2 { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.d2 .bar {
+    flex: none; display: flex; align-items: center; gap: 8px; padding: 5px 9px;
+    border-bottom: 1px solid var(--gpb-div-lt);
+}
+.d2 .body { flex: 1; display: flex; min-height: 0; }
+.d2 .gut {
+    width: 104px; flex: none; border-right: 1px solid var(--gpb-div);
+    background: var(--gpb-surface);
+}
+.d2 .gut .r {
+    display: flex; align-items: center; gap: 6px; padding: 0 8px;
+    border-bottom: 1px solid var(--gpb-div-lt); font-size: 10.5px; color: var(--gpb-soft);
+    white-space: nowrap; overflow: hidden;
+}
+.d2 .gut .r.rul { height: 16px; border-bottom-color: var(--gpb-div); }
+.d2 .gut .r .sw { width: 7px; height: 7px; flex: none; }
+.d2 .gut .r .n { overflow: hidden; text-overflow: ellipsis; }
+.d2 .gut .r small { color: var(--gpb-ghost); font-size: 9px; margin-left: auto; }
+.d2 .gut .r.add { color: var(--gpb-ghost); font-size: 10px; letter-spacing: 0.06em; }
+.d2 .tracks { flex: 1; min-width: 0; position: relative; }
+.d2 .lane { position: absolute; left: 0; right: 0; border-bottom: 1px solid var(--gpb-div-lt); }
+.d2 .lane.drop { background: rgba(232,67,60,0.07); }
+.d2 .clip {
+    position: absolute; top: 2px; bottom: 3px; background: var(--film-dim);
+    border: 1px solid var(--film); cursor: grab; overflow: hidden; z-index: 4;
+    min-width: 2px;
+}
+.d2 .clip canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.55; }
+.d2 .clip .nm {
+    position: absolute; left: 5px; top: 2px; font-size: 10px; font-weight: 600;
+    color: #eaf4fa; text-shadow: 0 1px 3px rgba(0,0,0,0.9); white-space: nowrap;
+    pointer-events: none;
+}
+.d2 .clip .dr {
+    position: absolute; left: 5px; bottom: 2px; font-size: 9px; color: rgba(234,244,250,0.7);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9); font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.d2 .clip.sel { border-color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5); }
+.d2 .clip.dragging { cursor: grabbing; z-index: 7; }
+.d2 .clip.dead { border-color: var(--gpb-warn); background: rgba(217,155,43,0.16); }
+.d2 .clip.dead canvas { display: none; }
+.d2 .insp {
+    flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 9px;
+    border-top: 1px solid var(--gpb-div); background: var(--gpb-elev); min-height: 38px;
+}
+.d2 .insp .nm { font-weight: 600; font-size: 12px; }
+.d2 .insp .hint { color: var(--gpb-ghost); font-size: 11px; }
+.nudge { display: inline-flex; align-items: center; gap: 2px; }
+.nudge button {
+    min-width: 23px; height: 22px; background: transparent; border: 1px solid var(--gpb-div);
+    color: var(--gpb-soft); cursor: pointer; font-size: 10px; padding: 0 4px;
+}
+.nudge button:hover { border-color: var(--gpb-ink); color: var(--gpb-ink); }
+.nudge input {
+    width: 64px; height: 22px; background: var(--gpb-stage); border: 1px solid var(--gpb-div);
+    color: var(--gpb-ink); font-size: 11px; padding: 0 5px; text-align: right;
+    font-variant-numeric: tabular-nums; margin: 0 3px;
+}
+.d2dock { display: flex; align-items: center; gap: 13px; }
+.d2dock .scrub { flex: 1; min-width: 0; height: 26px; border: 1px solid var(--gpb-div); }
+.d2dock .scrub .lp { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.16); }
+.d2dock .scrub .cov { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
+.d2dock .scrub .cov i { position: absolute; top: 0; bottom: 0; background: var(--film); }
+
+/* ============================================================
+   3 — FILMSTRIP JOG
+   ============================================================ */
+.d3 { display: flex; align-items: stretch; gap: 12px; }
+.d3 .mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.d3 .over { height: 12px; border: 1px solid var(--gpb-div); cursor: pointer; }
+.d3 .over .cv { position: absolute; top: 0; bottom: 0; background: var(--film-dim); }
+.d3 .over .win { position: absolute; top: 0; bottom: 0; border: 1px solid var(--gpb-ink);
+                 background: rgba(255,255,255,0.10); pointer-events: none; }
+.d3 .over .hd { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--gpb-red); }
+.d3 .strip { height: 84px; border: 1px solid var(--gpb-div); cursor: grab; }
+.d3 .strip.dragging { cursor: grabbing; }
+.d3 .strip .gap {
+    position: absolute; top: 0; bottom: 22px; display: grid; place-items: center;
+    color: #5f676c; font-size: 10px; letter-spacing: 0.08em;
+    background: repeating-linear-gradient(135deg, #101214 0 7px, #131518 7px 14px);
+}
+.d3 .strip .trace { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; }
+.d3 .ctr {
+    position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px;
+    background: var(--gpb-red); z-index: 10; pointer-events: none;
+}
+.d3 .ctr::before {
+    content: ''; position: absolute; left: -4px; top: 0;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 7px solid var(--gpb-red);
+}
+.d3 .rgt { display: flex; flex-direction: column; justify-content: center; gap: 5px; flex: none; }
+.jog {
+    width: 168px; height: 26px; border: 1px solid var(--gpb-div); background: var(--gpb-stage);
+    position: relative; cursor: ew-resize; overflow: hidden;
+}
+.jog .knurl { position: absolute; inset: 0; }
+.jog .zero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+             background: var(--gpb-red); opacity: 0.8; }
+.jog .lab {
+    position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px;
+    color: var(--gpb-muted); font-variant-numeric: tabular-nums; pointer-events: none;
+    text-shadow: 0 0 5px var(--gpb-stage), 0 0 5px var(--gpb-stage);
+}
+
+/* ============================================================
+   4 — ONE RULER
+   ============================================================ */
+.d4 { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.d4 .lapstrip { flex: none; height: 19px; display: flex; border-bottom: 1px solid var(--gpb-div-lt); }
+.d4 .lapstrip .c {
+    border-right: 1px solid var(--gpb-div-lt); font-size: 9.5px; line-height: 18px;
+    padding: 0 4px; color: var(--gpb-muted); overflow: hidden; white-space: nowrap;
+    cursor: pointer; min-width: 0;
+}
+.d4 .lapstrip .c:hover { background: var(--gpb-elev); color: var(--gpb-ink); }
+.d4 .lapstrip .c.on { background: rgba(232,67,60,0.18); color: var(--gpb-red-700); font-weight: 600; }
+.d4 .lapstrip .c.px { color: var(--gpb-ghost); background: rgba(0,0,0,0.16); }
+.d4 .rul { flex: none; height: 16px; border-bottom: 1px solid var(--gpb-div-lt); }
+.d4 .rec { flex: 1 1 auto; min-height: 42px; }
+.d4 .lanes { flex: none; }
+.d4 .lane { position: absolute; left: 0; right: 0; border-top: 1px solid var(--gpb-div-lt); }
+.d4 .clip {
+    position: absolute; top: 2px; bottom: 2px; background: var(--film-dim);
+    border: 1px solid var(--film); cursor: grab; overflow: hidden; z-index: 4;
+    font-size: 10px; color: #dceaf2; padding: 1px 5px; white-space: nowrap;
+}
+.d4 .clip.on { background: rgba(158,205,230,0.30); border-color: var(--film-live); }
+.d4 .clip.dead { border-color: var(--gpb-warn); background: rgba(217,155,43,0.16); }
+.d4 .clip.dragging { cursor: grabbing; z-index: 7; }
+.d4dock { display: flex; align-items: center; gap: 12px; }
+.match { display: flex; align-items: center; gap: 7px; flex: none; }
+.match .bar2 { width: 84px; height: 6px; border: 1px solid var(--gpb-div); position: relative; }
+.match .bar2 i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gpb-ok); }
+.match .bar2.poor i { background: var(--gpb-warn); }
+
+/* ============================================================
+   5 — CHAPTERS
+   ============================================================ */
+.d5 { display: flex; align-items: center; gap: 13px; }
+.d5 .chips { flex: 1; min-width: 0; display: flex; gap: 2px; height: 44px; }
+.d5 .chip {
+    position: relative; min-width: 0; background: var(--gpb-stage);
+    border: 1px solid var(--gpb-div); cursor: pointer; overflow: hidden;
+    display: flex; flex-direction: column; justify-content: center; padding: 0 6px;
+}
+.d5 .chip:hover { border-color: var(--gpb-soft); }
+.d5 .chip.on { border-color: var(--gpb-red); background: rgba(232,67,60,0.10); }
+.d5 .chip .n {
+    font-family: var(--gpb-head); font-weight: 600; font-size: 10px; letter-spacing: 0.08em;
+    color: var(--gpb-muted); text-transform: uppercase; white-space: nowrap;
+}
+.d5 .chip.on .n { color: var(--gpb-red-700); }
+.d5 .chip .t {
+    font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+    color: var(--gpb-ink); white-space: nowrap; line-height: 1.15;
+}
+.d5 .chip.px { background: rgba(0,0,0,0.22); padding: 0 3px; }
+/* A divider says which divider it is and nothing else — its duration is not
+   a lap time and printing it in lap-time type would say it was. */
+.d5 .chip.px .t { display: none; }
+.d5 .chip.px .n { font-size: 9px; letter-spacing: 0.04em; color: var(--gpb-ghost); }
+.d5 .chip .best { color: var(--gpb-red); margin-left: 3px; }
+.d5 .chip .cam {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+    background: rgba(255,255,255,0.07);
+}
+.d5 .chip .cam i { position: absolute; top: 0; bottom: 0; background: var(--film); }
+.d5 .chip .prog { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255,255,255,0.07); }
+.d5 .chip .hd { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--gpb-red); }
+.d5 .nocam { color: var(--gpb-ghost); }
+
+/* the sync sheet design 5 opens instead of an always-on editor */
+#sheet {
+    position: fixed; inset: 0; z-index: 500; background: rgba(6,8,10,0.74);
+    display: none; align-items: center; justify-content: center;
+}
+#sheet.on { display: flex; }
+#sheet .box {
+    width: 720px; max-width: calc(100vw - 40px); background: var(--gpb-surface);
+    border: 1px solid var(--gpb-div); box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+}
+#sheet h3 {
+    margin: 0; padding: 12px 16px 10px; font-family: var(--gpb-head); font-weight: 700;
+    font-size: 17px; letter-spacing: 0.05em; text-transform: uppercase;
+    border-bottom: 1px solid var(--gpb-div-lt);
+}
+#sheet .bd { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+#sheet .ft { padding: 10px 16px; border-top: 1px solid var(--gpb-div-lt);
+             display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+#sheet .lead { color: var(--gpb-muted); font-size: 11.5px; margin: 0; }
+#sheet .two { display: flex; gap: 10px; }
+#sheet .two > div { flex: 1; min-width: 0; }
+#sheet .cap { font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase;
+              color: var(--gpb-muted); margin-bottom: 4px; }
+#sheet .surf { height: 74px; border: 1px solid var(--gpb-div); }
+
+/* ---- compare view --------------------------------------------------- */
+.cmp { flex: 1; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; min-height: 0; }
+.cmp .row { flex: none; }
+.cmp .rl {
+    display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;
+}
+.cmp .rl b { font-family: var(--gpb-head); font-weight: 700; font-size: 14px;
+             letter-spacing: 0.06em; text-transform: uppercase; }
+.cmp .rl span { font-size: 11px; color: var(--gpb-muted); }
+.cmp .rl .pill {
+    font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+    border: 1px solid var(--gpb-div); padding: 1px 5px; color: var(--gpb-muted);
+}
+.cmp .host { background: var(--gpb-surface); border: 1px solid var(--gpb-div); padding: 8px 14px; }
+
+/* ---- the notes rail ------------------------------------------------- */
+#side h2 {
+    font-family: var(--gpb-head); font-weight: 700; font-size: 21px; line-height: 1.05;
+    letter-spacing: 0.02em; text-transform: uppercase; margin: 0 0 2px;
+}
+#side .tag { color: var(--gpb-muted); font-size: 12px; margin: 0 0 14px; }
+#side h4 {
+    font-family: var(--gpb-head); font-weight: 600; font-size: 11px; letter-spacing: 0.13em;
+    text-transform: uppercase; color: var(--gpb-muted); margin: 16px 0 6px;
+    border-top: 1px solid var(--gpb-div-lt); padding-top: 10px;
+}
+#side ul { margin: 0; padding-left: 16px; }
+#side li { margin-bottom: 5px; color: var(--gpb-soft); font-size: 12px; }
+#side li b { color: var(--gpb-ink); font-weight: 600; }
+#side p { margin: 0 0 8px; font-size: 12px; color: var(--gpb-soft); }
+#side .kind {
+    display: inline-block; font-size: 9px; letter-spacing: 0.11em; text-transform: uppercase;
+    border: 1px solid var(--gpb-div); padding: 1px 6px; color: var(--gpb-muted); margin-bottom: 10px;
+}
+#side .verdict { display: flex; gap: 6px; margin: 8px 0 4px; }
+#side .verdict button { flex: 1; }
+#side textarea {
+    width: 100%; height: 72px; background: var(--gpb-stage); border: 1px solid var(--gpb-div);
+    color: var(--gpb-ink); font: inherit; font-size: 11.5px; padding: 6px 7px; resize: vertical;
+}
+#side textarea:focus { outline: none; border-color: var(--gpb-soft); }
+#side .keys { font-size: 11px; color: var(--gpb-ghost); line-height: 1.7; }
+#side .keys kbd {
+    border: 1px solid var(--gpb-div); padding: 0 4px; font: inherit; font-size: 10px;
+    color: var(--gpb-muted); margin-right: 3px;
+}
+#picksum {
+    white-space: pre-wrap; font-size: 11px; color: var(--gpb-muted);
+    background: var(--gpb-stage); border: 1px solid var(--gpb-div); padding: 8px;
+    max-height: 190px; overflow: auto; margin-top: 8px;
+}
+</style>
+</head>
+<body>
+<div id="app">
+    <header id="topbar">
+        <div class="brand">RDM <span>STUDIO</span></div>
+        <div class="vr"></div>
+        <div class="what">Footage timeline &amp; transport &mdash; five designs</div>
+        <nav id="tabs"></nav>
+    </header>
+    <div id="body">
+        <main id="stage"></main>
+        <aside id="side"></aside>
+    </div>
+</div>
+<div id="sheet"><div class="box"></div></div>
+<script src="ft-core.js"></script>
+<script src="ft-designs.js"></script>
+<script>FT.boot();</script>
+</body>
+</html>

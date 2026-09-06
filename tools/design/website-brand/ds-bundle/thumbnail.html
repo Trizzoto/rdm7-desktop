@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RDM — thumbnail</title>
+<link rel="stylesheet" href="tokens.css" />
+<style>
+/* Thumbnail (1280×854): the black bar's wordmark, large, on the ground; a
+   red-underlined tab-row strip along the bottom — the two bands, at cover
+   scale. */
+html, body { height: 100%; }
+body { margin: 0; display: flex; flex-direction: column; background: var(--rdm-light-bg); }
+.bar { flex: 1; display: flex; align-items: center; padding: 0 64px; background: var(--rdm-bar); }
+.bar h1 {
+  margin: 0; color: #fff; font-family: var(--font-heading); font-weight: 700;
+  font-size: 148px; line-height: 0.9; letter-spacing: 0.02em; text-transform: uppercase;
+}
+.bar h1 span { color: var(--rdm-red); }
+.tabs { height: 120px; display: flex; align-items: stretch; gap: 8px; padding: 0 64px; background: var(--rdm-light-surface); border-top: 1px solid rgba(29,31,32,0.2); }
+.tabs span {
+  display: flex; align-items: center; padding: 0 6px;
+  font-family: var(--font-heading); font-weight: 600; font-size: 30px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: rgba(29,31,32,0.6);
+  border-bottom: 6px solid transparent; margin-bottom: -1px;
+}
+.tabs span.on { color: var(--rdm-light-ink); border-bottom-color: var(--rdm-red); }
+</style>
+</head>
+<body>
+<div class="bar"><h1>RDM<span>.</span></h1></div>
+<div class="tabs"><span class="on">RDM-7</span><span>RDM Lap</span><span>Studio</span></div>
+</body>
+</html>

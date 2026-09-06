@@ -1,0 +1,255 @@
+/* ==========================================================================
+   RDM — DESIGN TOKENS
+   --------------------------------------------------------------------------
+   Lifted value-for-value from RDM Studio's own UI (rdm7-desktop,
+   src/tauri-overlay.html — the shell shared by the lap timer, the keypad
+   editor, the dash editor and the app's Home). The website should look like
+   the app talking about itself, not a separate marketing skin.
+
+   Structure:
+     · a black identity bar + a light "where you are" tab row — TWO bands,
+       always in that order, the tab row's ground never changes with theme
+     · zero border radius, anywhere — square is the whole point
+     · structure is 1px rules and ruled tables, never drop shadows
+     · red means exactly two things: where you are (active tab), and the
+       one thing to do (the primary button) — nowhere else
+     · Barlow Condensed for headings (uppercase), Barlow for reading,
+       JetBrains Mono for every number
+   ========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@500;600&display=swap');
+
+:root {
+  /* ---------------------------------------------------------------
+     1. PRIMITIVES — the two Industry palettes the app itself swaps
+        between. Light is the lap timer's ground; dark is the editor's,
+        the keypad's and Home's.
+     --------------------------------------------------------------- */
+  --rdm-light-bg:      #c8c9cc;
+  --rdm-light-surface: #d9dadd;
+  --rdm-light-elev:    #e4e5e8;
+  --rdm-light-ink:     #1d1f20;
+
+  --rdm-dark-bg:      #303030;
+  --rdm-dark-surface: #393939;
+  --rdm-dark-elev:    #424242;
+  --rdm-dark-ink:     #e8e8e8;
+
+  --rdm-bar:       #0c0d0e;   /* the black bar — fixed in both themes */
+  --rdm-bar-border:#26282a;
+  --rdm-bar-muted: #9a9a9e;
+  --rdm-stage:     #16181b;   /* ground behind a product picture — fixed */
+
+  --rdm-red:        #d2232a;  /* brand red, light ground */
+  --rdm-red-hover:  #c02026;
+  --rdm-red-dark:       #e8433c; /* the same red, lifted one step for a dark ground */
+  --rdm-red-dark-hover: #f2635c;
+
+  --rdm-ok:   #2e7d43;
+  --rdm-warn: #a06508;
+  --rdm-bad:  #c02026;
+
+  /* ---------------------------------------------------------------
+     2. SEMANTIC ROLES — LIGHT (default)
+     --------------------------------------------------------------- */
+  --bg:      var(--rdm-light-bg);
+  --surface: var(--rdm-light-surface);
+  --elev:    var(--rdm-light-elev);
+
+  --text:           var(--rdm-light-ink);
+  --text-secondary: rgba(29,31,32,0.75);
+  --text-muted:     rgba(29,31,32,0.6);
+  --text-ghost:     rgba(29,31,32,0.4);
+
+  --border:        rgba(29,31,32,0.2);   /* every 1px rule */
+  --border-light:  rgba(29,31,32,0.1);   /* table row rules */
+  --border-strong: rgba(29,31,32,0.38);  /* quiet-button border */
+
+  --action:       var(--rdm-red);
+  --action-hover: var(--rdm-red-hover);
+
+  /* the inverted "ink" button: fills with --text, reads in --bg. This is
+     why it survives a light/dark repaint unchanged — it never names a
+     literal color, only the two roles that already flip together. */
+  --btn-secondary-bg:   var(--text);
+  --btn-secondary-text: var(--bg);
+
+  /* ---------------------------------------------------------------
+     3. FIXED TOKENS — do not repaint with theme.
+        The black bar and the tab row are the two constants that make the
+        light and dark surfaces read as one brand. The tab row in
+        particular is a real app rule, not a convenience: band two of the
+        Studio shell stays on the LIGHT ground even when the page below it
+        is dark, because it is the one strip every surface shares.
+     --------------------------------------------------------------- */
+  --bar-bg:     var(--rdm-bar);
+  --bar-border: var(--rdm-bar-border);
+  --bar-muted:  var(--rdm-bar-muted);
+
+  --tabrow-bg:         var(--rdm-light-surface);
+  --tabrow-text:       var(--rdm-light-ink);
+  --tabrow-text-muted: rgba(29,31,32,0.6);
+  --tabrow-border:     rgba(29,31,32,0.2);
+  --tabrow-active:     var(--rdm-red);
+
+  --stage: var(--rdm-stage);
+  --ok:   var(--rdm-ok);
+  --warn: var(--rdm-warn);
+  --bad:  var(--rdm-bad);
+
+  /* ---------------------------------------------------------------
+     4. TYPE
+     --------------------------------------------------------------- */
+  --font-heading: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
+  --font-body:    'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', Consolas, monospace;
+
+  --fs-display: clamp(2.75rem, 6vw, 5.25rem);  /* → up to 84px, the hero */
+  --fs-h1:      clamp(2.25rem, 4.4vw, 3.75rem); /* → up to 60px, section titles */
+  --fs-stat:    2.125rem;   /* 34px — a big fact in a ruled cell */
+  --fs-tab:     1rem;       /* 16px — band-two nav */
+  --fs-eyebrow: 0.75rem;    /* 12px, tracking 0.20em */
+  --fs-lead:    1.125rem;   /* 18px — hero copy */
+  --fs-body:    0.875rem;   /* 14px */
+  --fs-small:   0.8125rem;  /* 13px */
+  --fs-meta:    0.6875rem;  /* 11px mono */
+
+  --ls-tab:     0.10em;
+  --ls-eyebrow: 0.20em;
+  --ls-label:   0.16em;
+  --ls-meta:    0.06em;
+
+  /* ---------------------------------------------------------------
+     5. SPACE — the app's own rhythm: a 10px panel gutter, a 12px bar
+        padding, 40–48px page sides, 64px between sections.
+     --------------------------------------------------------------- */
+  --sp-1: 4px;   --sp-2: 8px;   --sp-3: 10px;  --sp-4: 12px;
+  --sp-5: 14px;  --sp-6: 16px;  --sp-8: 22px;  --sp-10: 28px;
+  --sp-12: 36px; --sp-16: 48px; --sp-20: 64px;
+
+  --container: 1200px;
+  --gutter:    40px;
+
+  /* ---------------------------------------------------------------
+     6. RADIUS — none. Every corner is square; only round dots (status,
+        live indicators) are round, because they are round things.
+     --------------------------------------------------------------- */
+  --radius: 0;
+
+  /* ---------------------------------------------------------------
+     7. DEPTH — there is none. 1px rules do this job, never a shadow.
+     --------------------------------------------------------------- */
+  --shadow-sm: none; --shadow-md: none; --shadow-lg: none;
+
+  /* ---------------------------------------------------------------
+     8. MOTION
+     --------------------------------------------------------------- */
+  --dur-fast: 120ms; --dur-base: 200ms;
+  --ease: ease-out;
+}
+
+/* ---------------------------------------------------------------
+   DARK — the editor / keypad / Home ground. The tab row (band two)
+   deliberately does NOT switch — see --tabrow-* above, which are fixed.
+   --------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:      var(--rdm-dark-bg);
+    --surface: var(--rdm-dark-surface);
+    --elev:    var(--rdm-dark-elev);
+
+    --text:           var(--rdm-dark-ink);
+    --text-secondary: rgba(232,232,232,0.8);
+    --text-muted:     rgba(232,232,232,0.62);
+    --text-ghost:     rgba(232,232,232,0.4);
+
+    --border:       rgba(255,255,255,0.14);
+    --border-light: rgba(255,255,255,0.07);
+    --border-strong:rgba(255,255,255,0.3);
+
+    --action:       var(--rdm-red-dark);
+    --action-hover: var(--rdm-red-dark-hover);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:      var(--rdm-dark-bg);
+  --surface: var(--rdm-dark-surface);
+  --elev:    var(--rdm-dark-elev);
+
+  --text:           var(--rdm-dark-ink);
+  --text-secondary: rgba(232,232,232,0.8);
+  --text-muted:     rgba(232,232,232,0.62);
+  --text-ghost:     rgba(232,232,232,0.4);
+
+  --border:       rgba(255,255,255,0.14);
+  --border-light: rgba(255,255,255,0.07);
+  --border-strong:rgba(255,255,255,0.3);
+
+  --action:       var(--rdm-red-dark);
+  --action-hover: var(--rdm-red-dark-hover);
+}
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
+*, *::before, *::after { box-sizing: border-box; border-radius: var(--radius) !important; }
+* { margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 0.95;
+}
+p { max-width: 68ch; }
+a { color: var(--text); text-decoration: none; }
+a:hover { color: var(--action); }
+img, svg, video { display: block; max-width: 100%; }
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+}
+
+/* ==========================================================================
+   UTILITIES
+   ========================================================================== */
+.rdm-head {
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+}
+.rdm-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.rdm-container { width: 100%; max-width: var(--container); margin-inline: auto; padding-inline: var(--gutter); }
+.rdm-section { padding-block: var(--sp-20); }
+
+/* the eyebrow — a red dot only for something new or live */
+.rdm-eyebrow {
+  display: inline-flex; align-items: center; gap: var(--sp-3);
+  font-family: var(--font-heading); font-weight: 600;
+  font-size: var(--fs-eyebrow); letter-spacing: var(--ls-eyebrow);
+  text-transform: uppercase; color: var(--text-muted);
+}
+.rdm-eyebrow .dot { width: 8px; height: 8px; border-radius: 50% !important; background: var(--action); flex: none; }
+
+/* status dots — the only three roles a colored dot ever carries */
+.rdm-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50% !important; flex: none; }
+.rdm-dot.ok { background: #4fae6b; }
+.rdm-dot.rec { background: var(--action); }
+.rdm-dot.off { background: #6a6d72; }
+
+.rdm-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0;
+  margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}

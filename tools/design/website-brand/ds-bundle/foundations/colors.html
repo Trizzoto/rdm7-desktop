@@ -1,0 +1,79 @@
+<!-- @dsCard group="Foundations" name="Colors" subtitle="Both palettes, the fixed bar/tab-row tokens, and the two roles red is allowed" viewport="900x760" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDM — Colors</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+.demo { max-width: 860px; margin: 0 auto; padding: var(--sp-8) var(--sp-6) var(--sp-16); }
+.demo-head { font-family: var(--font-heading); font-weight: 600; font-size: var(--fs-eyebrow); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); margin: var(--sp-10) 0 var(--sp-4); }
+.demo-head:first-child { margin-top: 0; }
+.note { font-size: var(--fs-small); color: var(--text-secondary); max-width: 68ch; line-height: 1.5; }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: var(--sp-3); }
+.sw { display: flex; flex-direction: column; border: 1px solid var(--border); }
+.sw .fill { height: 60px; }
+.sw .lbl { padding: var(--sp-3); background: var(--surface); font-size: var(--fs-small); }
+.sw .lbl b { display: block; }
+.sw .lbl code { font-family: var(--font-mono); font-size: var(--fs-meta); color: var(--text-muted); }
+.dark-block { padding: var(--sp-6); background: var(--rdm-dark-bg); border: 1px solid var(--border); }
+.dark-block .grid .lbl { background: var(--rdm-dark-surface); color: var(--rdm-dark-ink); }
+.dark-block .grid .lbl code { color: rgba(232,232,232,0.62); }
+.fixed-strip { display: flex; flex-direction: column; }
+.fixed-strip .band { display: flex; align-items: center; height: 44px; padding: 0 var(--sp-4); font-family: var(--font-heading); font-weight: 600; font-size: 15px; letter-spacing: var(--ls-tab); text-transform: uppercase; }
+.fixed-strip .bar { background: var(--rdm-bar); color: #fff; }
+.fixed-strip .tabs { height: 50px; background: var(--tabrow-bg); color: var(--tabrow-text); border-bottom: 1px solid var(--tabrow-border); gap: var(--sp-6); }
+.fixed-strip .tabs span.on { border-bottom: 3px solid var(--tabrow-active); padding-bottom: 3px; }
+.fixed-strip .tabs span.off { color: var(--tabrow-text-muted); }
+</style>
+</head>
+<body>
+<main class="demo">
+
+  <div class="demo-head">Light — the lap timer's ground</div>
+  <div class="grid">
+    <div class="sw"><div class="fill" style="background:#c8c9cc"></div><div class="lbl"><b>bg</b><code>#c8c9cc</code></div></div>
+    <div class="sw"><div class="fill" style="background:#d9dadd"></div><div class="lbl"><b>surface</b><code>#d9dadd</code></div></div>
+    <div class="sw"><div class="fill" style="background:#e4e5e8"></div><div class="lbl"><b>elev</b><code>#e4e5e8</code></div></div>
+    <div class="sw"><div class="fill" style="background:#1d1f20"></div><div class="lbl"><b>text</b><code>#1d1f20</code></div></div>
+  </div>
+
+  <div class="demo-head">Dark — the editor, the keypad, Home</div>
+  <div class="dark-block">
+    <div class="grid">
+      <div class="sw"><div class="fill" style="background:#303030"></div><div class="lbl"><b>bg</b><code>#303030</code></div></div>
+      <div class="sw"><div class="fill" style="background:#393939"></div><div class="lbl"><b>surface</b><code>#393939</code></div></div>
+      <div class="sw"><div class="fill" style="background:#424242"></div><div class="lbl"><b>elev</b><code>#424242</code></div></div>
+      <div class="sw"><div class="fill" style="background:#e8e8e8"></div><div class="lbl"><b>text</b><code>#e8e8e8</code></div></div>
+    </div>
+  </div>
+
+  <div class="demo-head">Brand red — the two roles it is allowed</div>
+  <div class="grid">
+    <div class="sw"><div class="fill" style="background:#d2232a"></div><div class="lbl"><b>action, light</b><code>#d2232a</code></div></div>
+    <div class="sw"><div class="fill" style="background:#c02026"></div><div class="lbl"><b>hover, light</b><code>#c02026</code></div></div>
+    <div class="sw"><div class="fill" style="background:#e8433c"></div><div class="lbl"><b>action, dark</b><code>#e8433c</code></div></div>
+    <div class="sw"><div class="fill" style="background:#f2635c"></div><div class="lbl"><b>hover, dark</b><code>#f2635c</code></div></div>
+  </div>
+  <p class="note">Active-tab underline, and the one primary button. Nowhere else — not a link color, not a section kicker, not a "featured" highlight. The dark-ground red is a step brighter than the light one so it clears contrast on <code>#303030</code>.</p>
+
+  <div class="demo-head">Fixed — the bar and the tab row never repaint</div>
+  <div class="fixed-strip">
+    <div class="band bar">RDM</div>
+    <div class="band tabs" style="display:flex;">
+      <span class="on">RDM-7</span><span class="off">RDM Lap</span><span class="off">Studio</span>
+    </div>
+  </div>
+  <p class="note" style="margin-top: var(--sp-3)">This exact pair of bands sits on top of the page whether the page below is light or dark: <code>--bar-*</code> is always <code>#0c0d0e</code>, and <code>--tabrow-*</code> is always the LIGHT surface (<code>#d9dadd</code> ground, <code>#1d1f20</code> text) — a real rule from the app, not a convenience. It is what makes every RDM surface read as one product.</p>
+
+  <div class="demo-head">Status dots — the only other colored role</div>
+  <div style="display:flex; gap: var(--sp-6); align-items:center;">
+    <span style="display:flex; align-items:center; gap:6px; font-size: var(--fs-small);"><i class="rdm-dot ok" style="background:#4fae6b"></i>In stock / live</span>
+    <span style="display:flex; align-items:center; gap:6px; font-size: var(--fs-small);"><i class="rdm-dot rec" style="background: var(--action)"></i>Recording</span>
+    <span style="display:flex; align-items:center; gap:6px; font-size: var(--fs-small);"><i class="rdm-dot off" style="background:#6a6d72"></i>Offline</span>
+  </div>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!-- @dsCard group="Components" name="Forms" subtitle="A square field that butts straight onto its button — no pill, no gap" viewport="800x380" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDM — Forms</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+.demo { max-width: 760px; margin: 0 auto; padding: var(--sp-8) var(--sp-6) var(--sp-16); }
+.demo-head { font-family: var(--font-heading); font-weight: 600; font-size: var(--fs-eyebrow); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); margin: var(--sp-10) 0 var(--sp-4); }
+.demo-head:first-child { margin-top: 0; }
+.note { font-size: var(--fs-small); color: var(--text-secondary); max-width: 68ch; line-height: 1.5; }
+.panel { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-6); background: var(--surface); border: 1px solid var(--border); max-width: 560px; }
+.field-row { display: flex; }
+.field { flex: 1; display: flex; align-items: center; height: 44px; padding: 0 14px; background: var(--bg); border: 1px solid var(--border-strong); border-right: none; font-size: 15px; color: var(--text-muted); }
+.btn-primary { display: inline-flex; align-items: center; height: 44px; padding: 0 22px; background: var(--action); border: 1px solid var(--action); color: #fff; font-family: var(--font-heading); font-weight: 600; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<main class="demo">
+
+  <div class="demo-head">Newsletter / capture row</div>
+  <div class="panel">
+    <div class="rdm-eyebrow"><span class="dot"></span>Signal in · 10% off · welcome</div>
+    <div style="font-family:var(--font-heading); font-weight:700; font-size:34px; line-height:1; text-transform:uppercase;">Join the channel. <span style="color:var(--action);">Save 10%.</span></div>
+    <div class="field-row">
+      <div class="field">your@email.com</div>
+      <button type="button" class="btn-primary">Subscribe</button>
+    </div>
+    <div style="font-size:12px; color:var(--text-muted);">No spam · unsubscribe any time</div>
+  </div>
+  <p class="note" style="margin-top: var(--sp-4);">The field is 44px, ground fill, a <code>--border-strong</code> outline, Barlow 15px — never a rounded pill. It butts directly onto its button with no gap and no radius on either side. Focus uses the same inset red ring as a tab.</p>
+
+</main>
+</body>
+</html>

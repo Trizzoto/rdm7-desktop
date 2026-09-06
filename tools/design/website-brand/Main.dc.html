@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Barlow', 'Segoe UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    * { box-sizing: border-box; border-radius: 0; }
+    a { color: #1d1f20; text-decoration: none; } a:hover { color: #d2232a; }
+    .head { font-family: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif; text-transform: uppercase; }
+    .mono { font-family: 'JetBrains Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; background: #c8c9cc; color: #1d1f20; padding: 40px 48px 56px; display: flex; flex-direction: column; gap: 36px;">
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; border-bottom: 1px solid rgba(29,31,32,0.2); padding-bottom: 18px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div class="head" style="font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: rgba(29,31,32,0.6);">RDM website · design style</div>
+      <h1 class="head" style="margin: 0; font-weight: 700; font-size: 56px; line-height: 0.95;">Foundations</h1>
+    </div>
+    <p style="margin: 0; max-width: 520px; font-size: 14px; line-height: 1.5; color: rgba(29,31,32,0.75);">The Studio lap-timer look, lifted value for value from the app. Light ground with a black bar, Barlow Condensed headings in caps, red for where you are and the one thing to do, nowhere else. No rounded corners anywhere.</p>
+  </div>
+
+  <!-- palette -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div class="head" style="font-weight: 600; font-size: 14px; letter-spacing: 0.14em;">Palette · light (the lap timer's ground)</div>
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px;">
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 76px; background: #c8c9cc;"></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Ground</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">#c8c9cc</div><div style="color: rgba(29,31,32,0.6); margin-top: 3px;">Page, rails, footer band</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 76px; background: #d9dadd;"></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Surface</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">#d9dadd</div><div style="color: rgba(29,31,32,0.6); margin-top: 3px;">Cards, panels, inputs, tab row</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 76px; background: #e4e5e8;"></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Elevated</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">#e4e5e8</div><div style="color: rgba(29,31,32,0.6); margin-top: 3px;">Hover, raised</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 76px; background: #1d1f20;"></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Ink</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">#1d1f20</div><div style="color: rgba(29,31,32,0.6); margin-top: 3px;">Text, and the secondary button's fill</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 76px; background: #d2232a;"></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Brand red</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">#d2232a · hover #c02026</div><div style="color: rgba(29,31,32,0.6); margin-top: 3px;">Active tab underline, primary button, live dot</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 76px; background: #0c0d0e;"></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Bar black</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">#0c0d0e</div><div style="color: rgba(29,31,32,0.6); margin-top: 3px;">The brand bar and the footer. Rules #26282a, muted #9a9a9e</div></div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px;">
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 44px; background: rgba(29,31,32,0.6);"></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Muted</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">ink @ 60%</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 44px; background: rgba(29,31,32,0.75);"></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Soft</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">ink @ 75% · body copy</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 44px; background: rgba(29,31,32,0.2);"></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Divider</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">ink @ 20% · every 1px rule</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 44px; background: rgba(29,31,32,0.1);"></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Divider, light</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">ink @ 10% · table rows</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 44px; background: #16181b;"></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Stage</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">#16181b · behind product pictures</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(29,31,32,0.2);"><div style="height: 44px; display: grid; grid-template-columns: repeat(3, 1fr);"><div style="background: #2e7d43;"></div><div style="background: #a06508;"></div><div style="background: #c02026;"></div></div><div style="padding: 8px 10px; background: #d9dadd; font-size: 12px;"><div style="font-weight: 600;">Ok · warn · bad</div><div class="mono" style="font-size: 11px; color: rgba(29,31,32,0.6);">#2e7d43 · #a06508 · #c02026</div></div></div>
+    </div>
+  </div>
+
+  <!-- dark palette -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div class="head" style="font-weight: 600; font-size: 14px; letter-spacing: 0.14em;">Palette · dark (the editor, keypad and Home)</div>
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; padding: 14px; background: #303030; border: 1px solid rgba(29,31,32,0.2);">
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.14);"><div style="height: 56px; background: #303030;"></div><div style="padding: 8px 10px; background: #393939; color: #e8e8e8; font-size: 12px;"><div style="font-weight: 600;">Ground</div><div class="mono" style="font-size: 11px; color: rgba(232,232,232,0.62);">#303030</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.14);"><div style="height: 56px; background: #393939;"></div><div style="padding: 8px 10px; background: #393939; color: #e8e8e8; font-size: 12px;"><div style="font-weight: 600;">Surface</div><div class="mono" style="font-size: 11px; color: rgba(232,232,232,0.62);">#393939</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.14);"><div style="height: 56px; background: #424242;"></div><div style="padding: 8px 10px; background: #393939; color: #e8e8e8; font-size: 12px;"><div style="font-weight: 600;">Elevated</div><div class="mono" style="font-size: 11px; color: rgba(232,232,232,0.62);">#424242</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.14);"><div style="height: 56px; background: #e8e8e8;"></div><div style="padding: 8px 10px; background: #393939; color: #e8e8e8; font-size: 12px;"><div style="font-weight: 600;">Ink</div><div class="mono" style="font-size: 11px; color: rgba(232,232,232,0.62);">#e8e8e8</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.14);"><div style="height: 56px; background: #e8433c;"></div><div style="padding: 8px 10px; background: #393939; color: #e8e8e8; font-size: 12px;"><div style="font-weight: 600;">Brand red, lifted</div><div class="mono" style="font-size: 11px; color: rgba(232,232,232,0.62);">#e8433c · one step brighter for contrast</div></div></div>
+      <div style="display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.14);"><div style="height: 56px; background: rgba(255,255,255,0.14);"></div><div style="padding: 8px 10px; background: #393939; color: #e8e8e8; font-size: 12px;"><div style="font-weight: 600;">Divider</div><div class="mono" style="font-size: 11px; color: rgba(232,232,232,0.62);">white @ 14% · light 7%</div></div></div>
+    </div>
+    <p style="margin: 0; font-size: 13px; color: rgba(29,31,32,0.6);">The tab row stays light even on a dark page. That one strip is what makes the two palettes read as the same brand.</p>
+  </div>
+
+  <!-- type -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div class="head" style="font-weight: 600; font-size: 14px; letter-spacing: 0.14em;">Type · Barlow Condensed for headings, Barlow for reading, JetBrains Mono for numbers</div>
+    <div style="display: grid; grid-template-columns: 220px 1fr; border-top: 1px solid rgba(29,31,32,0.2); border-left: 1px solid rgba(29,31,32,0.2); background: #d9dadd;">
+      <div class="mono" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-size: 11px; line-height: 1.6; color: rgba(29,31,32,0.6);">Display<br>Condensed 700 · 84px<br>line 0.94 · caps</div>
+      <div class="head" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-weight: 700; font-size: 84px; line-height: 0.94;">Realtime data. <span style="color: #d2232a;">Zero compromise.</span></div>
+      <div class="mono" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-size: 11px; line-height: 1.6; color: rgba(29,31,32,0.6);">Section title<br>Condensed 700 · 60px<br>line 0.95 · second line red</div>
+      <div class="head" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-weight: 700; font-size: 60px; line-height: 0.95;">Lap times. <span style="color: #d2232a;">On your dash.</span></div>
+      <div class="mono" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-size: 11px; line-height: 1.6; color: rgba(29,31,32,0.6);">Big fact<br>Condensed 700 · 34px</div>
+      <div class="head" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-weight: 700; font-size: 34px; line-height: 1;">50 fps · 7" · Any CAN</div>
+      <div class="mono" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-size: 11px; line-height: 1.6; color: rgba(29,31,32,0.6);">Tab / nav<br>Condensed 600 · 16px<br>tracking 0.10em · caps</div>
+      <div class="head" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-weight: 600; font-size: 16px; letter-spacing: 0.1em;">RDM-7 · RDM Lap · Studio · Marketplace</div>
+      <div class="mono" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-size: 11px; line-height: 1.6; color: rgba(29,31,32,0.6);">Eyebrow / label<br>Condensed 600 · 12px<br>tracking 0.20em · muted</div>
+      <div class="head" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: rgba(29,31,32,0.6);">A dash built by car people</div>
+      <div class="mono" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-size: 11px; line-height: 1.6; color: rgba(29,31,32,0.6);">Lead copy<br>Barlow 400 · 18px · line 1.5<br>soft ink</div>
+      <div style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-size: 18px; line-height: 1.5; color: rgba(29,31,32,0.75); max-width: 640px;">A 7-inch CAN dash, configured from any browser. Updated over Wi-Fi. No software to install.</div>
+      <div class="mono" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-size: 11px; line-height: 1.6; color: rgba(29,31,32,0.6);">Body / table<br>Barlow 400 · 14px · line 1.5</div>
+      <div style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-size: 14px; line-height: 1.5; color: rgba(29,31,32,0.75); max-width: 640px;">Plug-and-play for Haltech, Link and MaxxECU. Reads any other CAN bus too, factory or aftermarket.</div>
+      <div class="mono" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-size: 11px; line-height: 1.6; color: rgba(29,31,32,0.6);">Numbers / meta<br>JetBrains Mono 500 · 11–12px<br>tracking 0.06em · tabular</div>
+      <div class="mono" style="padding: 14px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); font-size: 12px; letter-spacing: 0.06em;">AUD $599 · 1:23.45 · +0.32 · v2.4.1</div>
+    </div>
+  </div>
+
+  <!-- rules -->
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid rgba(29,31,32,0.2); border-left: 1px solid rgba(29,31,32,0.2);">
+    <div style="padding: 14px 16px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); background: #d9dadd;"><div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: rgba(29,31,32,0.6);">Corners</div><div style="margin-top: 6px; font-size: 14px; line-height: 1.45;">None. Zero radius on everything. Only things that are round because they are round things: dots, lamps.</div></div>
+    <div style="padding: 14px 16px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); background: #d9dadd;"><div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: rgba(29,31,32,0.6);">Red</div><div style="margin-top: 6px; font-size: 14px; line-height: 1.45;">Means where you are (the tab underline, the active mode) and the one action (the primary button). The only data red is a slower delta. Everything else marks itself with ink.</div></div>
+    <div style="padding: 14px 16px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); background: #d9dadd;"><div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: rgba(29,31,32,0.6);">Rules, not shadows</div><div style="margin-top: 6px; font-size: 14px; line-height: 1.45;">Structure is 1px dividers and ruled tables, one fact per column. No drop shadows on the page. Panel gutters are 10px.</div></div>
+    <div style="padding: 14px 16px; border-right: 1px solid rgba(29,31,32,0.2); border-bottom: 1px solid rgba(29,31,32,0.2); background: #d9dadd;"><div class="head" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: rgba(29,31,32,0.6);">Pictures</div><div style="margin-top: 6px; font-size: 14px; line-height: 1.45;">A product sits in a panel with a header row, on the dark stage. The product picture is the app itself, drawn as itself.</div></div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

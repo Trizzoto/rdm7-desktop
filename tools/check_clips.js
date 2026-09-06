@@ -47,7 +47,8 @@ const FNS = ['gpTlBind', 'gpClips', 'gpClipStart', 'gpClipDur', 'gpClipEnd', 'gp
              'gpClipCovers', 'gpClipAtUtc', 'gpClipAt', 'gpClipReaches',
              'gpClipSyncFor', 'gpClipButt', 'gpClipLaneFree', 'gpClipsSave',
              'gpClipTether', 'gpTl', 'gpTlSec', 'gpTlSessDur', 'gpTlExtent',
-             'gpTlView', 'gpTlStep', 'gpTlClock', 'gpTlCoverage', 'gpTlReadout',
+             'gpTlView', 'gpTlWinOf', 'gpTlViewOf', 'gpJog',
+             'gpTlStep', 'gpTlClock', 'gpTlCoverage', 'gpTlReadout',
              'gpTlClipTip', 'gpTlHtml'];
 /* The tick ladder is a const beside the function that reads it — taken from
    the source too, so a ladder edited in the app is the ladder checked here. */
@@ -90,8 +91,14 @@ function env(opt) {
             clips: [], clipSeq: 0, clipPin: null, video: null,
             trace: rows, traceLaps: opt.laps || [{ from: 0, to: rows.length - 1 }],
             selLap: 0, playIdx: 0, ghostFence: null, tl: null, _tlLive: true,
-            sessionId: 'ses_a', sessions: [meta], sessionMeta: meta, view: 'session'
+            sessionId: 'ses_a', sessions: [meta], sessionMeta: meta, view: 'session',
+            /* The classic panel is what the assertions below describe. The
+               shapes ADR-0064 added have a check of their own
+               (check_lookbar.js) — this file is about clip arithmetic, and
+               pinning the shape keeps it about that. */
+            look: { bar: 'classic', tl: 'classic' }
         },
+        gpLook: () => ctx.gp.look,
         gpStore: { putMeta(m) { puts.push(JSON.parse(JSON.stringify(m))); } },
         gpCurSessionMeta: () => meta,
         gpSampleUtc(i) {
@@ -433,12 +440,16 @@ console.log('\nthe markup the drag is measured against');
     E.gp.tl = { from: 0, to: 100, snap: true };
     const a = E.add({ t0: REC + 25000, dur: 25, name: 'A' });
     E.add({ t0: REC + 60000, dur: 10, name: 'B', lane: 2 });
-    const h = E.gpTlHtml(false);
+    /* The PANEL is the track sheet now and nothing else — the three shapes
+       ADR-0064 offered are down to the one that put the film and the speed
+       trace on a single surface, which is the whole job. So the renderer this
+       function still owns is the COMPACT strip, and that is what these
+       geometry assertions exercise. The panel is checked as source below. */
+    const h = E.gpTlHtml(true);
     ok('a section a quarter of the way in is drawn a quarter of the way across',
        /left:25\.0000%;width:25\.0000%/.test(h), h.match(/left:[\d.]+%;width:[\d.]+%/g).join(' '));
-    ok('lane 2 is drawn two lane-heights down', /top:62px/.test(h),
-       '30 px lanes, 2 px of padding');
-    ok('the recording gets a band of its own', /gp-tl-sess/.test(h));
+    ok('lane 2 is drawn two lane-heights down', /top:34px/.test(h),
+       '16 px lanes, 2 px of padding');
     ok('and the playhead a line', /gp-tl-head/.test(h));
     ok('an empty lane is always offered to drop onto',
        (h.match(/data-gp-tllane=/g) || []).length === 4,
@@ -446,7 +457,7 @@ console.log('\nthe markup the drag is measured against');
 }
 {
     const E = env({ secs: 100 });
-    const h = E.gpTlHtml(false);
+    const h = E.gpTlHtml(true);
     ok('with nothing open it says what to do rather than nothing at all',
        /gp-tl-empty/.test(h) && /Footage/.test(h));
 }
@@ -461,9 +472,13 @@ console.log('\nthe markup the drag is measured against');
     ok('…and stating its own height, because nothing gives it one',
        /gp-tl-view[^>]*height:\d+px;flex:none/.test(h),
        (h.match(/gp-tl-view[^>]*/) || [''])[0]);
-    const p = E.gpTlHtml(false);
-    ok('the panel keeps its bar and fills what it is given',
-       /gp-tl-bar/.test(p) && !/height:\d+px;flex:none/.test(p));
+    /* Read off the source rather than run: gpTlPanelHtml reaches most of the
+       film cache and lifting it here would be lifting half the file. What
+       matters is that there is no longer a choice to get wrong. */
+    ok('and the panel is the track sheet, with nothing to pick instead',
+       /if \(!compact\) return gpTlPanelHtml\("sheet"\);/.test(src) &&
+       !/GP_TLS/.test(src),
+       'three panel shapes were a preference made out of a decision');
 }
 
 /* ══ the scale a drag is measured against ════════════════════════════════ */
@@ -477,7 +492,8 @@ console.log('\nhow far a drag moves a section');
     const m = /var pxPerSec = function \(view\) \{[\s\S]*?\n            \};/.exec(bind);
     ok('pxPerSec is still where this can reach it', !!m);
     if (m) {
-        const ctx = { gpTlView: () => ({ from: 0, to: 100 }) };
+        const ctx = { gpTlView: () => ({ from: 0, to: 100 }),
+                      gpTlViewOf: () => ({ from: 0, to: 100 }) };
         ctx.window = ctx;
         vm.createContext(ctx);
         vm.runInContext(m[0] + '\nthis.f = pxPerSec;', ctx);

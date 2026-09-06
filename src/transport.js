@@ -1470,6 +1470,12 @@
              * nobody has profiled. */
             async canSeen() { return await rpc('can.seen'); },
             async canSeenClear() { return await rpc('can.seen.clear'); },
+            /* The controller's own error counters — TEC/REC, failed transmits,
+             * lost arbitration, bus-off state — and the node's one-line reading
+             * of them. Nothing in Studio asked for this until ADR-0066, which
+             * is why a puck failing better than a third of its transmits looked
+             * from here like a car that had gone quiet. */
+            async canBus() { return await rpc('can.bus'); },
             async traceChannelsSet(channels) { return await rpc('trace.channels.set', { channels }); },
             async lapTrackGet() { return await rpc('lap.track.get'); },
             async lapTrackSet(track) { return await rpc('lap.track.set', track); },

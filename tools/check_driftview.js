@@ -277,7 +277,12 @@ ok('a scrub clears it', /gpPlayClearStop\(\)/.test(
              SRC.indexOf('window.gpScrubTo = function') + 700)));
 
 console.log('\nthe view owns its class names');
-['gpb-dlane', 'gpb-dhead', 'gpb-dlive', 'gpb-dtools', 'gpb-dspark', 'gpb-dhow']
+/* gpb-dhead and gpb-dtools went with the hero: the corner's name, its stars
+   and its transport are on the CARD now, and the card is .gpb-ccard, shared
+   with Corners. What is still drift's alone is the lane, the live readout, the
+   angle picture, the disclosure, and the feed wrapper that scopes the card's
+   drift-only styling. */
+['gpb-dlane', 'gpb-dlive', 'gpb-dfeed', 'gpb-dspark', 'gpb-dhow']
     .forEach(function (c) {
         /* .gpb-phead was already the Analyse panel drag header when the shell
            change reused it; the page head inherited its layout and came out
@@ -298,7 +303,17 @@ while ((m2 = re2.exec(bind))) names.add(m2[1]);
 ok('found the handlers gpDriftBind wires', names.size >= 6, [...names].join(', '));
 const dead = [...names].filter(n => !new RegExp('window\\.' + n + '\\s*=').test(SRC));
 ok('all of them are exported onto window', dead.length === 0, dead.join(', '));
-['data-gp-dstep', 'data-gp-dplay', 'data-gp-dloop', 'data-gp-dhow', 'data-gp-dspark']
+/* data-gp-dstep is gone as an attribute — the feed IS the list of corners, so
+   there is nothing for a prev/next pair to do that clicking a card does not.
+   gpDriftCornerStep survives as the [ and ] keys, and only as those, so they
+   are the thing to hold on to. */
+ok('[ and ] still step the corner, now that no button does',
+   /if \(key === "\["\) \{ window\.gpDriftCornerStep\(-1\); return "corner"; \}/.test(SRC) &&
+   /if \(key === "\]"\) \{ window\.gpDriftCornerStep\(1\); return "corner"; \}/.test(SRC));
+ok('and nothing is left listening for the attribute they replaced',
+   !/querySelectorAll\("\[data-gp-dstep\]"\)/.test(SRC),
+   'a listener matching nothing is a control somebody will look for');
+['data-gp-dplay', 'data-gp-dloop', 'data-gp-dlaps', 'data-gp-dhow', 'data-gp-dspark']
     .forEach(function (a) {
         ok(a + ' is both emitted and bound',
            rend.indexOf(a) >= 0 &&

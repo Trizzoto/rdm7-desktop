@@ -1,0 +1,120 @@
+<!-- @dsCard group="Patterns" name="Sections" subtitle="Section opener, spec strip, comparison table, closing CTA, footer" viewport="1200x1600" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDM — Sections</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+body { background: var(--bg); }
+.center { display: flex; justify-content: center; }
+.wrap { width: 100%; max-width: 1120px; padding: 0 var(--sp-8); }
+
+/* section opener */
+.opener { padding: var(--sp-16) 0; display: flex; flex-direction: column; gap: var(--sp-5); }
+.opener h2 { font-family: var(--font-heading); font-weight: 700; font-size: var(--fs-h1); line-height: 0.95; text-transform: uppercase; margin: 0; }
+.opener p { font-size: var(--fs-lead); line-height: 1.5; color: var(--text-secondary); max-width: 48ch; margin: 0; }
+.opener .row { display: flex; align-items: center; gap: 14px; }
+.btn-primary { display: inline-flex; align-items: center; height: 44px; padding: 0 24px; background: var(--action); border: 1px solid var(--action); color: #fff; font-family: var(--font-heading); font-weight: 600; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; }
+
+/* spec strip */
+.strip { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border-top: 1px solid var(--border); border-left: 1px solid var(--border); margin-bottom: var(--sp-16); }
+.strip > div { padding: var(--sp-5) var(--sp-6); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface); }
+.strip .lbl { font-family: var(--font-heading); font-weight: 600; font-size: 11px; letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); }
+.strip .stat { font-family: var(--font-heading); font-weight: 700; font-size: var(--fs-stat); line-height: 1; margin-top: 6px; }
+.strip .sub { margin-top: 6px; font-size: var(--fs-small); color: var(--text-secondary); }
+
+/* comparison table section */
+.cmp { display: grid; grid-template-columns: 4fr 8fr; gap: var(--sp-10); padding: var(--sp-16) 0; background: var(--surface); }
+.cmp-copy { padding-left: var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-4); }
+.cmp-copy h2 { font-family: var(--font-heading); font-weight: 700; font-size: var(--fs-h1); line-height: 0.95; text-transform: uppercase; margin: 0; }
+table.rdm-table { width: 100%; border-collapse: collapse; font-size: 14px; border-top: 1px solid var(--border); border-left: 1px solid var(--border); margin-right: var(--sp-8); }
+table.rdm-table th, table.rdm-table td { padding: 10px 14px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); text-align: left; }
+table.rdm-table th { font-family: var(--font-heading); font-weight: 600; font-size: 11px; letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-muted); }
+table.rdm-table th.us { font-weight: 700; font-size: 15px; letter-spacing: 0.1em; color: var(--text); border-bottom: 3px solid var(--action); }
+table.rdm-table td.us { font-weight: 600; background: var(--bg); }
+
+/* closing cta */
+.close { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-10); padding: var(--sp-16) 0; }
+.close h2 { font-family: var(--font-heading); font-weight: 700; font-size: var(--fs-h1); line-height: 0.95; text-transform: uppercase; margin: 0; }
+.close-actions { display: flex; flex-direction: column; gap: 10px; min-width: 260px; }
+.btn-secondary { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 22px; background: var(--btn-secondary-bg); border: 1px solid var(--btn-secondary-bg); color: var(--btn-secondary-text); font-family: var(--font-heading); font-weight: 600; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; text-align: center; }
+
+/* footer */
+footer { background: var(--bar-bg); color: var(--bar-muted); padding: var(--sp-8) 0 var(--sp-6); }
+.foot-wrap { display: flex; flex-direction: column; gap: var(--sp-6); }
+.foot-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-10); }
+.foot-links { display: flex; gap: 22px; font-family: var(--font-heading); font-weight: 600; font-size: 12.5px; letter-spacing: 0.12em; text-transform: uppercase; }
+.foot-links a { color: var(--bar-muted); text-decoration: none; }
+.foot-links a:hover { color: #fff; }
+.foot-bottom { display: flex; align-items: center; justify-content: space-between; padding-top: var(--sp-4); border-top: 1px solid var(--bar-border); font-size: 11.5px; }
+</style>
+</head>
+<body>
+
+<div class="center"><div class="wrap">
+  <section class="opener">
+    <div class="rdm-eyebrow"><span class="dot"></span>New · pre-order</div>
+    <h2>Lap times.<br><span style="color: var(--action);">On your dash.</span></h2>
+    <p>RDM Lap is a CAN GPS node that drops lap times, sector splits and true GPS speed straight onto your RDM-7. No separate lap timer, no second screen.</p>
+    <div class="row"><a class="btn-primary" href="#">Pre-order RDM Lap</a></div>
+  </section>
+
+  <div class="strip">
+    <div><div class="lbl">Screen</div><div class="stat">7"</div><div class="sub">Sunlight-readable, capacitive touch</div></div>
+    <div><div class="lbl">Refresh</div><div class="stat">50 fps</div><div class="sub">Every needle moves with the engine</div></div>
+    <div><div class="lbl">Layout</div><div class="stat">100%</div><div class="sub">Yours — every gauge, every page, every alert</div></div>
+    <div><div class="lbl">Input</div><div class="stat">Any CAN</div><div class="sub">Haltech, Link, MaxxECU, DBC import</div></div>
+  </div>
+</div></div>
+
+<div class="cmp">
+  <div class="cmp-copy">
+    <div class="rdm-eyebrow"><span class="dot"></span>Honest comparison</div>
+    <h2>All the data.<br><span style="color: var(--action);">None of the lock-in.</span></h2>
+    <p style="font-size:15.5px; line-height:1.5; color:var(--text-secondary);">We'd rather you fact-check us than take our word for it.</p>
+  </div>
+  <table class="rdm-table">
+    <thead><tr><th>Row</th><th class="us">RDM-7 · $599</th><th>Typical race dash</th></tr></thead>
+    <tbody>
+      <tr><td>Configured from</td><td class="us">Any browser</td><td>Proprietary desktop software</td></tr>
+      <tr><td>Try before you buy</td><td class="us">Yes, in the browser</td><td>No</td></tr>
+      <tr><td>Warranty</td><td class="us">12 months</td><td>Varies</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="center"><div class="wrap">
+  <div class="close">
+    <div>
+      <div class="rdm-eyebrow"><span class="dot"></span>Buy with zero risk</div>
+      <h2 style="margin-top:var(--sp-3);">Try it first.<br><span style="color: var(--action);">Then trust it.</span></h2>
+    </div>
+    <div class="close-actions">
+      <a class="btn-primary" href="#" style="justify-content:center;">Buy RDM-7 · $599</a>
+      <a class="btn-secondary" href="#">Try RDM Studio</a>
+    </div>
+  </div>
+</div></div>
+
+<footer>
+  <div class="center"><div class="foot-wrap" style="width:100%; max-width:1120px; padding:0 var(--sp-8);">
+    <div class="foot-top">
+      <div>
+        <span style="font-family:var(--font-heading); font-weight:700; font-size:16px; letter-spacing:0.07em; text-transform:uppercase; color:#fff;">RDM</span>
+        <div style="font-size:12.5px; margin-top:8px; line-height:1.5;">Realtime Data Monitoring.<br>Precision digital dashboards for automotive performance.</div>
+      </div>
+      <nav class="foot-links">
+        <a href="#">RDM-7</a><a href="#">RDM Lap</a><a href="#">Studio</a><a href="#">Marketplace</a><a href="#">Support</a>
+      </nav>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 RDM — Realtime Data Monitoring. All rights reserved.</span>
+      <span style="display:flex; gap:16px;"><a href="#" style="color:var(--bar-muted);">Privacy</a><a href="#" style="color:var(--bar-muted);">Terms</a></span>
+    </div>
+  </div></div>
+</footer>
+
+</body>
+</html>
