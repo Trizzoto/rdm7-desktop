@@ -1759,6 +1759,16 @@
            saved copy and disable offline channel editing (ADR-0030). */
         if (pathname === '/api/channels' || pathname === '/api/channels/canonical')
             return ok({ channels: [], capacity: 128, offline: true });
+        /* The source catalogue is a DASH answer (it carries live values and
+           marks the car's active ECU), but the CATALOGUE half of it also
+           travels with the page (ADR-0033). Answering `offline: true` with no
+           makes is what tells the picker to fall back to that baked table and
+           say so, instead of reaching the unmapped-endpoint throw below and
+           rendering "Failed to load sources" — which is how setting a channel
+           up offline looked impossible while the ECU-import picker one menu
+           over did it fine. */
+        if (pathname === '/api/channels/source-options')
+            return ok({ makes: [], current_signal: '', offline: true });
         /* Everything left is a DASH endpoint, and offline there is no dash.
            This used to answer `{ok:true}` — a 200 carrying no data — on the
            grounds that a no-op is harmless. It is not harmless: the editor
