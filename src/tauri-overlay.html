@@ -61458,3 +61458,568 @@
     </script>
 
 ##[ end ]##
+
+#! Record video — the dash, rendered to an MP4 at a steady 30 or 60 fps.
+#!
+#! The dash itself can't do this: a software JPEG takes 70-150 ms a frame on the
+#! S3 and the SD card is on a 10 MHz SPI bus, so on-device recording tops out
+#! near 10 fps and steals the CPU that draws the gauges. Studio already runs the
+#! dash's own LVGL code as the WASM backdrop, and that engine has a deterministic
+#! clock (preview_tick) and presents each finished frame to its canvas
+#! synchronously. So a frame here is: set the values for this instant, advance
+#! the clock by exactly one frame, copy the canvas, hand it to WebCodecs. The
+#! result is frame-exact no matter how slow the PC is.
+#!
+#! Values come from the bench sweep (same shape as the backdrop's own sim) or a
+#! dash data log (timestamp_ms + one column per signal, from this PC or from
+#! the connected dash's log list). The MP4 is muxed by the video-export muxer
+#! (window.__gpMux / __gpAvc1), not a second one.
+#!
+#! Anchored before confirmAsync only because that line is unique and sits at the
+#! top level of the editor's script, where wasmModule and the backdrop helpers
+#! live. Nothing in the base is changed.
+##[ block dash-video-record ]##
+##[ anchor ]##
+        function confirmAsync(title, message, confirmLabel, cancelLabel) {
+##[ insert-before ]##
+        /* ── Record video: the dash preview rendered to MP4 ─────────────── */
+        let _dvxBusy = false;
+        let _dvxCancel = false;
+
+        /* Parse a dash data log. Series are kept per signal with their own
+         * timestamps, because an empty cell means "no new value", not zero. */
+        function _dvxParseLog(text) {
+            const lines = String(text || '').split(/\r?\n/);
+            let h = 0;
+            while (h < lines.length && !lines[h].trim()) h++;
+            if (h >= lines.length) throw new Error('The file is empty.');
+            const head = lines[h].split(',').map(s => s.trim());
+            const tIdx = head.findIndex(s => /^timestamp(_ms)?$/i.test(s));
+            if (tIdx < 0) throw new Error('This is not a dash data log (it has no timestamp_ms column).');
+            const series = [];
+            const colSeries = head.map((name, c) => {
+                if (c === tIdx || !name) return null;
+                const s = { name, t: [], v: [], cur: 0, step: /gear/i.test(name) };
+                series.push(s);
+                return s;
+            });
+            let first = null, last = -Infinity;
+            for (let r = h + 1; r < lines.length; r++) {
+                const ln = lines[r];
+                if (!ln) continue;
+                const cells = ln.split(',');
+                const tAbs = parseFloat(cells[tIdx]);
+                if (!isFinite(tAbs) || tAbs < last) continue;   /* skip a clock that went backwards */
+                if (first === null) first = tAbs;
+                last = tAbs;
+                const t = tAbs - first;
+                for (let c = 0; c < cells.length && c < head.length; c++) {
+                    const s = colSeries[c];
+                    if (!s || cells[c] === '') continue;
+                    const v = parseFloat(cells[c]);
+                    if (!isFinite(v)) continue;
+                    s.t.push(t);
+                    s.v.push(v);
+                }
+            }
+            if (first === null) throw new Error('The log has no rows.');
+            return { series: series.filter(s => s.t.length), durMs: last - first };
+        }
+
+        /* Value of one series at time ms (monotonic calls: cursor walks forward).
+         * null before its first sample, so the widget keeps its no-data look. */
+        function _dvxValueAt(s, ms, smooth) {
+            const t = s.t;
+            if (!t.length || ms < t[0]) return null;
+            if (s.cur >= t.length || t[s.cur] > ms) s.cur = 0;
+            while (s.cur + 1 < t.length && t[s.cur + 1] <= ms) s.cur++;
+            const i = s.cur;
+            if (!smooth || s.step || i + 1 >= t.length) return s.v[i];
+            const span = t[i + 1] - t[i];
+            if (span <= 0) return s.v[i];
+            return s.v[i] + (s.v[i + 1] - s.v[i]) * ((ms - t[i]) / span);
+        }
+
+        /* The backdrop sim's sweep, as a function of video time instead of a
+         * timer: ~10 s per full sweep, same per-signal phase offsets. */
+        function _dvxSweepInject(tSec) {
+            const tri = (typeof _pvTri === 'function') ? _pvTri : (t => { t = ((t % 1) + 1) % 1; return t < 0.5 ? t * 2 : 2 - t * 2; });
+            const hash = (typeof _pvHash01 === 'function') ? _pvHash01 : (s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return (h % 997) / 997; });
+            const ranges = _wasmSimRanges();
+            const phase = tSec * 0.1;
+            for (const name of Object.keys(ranges)) {
+                if (typeof _testValues !== 'undefined' && typeof _testValues[name] === 'number') {
+                    injectWasmSignal(name, _testValues[name]);
+                    continue;
+                }
+                const r = ranges[name];
+                let v = r.min + tri(phase + hash(name)) * (r.max - r.min);
+                if (/gear/i.test(name)) v = Math.round(v);
+                injectWasmSignal(name, v);
+            }
+        }
+
+        /* A yield that isn't clamped to 1 s when the window is in the background. */
+        function _dvxYield() {
+            return new Promise(r => { const ch = new MessageChannel(); ch.port1.onmessage = () => r(); ch.port2.postMessage(0); });
+        }
+
+        function _dvxFmtTime(sec) {
+            sec = Math.max(0, Math.round(sec));
+            return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+        }
+
+        function _dvxEsc(s) {
+            return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        async function _dvxSave(blob, name) {
+            const tauri = typeof RDM !== 'undefined' && RDM.isTauri && RDM.isTauri() &&
+                          typeof RDM.saveFileDialog === 'function' && typeof RDM.writeFile === 'function';
+            if (!tauri) {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 10000);
+                return name;
+            }
+            const path = await RDM.saveFileDialog(name, [{ name: 'Video', extensions: ['mp4'] }]);
+            if (!path) return null;
+            await RDM.writeFile(path, new Uint8Array(await blob.arrayBuffer()));
+            return path;
+        }
+
+        /* Render `frames` frames and return an MP4 blob (null if cancelled).
+         * opts: { fps, scale, secs, startMs, log, smooth } — log null = sweep. */
+        async function _dvxRender(opts, onProgress) {
+            const mod = wasmModule;
+            const src = document.getElementById('canvas');
+            if (!mod || !src || _wasmCrashed) throw new Error('The dash preview is not running.');
+            if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined')
+                throw new Error('This app version cannot encode video (WebCodecs is missing).');
+            if (typeof window.__gpMux !== 'function' || typeof window.__gpAvc1 !== 'function')
+                throw new Error('The video writer did not load.');
+
+            const fps = opts.fps;
+            const frames = Math.max(1, Math.round(opts.secs * fps));
+            const W0 = src.width, H0 = src.height;
+            const W = Math.round(W0 * opts.scale / 2) * 2;
+            const H = Math.round(H0 * opts.scale / 2) * 2;
+
+            const mbs = Math.ceil(W / 16) * Math.ceil(H / 16);
+            const cfg = {
+                codec: (mbs <= 8192 && mbs * fps <= 245760) ? 'avc1.640028' : 'avc1.640033',
+                width: W, height: H, framerate: fps,
+                /* Dash graphics are hard edges on flat black: generous bits
+                 * keep needle and tick edges from smearing. */
+                bitrate: Math.min(60e6, Math.round(W * H * fps * 0.35)),
+                avc: { format: 'avc' }, latencyMode: 'quality'
+            };
+            let useCfg = null;
+            try {
+                const hw = Object.assign({}, cfg, { hardwareAcceleration: 'prefer-hardware' });
+                const r = await VideoEncoder.isConfigSupported(hw);
+                if (r && r.supported) useCfg = hw;
+            } catch (e) { }
+            if (!useCfg) {
+                const r = await VideoEncoder.isConfigSupported(cfg).catch(() => null);
+                if (!r || !r.supported) throw new Error('This computer cannot encode H.264 video at ' + W + ' x ' + H + '.');
+                useCfg = cfg;
+            }
+
+            const chunks = [], tsList = [], keys = [];
+            let avcC = null, failed = null;
+            const encoder = new VideoEncoder({
+                output: (chunk, meta) => {
+                    if (!avcC && meta && meta.decoderConfig && meta.decoderConfig.description)
+                        avcC = new Uint8Array(meta.decoderConfig.description);
+                    const b = new Uint8Array(chunk.byteLength);
+                    chunk.copyTo(b);
+                    chunks.push(b); tsList.push(chunk.timestamp); keys.push(chunk.type === 'key');
+                },
+                error: e => { failed = failed || e; }
+            });
+            encoder.configure(useCfg);
+
+            const cv = document.createElement('canvas');
+            cv.width = W; cv.height = H;
+            const g = cv.getContext('2d', { alpha: false });
+            g.imageSmoothingEnabled = opts.scale % 1 !== 0;   /* whole-number scales stay pixel-sharp */
+
+            /* Take the engine off its own clock: the backdrop's main loop,
+             * the sim/live timers and any queued layout rebuild would all move
+             * the picture between frames. */
+            const origSchedule = window.scheduleWasmPreview;
+            _wasmSimStop();
+            _wasmLiveStop();
+            if (_wasmPreviewTimer) { clearTimeout(_wasmPreviewTimer); _wasmPreviewTimer = null; }
+            window.scheduleWasmPreview = function () { };
+            if (typeof mod.pauseMainLoop === 'function') mod.pauseMainLoop();
+
+            const log = opts.log;
+            const inject = (ms) => {
+                if (!log) { _dvxSweepInject(ms / 1000); return; }
+                for (const s of log.series) {
+                    const v = _dvxValueAt(s, ms, opts.smooth);
+                    if (v !== null) injectWasmSignal(s.name, v);
+                }
+            };
+            const tick = (ms) => {
+                /* Never one big jump: LVGL's refresh timer and widget
+                 * animations expect roughly display-rate steps. */
+                while (ms > 0) {
+                    const step = Math.min(16, ms);
+                    mod.ccall('preview_tick', null, ['number'], [step]);
+                    ms -= step;
+                }
+            };
+
+            try {
+                /* A fresh build of the current layout, so every widget starts
+                 * from its load state rather than wherever the sim left it. */
+                await updateWasmPreview();
+                if (_wasmCrashed) throw new Error('The dash preview stopped while loading the layout.');
+                if (log) for (const s of log.series) s.cur = 0;
+                const startMs = opts.startMs || 0;
+                /* One second to settle on the first instant's values before
+                 * frame 0, so the video doesn't open on gauges swinging up
+                 * from zero. */
+                for (let k = 0; k < 60; k++) { inject(startMs); tick(16); }
+
+                let clockMs = 0;
+                for (let i = 0; i < frames; i++) {
+                    if (_dvxCancel) break;
+                    if (failed) throw failed;
+                    const tMs = i * 1000 / fps;
+                    inject(startMs + tMs * (opts.speed || 1));
+                    const target = Math.round(tMs);
+                    tick(target - clockMs || (i === 0 ? 1 : 0));
+                    clockMs = Math.max(clockMs, target);
+
+                    g.drawImage(src, 0, 0, W, H);
+                    const tsUs = Math.round(i * 1e6 / fps);
+                    const vf = new VideoFrame(cv, { timestamp: tsUs, duration: Math.round(1e6 / fps) });
+                    encoder.encode(vf, { keyFrame: i % (fps * 2) === 0 });
+                    vf.close();
+
+                    while (encoder.encodeQueueSize > 6 && !failed) {
+                        await new Promise(r => {
+                            let done = false;
+                            const fire = () => { if (done) return; done = true; encoder.removeEventListener('dequeue', fire); r(); };
+                            encoder.addEventListener('dequeue', fire);
+                            setTimeout(fire, 100);
+                        });
+                    }
+                    if (i % 4 === 0) { onProgress(i + 1, frames); await _dvxYield(); }
+                }
+                onProgress(frames, frames);
+                if (_dvxCancel) { try { encoder.close(); } catch (e) { } return null; }
+                await encoder.flush();
+                encoder.close();
+                if (failed) throw failed;
+                if (!chunks.length || !avcC) throw new Error('The encoder produced no video.');
+                for (let i = 1; i < tsList.length; i++)
+                    if (tsList[i] < tsList[i - 1]) throw new Error('The encoder reordered frames; this writer cannot store that.');
+
+                const VTS = 90000, tailUs = 1e6 / fps;
+                const durs = [], sync = [];
+                for (let i = 0; i < tsList.length; i++) {
+                    const next = i + 1 < tsList.length ? tsList[i + 1] : tsList[i] + tailUs;
+                    durs.push((next - tsList[i]) * VTS / 1e6);
+                    if (keys[i]) sync.push(i);
+                }
+                const track = {
+                    id: 1, video: true, timescale: VTS, width: W, height: H,
+                    chunks, durs, sync,
+                    durTicks: durs.reduce((a, b) => a + b, 0),
+                    entry: window.__gpAvc1(W, H, avcC)
+                };
+                return window.__gpMux(track, null);
+            } catch (e) {
+                try { if (encoder.state !== 'closed') encoder.close(); } catch (e2) { }
+                if (e instanceof WebAssembly.RuntimeError) {
+                    _wasmCrashed = true;
+                    throw new Error('The dash preview crashed while rendering.');
+                }
+                throw e;
+            } finally {
+                window.scheduleWasmPreview = origSchedule;
+                if (typeof mod.resumeMainLoop === 'function' && !_wasmCrashed) mod.resumeMainLoop();
+                /* Back to whatever the backdrop was doing, on a clean rebuild. */
+                if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+                _updateWasmCanvasVisibility();
+            }
+        }
+
+        function _dvxOpen() {
+            if (_dvxBusy) return;
+            if (typeof _wasmBackdropActive !== 'function' || !_wasmBackdropActive()) {
+                showToast('The dash preview is not running, so there is nothing to record yet.', 'error');
+                return;
+            }
+            const src = document.getElementById('canvas');
+            const W0 = src ? src.width : 800, H0 = src ? src.height : 480;
+            const connected = typeof RDM !== 'undefined' && RDM.mode !== 'local' && _connectionOk;
+            const layoutName = (currentLayout && currentLayout.name) || 'dash';
+
+            const overlay = document.createElement('div');
+            overlay.id = 'dvxOverlay';
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,8,0.82);backdrop-filter:blur(6px);z-index:22500;display:flex;align-items:center;justify-content:center;';
+            const lbl = 'display:block;font-size:11px;color:#999;margin:14px 0 5px;';
+            const inp = 'width:100%;box-sizing:border-box;padding:7px 8px;background:#111214;border:1px solid #2e2f34;border-radius:6px;color:#e0e0e0;font-size:12px;';
+            const btn2 = 'padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:#bbb;font-size:12px;';
+            overlay.innerHTML = `
+                <div style="background:#1a1b1e;border:1px solid #2e2f34;border-radius:10px;padding:24px;width:420px;max-width:calc(100vw - 40px);box-shadow:0 24px 60px rgba(0,0,0,0.6);">
+                    <div style="font-size:13px;font-weight:600;color:#e0e0e0;margin-bottom:6px;letter-spacing:0.03em;">Record video</div>
+                    <div style="font-size:12px;color:#999;line-height:1.5;">Renders <b style="color:#ccc;font-weight:500;">${_dvxEsc(layoutName)}</b> to an MP4, frame by frame, so the video is perfectly smooth however long it takes to make.</div>
+                    <div id="dvxForm">
+                        <label style="${lbl}" for="dvxSrc">What moves the gauges</label>
+                        <select id="dvxSrc" style="${inp}">
+                            <option value="sweep">Demo sweep: every gauge runs through its range</option>
+                            <option value="file">A data log on this computer</option>
+                            ${connected ? '<option value="dash">A data log on the dash</option>' : ''}
+                        </select>
+                        <div id="dvxSweepRow">
+                            <label style="${lbl}" for="dvxLen">Length</label>
+                            <select id="dvxLen" style="${inp}">
+                                <option value="10">10 seconds</option>
+                                <option value="20" selected>20 seconds</option>
+                                <option value="30">30 seconds</option>
+                                <option value="60">1 minute</option>
+                            </select>
+                        </div>
+                        <div id="dvxFileRow" style="display:none;">
+                            <label style="${lbl}">Log file</label>
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <button id="dvxPick" style="${btn2}">Choose file&hellip;</button>
+                                <span id="dvxFileName" style="font-size:12px;color:#999;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">No file chosen</span>
+                            </div>
+                        </div>
+                        <div id="dvxDashRow" style="display:none;">
+                            <label style="${lbl}" for="dvxDashLog">Log on the dash</label>
+                            <select id="dvxDashLog" style="${inp}"><option value="">Loading&hellip;</option></select>
+                        </div>
+                        <div id="dvxRangeRow" style="display:none;">
+                            <label style="${lbl}">Part of the log <span id="dvxLogLen" style="color:#666;"></span></label>
+                            <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:#999;">
+                                From <input id="dvxFrom" type="number" min="0" step="1" value="0" style="${inp}width:80px;"> s
+                                to <input id="dvxTo" type="number" min="1" step="1" style="${inp}width:80px;"> s
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:10px;">
+                            <div style="flex:1;">
+                                <label style="${lbl}" for="dvxFps">Frame rate</label>
+                                <select id="dvxFps" style="${inp}">
+                                    <option value="30" selected>30 fps</option>
+                                    <option value="60">60 fps</option>
+                                </select>
+                            </div>
+                            <div style="flex:1;">
+                                <label style="${lbl}" for="dvxScale">Size</label>
+                                <select id="dvxScale" style="${inp}">
+                                    <option value="1">${W0} &times; ${H0}</option>
+                                    <option value="2" selected>${W0 * 2} &times; ${H0 * 2}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <details style="margin-top:14px;">
+                            <summary style="font-size:11px;color:#888;cursor:pointer;">Advanced</summary>
+                            <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:#999;margin-top:10px;cursor:pointer;">
+                                <input type="checkbox" id="dvxSmooth" checked> Smooth between log samples
+                            </label>
+                            <div style="font-size:11px;color:#666;line-height:1.5;margin-top:4px;">Off shows each logged value until the next one arrives, like the dash does.</div>
+                        </details>
+                        <div id="dvxErr" style="display:none;font-size:12px;color:hsl(0,70%,62%);margin-top:12px;line-height:1.5;"></div>
+                        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
+                            <button id="dvxCancelBtn" style="${btn2}">Cancel</button>
+                            <button id="dvxGo" style="padding:7px 16px;cursor:pointer;background:#ef4444;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:500;">Record</button>
+                        </div>
+                    </div>
+                    <div id="dvxProg" style="display:none;margin-top:18px;">
+                        <div style="height:6px;background:#111214;border:1px solid #2e2f34;border-radius:4px;overflow:hidden;">
+                            <div id="dvxBar" style="height:100%;width:0;background:#ef4444;"></div>
+                        </div>
+                        <div id="dvxProgText" style="font-size:12px;color:#999;margin-top:8px;">Getting the layout ready&hellip;</div>
+                        <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+                            <button id="dvxStop" style="${btn2}">Stop</button>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            const $ = id => overlay.querySelector('#' + id);
+
+            let log = null, logLabel = '';
+            const showErr = (msg) => { const el = $('dvxErr'); el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none'; };
+            const setLog = (parsed, label) => {
+                log = parsed; logLabel = label;
+                const secs = Math.max(1, Math.ceil(parsed.durMs / 1000));
+                $('dvxLogLen').textContent = '(the whole log is ' + _dvxFmtTime(secs) + ', ' + parsed.series.length + ' signals)';
+                $('dvxFrom').value = 0;
+                $('dvxTo').value = Math.min(secs, 600);
+                $('dvxRangeRow').style.display = '';
+                showErr('');
+            };
+            const clearLog = () => { log = null; $('dvxRangeRow').style.display = 'none'; };
+
+            const syncSource = async () => {
+                const v = $('dvxSrc').value;
+                $('dvxSweepRow').style.display = v === 'sweep' ? '' : 'none';
+                $('dvxFileRow').style.display = v === 'file' ? '' : 'none';
+                $('dvxDashRow').style.display = v === 'dash' ? '' : 'none';
+                clearLog();
+                showErr('');
+                if (v === 'dash') {
+                    const sel = $('dvxDashLog');
+                    try {
+                        const r = await fetch('/api/log/list');
+                        const j = r.ok ? await r.json() : [];
+                        const arr = (Array.isArray(j) ? j : (j.files || []))
+                            .map(f => typeof f === 'string' ? f : (f.name || f.file || ''))
+                            .filter(n => n && !/^canraw_/i.test(n));
+                        sel.innerHTML = arr.length
+                            ? '<option value="">Pick a log&hellip;</option>' + arr.map(n => `<option value="${_dvxEsc(n)}">${_dvxEsc(n)}</option>`).join('')
+                            : '<option value="">No data logs on the dash</option>';
+                    } catch (e) {
+                        sel.innerHTML = '<option value="">Could not list the dash\'s logs</option>';
+                    }
+                }
+            };
+            $('dvxSrc').onchange = syncSource;
+
+            $('dvxDashLog').onchange = async () => {
+                const name = $('dvxDashLog').value;
+                clearLog();
+                if (!name) return;
+                showErr('');
+                $('dvxLogLen').textContent = '';
+                try {
+                    const r = await fetch('/api/log/download?name=' + encodeURIComponent(name));
+                    if (!r.ok) throw new Error('The dash did not send the log (' + r.status + ').');
+                    setLog(_dvxParseLog(await r.text()), name);
+                } catch (e) { showErr(e.message || String(e)); }
+            };
+
+            $('dvxPick').onclick = async () => {
+                showErr('');
+                try {
+                    let text = null, name = '';
+                    if (typeof RDM !== 'undefined' && RDM.isTauri && RDM.isTauri() && typeof RDM.openFileDialog === 'function') {
+                        /* Never <input type=file> under WebView2: it blocks the
+                         * app's JS thread until the picker closes. */
+                        const p = await RDM.openFileDialog([{ name: 'Dash data log', extensions: ['csv'] }]);
+                        const path = Array.isArray(p) ? p[0] : p;
+                        if (!path) return;
+                        name = String(path).split(/[\\/]/).pop();
+                        text = new TextDecoder().decode(await RDM.readFile(path));
+                    } else {
+                        const f = await new Promise(res => {
+                            const i = document.createElement('input');
+                            i.type = 'file'; i.accept = '.csv';
+                            i.onchange = () => res(i.files && i.files[0]);
+                            i.click();
+                        });
+                        if (!f) return;
+                        name = f.name;
+                        text = await f.text();
+                    }
+                    $('dvxFileName').textContent = name;
+                    setLog(_dvxParseLog(text), name);
+                } catch (e) { clearLog(); showErr(e.message || String(e)); }
+            };
+
+            const onKey = (e) => {
+                if (e.key !== 'Escape') return;
+                e.stopPropagation(); e.preventDefault();
+                if (_dvxBusy) _dvxCancel = true; else close();
+            };
+            const close = () => {
+                document.removeEventListener('keydown', onKey, true);
+                overlay.remove();
+            };
+            document.addEventListener('keydown', onKey, true);
+            $('dvxCancelBtn').onclick = close;
+            $('dvxStop').onclick = () => { _dvxCancel = true; $('dvxProgText').textContent = 'Stopping…'; };
+
+            $('dvxGo').onclick = async () => {
+                const srcKind = $('dvxSrc').value;
+                const fps = parseInt($('dvxFps').value, 10) || 30;
+                const scale = parseFloat($('dvxScale').value) || 1;
+                let secs, startMs = 0;
+                if (srcKind === 'sweep') {
+                    secs = parseInt($('dvxLen').value, 10) || 20;
+                } else {
+                    if (!log) { showErr(srcKind === 'dash' ? 'Pick a log from the dash first.' : 'Choose a log file first.'); return; }
+                    const whole = log.durMs / 1000;
+                    const from = Math.max(0, Math.min(whole, parseFloat($('dvxFrom').value) || 0));
+                    const to = Math.max(0, Math.min(whole, parseFloat($('dvxTo').value) || whole));
+                    if (to - from < 0.5) { showErr('The part of the log to record must be at least half a second long.'); return; }
+                    if (to - from > 600) { showErr('Record 10 minutes or less at a time.'); return; }
+                    startMs = from * 1000;
+                    secs = to - from;
+                }
+
+                _dvxBusy = true;
+                _dvxCancel = false;
+                $('dvxForm').style.display = 'none';
+                $('dvxProg').style.display = '';
+                const total = Math.max(1, Math.round(secs * fps));
+                const t0 = performance.now();
+                let blob = null, err = null;
+                try {
+                    blob = await _dvxRender({ fps, scale, secs, startMs, log: srcKind === 'sweep' ? null : log, smooth: $('dvxSmooth').checked },
+                        (done, n) => {
+                            $('dvxBar').style.width = (100 * done / n).toFixed(1) + '%';
+                            const el = (performance.now() - t0) / 1000;
+                            const left = done > 8 ? el / done * (n - done) : null;
+                            $('dvxProgText').textContent = 'Frame ' + done + ' of ' + n +
+                                (left !== null ? ' — about ' + _dvxFmtTime(left) + ' left' : '');
+                        });
+                } catch (e) { err = e; }
+                _dvxBusy = false;
+
+                if (err) {
+                    $('dvxProg').style.display = 'none';
+                    $('dvxForm').style.display = '';
+                    showErr('Recording failed: ' + (err.message || err));
+                    return;
+                }
+                if (!blob) { close(); showToast('Recording stopped', 'info'); return; }
+
+                const stamp = new Date();
+                const pad = n => String(n).padStart(2, '0');
+                const safe = String(layoutName).replace(/[^\w.-]+/g, '_');
+                const fname = `rdm-${safe}-${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}.mp4`;
+                $('dvxProgText').textContent = 'Rendered ' + total + ' frames. Choose where to save it…';
+                try {
+                    const where = await _dvxSave(blob, fname);
+                    close();
+                    if (where) showToast('Video saved: ' + String(where).split(/[\\/]/).pop(), 'success');
+                    else showToast('Video not saved', 'info');
+                } catch (e) {
+                    close();
+                    showToast('Could not save the video: ' + (e.message || e), 'error');
+                }
+            };
+        }
+
+        /* The button lives with the Sim / Live / Control pills, wherever the
+         * desktop shell has moved them to, so it is placed at runtime rather
+         * than anchored into the firmware header. */
+        function _dvxMountButton() {
+            if (document.getElementById('pillRecordVideo')) return;
+            const ref = document.getElementById('pillLiveControl');
+            if (!ref || !ref.parentNode) return;
+            const b = document.createElement('button');
+            b.className = 'header-pill';
+            b.id = 'pillRecordVideo';
+            b.textContent = 'Record video';
+            b.title = 'Render the dash preview to an MP4 at a steady 30 or 60 fps, driven by a demo sweep or a data log.';
+            b.onclick = _dvxOpen;
+            ref.parentNode.insertBefore(b, ref.nextSibling);
+        }
+        window.addEventListener('load', () => setTimeout(_dvxMountButton, 0));
+        window._dvxOpen = _dvxOpen;
+
+##[ end ]##
