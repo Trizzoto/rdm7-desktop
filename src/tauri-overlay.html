@@ -55849,6 +55849,10 @@
             if (!dir[y]) return null;
             return { x: dir[0], y: dir[1], z: dir[2] };
         }
+        /* The two measure buttons are built as onclick strings, which only
+           reach names on window. */
+        window.gpwMeasureStill = gpwMeasureStill;
+        window.gpwMeasureRoll = gpwMeasureRoll;
         window.gpwFlipDown = function () { var w = gpw(); if (w.down) { w.down.up = !w.down.up; gpwRender(); } };
         window.gpwFlipFwd = function () { var w = gpw(); if (w.fwd) { w.fwd.plus = !w.fwd.plus; gpwRender(); } };
         window.gpwWriteMounting = function () {
