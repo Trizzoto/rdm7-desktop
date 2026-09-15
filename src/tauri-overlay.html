@@ -61423,10 +61423,18 @@
             showToast('OTA update requires a WiFi connection to the device', 'info');
         }
 
-        /* Seed the RDM logo into IndexedDB if the data file was loaded */
+        /* Seed the RDM logo into IndexedDB if the data file was loaded.
+         * On a first run the default layout reaches the WASM before this
+         * write lands: the preview asks for 'RDM', finds nothing, and marks
+         * it failed for good — so a fresh install (and every first visit to
+         * the web Studio) showed an empty logo box until a reload. Once the
+         * seed is stored, forget that miss and repaint. */
         if (typeof _RDM_LOGO_RDMIMG_B64 !== 'undefined' && typeof RDM !== 'undefined') {
-            RDM.getImageData('RDM').then(existing => {
-                if (!existing) RDM.setImageData('RDM', _RDM_LOGO_RDMIMG_B64);
+            RDM.getImageData('RDM').then(async existing => {
+                if (existing) return;
+                await RDM.setImageData('RDM', _RDM_LOGO_RDMIMG_B64);
+                if (typeof _wasmFailedImages !== 'undefined' && _wasmFailedImages.delete('RDM') &&
+                    typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
             }).catch(() => { });
         }
 
