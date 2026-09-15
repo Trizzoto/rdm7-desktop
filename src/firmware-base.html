@@ -37,6 +37,13 @@
             --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
             --shadow-inset: inset 0 1px 2px rgba(0,0,0,0.3);
 
+            /* Status — the CAN emulator and the share dialog ask for these by
+               name. They were never defined, so each call site carried its own
+               fallback, and two of them disagreed about what red "failed" is. */
+            --danger: #e53935;
+            --warning: #f0a020;
+            --success: #4caf50;
+
             /* Radii — tight and professional */
             --radius-sm: 2px;
             --radius-md: 4px;
@@ -1748,6 +1755,15 @@
             width: 20px; height: 20px;
             stroke: var(--accent);
             fill: none; stroke-width: 1.8;
+        }
+        /* A feature that works but is still being built: the card opens as
+           normal, the chip says it isn't finished. */
+        .setup-card .dev-chip {
+            margin-left: auto;
+            padding: 2px 6px;
+            font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+            color: #1d1f20; background: var(--warning);
+            border-radius: 2px; white-space: nowrap;
         }
         .setup-card .card-body {
             font-size: 11px;
@@ -5129,7 +5145,7 @@
                  cruise buttons a Haltech reads as its own IO box, or any
                  spec a customer brings. -->
             <div class="setup-card" onclick="openCanEmu && openCanEmu()">
-                <div class="card-title"><svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><circle cx="7.5" cy="9.7" r="1.6"/><circle cx="12" cy="9.7" r="1.6"/><circle cx="16.5" cy="9.7" r="1.6"/><circle cx="7.5" cy="14.3" r="1.6"/><circle cx="12" cy="14.3" r="1.6"/><circle cx="16.5" cy="14.3" r="1.6" fill="currentColor" stroke="none"/></svg>Keypads &amp; IO boxes</div>
+                <div class="card-title"><svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><circle cx="7.5" cy="9.7" r="1.6"/><circle cx="12" cy="9.7" r="1.6"/><circle cx="16.5" cy="9.7" r="1.6"/><circle cx="7.5" cy="14.3" r="1.6"/><circle cx="12" cy="14.3" r="1.6"/><circle cx="16.5" cy="14.3" r="1.6" fill="currentColor" stroke="none"/></svg>Keypads &amp; IO boxes<span class="dev-chip">In development</span></div>
                 <div class="card-body">Buttons on the screen that your ECU reads as its own keypad or IO box &mdash; cruise control on a Haltech, for one.</div>
                 <div class="card-stat" id="setupEmuStat">&mdash;</div>
             </div>
@@ -23565,14 +23581,15 @@
                         `${sigs.length} defined · ${live} live`;
                 }
             } catch(e) {}
-            /* ECU preset + bus verdict, for the "ECU & CAN bus" card. The
-             * preset lives on the layout; the verdict is the same
-             * plain-words rule the modal uses. */
+            /* ECU preset for the "ECU & CAN bus" card. The dash's ECU, not the
+             * active layout's tag: a portable layout names no ECU, and reading
+             * it here said "No preset set" on a car whose channels were bound
+             * to one. Same source as the Channels context strip. */
             try {
-                const r = await fetch('/api/layout/current');
+                const r = await fetch('/api/ecu/current');
                 if (r.ok) {
-                    const l = await r.json();
-                    const name = [l.ecu, l.ecu_version].filter(Boolean).join(' ');
+                    const d = await r.json();
+                    const name = [d.make, d.version].filter(Boolean).join(' ');
                     setStat('setupCanStat', name || 'No preset set');
                 }
             } catch(e) {}
@@ -28847,10 +28864,10 @@
                         _canShareStatusTimer = null;
                         submitBtn.disabled = false;
                         if (s.state === 'success') {
-                            status.style.color = 'var(--accent, #5ad17a)';
+                            status.style.color = 'var(--success)';
                             setTimeout(() => closeCanShare(), 1500);
                         } else {
-                            status.style.color = 'var(--danger, #ff6b6b)';
+                            status.style.color = 'var(--danger)';
                         }
                     }
                 } catch (_) { /* keep polling */ }
