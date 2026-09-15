@@ -1507,6 +1507,140 @@ fn http_client() -> Result<reqwest::Client, String> {
 /// 192.168.4.1 colliding with a home router's gateway) answers a 303 to a
 /// block page. Following that turned a "no device" into a bogus 200 with a
 /// foreign HTML body, which the frontend mistook for a live device. With
+// ── ADB link (Linux dashes over USB) ────────────────────────────────
+// The Luckfox-based dashes are Linux boards, not ESP32s: they expose no CDC
+// serial port, so the serial transport above can never see one. What they DO
+// expose over USB is ADB, and behind it the very same HTTP API the WiFi
+// transport already speaks. So "connect over USB" for these is: find the
+// board, forward a local port to its port 80, and let the ordinary HTTP
+// transport carry everything else unchanged.
+
+/// Where adb lives. PATH first (scoop, winget, a manual platform-tools on
+/// PATH all land here); then the usual SDK spots, so a user who installed
+/// Android Studio and never touched PATH still works.
+fn adb_bin() -> std::path::PathBuf {
+    let exe = if cfg!(windows) { "adb.exe" } else { "adb" };
+    let mut candidates: Vec<std::path::PathBuf> = vec![std::path::PathBuf::from(exe)];
+    for var in ["ANDROID_HOME", "ANDROID_SDK_ROOT", "LOCALAPPDATA"] {
+        if let Ok(root) = std::env::var(var) {
+            candidates.push(
+                std::path::Path::new(&root)
+                    .join("Android")
+                    .join("Sdk")
+                    .join("platform-tools")
+                    .join(exe),
+            );
+            candidates.push(std::path::Path::new(&root).join("platform-tools").join(exe));
+        }
+    }
+    if let Ok(home) = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
+        candidates.push(
+            std::path::Path::new(&home)
+                .join("scoop")
+                .join("shims")
+                .join(exe),
+        );
+    }
+    for c in candidates.iter().skip(1) {
+        if c.is_file() {
+            return c.clone();
+        }
+    }
+    std::path::PathBuf::from(exe)
+}
+
+/// Run adb and hand back stdout. A GUI app must not flash a console window
+/// every time it polls, hence CREATE_NO_WINDOW.
+fn adb(args: &[&str]) -> Result<String, String> {
+    let mut cmd = std::process::Command::new(adb_bin());
+    cmd.args(args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = cmd.output().map_err(|e| {
+        format!(
+            "Could not run adb ({e}). Install the Android platform-tools and \
+             make sure adb is on PATH."
+        )
+    })?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(if err.is_empty() {
+            format!("adb {} failed", args.join(" "))
+        } else {
+            err
+        });
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AdbDevice {
+    pub serial: String,
+    /// "device" when it is usable; "unauthorized" / "offline" otherwise.
+    pub state: String,
+    pub model: String,
+}
+
+/// Every board adb can currently see. Reports non-"device" states too, so the
+/// UI can say *why* a plugged-in board is not connectable rather than claiming
+/// nothing is attached.
+#[tauri::command]
+async fn adb_devices() -> Result<Vec<AdbDevice>, String> {
+    let out = adb(&["devices", "-l"])?;
+    let mut list = Vec::new();
+    for line in out.lines().skip(1) {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.split_whitespace();
+        let serial = match parts.next() {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+        let state = parts.next().unwrap_or("unknown").to_string();
+        let model = line
+            .split_whitespace()
+            .find_map(|t| t.strip_prefix("model:"))
+            .unwrap_or("")
+            .replace('_', " ");
+        list.push(AdbDevice { serial, state, model });
+    }
+    Ok(list)
+}
+
+/// Forward a free local port to the board's HTTP server and return the port.
+///
+/// The port is chosen by asking the OS for one that is actually free rather
+/// than assuming a fixed number: `adb forward` will happily rebind a local
+/// port that something else is already serving, which would silently hijack
+/// it. Re-forwarding the same board is harmless — adb replaces the rule.
+#[tauri::command]
+async fn adb_forward(serial: String) -> Result<u16, String> {
+    let port = {
+        let l = std::net::TcpListener::bind(("127.0.0.1", 0))
+            .map_err(|e| format!("No free local port: {e}"))?;
+        l.local_addr()
+            .map_err(|e| format!("No free local port: {e}"))?
+            .port()
+    };
+    let local = format!("tcp:{port}");
+    adb(&["-s", &serial, "forward", &local, "tcp:80"])?;
+    Ok(port)
+}
+
+/// Drop a forward. Best-effort: a board that has already been unplugged has
+/// taken its rules with it, and that is not a failure worth reporting.
+#[tauri::command]
+async fn adb_forward_remove(port: u16) -> Result<(), String> {
+    let _ = adb(&["forward", "--remove", &format!("tcp:{port}")]);
+    Ok(())
+}
+
 /// redirects off, that 303 surfaces as a non-2xx status and is rejected.
 fn device_http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
@@ -2100,6 +2234,9 @@ pub fn run() {
             serial_upload_chunked,
             serial_download_base64,
             serial_download_log,
+            adb_devices,
+            adb_forward,
+            adb_forward_remove,
             http_fetch,
             http_fetch_binary,
             http_upload_binary,

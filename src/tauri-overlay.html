@@ -193,6 +193,7 @@
                     <option value="wifi">WiFi</option>
                     <option value="hotspot">Hotspot</option>
                     <option value="usb">USB Serial</option>
+                    <option value="adb">USB (Linux dash)</option>
                 </select>
                 <span id="connDot" style="width:7px; height:7px; border-radius:50%; background:#555; align-self:center; margin-left:4px; flex:none;"></span>
                 <span id="connModeLabel" style="display:inline-flex; align-items:center; padding:0 10px 0 6px; font-size:10.5px; color:var(--text-muted); font-family:'JetBrains Mono',monospace; white-space:nowrap;">Local</span>
@@ -335,6 +336,19 @@
                 <button class="btn btn-secondary" onclick="_wifiManualConnect()" style="font-size:11px;">Connect</button>
                 <button class="btn btn-secondary" id="wifiRescanBtn" onclick="_wifiScan()" style="font-size:11px;">Rescan</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Desktop: pick which Linux dash to talk to, when more than one is
+         plugged in. One board connects straight away and never shows this. -->
+    <div id="adbPickerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="_closeAdbPicker()">
+        <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:420px; max-width:95vw; display:flex; flex-direction:column; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-weight:600; font-size:14px;">Connect over USB</span>
+                <button class="close-btn" onclick="_closeAdbPicker()" style="font-size:18px;">&times;</button>
+            </div>
+            <div id="adbPickerStatus" style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">More than one dash is plugged in.</div>
+            <div id="adbDeviceList" style="display:flex; flex-direction:column; gap:6px; overflow-y:auto; min-height:40px; max-height:40vh;"></div>
         </div>
     </div>
 
@@ -59086,7 +59100,110 @@
                 });
             } else if (mode === 'usb') {
                 _connectUsb(_connLabel());
+            } else if (mode === 'adb') {
+                _connectAdb();
             }
+        }
+
+        /* -- USB link to a Linux dash (adb) -------------------------------
+         * The Luckfox-based dashes have no serial port. They speak the same
+         * HTTP API as WiFi does, over an adb port forward, so this brings the
+         * link up and then hands off to the same _testConnection() every other
+         * mode uses. */
+        function _adbSaySo(e) {
+            const msg = (e && e.message) ? e.message : String(e);
+            _connectionOk = false;
+            _setConnState('#ef4444', 'USB');
+            showToast(msg, 'error');
+            _updateConnectionUI();
+        }
+
+        async function _adbUse(dev, opts) {
+            opts = opts || {};
+            try {
+                await RDM.adbConnect(dev.serial);
+                _setConnState('var(--text-muted)', 'USB ' + dev.serial);
+                await _testConnection({ quiet: opts.quiet });
+                if (_connectionOk) {
+                    if (!opts.quiet) {
+                        showToast('Connected to ' + (dev.model || 'dash') +
+                            ' on USB (' + dev.serial + ')', 'success');
+                    }
+                } else {
+                    /* adb forwarded, but nothing answered on the other end:
+                     * the board is up and the dash process is not. Say that
+                     * rather than "no device" -- the difference IS the
+                     * diagnosis. */
+                    _setConnState('#f59e0b', 'USB ' + dev.serial);
+                    if (!opts.quiet) showToast('Board is connected, but the dash is not answering on it yet', 'info');
+                    _startHealthCheck();
+                    _startWifiRecovery();
+                }
+            } catch (e) { _adbSaySo(e); }
+        }
+
+        function _closeAdbPicker() {
+            const m = document.getElementById('adbPickerModal');
+            if (m) m.style.display = 'none';
+            const sel = document.getElementById('connectionMode');
+            if (sel && RDM.mode !== 'adb') sel.value = RDM.mode;
+        }
+
+        function _openAdbPicker(devs) {
+            const modal = document.getElementById('adbPickerModal');
+            const list = document.getElementById('adbDeviceList');
+            if (!modal || !list) return;
+            list.innerHTML = devs.map(function (d, i) {
+                return '<div onclick="_adbPick(' + i + ')" ' +
+                    'style="cursor:pointer; padding:9px 11px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg);">' +
+                    '<div style="font-size:12px; font-weight:600;">' + _escHtmlConn(d.model || 'RDM dash') + '</div>' +
+                    '<div style="font-size:10.5px; color:var(--text-muted); font-family:monospace;">' + _escHtmlConn(d.serial) + '</div>' +
+                    '</div>';
+            }).join('');
+            window._adbPickList = devs;
+            modal.style.display = 'flex';
+        }
+
+        window._adbPick = function (i) {
+            const devs = window._adbPickList || [];
+            const dev = devs[i];
+            _closeAdbPicker();
+            if (dev) _adbUse(dev);
+        };
+
+        async function _connectAdb(opts) {
+            opts = opts || {};
+            if (!RDM.isTauri()) {
+                showToast('A USB link to a Linux dash needs the desktop app', 'error');
+                return;
+            }
+            _connectionOk = false;
+            _setConnState('#f59e0b', 'USB');
+            let devs;
+            try { devs = await RDM.adbDevices(); }
+            catch (e) { _adbSaySo(e); return; }
+
+            const ready = devs.filter(function (d) { return d.state === 'device'; });
+            if (!ready.length) {
+                /* Plugged in but unusable is a different problem from nothing
+                 * plugged in, and it has a different fix. */
+                const blocked = devs.length ? devs[0] : null;
+                _setConnState('#ef4444', 'USB');
+                if (!opts.quiet) {
+                    showToast(blocked
+                        ? 'A board is plugged in but adb reports it "' + blocked.state + '" -- reconnect it, or accept the prompt on the dash'
+                        : 'No dash found on USB. Check the cable and that the dash is powered.', 'error');
+                }
+                _updateConnectionUI();
+                _startWifiRecovery();
+                return;
+            }
+            /* Prefer the board used last: reconnecting should not ask again. */
+            const last = RDM.getConnectionSettings().adbSerial;
+            const remembered = ready.filter(function (d) { return d.serial === last; })[0];
+            if (remembered) { await _adbUse(remembered, opts); return; }
+            if (ready.length > 1) { _openAdbPicker(ready); return; }
+            await _adbUse(ready[0], opts);
         }
 
         /* Bring a serial device online under its own role. A dash takes over as
@@ -59252,6 +59369,17 @@
                 _stopWifiRecovery();
                 _setConnState('#4ade80');
                 _updateConnectionUI();
+                /* Size the canvas to THIS dash before the layout loads.
+                 * Centre-origin coordinates are resolved against CANVAS_W/H,
+                 * so a 1920x720 layout dropped onto an 800x480 canvas puts
+                 * every widget 560,120 px out and clips the rest. The editor
+                 * read the display size once at startup, which is right on the
+                 * device (it is served BY the dash) and wrong here, where the
+                 * dash arrives long afterwards. */
+                if (typeof fetchDeviceInfo === 'function') {
+                    try { await fetchDeviceInfo(); } catch (e) { }
+                    if (RDM.mode !== _modeAtStart) return;
+                }
                 if (!opts.quiet) showToast('Connected to device (' + layouts.length + ' layouts)', 'success');
                 /* Capture the dash's identity so reconnect can re-find it by
                  * serial after a DHCP address change. The probe above already
@@ -59398,6 +59526,13 @@
                     await _testConnection({ quiet: true });
                     if (_connectionOk) showToast('USB device reconnected', 'success');
                 } catch (e) { }
+                return;
+            }
+            if (RDM.mode === 'adb') {
+                /* Unplugging the board takes its forward with it, so recovery
+                 * here is a fresh connect, not a re-probe of a dead port. */
+                await _connectAdb({ quiet: true });
+                if (_connectionOk) showToast('Dash reconnected over USB', 'success');
                 return;
             }
             if (RDM.mode !== 'wifi' && RDM.mode !== 'hotspot') { _stopWifiRecovery(); return; }
@@ -59892,6 +60027,13 @@
                     _startHealthCheck();
                     _startWifiRecovery();
                 });
+            } else if (settings.mode === 'adb') {
+                /* A forward dies with the app, so restoring this mode means
+                 * making it again. adbSerial picks the same board back up
+                 * without asking. */
+                const sel0 = document.getElementById('connectionMode');
+                if (sel0) sel0.value = 'adb';
+                _connectAdb({ quiet: true });
             } else if (settings.mode === 'usb' && settings.portName) {
                 (async () => {
                     try {

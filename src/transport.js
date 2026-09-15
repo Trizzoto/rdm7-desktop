@@ -2082,6 +2082,14 @@
                 const portName = opts.portName || '';
                 this._transport = createUsbTransport(portName);
                 _saveSettings({ ..._loadSettings(), mode, portName });
+            } else if (mode === 'adb') {
+                /* A Linux dash over USB. adb has already forwarded a local
+                 * port to the board's port 80 (see adbConnect), so from here
+                 * down it is the ordinary HTTP transport — same API, same
+                 * editor, no second implementation to keep in step. */
+                const port = opts.port;
+                this._transport = createWifiTransport(`http://127.0.0.1:${port}`);
+                _saveSettings({ ..._loadSettings(), mode, adbSerial: opts.serial || '', adbPort: port });
             }
 
             this._notifyListeners();
@@ -2106,6 +2114,9 @@
             } else if (s.mode === 'usb' && s.portName) {
                 this.setMode('usb', { portName: s.portName });
             }
+            /* 'adb' is deliberately absent: a forward does not survive the app
+             * closing, so it has to be re-established before the mode means
+             * anything. The overlay's restore calls adbConnect() instead. */
             // else stay local
         },
 
@@ -2167,6 +2178,30 @@
             try {
                 localStorage.setItem('rdm7_known_devices', JSON.stringify(list.slice(0, 8)));
             } catch (e) { }
+        },
+
+        /* ── ADB link — Linux dashes over USB (Tauri only) ──── */
+        /* These boards have no CDC serial port; what they expose over USB is
+         * adb, and behind it the same HTTP API WiFi uses. So connecting is:
+         * list boards, forward a local port to port 80, talk HTTP. */
+        async adbDevices() {
+            if (!_isTauri()) return [];
+            return await _tauriInvoke('adb_devices');
+        },
+
+        /* Forward a port to `serial` and switch the app onto it. Returns the
+         * local port. Throws with adb's own words if adb is missing or the
+         * board is unauthorised — the caller shows that, because "no device
+         * found" would be a lie in both cases. */
+        async adbConnect(serial) {
+            if (!_isTauri()) throw new Error('A USB link to a Linux dash needs the desktop app');
+            const prev = _loadSettings();
+            if (prev.mode === 'adb' && prev.adbPort) {
+                try { await _tauriInvoke('adb_forward_remove', { port: prev.adbPort }); } catch (e) { }
+            }
+            const port = await _tauriInvoke('adb_forward', { serial });
+            this.setMode('adb', { serial, port });
+            return port;
         },
 
         /* ── Serial Port Operations (Tauri only) ────────────── */
