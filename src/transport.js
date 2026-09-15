@@ -1333,6 +1333,11 @@
             async setCanConfig(cfg) {
                 await rpc('can.config.set', cfg);
             },
+            /* Keypads & IO boxes (firmware ADR-0077): the serial twin of
+             * /api/can/emu — same request, same {ok, error, file, status}. */
+            async canEmu(params) {
+                return await rpc('can.emu', params || {});
+            },
 
             async injectSignal(name, value) {
                 await rpc('signal.inject', { name, value });
@@ -1918,6 +1923,13 @@
             return t.getBrightness();
         }
         if (pathname === '/api/screenshot' || pathname === '/api/touch') return null;
+        /* Keypads & IO boxes goes to the dash for real. The blanket {ok:true}
+         * below would tell the page there are no devices and that a save
+         * worked, while nothing reached the dash. */
+        if (pathname === '/api/can/emu' && t.canEmu) {
+            return await t.canEmu(method === 'POST' ? (body || {})
+                : (params.templates ? { templates: true } : {}));
+        }
         if (pathname.startsWith('/api/can/')) return { ok: true };
         if (pathname.startsWith('/api/ecu/')) return { ok: true };
         if (pathname.startsWith('/api/presets')) return {};
