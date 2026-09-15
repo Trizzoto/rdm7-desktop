@@ -497,6 +497,7 @@
             --accent: #e8433c;        --accent-hover: #f2635c;
             --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+            --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
             --shadow-inset: inset 0 1px 2px rgba(0,0,0,0.3);
             background: radial-gradient(ellipse 62% 50% at 50% 38%, rgba(255,255,255,0.04), rgba(255,255,255,0) 70%), var(--bg-canvas);
         }
@@ -606,6 +607,14 @@
         .sh-info .s { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--accent); margin-top: 10px; letter-spacing: 0.1em; }
         .sh-card.dev .sh-info .t { color: var(--text-muted); }
         .sh-card.dev .sh-info .s { color: var(--text-muted); }
+        /* Products still being built: the card opens as normal, the chip says
+           it isn't for sale yet. */
+        .sh-dev-chip {
+            display: inline-block; margin-left: 8px; padding: 2px 6px; vertical-align: 2px;
+            font-family: 'JetBrains Mono', monospace; font-size: 8.5px; font-weight: 600;
+            letter-spacing: 0.1em; text-transform: uppercase; color: #1d1f20; background: #d99413;
+            border-radius: 2px;
+        }
         @media (max-width: 940px) { .sh-hero, .sh-kpcard, .sh-small { grid-column: span 12; } }
 
         /* ---- the dash editor wears the brand (ADR-0057) ---------------------
@@ -695,7 +704,7 @@
             --accent: #d2232a;              --accent-hover: #c02026;
             --gpb-bg: var(--ind-bg);        --gpb-surface: var(--ind-surface);
             --gpb-ink: var(--ind-ink);      --gpb-muted: var(--ind-muted);
-            --gpb-soft: var(--ind-soft);
+            --gpb-soft: var(--ind-soft);    --gpb-ghost: var(--ind-ghost);
             --gpb-div: var(--ind-div);      --gpb-div-lt: var(--ind-div-lt);
             --gpb-n200: var(--ind-elev);    --gpb-n800: var(--ind-elev);
             --gpb-red: #d2232a;             --gpb-red-600: #c02026;
@@ -713,6 +722,7 @@
             --accent: #e8433c;        --accent-hover: #f2635c;
             --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+            --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
             --shadow-inset: none;
             --dsb-bar: #0c0d0e;  --dsb-bar-muted: #9a9a9e; --dsb-bar-div: #26282a;
             --dsb-head: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
@@ -732,6 +742,7 @@
             --text: #e8e8e8; --text-muted: #999999; --text-ghost: #6a6a6a;
             --accent: #2d8ceb; --accent-hover: #4da3f2;
             --shadow-sm: 0 1px 3px rgba(0,0,0,0.4); --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+            --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
             --shadow-inset: inset 0 1px 2px rgba(0,0,0,0.3);
             background: #303030; color: #e8e8e8;
         }
@@ -1121,10 +1132,11 @@
             --accent: #e8433c;        --accent-hover: #f2635c;
             --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+            --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
             --shadow-inset: none;
             --gpb-bg: var(--ind-bg);        --gpb-surface: var(--ind-surface);
             --gpb-ink: var(--ind-ink);      --gpb-muted: var(--ind-muted);
-            --gpb-soft: var(--ind-soft);
+            --gpb-soft: var(--ind-soft);    --gpb-ghost: var(--ind-ghost);
             --gpb-div: var(--ind-div);      --gpb-div-lt: var(--ind-div-lt);
             --gpb-red: #e8433c;  --gpb-red-100: rgba(232,67,60,0.18); --gpb-red-400: #ec817b;
             --gpb-red-600: #f2635c; --gpb-red-700: #f7938e;
@@ -3478,12 +3490,13 @@
             --accent: #d2232a;        --accent-hover: #c02026;
             --shadow-sm: 0 1px 2px rgba(43,43,45,0.14);
             --shadow-md: 0 3px 10px rgba(43,43,45,0.16);
+            --shadow-lg: 0 8px 24px rgba(43,43,45,0.2);
             --shadow-inset: none;
             /* Industry tokens, gpb- prefixed so nothing leaks. The light end
                comes from the shared --ind-* palette at the top of this sheet. */
             --gpb-bg: var(--ind-bg);        --gpb-surface: var(--ind-surface);
             --gpb-ink: var(--ind-ink);      --gpb-muted: var(--ind-muted);
-            --gpb-soft: var(--ind-soft);
+            --gpb-soft: var(--ind-soft);    --gpb-ghost: var(--ind-ghost);
             --gpb-div: var(--ind-div);      --gpb-div-lt: var(--ind-div-lt);
             --gpb-red: #d2232a;  --gpb-red-100: #fdeeec; --gpb-red-200: #fbd6d3;
             --gpb-red-300: #f5afaa; --gpb-red-400: #ec817b; --gpb-red-500: #dd4b45;
@@ -6466,7 +6479,7 @@
                             </svg>
                         </div>
                         <div class="sh-info">
-                            <div class="t">CAN Keypad</div>
+                            <div class="t">CAN Keypad<span class="sh-dev-chip">In development</span></div>
                             <div class="d">Blink PKP buttons, LED rings bound to channels, night dim.</div>
                             <div class="d" id="shKpSaved" style="display:none; margin-top:2px;"></div>
                             <div class="s">OPEN CONFIGURATOR &#8594;</div>
@@ -6496,13 +6509,15 @@
                             </svg>
                         </div>
                         <div class="sh-info">
-                            <div class="t">RDM GPS &amp; Lap Timing</div>
+                            <div class="t">RDM GPS &amp; Lap Timing<span class="sh-dev-chip">In development</span></div>
                             <div class="d">Live map, lap timing on the node itself, IMU and CAN health.</div>
                             <div class="s">OPEN CONFIGURATOR &#8594;</div>
                         </div>
                     </div>
 
-<div class="sh-card sh-small" tabindex="0" role="button" onclick="_ioOpen()" onkeydown="if(event.key==='Enter')_ioOpen()">
+                    <!-- IO Expander: project shelved 2026-09-15. Card hidden so the home
+                         screen stops offering it; the workspace code is left in place. -->
+                    <div class="sh-card sh-small" style="display:none" aria-hidden="true" tabindex="-1" role="button" onclick="_ioOpen()" onkeydown="if(event.key==='Enter')_ioOpen()">
                         <div class="sh-visual">
                             <svg viewBox="0 0 130 85" aria-hidden="true">
                                 <defs>
@@ -6573,6 +6588,7 @@
             </button>
             <span class="kpb-vr"></span>
             <span class="kpb-wsname">Keypad</span>
+            <span class="sh-dev-chip" style="margin-left:0; align-self:center;">In development</span>
             <!-- Which keypad. Chips only appear once there is more than one to
                  choose between; the "+ Keypad" button is always there. The
                  section tabs below never move as keypads are added. ADR-0060 -->
@@ -6736,6 +6752,7 @@
             </button>
             <span class="gpb-vr"></span>
             <span class="gpb-wsname">Lap Timer</span>
+            <span class="sh-dev-chip" style="margin-left:0; align-self:center;">In development</span>
             <span class="gpb-vr"></span>
             <!-- Whose drive this is (ADR-0026): the circuit, when it was
                  driven, at what rate, and what it is worth. It was a band of
