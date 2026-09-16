@@ -2,8 +2,8 @@
 
 From: Tommy (apps) · 17 September 2026 · against v1.1 of 16 September 2026
 
-Twelve requests. CR-1 to CR-5 came from reading the spec; CR-6 to CR-10 out
-of the Dash web pilot; CR-11 and CR-12 out of Studio.
+Thirteen requests. CR-1 to CR-5 came from reading the spec; CR-6 to CR-10 out
+of the Dash web pilot; CR-11 and CR-12 out of Studio; CR-13 out of the firmware.
 
 CR-6, CR-8 and CR-10 have been DECIDED in the codebase so the work could
 continue, with the measurements below. They are still proposals: the tokens
@@ -420,3 +420,34 @@ weakest of the three.
 surfaces. It is the single finding from this work most likely to keep producing
 defects, because nothing about it is visible until something is measured on a
 composited background.
+
+## CR-13 — two of §1.3's four bans are stale
+
+**Section.** §1.3, the do-not-build-content-on list.
+
+**Current.** "Do not build content on night mode, USB connection mode, rotation
+persistence or persistent peaks. None are live features."
+
+**Why.** Checked against RDM-7_Dash at `5b3c6b17`, in the code rather than by
+asking:
+
+| | live? | evidence |
+|---|---|---|
+| night mode | **no** | `#define NIGHT_MODE_DISABLED 1` in `main/system/night_mode.h:35`. Honoured: `night_mode_set_active()` returns immediately, `night_mode_is_active()` always reports false, and the image, meter and warning widgets compile out their night branches |
+| persistent peaks | **no** | `main/layout/layout_manager.c:1055`: "Peak/min values are session-only (reset every boot, no NVS)". No peak keys in `config_store.c` |
+| rotation persistence | **yes** | `config_store_load_rotation()` is called and applied at `main.c:1537` |
+| USB connection mode | **yes** | `uart_protocol_init()` runs in production; `RDM7_DEBUG_KEEP_CONSOLE` defaults to 0, and the log hook means the desktop app and serial logs share one wire rather than excluding each other |
+
+**Proposed.** Drop rotation persistence and USB connection mode. Keep night mode
+and persistent peaks.
+
+Worth a word on the peaks entry: the feature is real and works. The Peak/Min
+screen exists (`ui/screens/ui_peaks.c`), Reset All exists (`signal_reset_peaks()`)
+and the per-widget `show_peak` field is in the editor. It is only the
+*persistence* that does not exist, so "persistent peaks" is precisely the right
+wording and the ban earns its keep. Anything describing this feature needs to
+avoid the word "all-time"; "since the dash was last powered on" is what is true.
+
+**What it affects.** Any customer-facing copy that describes device features, and
+it cuts both ways: two things people have been told not to write about are fine,
+and two are not.
