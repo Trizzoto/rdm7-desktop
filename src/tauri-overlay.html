@@ -680,22 +680,13 @@
             --ind-highlight: rgba(255,255,255,0.07);
         }
         /* ---- the light end, for what still wants it -------------------------
-           Three things do: the lap timer, which was designed around a light
-           ground (ADR-0024); BAND TWO everywhere — the tab row is the one
+           Two things do: the lap timer, which was designed around a light
+           ground (ADR-0024), and BAND TWO everywhere — the tab row is the one
            strip that stayed light when the surfaces went dark, so Setup /
            Channels / Design and the keypad's sections read the same as the lap
-           timer's; and, since 2026-09-16, the DASH EDITOR's own chrome —
-           "i dont like the grey you picked for the sidebars and stuff, they
-           should be D6D6D6 but darker". These values are that: #c8c9cc rails a
-           step down from D6D6D6, panels and the dash's surround above them.
-           One copy of the values, everything wearing them.
-
-           body.dsb-on is the editor and only the editor: _wsCloseAll turns the
-           class off whenever another workspace opens, so nothing nested can
-           inherit this by accident. --ind-stage is dark in both modes; it
-           stays at :root. */
+           timer's. One copy of the values, three places wearing them.
+           --ind-stage is dark in both modes; it stays at :root. */
         #gpWorkspace,
-        body.dsb-on,
         body.dsb-on .dsb-nav,
         #kpWorkspace .kpb-nav {
             --ind-bg: #c8c9cc;        /* ground: rails, page band, footer   */
@@ -732,7 +723,32 @@
             --gpb-n200: var(--ind-elev);    --gpb-n800: var(--ind-elev);
             --gpb-red: #d2232a;             --gpb-red-600: #c02026;
         }
+        /* ---- the dash editor's own ground (picked 2026-09-16) ---------------
+           The editor spent a day going light and came back: first "D6D6D6 but
+           darker", then "all too bright now needs darkening", and finally
+           these, chosen a dropdown at a time against the live editor. They are
+           NOT the :root dark palette — the rails sit a step above it and carry
+           a cool tint, which is the half of it that reads as chosen rather
+           than defaulted. The dash editor is the only surface wearing them;
+           Home, the keypad and the lap timer keep the shared palette.
+
+           The line colour is the DEVICE's (#2e302e, ui_theme.c) rather than an
+           alpha of the ink: it was picked next to the dash's own menus, which
+           is the look this is chasing. It is faintly green against these cool
+           greys on purpose — that is what was picked. */
         body.dsb-on {
+            --ind-bg: #2e2f33;        /* rails: sidebars, footer            */
+            --ind-surface: #37383c;   /* cards, panels, inputs              */
+            --ind-elev: #46474b;      /* hover / raised                     */
+            --ind-ink: #e8e8e8;
+            --ind-muted: rgba(232,232,232,0.55);
+            --ind-soft: rgba(232,232,232,0.8);
+            --ind-ghost: rgba(232,232,232,0.4);
+            --ind-div: #2e302e;
+            --ind-div-lt: rgba(232,232,232,0.07);
+            --ind-border-light: rgba(232,232,232,0.38);
+            --ind-highlight: rgba(232,232,232,0.07);
+
             --bg: var(--ind-surface);       --bg-sidebar: var(--ind-bg);
             --bg-toolbar: var(--ind-bg);    --bg-canvas: var(--ind-bg);
             --panel: var(--ind-surface);    --panel-elevated: var(--ind-elev);
@@ -742,20 +758,58 @@
             --highlight: var(--ind-highlight);
             --text: var(--ind-ink);         --text-muted: var(--ind-muted);
             --text-ghost: var(--ind-ghost);
-            /* Red goes back to #d2232a on this ground, for the same reason the
-               tab row does: #e8433c is the brighter one drawn for a dark
-               surface and it glares against a light grey. Shadows lighten with
-               it — a 55%-black drop shadow reads as dirt on #c8c9cc. */
-            --accent: #d2232a;        --accent-hover: #c02026;
-            --shadow-sm: 0 1px 2px rgba(29,31,32,0.14);
-            --shadow-md: 0 4px 14px rgba(29,31,32,0.16);
-            --shadow-lg: 0 12px 30px rgba(29,31,32,0.20);
+            /* The deep red, not the bright one: #e8433c is drawn to carry a
+               dark ground on the device's own glass, and next to these greys
+               it buzzes. This one sits down. */
+            --accent: #b3261f;        --accent-hover: #8e1e19;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+            --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
             --shadow-inset: none;
             --dsb-bar: #0c0d0e;  --dsb-bar-muted: #9a9a9e; --dsb-bar-div: #26282a;
             --dsb-head: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
             --dsb-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
             background: var(--ind-bg); color: var(--ind-ink);
         }
+        /* ---- type and shape, picked the same way ----------------------------
+           "it still feels very ai designed i dont know if its the font, or the
+           font colours". Three answers came out of the dropdowns:
+
+           - The caps stay, the tracking goes. Every label in the shell was set
+             0.08–0.14em apart, which reads as a title slide. At 0 it reads as
+             a tool. (Everything in these strips is caps now, including the
+             widget and layer names.)
+           - ONE face. The chrome was Barlow for body, Barlow Condensed for
+             heads, Sora for some headings and JetBrains Mono for numbers —
+             four voices in one window. Now it is Barlow throughout, condensed
+             for heads. #workspaceViewport is excluded on purpose: the fonts in
+             there are the DASH's fonts, and overriding them would draw a lie.
+           - Corners at 8. Square-everything survives where it is deliberate —
+             the bar and the tab row set radius 0 on their own children with
+             !important, and still win.
+
+           !important because these have to beat a long tail of firmware rules
+           that name a font, a radius or a tracking inline in the base HTML. */
+        body.dsb-on .dsb-bar *, body.dsb-on .dsb-nav *,
+        body.dsb-on .sidebar *, body.dsb-on .align-bar *,
+        body.dsb-on footer *, body.dsb-on .insp-fold > summary {
+            text-transform: uppercase !important;
+            letter-spacing: 0 !important;
+        }
+        body.dsb-on *:not(#workspaceViewport):not(#workspaceViewport *) {
+            font-family: var(--dsb-body) !important;
+        }
+        body.dsb-on .dsb-bar .dsb-home span, body.dsb-on .dsb-bar .dsb-wsname,
+        body.dsb-on .dsb-nav .studio-mode-btn, body.dsb-on .dsb-navacts .header-pill,
+        body.dsb-on #applyBtn, body.dsb-on .insp-fold > summary {
+            font-family: var(--dsb-head) !important;
+        }
+        body.dsb-on button, body.dsb-on select, body.dsb-on input,
+        body.dsb-on .sidebar, body.dsb-on .layer-item, body.dsb-on .insp-fold,
+        body.dsb-on .card, body.dsb-on .panel {
+            border-radius: 8px !important;
+        }
+
         /* The analyzer and the IO expander never joined the brand: they are
            still the firmware's dark editor with its blue accent, and they do
            not re-bind these tokens for themselves. Pin them so the editor's
@@ -1144,20 +1198,24 @@
            Round screens keep the round bezels, hence the :not()s — those rules
            carry their own padding and this one would out-specify them. */
         body.dsb-on .display-bezel.bezel-on:not(.bezel-round):not(.bezel-round-slim) {
-            background: #0b0b0d;
+            /* A shade up from the stage's black, so the frame is an object on
+               a ground rather than a hole in it. */
+            background: #202225;
             border-radius: 12px;
             box-shadow:
-                0 0 0 1px rgba(29,31,32,0.35),
-                0 18px 40px rgba(29,31,32,0.28);
+                0 0 0 1px rgba(0,0,0,0.6),
+                0 18px 44px rgba(0,0,0,0.5);
         }
-        /* The editor's stage is the lightest surface in the room: the dash is
-           a dark object and this is the bench it sits on. Same soft lift under
-           the middle, inverted — black at 5% instead of white at 7%. */
+        /* The editor's stage is BLACK — picked over eleven greys, and the one
+           thing here that isn't a tint of the chrome. A dash is a lit object
+           in a dark car; on anything grey the bezel and the screen stop being
+           one object. Same soft lift under the middle so it reads as lit
+           rather than pasted. */
         body.dsb-on .main-stage {
             background:
                 radial-gradient(ellipse 62% 52% at 50% 44%,
-                                rgba(29,31,32,0.055), rgba(29,31,32,0) 72%),
-                var(--ind-elev);
+                                rgba(255,255,255,0.07), rgba(255,255,255,0) 72%),
+                #000000;
         }
         /* Bare text sitting straight on that ground has to turn over with it.
            Only this one does — the editor's id-label is a light chip and the
