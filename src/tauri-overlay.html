@@ -680,13 +680,22 @@
             --ind-highlight: rgba(255,255,255,0.07);
         }
         /* ---- the light end, for what still wants it -------------------------
-           Two things do: the lap timer, which was designed around a light
-           ground (ADR-0024), and BAND TWO everywhere — the tab row is the one
+           Three things do: the lap timer, which was designed around a light
+           ground (ADR-0024); BAND TWO everywhere — the tab row is the one
            strip that stayed light when the surfaces went dark, so Setup /
            Channels / Design and the keypad's sections read the same as the lap
-           timer's. One copy of the values, three places wearing them.
-           --ind-stage is dark in both modes; it stays at :root. */
+           timer's; and, since 2026-09-16, the DASH EDITOR's own chrome —
+           "i dont like the grey you picked for the sidebars and stuff, they
+           should be D6D6D6 but darker". These values are that: #c8c9cc rails a
+           step down from D6D6D6, panels and the dash's surround above them.
+           One copy of the values, everything wearing them.
+
+           body.dsb-on is the editor and only the editor: _wsCloseAll turns the
+           class off whenever another workspace opens, so nothing nested can
+           inherit this by accident. --ind-stage is dark in both modes; it
+           stays at :root. */
         #gpWorkspace,
+        body.dsb-on,
         body.dsb-on .dsb-nav,
         #kpWorkspace .kpb-nav {
             --ind-bg: #c8c9cc;        /* ground: rails, page band, footer   */
@@ -733,10 +742,14 @@
             --highlight: var(--ind-highlight);
             --text: var(--ind-ink);         --text-muted: var(--ind-muted);
             --text-ghost: var(--ind-ghost);
-            --accent: #e8433c;        --accent-hover: #f2635c;
-            --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
-            --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
-            --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
+            /* Red goes back to #d2232a on this ground, for the same reason the
+               tab row does: #e8433c is the brighter one drawn for a dark
+               surface and it glares against a light grey. Shadows lighten with
+               it — a 55%-black drop shadow reads as dirt on #c8c9cc. */
+            --accent: #d2232a;        --accent-hover: #c02026;
+            --shadow-sm: 0 1px 2px rgba(29,31,32,0.14);
+            --shadow-md: 0 4px 14px rgba(29,31,32,0.16);
+            --shadow-lg: 0 12px 30px rgba(29,31,32,0.20);
             --shadow-inset: none;
             --dsb-bar: #0c0d0e;  --dsb-bar-muted: #9a9a9e; --dsb-bar-div: #26282a;
             --dsb-head: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
@@ -934,13 +947,14 @@
         body.dsb-on .layer-item.active { background: var(--ind-surface); color: var(--ind-ink); border-left: 3px solid var(--ind-ink); }
         body.dsb-on .sidebar-resize { background: var(--ind-bg); border-color: var(--ind-div); }
         body.dsb-on .sidebar-resize:hover, body.dsb-on .sidebar-resize.active { background: var(--ind-ink); }
-        /* The align bar belongs to the stage, not to the page. As a light
-           strip it sat between two hairlines like a mistake; as the top edge
-           of the dark ground it reads as the canvas's own toolbar. */
-        body.dsb-on .align-bar { background: var(--ind-stage); border-bottom: 1px solid rgba(255,255,255,0.08); padding: 4px 8px; }
-        body.dsb-on .align-bar .align-sep { background: rgba(255,255,255,0.14); }
-        body.dsb-on .align-btn { color: rgba(255,255,255,0.5); }
-        body.dsb-on .align-btn:hover { background: rgba(255,255,255,0.1); border-color: transparent; color: #fff; }
+        /* The align bar belongs to the stage, not to the page — so when the
+           stage turned light (2026-09-16) this turned with it, or it would
+           have been left as a dark band across a light room. Still the
+           canvas's own toolbar, still the top edge of the ground under it. */
+        body.dsb-on .align-bar { background: var(--ind-surface); border-bottom: 1px solid var(--ind-div); padding: 4px 8px; }
+        body.dsb-on .align-bar .align-sep { background: var(--ind-div); }
+        body.dsb-on .align-btn { color: var(--ind-muted); }
+        body.dsb-on .align-btn:hover { background: rgba(29,31,32,0.09); border-color: transparent; color: var(--ind-ink); }
 
         /* ---- the touch/tablet bottom UI belongs to the stage too -------------
            Below 1024px, or on any touchscreen, the firmware swaps the sidebar
@@ -950,30 +964,31 @@
            rgba(30,30,30,.9)) with foreground colour on var(--text)/var(--text-muted)
            — fine on the firmware's own dark theme, but under the Industry
            re-theme those tokens resolve to dark ink, so the labels went dark
-           text on a near-black bar. Pinned to the align bar's own language
-           (#16181b ground, white-on-dark) so all three read as one dark shelf
-           instead of three different blacks, and left off var(--accent):
-           red on this page is Save and section-only (see the align bar
-           comment above and .dsb-navacts .header-pill.active below). */
-        body.dsb-on #mobileActionBar { background: var(--ind-stage); border-top: 1px solid rgba(255,255,255,0.08); }
-        body.dsb-on #mobileActionBar button { color: rgba(255,255,255,0.5); }
+           text on a near-black bar. Pinned to the align bar's own language so
+           all three read as one shelf instead of three different blacks —
+           which since 2026-09-16 is a LIGHT shelf, because the stage they sit
+           on is light. Still off var(--accent): red on this page is Save and
+           section-only (see the align bar comment above and
+           .dsb-navacts .header-pill.active below). */
+        body.dsb-on #mobileActionBar { background: var(--ind-surface); border-top: 1px solid var(--ind-div); }
+        body.dsb-on #mobileActionBar button { color: var(--ind-muted); }
         body.dsb-on #mobileActionBar button:hover,
         body.dsb-on #mobileActionBar button.active,
         body.dsb-on #mobileActionBar button[aria-pressed="true"],
-        body.dsb-on #mobileActionBar button.sim-on { color: #fff; }
-        body.dsb-on #mobileZoomBar { background: var(--ind-stage); border: 1px solid rgba(255,255,255,0.08); }
-        body.dsb-on #mobileZoomBar button { color: rgba(255,255,255,0.5); }
-        body.dsb-on #mobileZoomBar button:hover { background: rgba(255,255,255,0.1); color: #fff; }
-        /* rgba(22,24,27,...) is --ind-stage (#16181b) decomposed — a custom
-           property can't be blended with an alpha inline without a CSS
-           feature this file doesn't otherwise rely on, so the decimal triplet
-           is kept in sync with the hex by hand instead. */
-        body.dsb-on #widgetSelToolbar { background: rgba(22,24,27,0.94); border-color: rgba(255,255,255,0.08); }
+        body.dsb-on #mobileActionBar button.sim-on { color: var(--ind-ink); }
+        body.dsb-on #mobileZoomBar { background: var(--ind-surface); border: 1px solid var(--ind-div); }
+        body.dsb-on #mobileZoomBar button { color: var(--ind-muted); }
+        body.dsb-on #mobileZoomBar button:hover { background: rgba(29,31,32,0.09); color: var(--ind-ink); }
+        /* rgba(217,218,221,...) is --ind-surface on this scope (#d9dadd)
+           decomposed — a custom property can't be blended with an alpha
+           inline without a CSS feature this file doesn't otherwise rely on,
+           so the decimal triplet is kept in sync with the hex by hand. */
+        body.dsb-on #widgetSelToolbar { background: rgba(217,218,221,0.96); border-color: var(--ind-div); }
         body.dsb-on .wst-btn, body.dsb-on .wst-size-btn,
         body.dsb-on .wst-label, body.dsb-on .wst-test-val,
-        body.dsb-on .wst-test-toggle { color: rgba(255,255,255,0.5); }
-        body.dsb-on .wst-btn:hover, body.dsb-on .wst-size-btn:hover { color: #fff; }
-        body.dsb-on .wst-size-val { color: #fff; }
+        body.dsb-on .wst-test-toggle { color: var(--ind-muted); }
+        body.dsb-on .wst-btn:hover, body.dsb-on .wst-size-btn:hover { color: var(--ind-ink); }
+        body.dsb-on .wst-size-val { color: var(--ind-ink); }
 
         /* controls inside the panels */
         body.dsb-on .accordion-body input[type="text"], body.dsb-on .accordion-body input[type="number"],
@@ -1100,17 +1115,49 @@
            So the stage alone stays dark, with a soft lift under the middle so
            the product looks lit rather than pasted.
 
-           Deliberately ONE rule for both, because they are one decision — if
-           the ground moves, it moves in both places or the two workspaces stop
-           looking like the same app. Not done by re-binding --bg-canvas: that
-           token is also the background of .ws and .ws-stage, so darkening it
-           would take the lap timer's map and the analyzer's table with it. */
-        body.dsb-on .main-stage,
+           This WAS one rule for both, because they were one decision. The
+           editor's half moved on 2026-09-16 — "the background is too dark
+           where the dash sits" — and the keypad's did not: its stage is a lit
+           product shot of a black keypad, which needs the dark ground the
+           editor no longer does. Two decisions now, so two rules.
+
+           Neither is done by re-binding --bg-canvas: that token is also the
+           background of .ws and .ws-stage, so moving it would take the lap
+           timer's map and the analyzer's table with it. */
         #kpWorkspace .kp-stage {
             background:
                 radial-gradient(ellipse 62% 52% at 50% 44%,
                                 rgba(255,255,255,0.07), rgba(255,255,255,0) 72%),
                 var(--ind-stage);
+        }
+        /* ---- the bezel the hardware actually has ----------------------------
+           The frame around the canvas was a designer's 16 x 12 px. The dash is
+           a Waveshare ESP32-S3-Touch-LCD-7 (the 800x480 board), and its
+           published dimension drawing gives the glass as 192.96 x 110.76 mm
+           around an active area of 154.88 x 86.72 — 19.04 mm at each side,
+           13.04 above and 11.00 below. Those fractions of the active area are
+           what _bezelApply() sets as padding, so the frame is the same share
+           of the panel on screen as in your hand, bottom edge thinner, and it
+           stays right at any canvas size. Colour and corner here; the corner
+           radius is a judgement, the drawing doesn't dimension it.
+
+           Round screens keep the round bezels, hence the :not()s — those rules
+           carry their own padding and this one would out-specify them. */
+        body.dsb-on .display-bezel.bezel-on:not(.bezel-round):not(.bezel-round-slim) {
+            background: #0b0b0d;
+            border-radius: 12px;
+            box-shadow:
+                0 0 0 1px rgba(29,31,32,0.35),
+                0 18px 40px rgba(29,31,32,0.28);
+        }
+        /* The editor's stage is the lightest surface in the room: the dash is
+           a dark object and this is the bench it sits on. Same soft lift under
+           the middle, inverted — black at 5% instead of white at 7%. */
+        body.dsb-on .main-stage {
+            background:
+                radial-gradient(ellipse 62% 52% at 50% 44%,
+                                rgba(29,31,32,0.055), rgba(29,31,32,0) 72%),
+                var(--ind-elev);
         }
         /* Bare text sitting straight on that ground has to turn over with it.
            Only this one does — the editor's id-label is a light chip and the
@@ -58448,11 +58495,78 @@
            the wrong palette. */
         function _dsbOn(on) { document.body.classList.toggle("dsb-on", !!on); }
 
+        /* ---- the bezel is the panel's, and Fit measures it ------------------
+         * Waveshare ESP32-S3-Touch-LCD-7 (the 800x480 board this dash is
+         * built on), from its dimension drawing: 192.96 x 110.76 mm of glass
+         * around a 154.88 x 86.72 mm active area. Held as fractions OF THE
+         * ACTIVE AREA rather than pixels, so the frame stays proportionate on
+         * the 10.25" canvas too instead of being 7"-sized numbers on it.
+         * Per axis, because the panel's pixels are not square (0.194 mm
+         * across, 0.181 down) — one scale factor would lean the frame.
+         *
+         * The firmware's zoomToFit has the old 16/12 px frame baked in as
+         * constants, so with a frame this size Fit would zoom to something
+         * that doesn't fit. Ours reads the padding back off the element,
+         * which also means the round bezels need no second set of numbers. */
+        var WS7_BEZEL = { side: 19.04 / 154.88, top: 13.04 / 86.72, bottom: 11.00 / 86.72 };
+
+        function _bezelApply() {
+            var el = document.getElementById("canvasContainer");
+            if (!el) return;
+            var plain = el.classList.contains("bezel-on") &&
+                        !el.classList.contains("bezel-round") &&
+                        !el.classList.contains("bezel-round-slim");
+            if (!plain) { el.style.padding = ""; return; }   /* off, or round: leave the CSS alone */
+            var w = (typeof CANVAS_W !== "undefined" && CANVAS_W) ? CANVAS_W : 800;
+            var h = (typeof CANVAS_H !== "undefined" && CANVAS_H) ? CANVAS_H : 480;
+            el.style.padding = Math.round(h * WS7_BEZEL.top) + "px " +
+                               Math.round(w * WS7_BEZEL.side) + "px " +
+                               Math.round(h * WS7_BEZEL.bottom) + "px";
+        }
+
+        /* Wrapped at DOM-ready, not here: these are firmware functions from a
+         * later <script>, so at this point in the file they may not exist yet
+         * to wrap. */
+        function _bezelHook() {
+            /* Re-apply after anything that can change the screen or the toggle. */
+            ["applyScreenDimensions", "toggleHeaderPill"].forEach(function (name) {
+                var fw = window[name];
+                if (typeof fw !== "function") return;
+                window[name] = function () {
+                    var out = fw.apply(this, arguments);
+                    _bezelApply();
+                    return out;
+                };
+            });
+            _bezelApply();
+
+            var fwFit = window.zoomToFit;
+            if (typeof fwFit !== "function") return;
+            window.zoomToFit = function () {
+                var vp = document.getElementById("workspaceViewport");
+                var el = document.getElementById("canvasContainer");
+                if (!vp || !el || typeof CANVAS_W === "undefined") return fwFit.apply(this, arguments);
+                var cs = getComputedStyle(el);
+                var padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+                var padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+                var r = vp.getBoundingClientRect();
+                if (!r.width || !r.height) return fwFit.apply(this, arguments);
+                var z = Math.min((r.width - 40) / (CANVAS_W + padX),    /* 40 = the firmware's breathing room */
+                                 (r.height - 40) / (CANVAS_H + padY), 3.0);
+                zoomLevel = Math.max(0.2, z);
+                panX = 0; panY = 0;
+                updateCanvasTransform();
+            };
+        }
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", _bezelHook);
+        else _bezelHook();
+
         window._suiteOpenDash = function () {
             var home = document.getElementById("suiteHome");
             if (home) home.style.display = "none";
             _dsbBuild();
             _dsbOn(true);
+            _bezelApply();   /* the frame, in case the screen changed while away */
             /* connPollTimer stays running — it also drives the editor
              * header's connection dot now, not just the Home heading. */
             if (_shLiveTimer) { clearInterval(_shLiveTimer); _shLiveTimer = null; }
