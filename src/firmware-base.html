@@ -25,8 +25,27 @@
         }
         function apply(pref) {
             var root = document.documentElement;
+
+            /* A transition on a property fed by a token does NOT restart when
+               the token changes: the element keeps its old computed value,
+               indefinitely, not just for the transition's duration. Measured on
+               .ch2-row, which carries `transition: background 0.12s` — 800ms
+               after switching to light it was still painting the dark ground,
+               and only a forced recalc with transitions off corrected it.
+               Every themed element with a transition would be left behind, so
+               the swap lands in one frame with transitions suppressed. */
+            var mute = document.createElement('style');
+            mute.setAttribute('data-theme-swap', '');
+            mute.textContent = '*,*::before,*::after{transition:none !important}';
+            (document.head || root).appendChild(mute);
+
             if (pref === 'light' || pref === 'dark') root.setAttribute('data-theme', pref);
             else root.removeAttribute('data-theme');   /* follow the OS */
+
+            void root.offsetHeight;                    /* force the recalc now */
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () { mute.remove(); });
+            });
         }
         /* Anything painted from JS has to repaint: a canvas or an inline style
            written as a literal does not follow a var() swap (§10.2). Listen for
@@ -220,6 +239,16 @@
            two grounds do not follow the theme. Without this, light mode puts
            #1d1f20 text on a #0c0d0e bar, which measures 1.18. */
         [data-ground="bar"], [data-ground="stage"] {
+            /* The grounds are pinned here too, not just the ink. A component
+               sitting on the bar paints its own surface from --ground or
+               --surface; without this the mode switcher painted the LIGHT page
+               ground as a pale pill on the black bar, with bar-scope grey text
+               on it — 1.32. These are the dark-mode values, so nothing moves in
+               dark mode; they simply stop following the theme, which is the
+               same rule the ink already obeys. */
+            --ground: #303030;
+            --surface: #393939;
+            --raised: #424242;
             --text-primary: #e8e8e8;
             --text-secondary: #afafaf;
             --divider: rgba(255,255,255,0.14);
@@ -227,6 +256,21 @@
             --line-control: rgba(255,255,255,0.45);
             --highlight: rgba(255,255,255,0.07);
             --accent-ink: #f3b1ad;
+            /* An alias resolves where it is DECLARED, not where it is used. The
+               aliases above are declared on :root, so they baked in the root's
+               values and a descendant override of --text-primary never reached
+               them: in light mode the burger on this bar measured 1.18. They
+               have to be re-declared inside every scope that moves a role. */
+            --text: var(--text-primary);
+            --text-muted: var(--text-secondary);
+            --border: var(--divider);
+            --border-light: var(--line-strong);
+            --bg: var(--ground);
+            --bg-sidebar: var(--ground);
+            --bg-toolbar: var(--surface);
+            --bg-canvas: var(--raised);
+            --panel: var(--surface);
+            --panel-elevated: var(--raised);
         }
 
         body {
@@ -386,8 +430,8 @@
             font-size: 11px;
             color: var(--text);
         }
-        .sigcard-val.stale { color: hsl(0,60%,55%); }
-        .sigcard-val.fresh { color: hsl(140,60%,55%); }
+        .sigcard-val.stale { color: var(--status-danger); }
+        .sigcard-val.fresh { color: var(--status-ok); }
         .sigcard-details {
             margin-top: 6px;
             padding-top: 6px;
@@ -483,7 +527,7 @@
                 min-width: 40px; height: 40px;
                 background: var(--highlight);
                 border: 1px solid var(--divider);
-                color: var(--text, #e0e0e0);
+                color: var(--text, var(--text-primary));
                 border-radius: 8px;
                 cursor: pointer;
                 padding: 0;
@@ -494,9 +538,9 @@
                 touch-action: manipulation;
             }
             .wst-btn svg { width: 20px; height: 20px; }
-            .wst-btn:active, .wst-step:active, .wst-size-btn:active { background: rgba(255,255,255,0.12); }
+            .wst-btn:active, .wst-step:active, .wst-size-btn:active { background: var(--highlight); }
             .wst-btn.wst-icon { min-width: 36px; }
-            .wst-btn.wst-danger { color: #f87171; }
+            .wst-btn.wst-danger { color: var(--status-danger); }
             .wst-btn.wst-danger:active { background: rgba(248,113,113,0.15); }
             .wst-btn[aria-disabled="true"] { opacity: 0.35; pointer-events: none; }
             /* Test-active toggle for boolean widgets (indicator / warning / toggle / button).
@@ -504,19 +548,19 @@
             .wst-test-toggle {
                 flex: 1; min-width: 0; padding: 0 14px;
                 font-weight: 700; letter-spacing: 0.04em;
-                color: var(--text-muted, #888);
+                color: var(--text-muted, var(--text-secondary));
             }
             .wst-test-toggle[aria-pressed="true"] {
                 background: rgba(34,197,94,0.18);
                 border-color: rgba(34,197,94,0.45);
-                color: hsl(142, 71%, 65%);
+                color: var(--status-ok);
             }
             .wst-step {
-                min-width: 44px; font-weight: 700; color: hsl(210,80%,60%);
+                min-width: 44px; font-weight: 700; color: var(--accent-ink);
                 background: rgba(45,140,235,0.12); border-color: rgba(45,140,235,0.3);
             }
             .wst-step.active-10 {
-                color: #fbbf24; background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.3);
+                color: var(--status-warn); background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.3);
             }
             /* Spacer removed on touch: row-1 now wraps + centers, so a
              * flex-grow spacer would just fight the centering. */
@@ -530,7 +574,7 @@
             }
             .wst-label {
                 font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
-                color: var(--text-muted, #9ca3af);
+                color: var(--text-muted, var(--text-secondary));
                 padding-right: 2px;
             }
             .wst-size-btn { min-width: 34px; height: 34px; font-size: 16px; font-weight: 600; }
@@ -538,7 +582,7 @@
                 min-width: 42px; text-align: center;
                 font-family: var(--font-mono);
                 font-size: 13px; font-weight: 600;
-                color: var(--text, #e0e0e0);
+                color: var(--text, var(--text-primary));
             }
             .wst-row-test {
                 display: flex; align-items: center; gap: 8px;
@@ -550,7 +594,7 @@
             .wst-row-test input[type="range"] {
                 flex: 1 1 auto; min-width: 80px;
                 height: 28px;
-                accent-color: hsl(210,80%,60%);
+                accent-color: var(--accent);
                 touch-action: manipulation;
                 cursor: pointer;
             }
@@ -558,9 +602,9 @@
                 min-width: 44px; text-align: right;
                 font-family: var(--font-mono);
                 font-size: 12px; font-weight: 600;
-                color: var(--text-muted, #9ca3af);
+                color: var(--text-muted, var(--text-secondary));
             }
-            .wst-test-val.active { color: hsl(210,80%,60%); }
+            .wst-test-val.active { color: var(--accent-ink); }
             /* When the selection toolbar is visible, lift the zoom bar above
              * it. Offsets account for row-1 wrapping to two lines on ~375px
              * phones (taller toolbar). */
@@ -570,14 +614,14 @@
             body.wst-active.wst-has-test #mobileZoomBar {
                 bottom: calc(262px + env(safe-area-inset-bottom, 0px)) !important;
             }
-            #wstLockBtn.locked { color: #fbbf24; background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.3); }
+            #wstLockBtn.locked { color: var(--status-warn); background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.3); }
             /* First-run coach bubble above the selection toolbar. */
             .wst-coach {
                 position: absolute;
                 bottom: calc(100% + 8px);
                 left: 8px; right: 8px;
-                background: var(--accent, hsl(210,80%,55%));
-                color: #fff;
+                background: var(--accent);
+                color: var(--text-on-fill);
                 font-size: 12px; font-weight: 500;
                 padding: 9px 12px;
                 border-radius: 10px;
@@ -587,7 +631,7 @@
             }
             .wst-coach-x {
                 font-weight: 700; white-space: nowrap;
-                border: 1px solid rgba(255,255,255,0.6);
+                border: 1px solid var(--line-control);
                 border-radius: 6px; padding: 3px 8px;
             }
         }
@@ -798,7 +842,7 @@
         #mobileActionBar button:active { background: var(--highlight); }
         #mobileActionBar button[aria-disabled="true"] { opacity: 0.35; pointer-events: none; }
         #mobileActionBar button[aria-pressed="true"],
-        #mobileActionBar button.sim-on { color: hsl(140,60%,70%); }
+        #mobileActionBar button.sim-on { color: var(--status-ok); }
         /* Save button lights up accent while there are unsaved edits so the
          * primary "commit to device" action is obvious and thumb-reachable. */
         #mobileSaveBtn.has-unsaved { color: var(--accent); }
@@ -816,7 +860,7 @@
             background: rgba(30,30,30,0.9);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.15);
+            border: 1px solid var(--highlight);
             border-radius: 24px;
             padding: 4px 8px;
             gap: 4px;
@@ -1062,7 +1106,7 @@
         }
 
         ::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.15);
+            background: var(--highlight);
             border-radius: 3px;
         }
 
@@ -1090,7 +1134,7 @@
 
         .display-bezel.bezel-on {
             padding: 12px 16px;
-            background: #17181a;
+            background: var(--stage);
             border-radius: 4px;
             box-shadow:
                 0 0 0 1px rgba(255,255,255,0.10),
@@ -1105,7 +1149,7 @@
             position: relative;
             width: 800px;
             height: 480px;
-            background: hsl(0, 0%, 0%);
+            background: var(--bar);
             transform-origin: center;
             border-radius: 2px;
             box-shadow: 0 0 40px hsla(0, 0%, 0%, 0.5);
@@ -1185,7 +1229,7 @@
         }
         .layout-menu-item:hover {
             background: var(--accent);
-            color: #ffffff;
+            color: var(--text-on-fill);
         }
         .layout-menu-item svg {
             width: 16px; height: 16px;
@@ -1218,7 +1262,7 @@
         /* Widget Box in Editor */
         .widget-box {
             position: absolute;
-            border: 1px solid rgba(255,255,255,0.25);
+            border: 1px solid var(--line-control);
             background: transparent;
             cursor: move;
             box-sizing: border-box;
@@ -1226,23 +1270,23 @@
         }
 
         .widget-box:hover {
-            border-color: rgba(255,255,255,0.45);
+            border-color: var(--line-control);
         }
 
         .widget-box.selected {
-            border: 2px solid rgba(255,255,255,0.9);
+            border: 2px solid var(--line-control);
             box-shadow: 0 0 8px rgba(255,255,255,0.15);
             z-index: 10;
         }
 
         .widget-box.locked {
             border-style: dashed;
-            border-color: rgba(255,255,255,0.15);
+            border-color: var(--highlight);
             pointer-events: none;
         }
 
         .widget-box.locked.selected {
-            border-color: rgba(255,255,255,0.9);
+            border-color: var(--line-control);
             pointer-events: none;
         }
 
@@ -1263,22 +1307,22 @@
         }
 
         /* Colour-coded widget borders by type */
-        .widget-box[data-type="panel"]    { border-color: hsl(152, 55%, 45%); }
-        .widget-box[data-type="rpm_bar"]  { border-color: hsl(14, 90%, 55%); }
+        .widget-box[data-type="panel"]    { border-color: var(--status-ok); }
+        .widget-box[data-type="rpm_bar"]  { border-color: var(--status-danger); }
         .widget-box[data-type="speed"]    { border-color: hsl(210, 80%, 55%); }
         .widget-box[data-type="gear"]     { border-color: hsl(270, 60%, 55%); }
-        .widget-box[data-type="bar"]      { border-color: hsl(38, 100%, 55%); }
-        .widget-box[data-type="indicator"]{ border-color: hsl(54, 90%, 55%); }
-        .widget-box[data-type="warning"]  { border-color: hsl(0, 80%, 55%); }
+        .widget-box[data-type="bar"]      { border-color: var(--status-warn); }
+        .widget-box[data-type="indicator"]{ border-color: var(--status-warn); }
+        .widget-box[data-type="warning"]  { border-color: var(--status-danger); }
         .widget-box[data-type="text"]     { border-color: hsl(190, 80%, 45%); }
-        .widget-box[data-type="meter"]    { border-color: hsl(88, 50%, 50%); }
+        .widget-box[data-type="meter"]    { border-color: var(--status-ok); }
         .widget-box[data-type="image"]    { border-color: hsl(280, 60%, 55%); }
         .widget-box[data-type="shape_panel"] { border-color: hsl(220, 30%, 50%); }
         .widget-box[data-type="line"]     { border-color: hsl(200, 70%, 55%); }
         .widget-box[data-type="arc"]      { border-color: hsl(320, 60%, 50%); }
-        .widget-box[data-type="toggle"]   { border-color: hsl(160, 70%, 45%); }
-        .widget-box[data-type="button"]   { border-color: hsl(45, 80%, 50%); }
-        .widget-box[data-type="shift_light"] { border-color: hsl(5, 90%, 60%); }
+        .widget-box[data-type="toggle"]   { border-color: var(--status-ok); }
+        .widget-box[data-type="button"]   { border-color: var(--status-warn); }
+        .widget-box[data-type="shift_light"] { border-color: var(--status-danger); }
 
         /* Shape widgets (shape_panel, line) render on the DEVICE only — the
          * editor never draws their geometry (see renderEditor). Dashed border
@@ -1292,7 +1336,7 @@
             font-weight: 700;
             letter-spacing: 0.04em;
             text-transform: uppercase;
-            color: var(--accent, #4a90e2);
+            color: var(--accent);
             margin-left: 5px;
             opacity: 0.85;
         }
@@ -1338,7 +1382,7 @@
         }
         #interactionLayer.hide-widgets .widget-box:hover,
         #interactionLayer.hide-widgets .widget-box.selected {
-            border-color: rgba(255,255,255,0.9);
+            border-color: var(--line-control);
         }
 
         /* Resize Handles */
@@ -1479,8 +1523,8 @@
         }
         .align-btn svg { width: 14px; height: 14px; }
         .align-btn:hover {
-            background: rgba(255,255,255,0.1);
-            border-color: #666;
+            background: var(--highlight);
+            border-color: var(--divider);
             color: var(--text);
         }
 
@@ -1561,7 +1605,7 @@
         /* Buttons */
         .btn {
             background: var(--accent);
-            color: #ffffff;
+            color: var(--text-on-fill);
             border: none;
             padding: 7px 14px;
             border-radius: var(--radius-md);
@@ -1590,9 +1634,9 @@
         }
 
         .btn-secondary:hover {
-            color: #bbbbbb;
-            background: #383838;
-            border-color: #444444;
+            color: var(--text-secondary);
+            background: var(--surface);
+            border-color: var(--divider);
         }
 
         .btn-secondary:active {
@@ -1630,7 +1674,7 @@
         }
 
         .status-dot.online {
-            background: hsl(152, 80%, 48%);
+            background: var(--status-ok);
             box-shadow: 0 0 6px hsla(152, 80%, 48%, 0.4);
         }
 
@@ -1716,7 +1760,7 @@
         }
 
         .layer-item.active {
-            background: hsla(0, 0%, 75%, 0.08);
+            background: var(--highlight);
             color: var(--text);
             border-left-color: var(--accent);
         }
@@ -1741,7 +1785,7 @@
         }
 
         .layer-btn:hover {
-            background: hsla(0, 0%, 100%, 0.08);
+            background: var(--highlight);
             border-color: var(--border);
             color: var(--text);
         }
@@ -1780,7 +1824,7 @@
         .smart-guide-x,
         .smart-guide-y {
             position: absolute;
-            background: hsl(0, 100%, 60%);
+            background: var(--status-danger);
             z-index: 50;
             pointer-events: none;
             display: none;
@@ -1824,9 +1868,9 @@
         }
 
         .header-pill:hover {
-            color: #bbbbbb;
-            background: #383838;
-            border-color: #444444;
+            color: var(--text-secondary);
+            background: var(--surface);
+            border-color: var(--divider);
         }
 
         .header-pill.active {
@@ -1836,7 +1880,7 @@
         }
 
         .header-pill.active:hover {
-            background: #363636;
+            background: var(--surface);
         }
 
         /* ── Studio mode switcher (Setup / Design) ──
@@ -1870,7 +1914,7 @@
         .studio-mode-btn:hover { color: var(--text); }
         .studio-mode-btn.active {
             background: var(--accent);
-            color: #fff;
+            color: var(--text-on-fill);
             box-shadow: 0 1px 3px rgba(74,144,226,0.4);
         }
 
@@ -2132,7 +2176,7 @@
             font-family: monospace; font-size: 13px; letter-spacing: .06em;
             color: var(--text); word-break: break-all;
         }
-        .ch2-probe-bytes .hit { color: var(--accent, #4ea1ff); font-weight: 700; }
+        .ch2-probe-bytes .hit { color: var(--accent); font-weight: 700; }
         .ch2-probe-val {
             font-size: 20px; font-weight: 700; color: var(--text);
             margin-top: 6px;
@@ -2225,7 +2269,7 @@
             cursor: pointer; white-space: nowrap;
         }
         .ch2-filter-btn:hover { color: var(--text); }
-        .ch2-filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .ch2-filter-btn.active { background: var(--accent); color: var(--text-on-fill); border-color: var(--accent); }
         .ch2-list { flex: 1; overflow-y: auto; scrollbar-gutter: stable; }
 
         /* One row markup, two layouts. In the modal the source sits under the
@@ -2346,8 +2390,8 @@
             font-size: 11px;
             margin-left: 3px;
         }
-        .ch2-row-val.warn  { color: hsl(40,90%,62%); }
-        .ch2-row-val.crit  { color: hsl(0,75%,62%); }
+        .ch2-row-val.warn  { color: var(--status-warn); }
+        .ch2-row-val.crit  { color: var(--status-danger); }
         .ch2-row-val.stale { color: var(--text-muted); }
 
         /* Inactive rows: greyed; click to activate. */
@@ -2399,8 +2443,8 @@
             padding: 9px 11px; border-radius: 5px; margin-bottom: 8px;
             background: var(--bg); border: 1px solid var(--border);
         }
-        .ch2-add-note.ok   { border-color: hsl(140,40%,32%); color: hsl(140,55%,68%); }
-        .ch2-add-note.warn { border-color: hsl(40,50%,35%);  color: hsl(40,80%,70%); }
+        .ch2-add-note.ok   { border-color: var(--status-ok); color: var(--status-ok); }
+        .ch2-add-note.warn { border-color: var(--status-warn);  color: var(--status-warn); }
         .ch2-add-btn { width: 100%; margin-top: 6px; padding: 9px; font-size: 13px; }
         .ch2-add-btn:disabled { opacity: .5; cursor: not-allowed; }
 
@@ -2499,7 +2543,7 @@
             display: inline-block;
             padding: 8px 16px;
             background: var(--accent);
-            color: #fff;
+            color: var(--text-on-fill);
             border: none;
             border-radius: 4px;
             cursor: pointer;
@@ -2538,8 +2582,8 @@
         .ch2-detail-live .unit {
             font-size: 12px; color: var(--text-muted); margin-left: 4px;
         }
-        .ch2-detail-live.warn  { color: hsl(40,90%,62%); }
-        .ch2-detail-live.crit  { color: hsl(0,75%,62%); }
+        .ch2-detail-live.warn  { color: var(--status-warn); }
+        .ch2-detail-live.crit  { color: var(--status-danger); }
         .ch2-detail-live.stale { color: var(--text-muted); }
 
         .ch2-section {
@@ -2586,7 +2630,7 @@
         }
         .ch2-section h3 .action ~ .action { margin-left: 0; }
         .ch2-section h3 .action:hover {
-            background: rgba(255,255,255,0.09);
+            background: var(--highlight);
             border-color: var(--text-muted);
         }
 
@@ -2758,7 +2802,7 @@
             display: flex; gap: 10px; justify-content: flex-end;
             position: sticky; bottom: 0;
             background: var(--panel);
-            border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+            border-top: 1px solid var(--border, var(--highlight));
         }
         .ch2-link-btn {
             background: transparent;
@@ -2772,8 +2816,8 @@
         .ch2-link-btn:hover { color: var(--text); text-decoration: underline; }
         /* Destructive actions carry their colour at rest — see the note on
            .action.danger above. Colour, no box. */
-        .ch2-link-btn.danger { color: hsl(0,55%,62%); }
-        .ch2-link-btn.danger:hover { color: hsl(0,70%,68%); }
+        .ch2-link-btn.danger { color: var(--status-danger); }
+        .ch2-link-btn.danger:hover { color: var(--status-danger); }
 
         /* Source section — bound card + empty state */
         .ch2-source-bound {
@@ -2848,11 +2892,11 @@
             padding: 3px 2px;
             border: none;
             background: none;
-            color: hsl(0, 55%, 62%);
+            color: var(--status-danger);
         }
         .ch2-section h3 .action.danger:hover {
             background: none;
-            color: hsl(0, 70%, 68%);
+            color: var(--status-danger);
             text-decoration: underline;
         }
 
@@ -2934,7 +2978,7 @@
         .ch2-srcp-grouphead {
             padding: 10px 12px 4px;
             font-size: 9px; font-weight: 700; letter-spacing: .08em;
-            text-transform: uppercase; color: var(--text-ghost);
+            text-transform: uppercase; color: var(--text-secondary);
         }
         .ch2-srcp-make {
             padding: 7px 12px; cursor: pointer;
@@ -2945,7 +2989,7 @@
         .ch2-srcp-make .nm { font-size: 12px; color: var(--text-muted); }
         .ch2-srcp-make.active .nm { color: var(--text); font-weight: 600; }
         .ch2-srcp-make .sub {
-            font-size: 9px; color: var(--text-ghost); margin-top: 2px;
+            font-size: 9px; color: var(--text-secondary); margin-top: 2px;
             font-family: var(--font-mono);
         }
 
@@ -2976,7 +3020,7 @@
             transition: background .12s;
         }
         .ch2-srcp-row:hover { background: var(--highlight); }
-        .ch2-srcp-row.active { background: rgba(255,255,255,0.09); }
+        .ch2-srcp-row.active { background: var(--highlight); }
         /* Native checkbox in add mode: no custom box to draw, no state to get
          * wrong, and it reads as tickable without being told. Pointer events
          * off so the row's own click handles it — one target, one toggle. */
@@ -2996,7 +3040,7 @@
         /* Which source a search hit came from — only shown while searching,
          * when rows no longer share one. */
         .ch2-srcp-row .mk {
-            font-size: 9px; color: var(--text-ghost); margin-left: 6px;
+            font-size: 9px; color: var(--text-secondary); margin-left: 6px;
             text-transform: uppercase; letter-spacing: .05em;
         }
         .ch2-srcp-row .inuse { font-size: 11px; color: var(--text-muted); margin-left: 6px; }
@@ -3188,13 +3232,13 @@
                       letter-spacing: .5px; padding: 2px 7px; line-height: 1.25;
                       border-radius: 999px; text-transform: uppercase;
                       vertical-align: middle; }
-        .ch2-srctag.obd2     { background: rgba(255,176,32,0.14);  color: #ffb020; }   /* amber  */
-        .ch2-srctag.math     { background: rgba(102,187,106,0.14); color: #66bb6a; }   /* green  */
+        .ch2-srctag.obd2     { background: rgba(255,176,32,0.14);  color: var(--status-warn); }   /* amber  */
+        .ch2-srctag.math     { background: rgba(102,187,106,0.14); color: var(--status-ok); }   /* green  */
         /* Everything else is plain text in the same cell. */
         .ch2-srctxt          { color: var(--text-muted); }
         .ch2-srctxt.mono     { font-family: 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
                                letter-spacing: .3px; }
-        .ch2-srctxt.none     { color: #6a6a6a; font-style: italic; }
+        .ch2-srctxt.none     { color: var(--text-secondary); font-style: italic; }
 
         /* ECU "make" folder — expands to reveal version rows inside.
          * Active preset's make is rendered <details open> so users see
@@ -3253,7 +3297,7 @@
         .ch2-src-folder-body .ch2-src-row:last-child { border-bottom: none; }
         .ch2-src-folder-body .ch2-src-row:hover {
             background: var(--highlight);
-            border-color: rgba(255,255,255,0.025);
+            border-color: var(--highlight);
         }
         .ch2-src-folder-body .ch2-src-row.is-current {
             background: rgba(74,144,226,0.06);
@@ -3353,7 +3397,7 @@
             font-family: inherit;
         }
         .inspector-channel-actions button:hover { color: var(--accent); }
-        .inspector-channel-actions button.danger:hover { color: hsl(0,70%,62%); }
+        .inspector-channel-actions button.danger:hover { color: var(--status-danger); }
 
         /* Channel picker for widget inspector — same shell as signal
          * picker but list shows channels (grouped, inactive faded). */
@@ -3390,14 +3434,14 @@
          * of the UI already uses for status indicators. Same for Auto-sync. */
         .header-pill.sim-active,
         .header-pill.sync-active {
-            background: hsl(140, 60%, 30%);
-            color: hsl(140, 60%, 92%);
-            border-color: hsl(140, 60%, 55%);
+            background: var(--status-ok);
+            color: var(--status-ok);
+            border-color: var(--status-ok);
             font-weight: 600;
         }
         .header-pill.sim-active:hover,
         .header-pill.sync-active:hover {
-            background: hsl(140, 60%, 34%);
+            background: var(--status-ok);
         }
 
         .header-divider {
@@ -3548,7 +3592,7 @@
             font-weight: 700;
             letter-spacing: 0.04em;
             text-transform: uppercase;
-            color: hsl(0, 0%, 100%);
+            color: var(--text-on-fill);
         }
 
         .shortcut-grid {
@@ -3590,7 +3634,7 @@
         }
 
         #draftToast button {
-            background: #1a1a1a;
+            background: var(--stage);
             color: var(--accent);
             border: none;
             padding: 5px 10px;
@@ -3601,7 +3645,7 @@
         }
 
         #draftToast button:hover {
-            background: #282828;
+            background: var(--ground);
         }
 
         /* Toast Notifications */
@@ -3622,12 +3666,12 @@
             border-radius: var(--radius-md);
             font-size: 12px;
             font-weight: 600;
-            color: hsl(0, 0%, 100%);
+            color: var(--text-on-fill);
             pointer-events: auto;
             animation: toastIn 0.3s ease-out;
             box-shadow: var(--shadow-md);
             white-space: nowrap;
-            border: 1px solid hsla(0, 0%, 100%, 0.1);
+            border: 1px solid var(--highlight);
         }
 
         .toast.toast-out {
@@ -3661,12 +3705,12 @@
             border-bottom: 1px solid var(--divider);
             transition: background 0.12s;
         }
-        .sig-list-item:hover { background: hsla(0, 0%, 75%, 0.06); }
+        .sig-list-item:hover { background: var(--highlight); }
         .sig-list-item .sig-dot {
             width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
         }
-        .sig-list-item .sig-dot.bound { background: hsl(152, 70%, 42%); box-shadow: 0 0 4px hsla(152, 70%, 42%, 0.35); }
-        .sig-list-item .sig-dot.unbound { background: #404040; }
+        .sig-list-item .sig-dot.bound { background: var(--status-ok); box-shadow: 0 0 4px hsla(152, 70%, 42%, 0.35); }
+        .sig-list-item .sig-dot.unbound { background: var(--raised); }
         .sig-list-item .sig-info { flex: 1; min-width: 0; }
         .sig-list-item .sig-name {
             font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -3692,7 +3736,7 @@
         .sig-card:nth-child(even) {
             background: var(--highlight);
         }
-        .sig-card:hover { background: hsla(0, 0%, 75%, 0.04); }
+        .sig-card:hover { background: var(--highlight); }
         .sig-card-header {
             display: flex;
             align-items: center;
@@ -3718,7 +3762,7 @@
          *      registry but nothing's bound and nothing's incoming. */
         .sig-card-header .sig-dot {
             width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-            background: #404040;
+            background: var(--raised);
             transition: background 0.18s, box-shadow 0.18s;
         }
         .sig-card-header .sig-dot.bound { background: var(--status-ok); }
@@ -3729,7 +3773,7 @@
         .sig-card.expanded .sig-card-header .sig-expand-icon { transform: rotate(90deg); }
         .sig-card.highlighted {
             border-left: 2px solid var(--accent);
-            background: hsla(0, 0%, 75%, 0.06);
+            background: var(--highlight);
         }
         .sig-card.highlighted .sig-card-header { padding-left: 10px; }
         .sig-card-body {
@@ -3765,23 +3809,23 @@
             color: hsl(0, 0%, 40%);
             margin-top: 8px;
             padding-top: 6px;
-            border-top: 1px solid hsla(0, 0%, 100%, 0.06);
+            border-top: 1px solid var(--highlight);
         }
-        .sig-card-bound span { color: hsl(0, 0%, 53%); }
+        .sig-card-bound span { color: var(--text-secondary); }
         .sig-widget-chip {
             display: inline-block;
             font-size: 9px;
             font-weight: 600;
             padding: 1px 6px;
             border-radius: var(--radius-sm);
-            background: hsla(0, 0%, 75%, 0.1);
+            background: var(--highlight);
             color: var(--accent);
             cursor: pointer;
             margin: 2px 2px 0 0;
-            border: 1px solid hsla(0, 0%, 75%, 0.2);
+            border: 1px solid var(--highlight);
             transition: background 0.12s;
         }
-        .sig-widget-chip:hover { background: hsla(0, 0%, 75%, 0.2); }
+        .sig-widget-chip:hover { background: var(--highlight); }
         .sig-card-footer {
             margin-top: 8px;
             display: flex;
@@ -3789,7 +3833,7 @@
         }
         .sig-card-footer button {
             font-size: 10px;
-            color: hsl(0, 100%, 63%);
+            color: var(--status-danger);
             background: none;
             border: none;
             cursor: pointer;
@@ -3804,7 +3848,7 @@
             color: hsl(0, 0%, 40%);
             cursor: pointer;
             transition: color 0.15s;
-            border-top: 1px solid hsla(0, 0%, 100%, 0.04);
+            border-top: 1px solid var(--highlight);
         }
         .sig-open-manager:hover { color: var(--accent); }
 
@@ -3843,7 +3887,7 @@
             font-size: 13px;
             letter-spacing: 0.06em;
             text-transform: uppercase;
-            color: hsl(0, 0%, 100%);
+            color: var(--text-on-fill);
         }
         .signal-modal-header .close-btn {
             background: none; border: none; color: var(--text-muted); font-size: 20px;
@@ -3916,7 +3960,7 @@
         }
         .signal-table tbody tr { transition: background 0.1s; }
         .signal-table tbody tr:nth-child(even) td { background: var(--highlight); }
-        .signal-table tbody tr:hover td { background: hsla(0, 0%, 75%, 0.04); }
+        .signal-table tbody tr:hover td { background: var(--highlight); }
         .signal-table input[type="text"],
         .signal-table input[type="number"] {
             width: 100%;
@@ -3932,7 +3976,7 @@
         }
         .signal-table input:hover { border-color: var(--border); background: rgba(20,20,20,0.4); }
         .signal-table input:focus { border-color: var(--accent); outline: none; background: var(--bg); box-shadow: 0 0 0 1px hsla(0, 0%, 80%, 0.2); }
-        .signal-table input.invalid { border-color: hsl(0, 70%, 55%) !important; background: hsla(0, 70%, 55%, 0.06) !important; }
+        .signal-table input.invalid { border-color: var(--status-danger) !important; background: hsla(0, 70%, 55%, 0.06) !important; }
         .signal-table .col-status { width: 24px; text-align: center; }
         .signal-table .col-name { min-width: 130px; }
         .signal-table .col-canid { width: 80px; }
@@ -3957,8 +4001,8 @@
             transition: all 0.12s;
         }
         .sig-toggle.on {
-            background: hsla(0, 0%, 75%, 0.12);
-            border-color: hsla(0, 0%, 75%, 0.3);
+            background: var(--highlight);
+            border-color: var(--line-control);
             color: var(--accent);
         }
         .sig-toggle.off {
@@ -3978,14 +4022,14 @@
             border-radius: var(--radius-sm);
             transition: all 0.12s;
         }
-        .sig-del-btn:hover { color: hsl(0, 70%, 55%); background: hsla(0, 70%, 55%, 0.08); }
+        .sig-del-btn:hover { color: var(--status-danger); background: hsla(0, 70%, 55%, 0.08); }
         .sig-bound-dot {
             display: inline-block;
             width: 6px; height: 6px;
             border-radius: 50%;
         }
-        .sig-bound-dot.active { background: hsl(152, 70%, 42%); box-shadow: 0 0 4px hsla(152, 70%, 42%, 0.4); }
-        .sig-bound-dot.inactive { background: #2e2e2e; }
+        .sig-bound-dot.active { background: var(--status-ok); box-shadow: 0 0 4px hsla(152, 70%, 42%, 0.4); }
+        .sig-bound-dot.inactive { background: var(--ground); }
         .signal-modal-footer {
             padding: 10px 20px;
             display: flex;
@@ -4054,11 +4098,11 @@
             display: inline-block;
             width: 6px; height: 6px;
             border-radius: 50%;
-            background: hsl(210, 70%, 55%);
+            background: var(--accent);
             margin-right: 6px;
             flex-shrink: 0;
         }
-        .preset-col-item.active .preset-custom-dot { background: hsl(210, 50%, 30%); }
+        .preset-col-item.active .preset-custom-dot { background: var(--accent-pressed); }
         .preset-col-actions {
             display: flex; gap: 4px; align-items: center;
             padding: 6px 10px;
@@ -4113,14 +4157,14 @@
             border-radius: var(--radius-sm); transition: all 0.12s;
             position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
         }
-        .preset-sig-del:hover { color: hsl(0, 70%, 55%); background: hsla(0, 70%, 55%, 0.08); }
+        .preset-sig-del:hover { color: var(--status-danger); background: hsla(0, 70%, 55%, 0.08); }
         .preset-col-item.custom-sig { position: relative; padding-right: 24px; }
         .preset-delete-ecu {
             background: none; border: none; font-size: 11px;
-            color: hsl(0, 50%, 50%); cursor: pointer; padding: 2px 6px;
+            color: var(--status-danger); cursor: pointer; padding: 2px 6px;
             border-radius: var(--radius-sm); transition: all 0.12s;
         }
-        .preset-delete-ecu:hover { color: hsl(0, 70%, 60%); background: hsla(0, 70%, 55%, 0.1); }
+        .preset-delete-ecu:hover { color: var(--status-danger); background: hsla(0, 70%, 55%, 0.1); }
         /* DBC Import Modal */
         #dbcImportModal {
             display: none; position: fixed;
@@ -4241,7 +4285,7 @@
             transition: color 0.15s, border-color 0.15s, background 0.15s;
         }
         .pa-row .pa-remove:hover {
-            color: #e65a5a; border-color: #e65a5a; background: rgba(230,90,90,0.08);
+            color: var(--status-danger); border-color: var(--status-danger); background: rgba(230,90,90,0.08);
         }
         .pa-add-row {
             display: inline-flex; align-items: center; gap: 6px;
@@ -4266,7 +4310,7 @@
             line-height: 1.5; padding: 8px 12px;
         }
         #paError.pa-error {
-            color: #e65a5a; border-color: rgba(230,90,90,0.5);
+            color: var(--status-danger); border-color: rgba(230,90,90,0.5);
             background: rgba(230,90,90,0.07);
         }
 
@@ -4285,17 +4329,17 @@
         }
         .preset-selection-bar .selection-text {
             font-size: 12px;
-            color: hsl(0, 0%, 53%);
+            color: var(--text-secondary);
             flex: 1;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
         .preset-selection-bar .selection-text.has-sel { color: var(--accent); }
-        .preset-selection-bar .selection-text.added { color: hsl(140, 55%, 55%); font-weight: 600; }
+        .preset-selection-bar .selection-text.added { color: var(--status-ok); font-weight: 600; }
         /* ✓ badge on a signal row that's already been imported into the layout */
         .preset-col-item .preset-added-badge {
-            color: hsl(140, 55%, 55%);
+            color: var(--status-ok);
             font-size: 11px;
             font-weight: 700;
             margin-left: 6px;
@@ -4319,7 +4363,7 @@
             border: 1px solid var(--border);
             border-radius: var(--radius-sm);
             background:
-              repeating-conic-gradient(#444 0 25%, #555 0 50%) 0 0 / 12px 12px;
+              repeating-conic-gradient(var(--raised) 0 25%, #555 0 50%) 0 0 / 12px 12px;
             cursor: copy;
             user-select: none;
         }
@@ -4353,7 +4397,7 @@
             width: 12px; height: 11px;
             border: 1px solid var(--text-muted);
             border-top: 0;
-            background: #000;
+            background: var(--bar);
         }
         .grad-editor .ge-marker.selected .ge-mtri { border-bottom-color: var(--accent); }
         .grad-editor .ge-marker.selected .ge-mbox { border-color: var(--accent); border-width: 2px; }
@@ -4375,8 +4419,8 @@
         .grad-editor .ge-controls .ge-pos { width: 56px; }
         .grad-editor .ge-controls .ge-hex { width: 80px; }
         .grad-editor .ge-controls .ge-del {
-            background: none; border: 1px solid hsl(0,70%,60%);
-            color: hsl(0,70%,60%);
+            background: none; border: 1px solid var(--status-danger);
+            color: var(--status-danger);
             padding: 2px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 11px;
         }
         .grad-editor .ge-controls .ge-del[disabled] { opacity: 0.4; cursor: not-allowed; }
@@ -4390,7 +4434,7 @@
         }
         .image-picker-wrap select { flex: 1; }
         .image-picker-wrap button {
-            background: var(--bg-card); border: 1px solid var(--border);
+            background: var(--raised); border: 1px solid var(--border);
             border-radius: var(--radius-sm); color: var(--text); font-size: 14px;
         }
         .image-picker-wrap button:hover { border-color: var(--accent); }
@@ -4422,7 +4466,7 @@
         .toggle-track {
             position: absolute;
             inset: 0;
-            background: hsl(220, 12%, 20%);
+            background: var(--surface);
             border-radius: 10px;
             cursor: pointer;
             transition: background 0.2s;
@@ -4446,7 +4490,7 @@
 
         .toggle-switch input:checked + .toggle-track::after {
             transform: translateX(16px);
-            background: #1a1a1a;
+            background: var(--stage);
         }
 
         .toggle-switch input:disabled + .toggle-track {
@@ -4562,7 +4606,7 @@
             border:1px solid var(--border); line-height:1.4;
         }
         .sweep-chip:hover { color:var(--text); border-color:var(--text-muted); }
-        .sweep-chip.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+        .sweep-chip.on { background:var(--accent); border-color:var(--accent); color:var(--text-on-fill); }
         .sweep-chip:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
         .sweep-stop { display:flex; align-items:center; gap:5px; }
         .sweep-stop label { font-size:10px; color:var(--text-muted); }
@@ -4585,7 +4629,7 @@
         .field-help:hover { color:var(--accent); border-color:var(--accent); }
         #fieldTip {
             position:fixed; z-index:10000; max-width:260px; pointer-events:none;
-            background:#0d1622; color:#e6edf3; border:1px solid var(--accent);
+            background:var(--stage); color:var(--text-primary); border:1px solid var(--accent);
             border-radius:6px; padding:7px 9px; font-size:11px; line-height:1.45;
             box-shadow:0 6px 22px rgba(0,0,0,.55); opacity:0; transition:opacity .1s;
         }
@@ -4596,7 +4640,7 @@
         .vlabels-desc { font-size:11px; color:var(--text-muted); line-height:1.5; }
         .vlabels-desc code { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:0 4px; font-size:10px; color:var(--text); white-space:nowrap; }
         .vlabels-live { font-size:11px; line-height:1.45; padding:6px 9px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-md); }
-        .vlabels-live .vl-sig { color:#5fb0f0; font-weight:600; }
+        .vlabels-live .vl-sig { color:var(--accent-ink); font-weight:600; }
         .vlabels-live .vl-out { color:var(--text); font-weight:700; }
         .vlabels-live .vl-out.mapped { color:var(--accent); }
         .vlabels-live .vl-hint { color:var(--text-muted); }
@@ -4609,7 +4653,7 @@
         .vlabels-row .vl-arrow { flex:none; color:var(--text-muted); font-size:13px; }
         .vlabels-row .vl-label { flex:1; min-width:0; font-weight:600; }
         .vlabels-row .vl-del { flex:none; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; background:transparent; border:1px solid var(--border); color:var(--text-muted); border-radius:var(--radius-md); font-size:16px; line-height:1; cursor:pointer; transition:all .12s; }
-        .vlabels-row .vl-del:hover { border-color:hsl(0,75%,55%); color:hsl(0,80%,62%); background:hsla(0,75%,55%,.12); }
+        .vlabels-row .vl-del:hover { border-color:var(--status-danger); color:var(--status-danger); background:hsla(0,75%,55%,.12); }
         .vlabels-empty { font-size:11px; color:var(--text-muted); font-style:italic; }
         .vlabels-add { width:100%; }
         .vlabels-note { font-size:10px; color:var(--text-muted); line-height:1.4; }
@@ -4659,7 +4703,7 @@
         .props-test-momentary.pressed {
             background: var(--accent);
             border-color: var(--accent);
-            color: #fff;
+            color: var(--text-on-fill);
         }
 
         /* Disabled field states */
@@ -4690,7 +4734,7 @@
             border-left: 2px solid transparent;
         }
         .assign-sig-item:hover {
-            background: hsla(0, 0%, 75%, 0.04);
+            background: var(--highlight);
             border-left-color: var(--accent);
         }
         .assign-sig-item .sig-item-name { font-weight: 600; }
@@ -4737,7 +4781,7 @@
         .drop-ghost {
             position: absolute; pointer-events: none; z-index: 50;
             border: 2px dashed var(--accent);
-            background: hsla(0, 0%, 75%, 0.1);
+            background: var(--highlight);
             border-radius: var(--radius-sm);
         }
         .drop-flash {
@@ -6622,7 +6666,7 @@
                                 <input id="fuelFwdOffset" type="number" step="any" value="0" style="width:100%; margin-top:2px; padding:5px; background:var(--panel-elevated); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
                             </label>
                         </div>
-                        <div id="fuelFwdHealth" style="font-size:10px; color:var(--text-ghost);"></div>
+                        <div id="fuelFwdHealth" style="font-size:10px; color:var(--text-secondary);"></div>
                     </div>
                 </details>
 
@@ -16764,7 +16808,7 @@
                 const overlay = document.createElement('div');
                 overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
                 overlay.innerHTML = `
-                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:300px;color:var(--text);">
+                    <div style="background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:300px;color:var(--text);">
                         <h3 style="margin:0 0 12px 0;font-size:15px;">Upload Font</h3>
                         <div style="margin-bottom:8px;font-size:13px;color:var(--text-muted);">File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)</div>
                         <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
@@ -17203,7 +17247,7 @@
                     const v = info.value;
                     const display = (Number.isInteger(v) || Math.abs(v) >= 100) ? v.toFixed(0) : v.toFixed(2);
                     el.textContent = info.stale ? '---' : display;
-                    el.style.color = info.stale ? 'var(--text-ghost)' : '#4fc3f7';
+                    el.style.color = info.stale ? 'var(--text-secondary)' : '#4fc3f7';
                 }
             });
 
@@ -17286,7 +17330,7 @@
                 if (isInternal) {
                     const live = _signalLiveValues[s.name];
                     let valText = '---';
-                    let valColor = 'var(--text-ghost)';
+                    let valColor = 'var(--text-secondary)';
                     if (live && !live.stale) {
                         const v = live.value;
                         valText = (Number.isInteger(v) || Math.abs(v) >= 100) ? v.toFixed(0) : v.toFixed(2);
@@ -19211,7 +19255,7 @@
                 const overlay = document.createElement('div');
                 overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;';
                 overlay.innerHTML = `
-                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:380px;max-width:90vw;color:var(--text);">
+                    <div style="background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:380px;max-width:90vw;color:var(--text);">
                         <h3 style="margin:0 0 12px 0;font-size:15px;">Edit Image: ${name}</h3>
                         <div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);">Current: ${origW} x ${origH}</div>
                         <div style="margin-bottom:8px;">
@@ -22302,7 +22346,7 @@
                 _emu.closeArmed = Date.now() + 4000;
                 const bar = document.getElementById('canEmuSaveBar');
                 const msg = bar && bar.querySelector('span');
-                if (msg) { msg.textContent = 'Not saved to the dash. Close again to throw the changes away.'; msg.style.color = 'var(--warning, #f0a020)'; }
+                if (msg) { msg.textContent = 'Not saved to the dash. Close again to throw the changes away.'; msg.style.color = 'var(--warning)'; }
                 if (bar) bar.scrollIntoView({ block: 'nearest' });
                 return;
             }
@@ -22340,10 +22384,10 @@
 
         function _emuWord(st) {
             const s = st && st.status;
-            return s === 'sending' ? ['On the bus', 'var(--success, #4caf50)']
+            return s === 'sending' ? ['On the bus', 'var(--success)']
                  : s === 'waiting' ? ['Starting', 'var(--text-muted)']
-                 : s === 'paused'  ? ['Paused', 'var(--warning, #f0a020)']
-                 : s === 'refused' ? ['Stopped', 'var(--danger, #e53935)']
+                 : s === 'paused'  ? ['Paused', 'var(--warning)']
+                 : s === 'refused' ? ['Stopped', 'var(--danger)']
                  : ['Off', 'var(--text-muted)'];
         }
 
@@ -22373,12 +22417,12 @@
             const body = document.getElementById('canEmuBody');
             if (!body) return;
             if (_emu.error) {
-                body.innerHTML = `<div style="font-size:12px; color:var(--danger, #e53935); padding:12px; border:1px solid var(--border); border-radius:var(--radius-md);">${_emuEsc(_emu.error)}</div>`;
+                body.innerHTML = `<div style="font-size:12px; color:var(--danger); padding:12px; border:1px solid var(--border); border-radius:var(--radius-md);">${_emuEsc(_emu.error)}</div>`;
                 return;
             }
             const devs = _emu.file.devices;
             let h = '';
-            h += `<div id="canEmuSaveBar" style="display:${_emu.dirty ? 'flex' : 'none'}; position:sticky; top:-20px; z-index:2; align-items:center; gap:10px; padding:10px 12px; margin:-4px 0 12px; background:var(--panel-elevated); border:1px solid var(--accent, #e53935); border-radius:var(--radius-md);">
+            h += `<div id="canEmuSaveBar" style="display:${_emu.dirty ? 'flex' : 'none'}; position:sticky; top:-20px; z-index:2; align-items:center; gap:10px; padding:10px 12px; margin:-4px 0 12px; background:var(--panel-elevated); border:1px solid var(--accent); border-radius:var(--radius-md);">
                     <span style="flex:1; font-size:12px;">Changes not on the dash yet.</span>
                     <button class="btn" onclick="_emuDiscard()">Discard</button>
                     <button class="btn btn-primary" onclick="_emuSave()">Save to the dash</button>
@@ -22390,7 +22434,7 @@
             h += `<details style="margin-top:14px; font-size:12px;"><summary style="cursor:pointer; color:var(--text-muted);">All devices as JSON &mdash; copy, paste, share</summary>
                     <textarea id="canEmuAllJson" spellcheck="false" style="${_emuIn} width:100%; height:220px; margin-top:8px; font-family:var(--font-mono); font-size:11px;">${_emuEsc(JSON.stringify(_emu.file, null, 2))}</textarea>
                     <div style="display:flex; gap:8px; margin-top:6px;"><button class="btn" onclick="_emuApplyAllJson()">Use this JSON</button>
-                    <span id="canEmuAllJsonErr" style="font-size:11px; color:var(--danger, #e53935); align-self:center;"></span></div>
+                    <span id="canEmuAllJsonErr" style="font-size:11px; color:var(--danger); align-self:center;"></span></div>
                   </details>`;
             body.innerHTML = h;
             _emuRenderLive();
@@ -22411,7 +22455,7 @@
                     <span id="emuState_${di}" style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em;"></span>
                     <label style="display:flex; align-items:center; gap:6px; font-size:12px;"><input type="checkbox" ${d.enabled !== false ? 'checked' : ''} onchange="_emuSetEnabled(${di}, this.checked)">On</label>
                   </div>
-                  <div id="emuReason_${di}" style="font-size:11px; color:var(--danger, #e53935); min-height:14px; margin-bottom:6px;"></div>`;
+                  <div id="emuReason_${di}" style="font-size:11px; color:var(--danger); min-height:14px; margin-bottom:6px;"></div>`;
 
             /* Buttons */
             h += `<div style="font-size:11px; font-weight:600; margin:6px 0 4px;">Buttons</div>
@@ -22451,7 +22495,7 @@
                 if (c.kind === 'select' && states.length < 8)
                     h += `<tr><td style="${_emuTd}"></td><td colspan="4" style="${_emuTd}"><button class="btn" style="padding:3px 10px; font-size:11px;" onclick="_emuAddState(${di},${ci})">+ Add a button to ${_emuEsc(c.name || c.id)}</button></td></tr>`;
                 const warn = _emuLadderWarning(c, use);
-                if (warn) h += `<tr><td></td><td colspan="4" style="padding:4px 8px; font-size:11px; color:var(--warning, #f0a020);">${_emuEsc(warn)}</td></tr>`;
+                if (warn) h += `<tr><td></td><td colspan="4" style="padding:4px 8px; font-size:11px; color:var(--warning);">${_emuEsc(warn)}</td></tr>`;
             });
             h += `</table></div>`;
 
@@ -22494,7 +22538,7 @@
                     <summary style="cursor:pointer; color:var(--text-muted);">Edit this device as JSON &mdash; frames, bit positions, your own spec</summary>
                     <textarea id="emuJson_${di}" spellcheck="false" style="${_emuIn} width:100%; height:240px; margin-top:8px; font-family:var(--font-mono); font-size:11px;">${_emuEsc(JSON.stringify(d, null, 2))}</textarea>
                     <div style="display:flex; gap:8px; margin-top:6px; align-items:center;"><button class="btn" onclick="_emuApplyDeviceJson(${di})">Use this JSON</button>
-                    <span id="emuJsonErr_${di}" style="font-size:11px; color:var(--danger, #e53935);"></span></div>
+                    <span id="emuJsonErr_${di}" style="font-size:11px; color:var(--danger);"></span></div>
                   </details>
                   <div style="display:flex; justify-content:flex-end; margin-top:10px;"><button class="btn" onclick="_emuRemoveDevice(${di}, this)">Remove this device</button></div>`;
             h += `</div>`;
@@ -22675,7 +22719,7 @@
             } catch (e) {
                 if (bar) {
                     bar.querySelector('span').textContent = e.message;
-                    bar.querySelector('span').style.color = 'var(--danger, #e53935)';
+                    bar.querySelector('span').style.color = 'var(--danger)';
                 }
             }
         }
@@ -28102,7 +28146,7 @@
             return `
                 <div class="ch2-section">
                     <h3>CAN decode
-                        <span style="font-size:10px; color:var(--text-ghost); margin-left:6px; text-transform:none; letter-spacing:0;">applies when you Save</span>
+                        <span style="font-size:10px; color:var(--text-secondary); margin-left:6px; text-transform:none; letter-spacing:0;">applies when you Save</span>
                     </h3>
                     <div class="ch2-dec-grid">
                         <div class="ch2-num">

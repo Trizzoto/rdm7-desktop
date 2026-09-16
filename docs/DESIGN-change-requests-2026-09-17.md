@@ -2,7 +2,8 @@
 
 From: Tommy (apps) · 17 September 2026 · against v1.1 of 16 September 2026
 
-Five requests. Each follows the §Governance format: section and token, current
+Nine requests. CR-1 to CR-5 came from reading the spec; CR-6 to CR-9 came
+out of running the Dash web pilot. Each follows the §Governance format: section and token, current
 value, proposed value, the measurement, and what it affects.
 
 Everything else in v1.1 verified. Every contrast ratio in the file was
@@ -189,3 +190,113 @@ The figures above are a bound on the work, not a defect count, and the split
 between chrome and widget defaults has not been separated yet. No change to
 DESIGN.md is proposed; this is for planning the "zero raw colour literals"
 definition of done, which is a larger job than the map implies.
+
+---
+
+# From the Dash web pilot
+
+CR-6 to CR-9 are things the pilot hit in practice. This is what running one file
+end to end was for.
+
+## CR-6 — there is no categorical palette
+
+**Section.** §2, roles.
+
+**Current.** Colour roles are `accent`, `ok`, `warn`, `bad` plus the neutrals.
+Every one carries a meaning.
+
+**Why.** The editor colour-codes widgets by type: sixteen entries in
+`.widget-box[data-type="..."]`. Nine already borrow a status role, so a panel is
+"ok" green and an rpm bar is "danger" red while meaning neither, and the other
+seven are raw hues (210, 270, 190, 280, 220, 200, 320). Five of those are blues,
+which §2.2 deletes.
+
+Rule 2 says a value not in DESIGN.md does not get used, so these can be neither
+converted nor invented. They are the only raw colours left in the editor's CSS
+that carry meaning.
+
+**Proposed.** A categorical set, explicitly not semantic, sized to the need
+(sixteen widget types; the phone and storefront will want the same). Verified
+against the three dark and three light grounds at the 3:1 non-text threshold,
+since these are borders.
+
+**What it affects.** 16 rules in Dash web, the same colour-coding in Studio, and
+it stops status roles being used to mean "category".
+
+## CR-7 — `opacity` is used to dim interactive content
+
+**Section.** §9.4, and §2.1 rule 4.
+
+**Current.** §9.4 gives `opacity: 0.45` to **disabled** controls. Nothing covers
+de-emphasis of content that is still interactive.
+
+**Why.** Dash web has 23 rules dimming with opacity. The largest is
+`.ch2-row.inactive { opacity: 0.40 }` — the "not set up" channel list, which is
+clickable, brightens to 0.95 on hover, and is captioned "click one to see what
+it is". It is not disabled.
+
+Measured over every visible text node against its real composited background
+with ancestor opacity folded in, this puts **649 text nodes under 4.5 in both
+modes**: 2.19 worst case on dark, 1.69 on light. It is mode-independent and
+predates the token work — with opacity ignored, both modes measure 0 failures.
+
+This is the third text tier returning through the side door. §2.1 rule 4 retired
+`ghost` / `hint` because three tiers cannot all clear 4.5. Dimming a tier with
+opacity recreates exactly that, invisibly to the token layer.
+
+**Proposed.** Either state that opacity below 1 is for disabled only and give
+non-disabled de-emphasis a role that still clears 4.5, or state the floor: no
+composited text below 4.5 regardless of how the dimming is done.
+
+**What it affects.** 23 rules in Dash web and the equivalents elsewhere. It is a
+visible change to the channels page, which is why it is a request rather than
+something done quietly in code.
+
+## CR-8 — scrims and status tints have no tokens
+
+**Section.** §2.
+
+**Current.** No token for a modal backdrop, and none for a tinted status
+surface.
+
+**Why.** Dash web has 20 scrim call sites (`rgba(20,20,20,0.4)`,
+`rgba(10,10,10,0.85)` and 19 more) and 37 status-tint sites
+(`rgba(251,191,36,0.12)` behind a warning row, `hsla(0,70%,55%,0.08)` behind an
+error). Both are ordinary interface furniture, neither maps to an existing role,
+and together they are the largest remaining group of raw values in the CSS after
+the categorical palette.
+
+**Proposed.** `scrim` per mode, and a tint form of `ok` / `warn` / `danger` — or
+a stated rule for deriving a tint from a status role, since a fixed alpha over a
+moving ground does not hold its contrast.
+
+**What it affects.** 57 call sites in Dash web alone.
+
+## CR-9 — §10.2 is narrower than the problem it names
+
+**Section.** §10.2, "The JS problem".
+
+**Current.** "Values read from JavaScript do not follow a `var()` swap."
+
+**Why.** True, but the same class of bug bit harder from pure CSS. A property
+fed by a token that also carries a `transition` does **not** restart that
+transition when the token changes: the element keeps its old computed value
+indefinitely, not for the transition's duration. `.ch2-row` has
+`transition: background 0.12s`; 800ms after switching to light it was still
+painting the dark ground, and only a forced recalc with transitions suppressed
+corrected it.
+
+Any themed property with a transition is affected, and §7 mandates transitions
+on "hover, focus, colour and border changes", so the overlap is large. Dash web
+alone uses `transition: all` 16 times.
+
+The fix is mechanical — suppress transitions for the frame the swap lands in —
+but nothing in the file tells an implementer to expect it, and the symptom looks
+like a browser caching bug rather than a design-system one.
+
+**Proposed.** Widen §10.2 to "a value does not follow a `var()` swap if it was
+read into JavaScript **or if it is mid-transition**", and record the
+suppress-for-one-frame technique beside it.
+
+**What it affects.** Every surface that gains a theme toggle: Studio and Dash
+web. The phone is unaffected, having no CSS transitions.
