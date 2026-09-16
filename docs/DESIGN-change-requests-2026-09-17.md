@@ -2,8 +2,13 @@
 
 From: Tommy (apps) · 17 September 2026 · against v1.1 of 16 September 2026
 
-Eleven requests. CR-1 to CR-5 came from reading the spec; CR-6 to CR-10 out
-of the Dash web pilot; CR-11 out of Studio. Each follows the §Governance format: section and token, current
+Twelve requests. CR-1 to CR-5 came from reading the spec; CR-6 to CR-10 out
+of the Dash web pilot; CR-11 and CR-12 out of Studio.
+
+CR-6, CR-8 and CR-10 have been DECIDED in the codebase so the work could
+continue, with the measurements below. They are still proposals: the tokens
+live in the app token layer, not in DESIGN.md, and if James rules differently
+they are the only lines that change. Each follows the §Governance format: section and token, current
 value, proposed value, the measurement, and what it affects.
 
 Everything else in v1.1 verified. Every contrast ratio in the file was
@@ -362,3 +367,56 @@ visible change — either is fine. Only the raised step has to move.
 
 **What it affects.** One value in `src/tauri-overlay.html`, and it is the
 difference between the dash editor clearing 4.5 and not.
+
+## CR-12 — `text.secondary` has no headroom, and the grounds are close together
+
+**Section.** §2.3 / §2.4, `text.secondary`, and §2.4's three dark grounds.
+
+**Current.** `text.secondary` is `#afafaf` dark and `#545557` light, corrected in
+v1.1 to land at 4.58 and 4.51 against the three canonical grounds.
+
+**Why.** Those figures are the requirement exactly, with nothing spare, and real
+interfaces do not put text on a bare ground. They put it on a ground with
+something over it. Measured:
+
+| what the ground actually is | dark | light |
+|---|---|---|
+| bare | 4.58 | 4.51 |
+| + a 4% resting wash on a list item | 4.36 | 4.20 |
+| + the 7% `highlight` | 3.73 | 3.97 |
+| + an 18% status tint | 3.60 | 3.65 |
+
+So `text.secondary` is only valid on the exact three grounds it was verified
+against. Anything laid over them takes it under.
+
+I hit this four times in one file — tints, sunken wells, a lap-timer badge on a
+4% wash, and the whole `--ind-*` tier collapse — and handled it each time by
+ruling that a non-canonical surface carries primary text only. That works, but
+it is a workaround for a value with no margin, and it quietly removes the second
+tier from a lot of the interface.
+
+Moving the value does not fix it either. I solved for the grey that would clear
+4.5 on `raised` plus a 7% highlight: it is around `#c2c2c2`, close enough to
+`text.primary` `#e8e8e8` that the two tiers stop reading as two tiers. The real
+cause is that the three dark grounds span `#303030` to `#424242` — about 0.9
+relative luminance — and a 7% white wash on the top one lands at `#4f4f4f`,
+which is a light ground to have to carry "quiet" text on.
+
+**Proposed.** One of:
+
+1. Give `text.secondary` explicit headroom and state what it must survive — for
+   example "clears 4.5 on every ground **and on that ground under `highlight`**"
+   — accepting that the two tiers move closer together.
+2. Keep the value and state the restriction as a rule, which is what the code
+   does today: *a surface that is not one of the three canonical grounds carries
+   primary text only.*
+3. Widen the gap between `surface` and `raised` so a wash on `raised` does not
+   land so light.
+
+Option 2 is what is implemented, because it required no new values. It is the
+weakest of the three.
+
+**What it affects.** Every surface with an overlay on it, on all three software
+surfaces. It is the single finding from this work most likely to keep producing
+defects, because nothing about it is visible until something is measured on a
+composited background.

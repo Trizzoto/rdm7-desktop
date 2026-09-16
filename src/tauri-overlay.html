@@ -265,10 +265,10 @@
 
 ##[ block device-manager-modal ]##
 ##[ anchor ]##
-    <div id="deviceInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceInfo()">
+    <div id="deviceInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceInfo()">
 ##[ insert-before ]##
     <!-- Desktop: Device Manager modal -->
-    <div id="deviceManagerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceManager()">
+    <div id="deviceManagerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceManager()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:480px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                 <span style="font-weight:600; font-size:14px;">Device Manager</span>
@@ -318,10 +318,10 @@
 #! WiFi device picker — discovered dashes + recent devices + manual IP entry
 ##[ block wifi-picker-modal ]##
 ##[ anchor ]##
-    <div id="deviceInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceInfo()">
+    <div id="deviceInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceInfo()">
 ##[ insert-before ]##
     <!-- Desktop: WiFi device picker -->
-    <div id="wifiPickerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="_closeWifiPicker()">
+    <div id="wifiPickerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="_closeWifiPicker()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:440px; max-width:95vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                 <span style="font-weight:600; font-size:14px;">Connect over WiFi</span>
@@ -341,7 +341,7 @@
 
     <!-- Desktop: pick which Linux dash to talk to, when more than one is
          plugged in. One board connects straight away and never shows this. -->
-    <div id="adbPickerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="_closeAdbPicker()">
+    <div id="adbPickerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="_closeAdbPicker()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:420px; max-width:95vw; display:flex; flex-direction:column; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                 <span style="font-weight:600; font-size:14px;">Connect over USB</span>
@@ -353,7 +353,7 @@
     </div>
 
     <!-- Desktop: Transfer Layouts (This PC ⇄ Device) -->
-    <div id="transferModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeTransferModal()">
+    <div id="transferModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeTransferModal()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:600px; max-width:95vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="font-weight:600; font-size:14px;">Transfer Layouts</span>
@@ -385,7 +385,7 @@
 #! rendered ABOVE the editor so the editor DOM/init is untouched.
 ##[ block suite-home-keypad ]##
 ##[ anchor ]##
-    <div id="deviceInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceInfo()">
+    <div id="deviceInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceInfo()">
 ##[ insert-before ]##
     <!-- ================= Desktop suite shell: splash / home / keypad ================= -->
     <style>
@@ -1894,7 +1894,7 @@
         .kp-statemsg.show { opacity: 1; }
         .kp-busline { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); }
         .kp-busline .tx { color: var(--accent-ink); font-weight: 700; }
-        .kp-busline .rx { color: #8a7fd6; font-weight: 700; }
+        .kp-busline .rx { color: var(--text-primary); font-weight: 700; }
         .kp-busline i { font-style: normal; }
         .kp-busline i.on { color: #6fbf73; font-weight: 700; }
         .kp-busline i.tick { color: #c8a24e; }
@@ -1962,7 +1962,7 @@
         .kpw-log { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); max-height: 210px; overflow-y: auto; padding: 8px 10px; margin: 0 0 12px; }
         .kpw-log div { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; line-height: 1.65; color: var(--text-muted); white-space: pre-wrap; word-break: break-word; }
         .kpw-log div .tx { color: var(--accent-ink); font-weight: 700; }
-        .kpw-log div .rx { color: #8a7fd6; font-weight: 700; }
+        .kpw-log div .rx { color: var(--text-primary); font-weight: 700; }
         .kpw-log div.ok { color: #6fbf73; }
         .kpw-log div.fail { color: #e07f76; }
         .kpw-log div.warn { color: #e0a24e; }
@@ -2091,7 +2091,7 @@
         .ws-item:hover { color: var(--text); background: var(--panel); }
         .ws-item.on { border-color: transparent; color: var(--text); background: var(--panel-elevated);
                       box-shadow: inset 2px 0 0 var(--accent); }
-        .ws-item .tag { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted); }
+        .ws-item .tag { margin-left: auto; font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); }
         .ws-item .st { width: 7px; height: 7px; border-radius: 50%; background: var(--border-light); flex-shrink: 0; }
         .ws-item .st.on { background: #5d8a62; }
         /* ---- Session rail tabs: Sessions / Laps --------------------------
@@ -2488,7 +2488,7 @@
         .gp-secs span.p { background: rgba(178, 102, 220, 0.22); color: #c98ae0; }
         .gp-secs span.g { background: rgba(111, 191, 115, 0.18); color: #6FBF73; }
         .gp-secs span.r { background: rgba(224, 93, 82, 0.18); color: #e05d52; }
-        .ws-item .tag.gp-best { color: #c98ae0; }
+        .ws-item .tag.gp-best { color: var(--cat-violet); }
         .gp-ideal { cursor: default; opacity: 0.9; }
         .gp-ideal-n { font-size: 9px; color: var(--text-muted); margin-top: 3px; }
         .gp-splits-wrap { overflow-x: auto; margin-top: 4px; }
@@ -4048,7 +4048,7 @@
             background: rgba(29,31,32,0.04); color: var(--gpb-ink);
             box-shadow: inset 2px 0 0 var(--gpb-red);
         }
-        #gpWorkspace .ws-item .tag { color: var(--gpb-muted); font-family: var(--gpb-body); font-variant-numeric: tabular-nums; }
+        #gpWorkspace .ws-item .tag { color: var(--gpb-ink); font-family: var(--gpb-body); font-variant-numeric: tabular-nums; }
         #gpWorkspace .ws-item .st { background: var(--gpb-n300); }
         #gpWorkspace .ws-item .st.on { background: var(--gpb-ok); }
 

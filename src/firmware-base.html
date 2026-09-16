@@ -172,6 +172,57 @@
             --shadow-lg: 0 12px 32px rgba(0,0,0,0.6);
             --shadow-inset: inset 0 1px 2px rgba(0,0,0,0.3);
 
+            /* ── Decided here, not in DESIGN.md (CR-6, CR-8, CR-10) ──────────
+               These fill gaps the spec has not ruled on yet. Values are
+               measured, not picked; the reasoning is in
+               rdm7-desktop/docs/DESIGN-change-requests-2026-09-17.md. If James
+               rules differently, these are the only lines that change. */
+
+            /* A modal backdrop. Fixed in both modes, like stage and bar: it is
+               a darkening veil either way, and it carries no text of its own. */
+            --scrim: rgba(12,13,14,0.82);
+
+            /* One step BELOW ground, the mirror of raised: inset toolbars,
+               table headers and form wells. These were a translucent darkening,
+               which composited to a different colour on every ground it landed
+               on. A sunken surface, like a tinted one, carries PRIMARY text
+               only: text.secondary is specified at 4.51/4.58, which is zero
+               headroom, so it is only valid on the three canonical grounds. */
+            --sunken: #272727;
+
+            /* Tinted status surfaces. The status colour washed over whatever is
+               behind at 18%. A tinted surface carries PRIMARY text only —
+               text.secondary sits at 4.51 on the plain ground and has no
+               headroom left, so any wash under it drops below 4.5. Primary on
+               these measures 6.01 worst case. */
+            --tint-ok: color-mix(in srgb, var(--status-ok) 18%, transparent);
+            --tint-warn: color-mix(in srgb, var(--status-warn) 18%, transparent);
+            --tint-danger: color-mix(in srgb, var(--status-danger) 18%, transparent);
+            --tint-accent: color-mix(in srgb, var(--accent) 18%, transparent);
+
+            /* The label on a PALE fill. text.on-fill is white, for an accent
+               fill; this is its opposite and, like it, does not follow the
+               mode — the fill it sits on is pale in both. */
+            --ink-on-fill: #1d1f20;
+            /* ...and the pale fill itself. Handles and grips drawn over the
+               canvas are the mirror of stage and bar: fixed, because they sit
+               on the user's artwork rather than on the page. */
+            --fill-light: #ffffff;
+
+            /* Categorical, explicitly NOT semantic: widget-type outlines in the
+               editor. They sit on the user's own dashboard art rather than on a
+               theme ground, so they are verified against the device screen —
+               4.5 on black, and over 3:1 on the near-blacks. Status roles used
+               to do this job for nine of the sixteen types, which made a panel
+               "ok" green and an rpm bar "danger" red while meaning neither. */
+            --cat-blue: #2478cc;
+            --cat-violet: #9452e0;
+            --cat-magenta: #d4259a;
+            --cat-orange: #ad611f;
+            --cat-yellow: #ad9a1f;
+            --cat-green: #1fad36;
+            --cat-teal: #1fada2;
+
             /* ── Motion (§7) ── */
             --motion-fast: 120ms;
             --motion-base: 150ms;
@@ -216,6 +267,7 @@
                 --line-strong: rgba(29,31,32,0.38);
                 --line-control: #666666;
                 --highlight: rgba(29,31,32,0.07);
+                --sunken: #bcbdc0;
                 --accent-ink: #9c1a1f;
                 --status-ok: #235f33;
                 --status-warn: #774b06;
@@ -237,6 +289,7 @@
             --line-strong: rgba(29,31,32,0.38);
             --line-control: #666666;
             --highlight: rgba(29,31,32,0.07);
+            --sunken: #bcbdc0;
             --accent-ink: #9c1a1f;
             --status-ok: #235f33;
             --status-warn: #774b06;
@@ -513,7 +566,7 @@
                 left: 8px; right: 8px;
                 bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 4px);
                 z-index: 9997;
-                background: rgba(24,24,24,0.94);
+                background: var(--bar);
                 backdrop-filter: blur(14px);
                 -webkit-backdrop-filter: blur(14px);
                 border: 1px solid var(--border);
@@ -553,7 +606,7 @@
             .wst-btn:active, .wst-step:active, .wst-size-btn:active { background: var(--highlight); }
             .wst-btn.wst-icon { min-width: 36px; }
             .wst-btn.wst-danger { color: var(--status-danger); }
-            .wst-btn.wst-danger:active { background: rgba(248,113,113,0.15); }
+            .wst-btn.wst-danger:active { background: var(--tint-danger); }
             .wst-btn[aria-disabled="true"] { opacity: 0.35; pointer-events: none; }
             /* Test-active toggle for boolean widgets (indicator / warning / toggle / button).
              * Pressed state lights up green to match the "currently injecting test value" feel. */
@@ -563,16 +616,16 @@
                 color: var(--text-muted, var(--text-secondary));
             }
             .wst-test-toggle[aria-pressed="true"] {
-                background: rgba(34,197,94,0.18);
+                background: var(--tint-ok);
                 border-color: rgba(34,197,94,0.45);
                 color: var(--status-ok);
             }
             .wst-step {
                 min-width: 44px; font-weight: 700; color: var(--accent-ink);
-                background: rgba(45,140,235,0.12); border-color: rgba(45,140,235,0.3);
+                background: var(--tint-accent); border-color: rgba(45,140,235,0.3);
             }
             .wst-step.active-10 {
-                color: var(--status-warn); background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.3);
+                color: var(--status-warn); background: var(--tint-warn); border-color: rgba(251,191,36,0.3);
             }
             /* Spacer removed on touch: row-1 now wraps + centers, so a
              * flex-grow spacer would just fight the centering. */
@@ -626,7 +679,7 @@
             body.wst-active.wst-has-test #mobileZoomBar {
                 bottom: calc(262px + env(safe-area-inset-bottom, 0px)) !important;
             }
-            #wstLockBtn.locked { color: var(--status-warn); background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.3); }
+            #wstLockBtn.locked { color: var(--status-warn); background: var(--tint-warn); border-color: rgba(251,191,36,0.3); }
             /* First-run coach bubble above the selection toolbar. */
             .wst-coach {
                 position: absolute;
@@ -670,7 +723,7 @@
         /* ── Mobile menu overlay + slide-in panel (hamburger → More → "…") */
         .mobile-menu-overlay {
             display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.6); z-index: 9998;
+            background: var(--scrim); z-index: 9998;
         }
         .mobile-menu-overlay.active { display: block; }
         .mobile-menu-panel {
@@ -827,7 +880,7 @@
             box-sizing: border-box;
             height: calc(56px + max(env(safe-area-inset-bottom, 0px), 14px));
             padding-bottom: max(env(safe-area-inset-bottom, 0px), 14px);
-            background: rgba(20,20,20,0.92);
+            background: var(--bar);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border-top: 1px solid var(--border);
@@ -869,7 +922,7 @@
             bottom: calc(66px + max(env(safe-area-inset-bottom, 0px), 14px));
             left: 50%; transform: translateX(-50%);
             z-index: 9995;
-            background: rgba(30,30,30,0.9);
+            background: var(--bar);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             border: 1px solid var(--highlight);
@@ -897,7 +950,7 @@
         #mobileSheetBackdrop {
             display: none;
             position: fixed; inset: 0;
-            background: rgba(0,0,0,0.5);
+            background: var(--scrim);
             z-index: 9996;
         }
         #mobileSheetBackdrop.active { display: block; }
@@ -1305,7 +1358,7 @@
         .marquee-rect {
             position: absolute;
             border: 1px solid rgba(100, 180, 255, 0.8);
-            background: rgba(100, 180, 255, 0.12);
+            background: var(--tint-accent);
             pointer-events: none;
             z-index: 9999;
         }
@@ -1319,22 +1372,28 @@
         }
 
         /* Colour-coded widget borders by type */
-        .widget-box[data-type="panel"]    { border-color: var(--status-ok); }
-        .widget-box[data-type="rpm_bar"]  { border-color: var(--status-danger); }
-        .widget-box[data-type="speed"]    { border-color: hsl(210, 80%, 55%); }
-        .widget-box[data-type="gear"]     { border-color: hsl(270, 60%, 55%); }
-        .widget-box[data-type="bar"]      { border-color: var(--status-warn); }
-        .widget-box[data-type="indicator"]{ border-color: var(--status-warn); }
-        .widget-box[data-type="warning"]  { border-color: var(--status-danger); }
-        .widget-box[data-type="text"]     { border-color: hsl(190, 80%, 45%); }
-        .widget-box[data-type="meter"]    { border-color: var(--status-ok); }
-        .widget-box[data-type="image"]    { border-color: hsl(280, 60%, 55%); }
-        .widget-box[data-type="shape_panel"] { border-color: hsl(220, 30%, 50%); }
-        .widget-box[data-type="line"]     { border-color: hsl(200, 70%, 55%); }
-        .widget-box[data-type="arc"]      { border-color: hsl(320, 60%, 50%); }
-        .widget-box[data-type="toggle"]   { border-color: var(--status-ok); }
-        .widget-box[data-type="button"]   { border-color: var(--status-warn); }
-        .widget-box[data-type="shift_light"] { border-color: var(--status-danger); }
+        /* Categorical, not semantic. Seven of these were raw hues (five of them
+           blues, which 2.2 deletes) and the other nine borrowed a status role,
+           so a panel was "ok" green and an rpm bar "danger" red while meaning
+           neither. There were not enough non-status hues left for the seven, so
+           the overload had to go either way. The groupings below are the ones
+           this file already had; only the colours moved. See CR-6. */
+        .widget-box[data-type="panel"]    { border-color: var(--cat-green); }
+        .widget-box[data-type="meter"]    { border-color: var(--cat-green); }
+        .widget-box[data-type="toggle"]   { border-color: var(--cat-green); }
+        .widget-box[data-type="bar"]      { border-color: var(--cat-yellow); }
+        .widget-box[data-type="indicator"]{ border-color: var(--cat-yellow); }
+        .widget-box[data-type="button"]   { border-color: var(--cat-yellow); }
+        .widget-box[data-type="rpm_bar"]  { border-color: var(--cat-magenta); }
+        .widget-box[data-type="warning"]  { border-color: var(--cat-magenta); }
+        .widget-box[data-type="shift_light"] { border-color: var(--cat-magenta); }
+        .widget-box[data-type="speed"]    { border-color: var(--cat-blue); }
+        .widget-box[data-type="gear"]     { border-color: var(--cat-violet); }
+        .widget-box[data-type="text"]     { border-color: var(--cat-teal); }
+        .widget-box[data-type="line"]     { border-color: var(--cat-teal); }
+        .widget-box[data-type="image"]    { border-color: var(--cat-orange); }
+        .widget-box[data-type="shape_panel"] { border-color: var(--cat-orange); }
+        .widget-box[data-type="arc"]      { border-color: var(--cat-orange); }
 
         /* Shape widgets (shape_panel, line) render on the DEVICE only — the
          * editor never draws their geometry (see renderEditor). Dashed border
@@ -1402,7 +1461,7 @@
             position: absolute;
             width: 7px;
             height: 7px;
-            background: hsl(0, 0%, 100%);
+            background: var(--fill-light);
             border: 1.5px solid var(--accent);
             border-radius: 1px;
             pointer-events: auto;
@@ -1414,7 +1473,7 @@
             position: absolute;
             width: 13px;
             height: 13px;
-            background: hsl(0, 0%, 100%);
+            background: var(--fill-light);
             border: 2px solid var(--accent);
             border-radius: 50%;
             pointer-events: auto;
@@ -1432,7 +1491,7 @@
             font-size: 11px;
             font-weight: 700;
             color: var(--accent);
-            background: rgba(20,22,28,0.85);
+            background: var(--sunken);
             border: 1px dashed var(--accent);
             border-radius: 50%;
             pointer-events: auto;
@@ -1440,7 +1499,7 @@
             z-index: 29;
             user-select: none;
         }
-        .path-add-handle:hover { background: var(--accent); color: #000; }
+        .path-add-handle:hover { background: var(--accent); color: var(--ink-on-fill); }
 
         .resize-handle.nw {
             top: -5px;
@@ -1740,7 +1799,7 @@
 
         .cm-item:hover {
             background: var(--accent);
-            color: #1a1a1a;
+            color: var(--ink-on-fill);
         }
 
         .cm-divider {
@@ -1999,7 +2058,7 @@
             margin-left: auto;
             padding: 2px 6px;
             font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-            color: #1d1f20; background: var(--warning);
+            color: var(--ink-on-fill); background: var(--warning);
             border-radius: 2px; white-space: nowrap;
         }
         .setup-card .card-body {
@@ -2377,7 +2436,7 @@
         }
         .ch2-row.selected {
             border-color: var(--accent);
-            background: rgba(74,144,226,0.10);
+            background: var(--tint-accent);
         }
         .ch2-row-name {
             font-size: 13px;
@@ -2662,7 +2721,7 @@
             gap: 8px;
         }
         .ch2-sig:hover { background: var(--highlight); }
-        .ch2-sig.selected { background: rgba(74,144,226,0.13); }
+        .ch2-sig.selected { background: var(--tint-accent); }
         .ch2-sig-name {
             font-size: 12px; color: var(--text);
             font-family: var(--font-mono);
@@ -2697,11 +2756,11 @@
         .ch2-thresh-bar .zone {
             position: absolute; top: 0; bottom: 0;
         }
-        .ch2-thresh-bar .zone.lc { background: rgba(74,144,226,0.22); }
-        .ch2-thresh-bar .zone.lw { background: rgba(155,196,230,0.16); }
-        .ch2-thresh-bar .zone.no { background: rgba(70,209,98,0.14); }
-        .ch2-thresh-bar .zone.hw { background: rgba(230,184,0,0.22); }
-        .ch2-thresh-bar .zone.hc { background: rgba(230,90,90,0.26); }
+        .ch2-thresh-bar .zone.lc { background: var(--tint-accent); }
+        .ch2-thresh-bar .zone.lw { background: var(--tint-accent); }
+        .ch2-thresh-bar .zone.no { background: var(--tint-ok); }
+        .ch2-thresh-bar .zone.hw { background: var(--tint-warn); }
+        .ch2-thresh-bar .zone.hc { background: var(--tint-danger); }
         .ch2-thresh-bar .marker {
             position: absolute;
             top: -2px; bottom: -2px;
@@ -2917,7 +2976,7 @@
             position: fixed;
             inset: 0;
             z-index: 10001;
-            background: rgba(10,10,10,0.78);
+            background: var(--scrim);
             display: none;
             align-items: center;
             justify-content: center;
@@ -3210,11 +3269,11 @@
         }
         .ch2-src-row:hover {
             border-color: var(--accent);
-            background: rgba(74,144,226,0.04);
+            background: var(--tint-accent);
         }
         .ch2-src-row.is-current {
             border-color: rgba(74,144,226,0.6);
-            background: rgba(74,144,226,0.08);
+            background: var(--tint-accent);
         }
         .ch2-src-row-main { min-width: 0; }
         .ch2-src-row-label {
@@ -3244,8 +3303,8 @@
                       letter-spacing: .5px; padding: 2px 7px; line-height: 1.25;
                       border-radius: 999px; text-transform: uppercase;
                       vertical-align: middle; }
-        .ch2-srctag.obd2     { background: rgba(255,176,32,0.14);  color: var(--status-warn); }   /* amber  */
-        .ch2-srctag.math     { background: rgba(102,187,106,0.14); color: var(--status-ok); }   /* green  */
+        .ch2-srctag.obd2     { background: var(--tint-warn);  color: var(--status-warn); }   /* amber  */
+        .ch2-srctag.math     { background: var(--tint-ok); color: var(--status-ok); }   /* green  */
         /* Everything else is plain text in the same cell. */
         .ch2-srctxt          { color: var(--text-muted); }
         .ch2-srctxt.mono     { font-family: 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
@@ -3312,7 +3371,7 @@
             border-color: var(--highlight);
         }
         .ch2-src-folder-body .ch2-src-row.is-current {
-            background: rgba(74,144,226,0.06);
+            background: var(--tint-accent);
         }
 
         /* Nested version folder (only used when a make has 2+ versions).
@@ -3356,7 +3415,7 @@
             gap: 8px;
             align-items: center;
             padding: 9px 11px;
-            background: rgba(74,144,226,0.08);
+            background: var(--tint-accent);
             border: 1px solid rgba(74,144,226,0.3);
             border-radius: 6px;
             margin-bottom: 6px;
@@ -3365,7 +3424,7 @@
         }
         .inspector-channel-card:hover {
             border-color: var(--accent);
-            background: rgba(74,144,226,0.13);
+            background: var(--tint-accent);
         }
         .inspector-channel-card .ch-card-label {
             font-size: 12px; font-weight: 600; color: var(--text);
@@ -3537,7 +3596,7 @@
             left: 0;
             width: 100%;
             height: 1px;
-            background: #ffffff;
+            background: var(--fill-light);
         }
 
         #interactionLayer::after {
@@ -3545,7 +3604,7 @@
             top: 0;
             width: 1px;
             height: 100%;
-            background: #ffffff;
+            background: var(--fill-light);
         }
 
         #interactionLayer.hide-crosshair::before,
@@ -3579,7 +3638,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(10,10,10,0.85);
+            background: var(--scrim);
             backdrop-filter: blur(8px);
             z-index: 2000;
             align-items: center;
@@ -3634,7 +3693,7 @@
             left: 50%;
             transform: translateX(-50%);
             background: var(--accent);
-            color: #1a1a1a;
+            color: var(--ink-on-fill);
             padding: 10px 20px;
             border-radius: var(--radius-md);
             font-size: 13px;
@@ -3871,7 +3930,7 @@
             display: none;
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(10,10,10,0.85);
+            background: var(--scrim);
             backdrop-filter: blur(8px);
             z-index: 2000;
             align-items: center;
@@ -3913,7 +3972,7 @@
             gap: 8px;
             padding: 8px 20px;
             border-bottom: 1px solid var(--border);
-            background: rgba(20,20,20,0.4);
+            background: var(--sunken);
         }
         .signal-modal-toolbar .sig-search {
             flex: 1;
@@ -3986,9 +4045,9 @@
             box-sizing: border-box;
             transition: border-color 0.12s, background 0.12s;
         }
-        .signal-table input:hover { border-color: var(--border); background: rgba(20,20,20,0.4); }
+        .signal-table input:hover { border-color: var(--border); background: var(--sunken); }
         .signal-table input:focus { border-color: var(--accent); outline: none; background: var(--bg); box-shadow: 0 0 0 1px hsla(0, 0%, 80%, 0.2); }
-        .signal-table input.invalid { border-color: var(--status-danger) !important; background: hsla(0, 70%, 55%, 0.06) !important; }
+        .signal-table input.invalid { border-color: var(--status-danger) !important; background: var(--tint-danger) !important; }
         .signal-table .col-status { width: 24px; text-align: center; }
         .signal-table .col-name { min-width: 130px; }
         .signal-table .col-canid { width: 80px; }
@@ -4034,7 +4093,7 @@
             border-radius: var(--radius-sm);
             transition: all 0.12s;
         }
-        .sig-del-btn:hover { color: var(--status-danger); background: hsla(0, 70%, 55%, 0.08); }
+        .sig-del-btn:hover { color: var(--status-danger); background: var(--tint-danger); }
         .sig-bound-dot {
             display: inline-block;
             width: 6px; height: 6px;
@@ -4048,7 +4107,7 @@
             justify-content: space-between;
             align-items: center;
             border-top: 1px solid var(--border);
-            background: rgba(20,20,20,0.4);
+            background: var(--sunken);
         }
         .signal-modal-footer .sig-count {
             font-size: 10px;
@@ -4095,7 +4154,7 @@
         .preset-col-item:hover { background: var(--highlight); }
         .preset-col-item.active {
             background: var(--accent);
-            color: #1a1a1a;
+            color: var(--ink-on-fill);
             font-weight: 600;
         }
         .preset-col-item .preset-detail {
@@ -4125,7 +4184,7 @@
         .preset-add-form {
             padding: 8px 10px;
             border-top: 1px solid var(--border);
-            background: rgba(20,20,20,0.5);
+            background: var(--sunken);
         }
         .preset-add-form input {
             width: 100%; box-sizing: border-box;
@@ -4139,7 +4198,7 @@
         .preset-add-signal-form {
             padding: 10px;
             border-top: 1px solid var(--border);
-            background: rgba(20,20,20,0.5);
+            background: var(--sunken);
             max-height: 260px;
             overflow-y: auto;
         }
@@ -4169,19 +4228,19 @@
             border-radius: var(--radius-sm); transition: all 0.12s;
             position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
         }
-        .preset-sig-del:hover { color: var(--status-danger); background: hsla(0, 70%, 55%, 0.08); }
+        .preset-sig-del:hover { color: var(--status-danger); background: var(--tint-danger); }
         .preset-col-item.custom-sig { position: relative; padding-right: 24px; }
         .preset-delete-ecu {
             background: none; border: none; font-size: 11px;
             color: var(--status-danger); cursor: pointer; padding: 2px 6px;
             border-radius: var(--radius-sm); transition: all 0.12s;
         }
-        .preset-delete-ecu:hover { color: var(--status-danger); background: hsla(0, 70%, 55%, 0.1); }
+        .preset-delete-ecu:hover { color: var(--status-danger); background: var(--tint-danger); }
         /* DBC Import Modal */
         #dbcImportModal {
             display: none; position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(10,10,10,0.85);
+            background: var(--scrim);
             backdrop-filter: blur(8px);
             /* Above the mobile sheet (9999), the Signal Manager modal (2000)
              * and the Assign Data Source modal (10000). DBC import is usually
@@ -4297,7 +4356,7 @@
             transition: color 0.15s, border-color 0.15s, background 0.15s;
         }
         .pa-row .pa-remove:hover {
-            color: var(--status-danger); border-color: var(--status-danger); background: rgba(230,90,90,0.08);
+            color: var(--status-danger); border-color: var(--status-danger); background: var(--tint-danger);
         }
         .pa-add-row {
             display: inline-flex; align-items: center; gap: 6px;
@@ -4323,7 +4382,7 @@
         }
         #paError.pa-error {
             color: var(--status-danger); border-color: rgba(230,90,90,0.5);
-            background: rgba(230,90,90,0.07);
+            background: var(--tint-danger);
         }
 
         /* Signal Manager view toggle */
@@ -4452,7 +4511,7 @@
         .image-picker-wrap button:hover { border-color: var(--accent); }
 
         /* Sidebar Tabs */
-        .sidebar-tabs { display:flex; border-bottom:1px solid var(--border); background:rgba(20,20,20,0.4); flex-shrink:0; }
+        .sidebar-tabs { display:flex; border-bottom:1px solid var(--border); background:var(--sunken); flex-shrink:0; }
         .sidebar-tab { flex:1; padding:8px 4px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; text-align:center;
             background:none; border:none; border-bottom:2px solid transparent; color:var(--text-muted); cursor:pointer; min-height:40px; transition: color 0.12s; }
         .sidebar-tab:hover { color:var(--text); }
@@ -4561,7 +4620,7 @@
         .inspector-accordion > summary {
             padding:7px 14px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;
             color:var(--text-muted); cursor:pointer; border-bottom:1px solid var(--border);
-            background:rgba(20,20,20,0.4); list-style:none; display:flex; align-items:center; gap:8px;
+            background:var(--sunken); list-style:none; display:flex; align-items:center; gap:8px;
             user-select:none; transition: color 0.12s;
         }
         .inspector-accordion > summary:hover { color: var(--text); }
@@ -4665,7 +4724,7 @@
         .vlabels-row .vl-arrow { flex:none; color:var(--text-muted); font-size:13px; }
         .vlabels-row .vl-label { flex:1; min-width:0; font-weight:600; }
         .vlabels-row .vl-del { flex:none; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; background:transparent; border:1px solid var(--border); color:var(--text-muted); border-radius:var(--radius-md); font-size:16px; line-height:1; cursor:pointer; transition:all .12s; }
-        .vlabels-row .vl-del:hover { border-color:var(--status-danger); color:var(--status-danger); background:hsla(0,75%,55%,.12); }
+        .vlabels-row .vl-del:hover { border-color:var(--status-danger); color:var(--status-danger); background:var(--tint-danger); }
         .vlabels-empty { font-size:11px; color:var(--text-muted); font-style:italic; }
         .vlabels-add { width:100%; }
         .vlabels-note { font-size:10px; color:var(--text-muted); line-height:1.4; }
@@ -4728,7 +4787,7 @@
         input[type="color"] { width: 36px; height: 28px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
 
         /* Inspector badge */
-        .badge { background: var(--accent); color: #1a1a1a; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: var(--radius-sm); margin-left: 6px; }
+        .badge { background: var(--accent); color: var(--ink-on-fill); font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: var(--radius-sm); margin-left: 6px; }
 
         /* Muted accordion section */
         .inspector-accordion.muted-section > summary { opacity: 0.5; }
@@ -4811,7 +4870,7 @@
         <span>⚠️ Unsaved draft detected!</span>
         <button onclick="restoreDraft()">Restore Draft</button>
         <button onclick="discardDraft()"
-            style="background:transparent; border:1px solid #1a1a1a; color:#1a1a1a;">Discard</button>
+            style="background:transparent; border:1px solid #1a1a1a; color:var(--ink-on-fill);">Discard</button>
     </div>
     <div id="toastContainer" class="toast-container"></div>
 
@@ -4874,7 +4933,7 @@
 
     <!-- Confirm + result modal for the bootloader write. -->
     <div id="blFinishModal" style="display:none; position:fixed; inset:0; z-index:10201;
-         background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;">
+         background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;">
         <div style="background:var(--panel-elevated); border:1px solid var(--border);
              border-radius:var(--radius-lg); padding:24px; width:min(460px, 92vw);
              display:flex; flex-direction:column; gap:14px; box-shadow:var(--shadow-md);">
@@ -4910,7 +4969,7 @@
     <!-- Install-progress modal for the OTA flow: opened by _otaShowInstall(),
          updated by _otaPollInstall() until completion. -->
     <div id="otaInstallModal" style="display:none; position:fixed; inset:0; z-index:10200;
-         background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;">
+         background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;">
         <div style="background:var(--panel-elevated); border:1px solid var(--border);
              border-radius:var(--radius-lg); padding:24px; width:min(420px, 92vw);
              display:flex; flex-direction:column; gap:14px; box-shadow:var(--shadow-md);">
@@ -5018,7 +5077,7 @@
     </div>
 
     <!-- Create Preset (author a DBC/preset from scratch) Modal -->
-    <div id="presetAuthorModal" onclick="closePresetAuthorModal()" style="display:none; position:fixed; inset:0; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); z-index:10000; align-items:center; justify-content:center;">
+    <div id="presetAuthorModal" onclick="closePresetAuthorModal()" style="display:none; position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(8px); z-index:10000; align-items:center; justify-content:center;">
         <div class="dbc-modal-content" onclick="event.stopPropagation()" style="width:min(820px,97vw); max-height:92vh; display:flex; flex-direction:column;">
             <div class="signal-modal-header">
                 <span id="presetAuthorTitle">Create Preset</span>
@@ -5052,7 +5111,7 @@
     </div>
 
     <!-- Assign Data Source Modal -->
-    <div id="assignModal" onclick="closeAssignModal()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); z-index:10000; align-items:center; justify-content:center;">
+    <div id="assignModal" onclick="closeAssignModal()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:var(--scrim); backdrop-filter:blur(8px); z-index:10000; align-items:center; justify-content:center;">
         <div class="signal-modal-content" onclick="event.stopPropagation()" style="width:min(540px, 95vw); max-height:min(580px, 90vh);">
             <div class="signal-modal-header">
                 <span>Assign Data Source</span>
@@ -5177,7 +5236,7 @@
          an AI builder) straight into the editor. Mirrors the .rdm/file import
          path: validate → firmwareToWebFormat() → renderEditor(). No device
          required; Save afterwards to push to a connected dash. -->
-    <div id="loadJsonModal" onclick="closeLoadJsonModal()" style="display:none; position:fixed; inset:0; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); z-index:2000; align-items:center; justify-content:center;">
+    <div id="loadJsonModal" onclick="closeLoadJsonModal()" style="display:none; position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(8px); z-index:2000; align-items:center; justify-content:center;">
         <div onclick="event.stopPropagation()" style="background:var(--panel-elevated); border:1px solid var(--border); box-shadow:var(--shadow-md); border-radius:var(--radius-lg); padding:24px; width:min(640px, 95vw); max-height:90vh; overflow-y:auto; color:var(--text);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <h2 style="margin:0; font-size:15px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:white;">Load Layout JSON</h2>
@@ -5192,7 +5251,7 @@
             </div>
         </div>
     </div>
-    <div id="ecuModal" style="display:none; position:fixed; inset:0; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); z-index:2000; align-items:center; justify-content:center;">
+    <div id="ecuModal" style="display:none; position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(8px); z-index:2000; align-items:center; justify-content:center;">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); box-shadow:var(--shadow-md); border-radius:var(--radius-lg); padding:24px; min-width:280px; max-width:min(420px, 90vw); max-height:90vh; overflow-y:auto;">
             <div style="font-size:13px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-on-fill); margin-bottom:16px;">Select ECU / Vehicle</div>
             <div id="ecuModalList" style="max-height:min(300px, 60vh); overflow-y:auto; display:flex; flex-direction:column; gap:4px;"></div>
@@ -5211,7 +5270,7 @@
          on-dash left/right arrow buttons cycle through. Empty selection
          tells the firmware to fall back to "all non-system layouts in
          filesystem order" via config_store_save_layout_switcher(""). -->
-    <div id="switcherModal" onclick="closeSwitcherSetup()" style="display:none; position:fixed; inset:0; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); z-index:2000; align-items:center; justify-content:center;">
+    <div id="switcherModal" onclick="closeSwitcherSetup()" style="display:none; position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(8px); z-index:2000; align-items:center; justify-content:center;">
         <div onclick="event.stopPropagation()" style="background:var(--panel-elevated); border:1px solid var(--border); box-shadow:var(--shadow-md); border-radius:var(--radius-lg); padding:24px; width:min(560px, 95vw); max-height:90vh; overflow-y:auto; color:var(--text);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <h2 style="margin:0; font-size:15px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:white;">Dashboard Switcher</h2>
@@ -5227,7 +5286,7 @@
             </div>
         </div>
     </div>
-    <div id="storageModal" onclick="closeStorageManager()" style="display:none; position:fixed; inset:0; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); z-index:2000; align-items:center; justify-content:center;">
+    <div id="storageModal" onclick="closeStorageManager()" style="display:none; position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(8px); z-index:2000; align-items:center; justify-content:center;">
         <div onclick="event.stopPropagation()" style="background:var(--panel-elevated); border:1px solid var(--border); box-shadow:var(--shadow-md); border-radius:var(--radius-lg); padding:24px; width:min(820px, 95vw); max-height:90vh; overflow-y:auto; color:var(--text);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                 <h2 style="margin:0; font-size:15px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:white;">Storage Manager</h2>
@@ -5602,7 +5661,7 @@
     <!-- Dimmer Settings Modal -->
     <!-- Device Info modal. max-height + inner overflow so it fits on mobile; on
          tall phones the content overflows the viewport otherwise. -->
-    <div id="deviceInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceInfo()">
+    <div id="deviceInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDeviceInfo()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:420px; max-width:90vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex:0 0 auto;">
                 <span style="font-weight:600; font-size:14px;">Device Info</span>
@@ -5639,7 +5698,7 @@
          markup, same handlers, so which screen was it on has no wrong
          answer". Layout differences between the two mounts are pure CSS,
          keyed off .ch2-page on the wrapper. -->
-    <div id="channelsModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.78); align-items:center; justify-content:center;" onclick="closeChannelsModal()">
+    <div id="channelsModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); align-items:center; justify-content:center;" onclick="closeChannelsModal()">
         <div class="ch2-shell" id="chModalHost" onclick="event.stopPropagation()"></div>
     </div>
 
@@ -5853,7 +5912,7 @@
          is what turns watching into a file, so it is the primary control
          and sits above the numbers it captures. The file/replay machinery
          is real but secondary, so it collapses into a disclosure. -->
-    <div id="dataLoggerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDataLogger()">
+    <div id="dataLoggerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDataLogger()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:760px; max-width:94vw; height:82vh; display:flex; flex-direction:column; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                 <span style="font-weight:600; font-size:14px;">Live Data &amp; Logging <span id="sigDashCount" style="color:var(--text-muted); font-weight:400; font-size:11px; margin-left:6px;"></span></span>
@@ -5941,7 +6000,7 @@
     <!-- Share Raw CAN modal — picks a recorded canraw_*.csv and uploads it
          to the cloud bucket with car make/model + optional notes. The
          dashboard handles auth (HMAC over make/model/deviceId/timestamp). -->
-    <div id="canShareModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeCanShare()">
+    <div id="canShareModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeCanShare()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:460px; max-width:92vw; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                 <span style="font-weight:600; font-size:14px;">Share Raw CAN Trace</span>
@@ -5976,7 +6035,7 @@
     </div>
 
     <!-- Fuel Calibration modal -->
-    <div id="fuelCalibModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeFuelCalibration()">
+    <div id="fuelCalibModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeFuelCalibration()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:420px; max-width:90vw; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                 <span style="font-weight:600; font-size:14px;">Fuel Calibration</span>
@@ -5996,7 +6055,7 @@
     <!-- Gear Setup modal — configures the CALCULATED_GEAR internal signal.
          Opened via the hamburger "Gear Setup..." item, or automatically the
          first time a widget picks CALCULATED_GEAR as its data source. -->
-    <div id="gearModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeGearSetup()">
+    <div id="gearModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeGearSetup()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:460px; max-width:92vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <span style="font-weight:600; font-size:14px;">Gear Setup — Calculated Gear</span>
@@ -6075,7 +6134,7 @@
          /api/can/emu keeps; the tables are a plain view of it, and "Edit as
          JSON" is the whole truth for a spec the tables don't cover.
          ────────────────────────────────────────────────────────────────── -->
-    <div id="canEmuModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeCanEmu()">
+    <div id="canEmuModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeCanEmu()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:840px; max-width:96vw; max-height:92vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="font-weight:600; font-size:14px;">Keypads &amp; IO boxes</span>
@@ -6086,7 +6145,7 @@
         </div>
     </div>
 
-    <div id="canSetupModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeCanSetup()">
+    <div id="canSetupModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeCanSetup()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:520px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="font-weight:600; font-size:14px;">ECU &amp; CAN bus</span>
@@ -6141,7 +6200,7 @@
          (ADR-0039). Read-only: the dash owns credential entry on its own
          touchscreen, and this page says so rather than pretending.
          ──────────────────────────────────────────────────────────────── -->
-    <div id="networkModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeNetworkSetup()">
+    <div id="networkModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeNetworkSetup()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:520px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="font-weight:600; font-size:14px;">WiFi &amp; network</span>
@@ -6183,7 +6242,7 @@
          odometer. It gets its own door and names the signal feeding it,
          with a link to change that where it lives (ADR-0039).
          ──────────────────────────────────────────────────────────────── -->
-    <div id="odometerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeOdometer()">
+    <div id="odometerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeOdometer()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:440px; max-width:95vw; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="font-weight:600; font-size:14px;">Odometer</span>
@@ -6220,7 +6279,7 @@
          is "here's what's working, here's where to dive in" not a
          step-by-step.
          ──────────────────────────────────────────────────────────────── -->
-    <div id="obd2SetupModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeObd2Setup()">
+    <div id="obd2SetupModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeObd2Setup()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:560px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                 <span style="font-weight:600; font-size:14px;">OBD2 diagnostics</span>
@@ -6303,7 +6362,7 @@
          doesn't show, and Manual mode falls back to showing everything
          so the user is never stuck with an empty list.
          ──────────────────────────────────────────────────────────────── -->
-    <div id="ecuPresetModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeEcuPreset()">
+    <div id="ecuPresetModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeEcuPreset()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; width:560px; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; flex:0 0 auto;">
                 <span style="font-weight:600; font-size:14px;">Quick ECU Setup
@@ -6339,7 +6398,7 @@
          bottom. Mirrors the on-device dtc_reader.c UI; uses
          /api/obd2/dtcs?mode=…  and /api/obd2/clear.
          ──────────────────────────────────────────────────────────────── -->
-    <div id="troubleCodesModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeTroubleCodes()">
+    <div id="troubleCodesModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeTroubleCodes()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; width:640px; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex:0 0 auto;">
                 <span style="font-weight:600; font-size:14px;">Trouble Codes
@@ -6384,7 +6443,7 @@
          Vehicle Info modal — VIN + ECU name + readiness placeholder.
          Uses /api/obd2/vin and /api/obd2/ecuname.
          ──────────────────────────────────────────────────────────────── -->
-    <div id="vehicleInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeVehicleInfo()">
+    <div id="vehicleInfoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeVehicleInfo()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:480px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                 <span style="font-weight:600; font-size:14px;">Vehicle Info</span>
@@ -6412,7 +6471,7 @@
          documented PIDs at runtime. Saved with the layout JSON and registered
          in the firmware's custom-PID table on layout load. Import/Export
          lets users share PID packs. -->
-    <div id="customPidsModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeCustomPids()">
+    <div id="customPidsModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeCustomPids()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; width:780px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <span style="font-weight:600; font-size:14px;">OBD2 Custom PIDs
@@ -6466,7 +6525,7 @@
     <!-- Custom PID edit modal — form for one PID (Add or Edit). Has the
          Test button that calls POST /api/obd2/test_pid and renders the
          raw response bytes + decoded value inline. -->
-    <div id="customPidEditModal" style="display:none; position:fixed; inset:0; z-index:10100; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="customPidEditClose()">
+    <div id="customPidEditModal" style="display:none; position:fixed; inset:0; z-index:10100; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="customPidEditClose()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; width:520px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                 <span id="customPidEditTitle" style="font-weight:600; font-size:14px;">Custom PID</span>
@@ -6577,7 +6636,7 @@
          Multipoint calibration curve (2..8 points). Opened via the hamburger
          "Fuel Sender Setup..." item, or automatically the first time a widget
          picks FUEL_SENDER_V as its data source. -->
-    <div id="fuelSenderSetupModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeFuelSenderSetup()">
+    <div id="fuelSenderSetupModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeFuelSenderSetup()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:520px; max-width:94vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <span style="font-weight:600; font-size:14px;">Fuel sender</span>
@@ -6695,7 +6754,7 @@
          Advanced, where it only matters once you've said you want a
          trigger. Screen brightness moved in here too: "how bright is my
          screen" and "when does it dim" are one question (ADR-0039). -->
-    <div id="dimmerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDimmerSettings()">
+    <div id="dimmerModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDimmerSettings()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:440px; max-width:92vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="font-weight:600; font-size:14px;">Screen &amp; night</span>
@@ -6768,7 +6827,7 @@
     </div>
 
     <!-- Developer Options modal (Setup ▸ Developer Options). Bench/debug toggles. -->
-    <div id="devOptionsModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDevOptions()">
+    <div id="devOptionsModal" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--scrim); backdrop-filter:blur(8px); align-items:center; justify-content:center;" onclick="closeDevOptions()">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; width:440px; max-width:92vw; box-shadow:var(--shadow-md);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                 <span style="font-weight:600; font-size:14px;">Developer Options</span>
@@ -6805,7 +6864,7 @@
 
     <!-- Widget selection toolbar (mobile/touch; shown when a widget is selected).
          Nudge, W/H steppers, copy/paste/lock/delete, optional test-value slider. -->
-    <div id="widgetSelToolbar" aria-hidden="true">
+    <div id="widgetSelToolbar" data-ground="bar" aria-hidden="true">
       <div class="wst-row wst-row-1">
         <button class="wst-btn" data-nudge="left"  aria-label="Move left">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"/></svg>
@@ -6873,7 +6932,7 @@
     </div>
 
     <!-- Mobile floating zoom bar (auto-fades after 1.5s idle) -->
-    <div id="mobileZoomBar" aria-hidden="true">
+    <div id="mobileZoomBar" data-ground="bar" aria-hidden="true">
         <button onclick="zoomBy(-0.1)" title="Zoom out" aria-label="Zoom out">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
@@ -6884,7 +6943,7 @@
     </div>
 
     <!-- Mobile bottom nav (icons open slide-up sheets for Widgets / Properties / Layers / More) -->
-    <nav id="mobileActionBar" role="toolbar" aria-label="Primary actions">
+    <nav id="mobileActionBar" data-ground="bar" role="toolbar" aria-label="Primary actions">
         <button data-action="widgets" aria-label="Add Widget">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span>Widgets</span>
@@ -7448,7 +7507,7 @@
 
             const modal = document.createElement('div');
             modal.id = 'customEcuModal';
-            modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); z-index:3000; display:flex; align-items:center; justify-content:center;';
+            modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:var(--scrim); backdrop-filter:blur(8px); z-index:3000; display:flex; align-items:center; justify-content:center;';
             modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
             modal.innerHTML = `<div class="dbc-modal-content" onclick="event.stopPropagation()" style="width:min(380px, 90vw);">
                 <div class="signal-modal-header"><span>Create Custom ECU</span><button class="close-btn" onclick="document.getElementById('customEcuModal').remove()">&times;</button></div>
@@ -7532,7 +7591,7 @@
 
             const modal = document.createElement('div');
             modal.id = 'customSigModal';
-            modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); z-index:3000; display:flex; align-items:center; justify-content:center;';
+            modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:var(--scrim); backdrop-filter:blur(8px); z-index:3000; display:flex; align-items:center; justify-content:center;';
             modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
             modal.innerHTML = `<div class="dbc-modal-content" onclick="event.stopPropagation()" style="width:min(420px, 90vw);">
                 <div class="signal-modal-header"><span>Add Signal to ${_presetPickerSelection.ecu}</span><button class="close-btn" onclick="document.getElementById('customSigModal').remove()">&times;</button></div>
@@ -8521,7 +8580,7 @@
                 .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             const subtitle = _opts.subtitle ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;white-space:pre-wrap;">${esc(_opts.subtitle)}</div>` : '';
             const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,8,0.82);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            overlay.style.cssText = 'position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
             overlay.innerHTML = `
                 <div style="background:var(--stage);border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:320px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
                     <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:14px;letter-spacing:0.03em;">${esc(title)}</div>
@@ -8590,7 +8649,7 @@
          * must use this overlay — this callback form, or confirmAsync(). */
         function _showConfirmOverlay(title, message, confirmLabel, onConfirm, onCancel, cancelLabel) {
             const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,8,0.82);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            overlay.style.cssText = 'position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
             overlay.innerHTML = `
                 <div style="background:var(--stage);border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:320px;max-width:400px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
                     <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px;letter-spacing:0.03em;">${title}</div>
@@ -14214,11 +14273,11 @@
              * editing a multi-selection (you'd otherwise stack them / dup ids).
              * Size (W/H) stays editable and fans out. */
             const uniqAttr = (w.locked || _multiEdit) ? 'disabled' : '';
-            const lockMsg = w.locked ? '<div style="background:hsla(0, 100%, 63%, 0.1); border:1px solid hsl(0, 100%, 63%); color:var(--status-danger); padding:4px; font-size:11px; margin-bottom:12px; text-align:center; border-radius:4px;">Widget is Locked</div>' : '';
+            const lockMsg = w.locked ? '<div style="background:var(--tint-danger); border:1px solid hsl(0, 100%, 63%); color:var(--status-danger); padding:4px; font-size:11px; margin-bottom:12px; text-align:center; border-radius:4px;">Widget is Locked</div>' : '';
 
             let html = lockMsg;
             if (_multiEdit) {
-                html += `<div style="background:hsla(210,90%,55%,0.12); border:1px solid hsl(210,90%,55%); color:hsl(210,90%,72%); padding:5px 8px; font-size:11px; margin-bottom:10px; text-align:center; border-radius:4px;">Editing ${selectedIndices.size} ${w.type} widgets &mdash; changes apply to all</div>`;
+                html += `<div style="background:var(--tint-accent); border:1px solid hsl(210,90%,55%); color:hsl(210,90%,72%); padding:5px 8px; font-size:11px; margin-bottom:10px; text-align:center; border-radius:4px;">Editing ${selectedIndices.size} ${w.type} widgets &mdash; changes apply to all</div>`;
             }
 
             /* ── Layout Accordion (open by default) ── */
@@ -16292,7 +16351,7 @@
                 const startPct  = Math.min(fitPct, capPct);
 
                 const overlay = document.createElement('div');
-                overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(3px);display:flex;flex-direction:column;font-family:inherit;';
+                overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:var(--scrim);backdrop-filter:blur(3px);display:flex;flex-direction:column;font-family:inherit;';
                 overlay.innerHTML = `
                     <div id="iio-stage" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:24px 24px 12px;">
                         <div id="iio-frame" style="position:relative;border:1px solid rgba(255,255,255,0.18);border-radius:3px;overflow:hidden;background:var(--bar);flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,0.06),0 16px 56px rgba(0,0,0,0.8);">
@@ -16610,7 +16669,7 @@
             const defCount = Math.min(10, srcFrames.length);
 
             const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(3px);display:flex;flex-direction:column;font-family:inherit;';
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:var(--scrim);backdrop-filter:blur(3px);display:flex;flex-direction:column;font-family:inherit;';
             overlay.innerHTML = `
                 <div id="afr-stage" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:24px 24px 12px;">
                     <canvas id="afr-preview" style="max-width:80%;max-height:100%;border:1px solid rgba(255,255,255,0.18);border-radius:3px;background:var(--bar);box-shadow:0 16px 56px rgba(0,0,0,0.8);image-rendering:pixelated;"></canvas>
@@ -16818,7 +16877,7 @@
                 const name = file.name.replace(/\.ttf$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 27);
 
                 const overlay = document.createElement('div');
-                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+                overlay.style.cssText = 'position:fixed;inset:0;background:var(--scrim);z-index:9999;display:flex;align-items:center;justify-content:center;';
                 overlay.innerHTML = `
                     <div style="background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:300px;color:var(--text);">
                         <h3 style="margin:0 0 12px 0;font-size:15px;">Upload Font</h3>
@@ -17752,7 +17811,7 @@
 
         function _showRenameOverlay(currentName, onConfirm) {
             const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,8,0.82);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            overlay.style.cssText = 'position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
             overlay.innerHTML = `
                 <div style="background:var(--stage);border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:320px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
                     <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:14px;letter-spacing:0.03em;">Rename</div>
@@ -19265,7 +19324,7 @@
                 let cropping = false;
 
                 const overlay = document.createElement('div');
-                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;';
+                overlay.style.cssText = 'position:fixed;inset:0;background:var(--scrim);z-index:10000;display:flex;align-items:center;justify-content:center;';
                 overlay.innerHTML = `
                     <div style="background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:380px;max-width:90vw;color:var(--text);">
                         <h3 style="margin:0 0 12px 0;font-size:15px;">Edit Image: ${name}</h3>
@@ -21061,7 +21120,7 @@
 
             return new Promise(resolve => {
                 const overlay = document.createElement('div');
-                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,8,0.82);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
+                overlay.style.cssText = 'position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
                 overlay.innerHTML = `
                     <div style="background:var(--stage);border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:360px;max-width:420px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
                         <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px;letter-spacing:0.03em;">Apply ${make} ${version}</div>
@@ -28030,8 +28089,8 @@
                         <div class="ch2-num"><span class="ch2-num-label">Max</span>${numField('max', c.max, def?.max_default)}</div>
                     </div>
                     <div class="ch2-num-row">
-                        <div class="ch2-num"><span class="ch2-num-label"><span class="swatch" style="background:rgba(155,196,230,0.6);"></span>Low warn</span>${numField('low_warn', c.low_warn, '—')}</div>
-                        <div class="ch2-num"><span class="ch2-num-label"><span class="swatch" style="background:rgba(230,184,0,0.6);"></span>High warn</span>${numField('high_warn', c.high_warn, '—')}</div>
+                        <div class="ch2-num"><span class="ch2-num-label"><span class="swatch" style="background:var(--tint-accent);"></span>Low warn</span>${numField('low_warn', c.low_warn, '—')}</div>
+                        <div class="ch2-num"><span class="ch2-num-label"><span class="swatch" style="background:var(--tint-warn);"></span>High warn</span>${numField('high_warn', c.high_warn, '—')}</div>
                     </div>
                     ${(c.source_units && c.source_units.length > 1) ? `
                     <div class="ch2-num-row">
