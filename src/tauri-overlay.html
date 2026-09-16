@@ -477,7 +477,10 @@
             --highlight: var(--ind-highlight);
             --text: var(--ind-ink);         --text-muted: var(--ind-muted);
             --text-ghost: var(--ind-ghost);
-            --accent: #e8433c;        --accent-hover: #f2635c;
+            /* #e8433c is deleted (2.2). --accent is not re-declared, so the
+               brand red comes through from the base; red TEXT uses
+               --accent-ink, which is what the note above was reaching for. */
+            --accent-hover: var(--accent-pressed);
             --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
             --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
@@ -638,15 +641,23 @@
                the lap timer's map/popovers each hand-picked a "near black"
                (#16181a here, #16181b there) that was never meant to differ —
                one shared value now, so it can't drift apart a third time. */
-            --ind-stage: #16181b;
-            --ind-ink: #e8e8e8;
-            --ind-muted: rgba(232,232,232,0.62);
-            --ind-soft: rgba(232,232,232,0.8);
-            --ind-ghost: rgba(232,232,232,0.4);
-            --ind-div: rgba(255,255,255,0.14);
-            --ind-div-lt: rgba(255,255,255,0.07);
-            --ind-border-light: rgba(255,255,255,0.3);
-            --ind-highlight: rgba(255,255,255,0.07);
+            --ind-stage: var(--stage);
+            /* Two text tiers, not four (DESIGN.md 2.1 rule 4). ink/soft/muted/
+               ghost were all an alpha over whatever ground they landed on and
+               never re-solved, which is the failure the spec calls out for
+               line.control. Measured against this band's own three grounds:
+               muted reached 4.28 and ghost 2.69, both under the 4.5 they carry
+               text at. soft cleared but is a third tier by definition, so it
+               collapses into ink. The opaque roles clear on every ground here:
+               primary 8.20, secondary 4.58. */
+            --ind-ink: var(--text-primary);
+            --ind-muted: var(--text-secondary);
+            --ind-soft: var(--text-primary);
+            --ind-ghost: var(--text-secondary);
+            --ind-div: var(--divider);
+            --ind-div-lt: var(--highlight);
+            --ind-border-light: var(--line-strong);
+            --ind-highlight: var(--highlight);
         }
         /* ---- the light end, for what still wants it -------------------------
            Two things do: the lap timer, which was designed around a light
@@ -661,17 +672,46 @@
         body.dsb-on.studio-light,
         body.dsb-on .dsb-nav,
         #kpWorkspace .kpb-nav {
-            --ind-bg: #c8c9cc;        /* ground: rails, page band, footer   */
-            --ind-surface: #d9dadd;   /* cards, panels, inputs, tab row     */
-            --ind-elev: #e4e5e8;      /* hover / raised                     */
-            --ind-ink: #1d1f20;
-            --ind-muted: rgba(29,31,32,0.6);
-            --ind-soft: rgba(29,31,32,0.75);
-            --ind-ghost: rgba(29,31,32,0.4);
-            --ind-div: rgba(29,31,32,0.2);
-            --ind-div-lt: rgba(29,31,32,0.1);
-            --ind-border-light: rgba(29,31,32,0.38);
-            --ind-highlight: rgba(29,31,32,0.07);
+            /* These scopes are light islands in a dark app, so they move the
+               ROLES here, not just the --ind-* aliases. Everything the merged
+               base paints with (--ground, --text-primary, the legacy aliases
+               that follow them) then goes light inside them too, instead of
+               only the handful of properties that happened to be written in
+               --ind-*. The values are DESIGN.md 2.3 unchanged; they were
+               already this file's own. */
+            --ground: #c8c9cc;
+            --surface: #d9dadd;
+            --raised: #e4e5e8;
+            --text-primary: #1d1f20;
+            --text-secondary: #545557;
+            --divider: rgba(29,31,32,0.2);
+            --line-strong: rgba(29,31,32,0.38);
+            --line-control: #666666;
+            --highlight: rgba(29,31,32,0.07);
+            --accent-ink: #9c1a1f;
+            --status-ok: #235f33;
+            --status-warn: #774b06;
+            --status-danger: #a61c21;
+
+            --ind-bg: var(--ground);       /* ground: rails, page band, footer */
+            --ind-surface: var(--surface); /* cards, panels, inputs, tab row   */
+            --ind-elev: var(--raised);     /* hover / raised                   */
+            /* Two tiers here as well. The old muted reached only 3.64 against
+               this band's own grounds and ghost 2.23; the opaque roles clear at
+               4.51 and 9.99. */
+            --ind-ink: var(--text-primary);
+            --ind-muted: var(--text-secondary);
+            --ind-soft: var(--text-primary);
+            --ind-ghost: var(--text-secondary);
+            --ind-div: var(--divider);
+            --ind-div-lt: var(--highlight);
+            --ind-border-light: var(--line-strong);
+            --ind-highlight: var(--highlight);
+            /* The legacy aliases resolve where they are declared, so a light
+               island has to restate them or it keeps the root's dark values. */
+            --bg: var(--ground); --panel: var(--surface); --panel-elevated: var(--raised);
+            --text: var(--text-primary); --text-muted: var(--text-secondary);
+            --border: var(--divider); --border-light: var(--line-strong);
         }
         /* A var() inside a custom property is resolved where it is DECLARED, so
            the bindings above (on body.dsb-on / #kpWorkspace) reach band two as
@@ -718,14 +758,24 @@
             --ind-bg: #2e2f33;        /* rails: sidebars, footer            */
             --ind-surface: #37383c;   /* cards, panels, inputs              */
             --ind-elev: #46474b;      /* hover / raised                     */
-            --ind-ink: #e8e8e8;
-            --ind-muted: rgba(232,232,232,0.55);
-            --ind-soft: rgba(232,232,232,0.8);
-            --ind-ghost: rgba(232,232,232,0.4);
+            /* Two tiers, as at :root. Measured against THIS band's grounds the
+               old four gave muted 3.54 and ghost 2.59; the opaque roles give
+               4.23 and 4.23.
+               4.23 is still under 4.5, and the reason is --ind-elev above:
+               #46474b sits 0.87 rel-lum lighter than DESIGN.md's raised
+               (#424242), and a neutral secondary needs #b5b5b5 or lighter to
+               clear 4.5 on it. --ind-bg and --ind-surface are within 0.12 of
+               canonical and read the same; only this one is a real outlier.
+               Left as it is rather than flattened, because the cool tint is a
+               deliberate choice made on 2026-09-02. Raised as CR-11. */
+            --ind-ink: var(--text-primary);
+            --ind-muted: var(--text-secondary);
+            --ind-soft: var(--text-primary);
+            --ind-ghost: var(--text-secondary);
             --ind-div: #2e302e;
-            --ind-div-lt: rgba(232,232,232,0.07);
-            --ind-border-light: rgba(232,232,232,0.38);
-            --ind-highlight: rgba(232,232,232,0.07);
+            --ind-div-lt: var(--highlight);
+            --ind-border-light: var(--line-strong);
+            --ind-highlight: var(--highlight);
             /* The deep red, not the bright one: #e8433c is drawn to carry the
                device's own glass and buzzes against these greys. */
             --accent: #b3261f;        --accent-hover: #8e1e19;
@@ -765,15 +815,30 @@
            convert them. Home dropped out of this list when it started binding
            for itself. */
         body.dsb-on #caWorkspace, body.dsb-on #ioWorkspace {
-            --bg: #303030; --bg-sidebar: #303030; --bg-toolbar: #393939; --bg-canvas: #484848;
-            --panel: #393939; --panel-elevated: #424242; --bg-card: #393939;
-            --border: #111111; --border-light: #555555; --highlight: #4a4a4a;
-            --text: #e8e8e8; --text-muted: #999999; --text-ghost: #6a6a6a;
-            --accent: #2d8ceb; --accent-hover: #4da3f2;
+            /* These two were the last of the old firmware editor: pinned to its
+               literal greys and its blue so the editor's red bindings could not
+               reach in and half-convert them. The base now carries the real
+               token layer at the same values, so the pin binds to roles instead
+               of copies — same look in dark, and they follow the theme in light
+               rather than staying stuck dark. The blue goes with it (§2.2); it
+               was the last one on this surface. Re-declared here rather than
+               inherited because an alias resolves where it is declared. */
+            --bg: var(--ground); --bg-sidebar: var(--ground); --bg-toolbar: var(--surface);
+            --bg-canvas: var(--raised);
+            --panel: var(--surface); --panel-elevated: var(--raised); --bg-card: var(--raised);
+            --border: var(--divider); --border-light: var(--line-strong);
+            --text: var(--text-primary); --text-muted: var(--text-secondary);
+            --text-ghost: var(--text-secondary);
+            /* --highlight and --accent are deliberately NOT re-declared: a
+               custom property cannot alias itself (it is a cycle, and resolves
+               to invalid), and both already carry the right value by
+               inheritance — --accent from the dash editor these two sit inside,
+               --highlight from the base. */
+            --accent-hover: var(--accent-pressed);
             --shadow-sm: 0 1px 3px rgba(0,0,0,0.4); --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
             --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
             --shadow-inset: inset 0 1px 2px rgba(0,0,0,0.3);
-            background: #303030; color: #e8e8e8;
+            background: var(--ground); color: var(--text-primary);
         }
         body.dsb-on header { display: none !important; }
         body.dsb-on #workspaceGrid, body.dsb-on #studioSetupPanel,
@@ -1204,7 +1269,10 @@
             /* Brand red, one step brighter than the light surfaces use it:
                #d2232a is a 3:1 read against this ground, which is under the
                line for the small mono labels it also has to carry. */
-            --accent: #e8433c;        --accent-hover: #f2635c;
+            /* #e8433c is deleted (2.2). --accent is not re-declared, so the
+               brand red comes through from the base; red TEXT uses
+               --accent-ink, which is what the note above was reaching for. */
+            --accent-hover: var(--accent-pressed);
             --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
             --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
@@ -1213,8 +1281,13 @@
             --gpb-ink: var(--ind-ink);      --gpb-muted: var(--ind-muted);
             --gpb-soft: var(--ind-soft);    --gpb-ghost: var(--ind-ghost);
             --gpb-div: var(--ind-div);      --gpb-div-lt: var(--ind-div-lt);
-            --gpb-red: #e8433c;  --gpb-red-100: rgba(232,67,60,0.18); --gpb-red-400: #ec817b;
-            --gpb-red-600: #f2635c; --gpb-red-700: #f7938e;
+            /* The same ramp names the lap timer uses, rebound to roles rather
+               than to a second set of values. -700 and -400 carry TEXT, so
+               they are accent.ink (5.60 here); -red and -600 are fills.
+               -100 is a tint and has no role yet (CR-8). */
+            --gpb-red: var(--accent);  --gpb-red-100: rgba(232,67,60,0.18);
+            --gpb-red-400: var(--accent-ink);
+            --gpb-red-600: var(--accent-pressed); --gpb-red-700: var(--accent-ink);
             --gpb-n200: var(--ind-elev); --gpb-n800: var(--ind-elev);
             --gpb-bar: #0c0d0e;  --gpb-bar-muted: #9a9a9e; --gpb-bar-div: #26282a;
             --gpb-ok: #2e7d43;   --gpb-warn: #a06508;  --gpb-bad: #c02026;
@@ -1261,7 +1334,7 @@
             max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         #kpWorkspace .kpb-pad:hover { border-color: #4a4e52; color: #e6e6e8; }
-        #kpWorkspace .kpb-pad.on { background: #e8433c; border-color: #e8433c; color: #fff; }
+        #kpWorkspace .kpb-pad.on { background: var(--accent); border-color: var(--line-control); color: var(--accent-on-fill); }
         #kpWorkspace .kpb-pad.add { color: #7C8590; border-style: dashed; }
         #kpWorkspace .kpb-pad.add:hover { color: #e6e6e8; border-color: #4a4e52; }
         /* The dash pill: the lap timer's puck pill, doing the same job — one
@@ -1411,7 +1484,9 @@
         #kpWorkspace .kp-bus-in:focus, #kpWorkspace .kp-field input:focus, #kpWorkspace .kp-field select:focus { border-color: var(--gpb-ink); outline: none; }
         #kpWorkspace .kp-seg, #kpWorkspace .kp-seg2 { background: var(--gpb-surface); border: 1px solid var(--gpb-div); }
         #kpWorkspace .kp-seg button, #kpWorkspace .kp-seg2 button { font-family: var(--gpb-head); font-weight: 600; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gpb-muted); height: 26px; padding: 0; }
-        #kpWorkspace .kp-seg button.on, #kpWorkspace .kp-seg2 button.on { background: var(--gpb-ink); color: #fff; }
+        #kpWorkspace .kp-seg button.on, #kpWorkspace .kp-seg2 button.on {
+            background: var(--accent); color: var(--accent-on-fill);
+            box-shadow: inset 0 0 0 1px var(--line-control); }
         #kpWorkspace input[type="range"] { accent-color: var(--gpb-ink); }
         #kpWorkspace .kp-slider .val { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--gpb-muted); }
         /* the selected swatch rings in ink, and the connection cards */
@@ -1652,7 +1727,7 @@
             border-left: 3px solid rgba(255,255,255,0.3);
         }
         .kpfx-pre:hover { border-color: rgba(255,255,255,0.4); }
-        .kpfx-pre.on { background: rgba(255,255,255,0.09); border-left-color: #e8433c; }
+        .kpfx-pre.on { background: var(--highlight); border-left-color: var(--accent-ink); }
         .kpfx-pre .k {
             font-family: var(--gpb-head, 'Sora', sans-serif); font-size: 10px; letter-spacing: 0.12em;
             text-transform: uppercase; color: rgba(233,235,237,0.55);
@@ -1692,7 +1767,7 @@
             color: rgba(233,235,237,0.55); white-space: nowrap; overflow: hidden;
         }
         .kpfx-tlseg.now { background: rgba(255,255,255,0.09); }
-        .kpfx-tlseg.on { box-shadow: inset 0 -3px 0 #e8433c; }
+        .kpfx-tlseg.on { box-shadow: inset 0 -3px 0 var(--accent-ink); }
         .kpfx-tlseg.on .nm { color: #fff; font-weight: 600; }
         .kpfx-tlseg.rest .bar { background: repeating-linear-gradient(135deg, rgba(255,255,255,0.22) 0 3px, transparent 3px 6px); }
         .kpfx-tlseg.rest .nm { color: rgba(233,235,237,0.6); }
@@ -1818,7 +1893,7 @@
         .kp-statemsg { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--accent); font-weight: 600; opacity: 0; transition: opacity 0.2s; }
         .kp-statemsg.show { opacity: 1; }
         .kp-busline { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); }
-        .kp-busline .tx { color: var(--accent); font-weight: 700; }
+        .kp-busline .tx { color: var(--accent-ink); font-weight: 700; }
         .kp-busline .rx { color: #8a7fd6; font-weight: 700; }
         .kp-busline i { font-style: normal; }
         .kp-busline i.on { color: #6fbf73; font-weight: 700; }
@@ -1886,7 +1961,7 @@
            the hex is what makes a support conversation possible. */
         .kpw-log { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); max-height: 210px; overflow-y: auto; padding: 8px 10px; margin: 0 0 12px; }
         .kpw-log div { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; line-height: 1.65; color: var(--text-muted); white-space: pre-wrap; word-break: break-word; }
-        .kpw-log div .tx { color: var(--accent); font-weight: 700; }
+        .kpw-log div .tx { color: var(--accent-ink); font-weight: 700; }
         .kpw-log div .rx { color: #8a7fd6; font-weight: 700; }
         .kpw-log div.ok { color: #6fbf73; }
         .kpw-log div.fail { color: #e07f76; }
@@ -3579,7 +3654,7 @@
             --gpb-red-900: #440c0f;
             --gpb-stage: var(--ind-stage);
             --gpb-n100: var(--ind-elev); --gpb-n200: var(--ind-surface); --gpb-n300: #bfc0c3;
-            --gpb-n400: #b7b7ba; --gpb-n500: #98989b; --gpb-n600: #7a7a7d;
+            --gpb-n400: #b7b7ba; --gpb-n500: #98989b; --gpb-n600: var(--text-secondary);
             --gpb-n700: #5d5d60; --gpb-n800: #424244; --gpb-n900: #2b2b2d;
             --gpb-bar: #0c0d0e;  --gpb-bar-muted: #9a9a9e; --gpb-bar-div: #26282a;
             --gpb-ok: #2e7d43;   --gpb-warn: #a06508;  --gpb-bad: #c02026;

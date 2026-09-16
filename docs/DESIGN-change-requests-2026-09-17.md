@@ -2,8 +2,8 @@
 
 From: Tommy (apps) · 17 September 2026 · against v1.1 of 16 September 2026
 
-Ten requests. CR-1 to CR-5 came from reading the spec; CR-6 to CR-10 came
-out of running the Dash web pilot. Each follows the §Governance format: section and token, current
+Eleven requests. CR-1 to CR-5 came from reading the spec; CR-6 to CR-10 out
+of the Dash web pilot; CR-11 out of Studio. Each follows the §Governance format: section and token, current
 value, proposed value, the measurement, and what it affects.
 
 Everything else in v1.1 verified. Every contrast ratio in the file was
@@ -331,3 +331,34 @@ the mode.
 
 **What it affects.** 17 call sites in Dash web. They are the last group of raw
 neutrals in the CSS; everything else left is covered by CR-6, CR-7 or CR-8.
+
+## CR-11 — the dash editor's third ground set breaks the text tier
+
+**Section.** §2.4.
+
+**Current.** §2.4 gives three dark grounds: `ground` `#303030`, `surface`
+`#393939`, `raised` `#424242`.
+
+**Why.** Studio's dash editor (`body.dsb-on`) carries a fourth, fifth and sixth:
+`#2e2f33`, `#37383c`, `#46474b`, described in the file as "rails a step above
+the :root dark, cool-tinted" and chosen deliberately on 2026-09-02.
+
+Two of the three are a non-issue — `#2e2f33` and `#37383c` sit within 0.12
+relative luminance of canonical and read the same. `#46474b` is the problem: it
+is **0.87 rel-lum lighter** than `raised`, and `text.secondary` `#afafaf`
+measures **4.23** on it against the 4.5 it has to carry text at. A neutral
+secondary would have to be `#b5b5b5` or lighter to clear on that ground.
+
+So the band cannot use DESIGN.md's second text tier. That is the cost of a
+fourth ground set stated plainly, rather than an argument about taste.
+
+For context, the tiers there before this pass were worse: `muted` 3.54 and
+`ghost` 2.59. They are now 4.23 and 4.23, so this is an improvement that stops
+just short.
+
+**Proposed.** Bring `--ind-elev` to `#424242`. `--ind-bg` and `--ind-surface`
+can keep their cool tint at no measured cost, or come to canonical with no
+visible change — either is fine. Only the raised step has to move.
+
+**What it affects.** One value in `src/tauri-overlay.html`, and it is the
+difference between the dash editor clearing 4.5 and not.
