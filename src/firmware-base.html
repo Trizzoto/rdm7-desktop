@@ -4748,14 +4748,6 @@
             </div>
             <div class="dbc-form">
                 <div>
-                    <label>ECU Name</label>
-                    <input type="text" id="dbcEcuName" placeholder="e.g. MyECU">
-                </div>
-                <div>
-                    <label>Version</label>
-                    <input type="text" id="dbcVersion" placeholder="e.g. v1.0">
-                </div>
-                <div>
                     <label>DBC File</label>
                     <input type="file" id="dbcFileInput" accept=".dbc">
                 </div>
@@ -4763,11 +4755,26 @@
                     <label>Preview</label>
                     <div class="dbc-preview" id="dbcPreview">Select a .dbc file to preview signals.</div>
                 </div>
+                <div style="font-size:11px; color:var(--text-muted); line-height:1.45; margin-top:4px;">
+                    <b style="color:var(--text);">Create channels</b> makes one channel per signal, decoding straight away.
+                    To keep the file as a reusable ECU instead — and pick signals from it later under
+                    <b>+ Add channels › From a pre-defined ECU</b> — name it and choose <b>Save as preset</b>.
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div>
+                        <label>ECU name (preset only)</label>
+                        <input type="text" id="dbcEcuName" placeholder="e.g. My ECU">
+                    </div>
+                    <div>
+                        <label>Version (preset only)</label>
+                        <input type="text" id="dbcVersion" placeholder="e.g. v1.0">
+                    </div>
+                </div>
             </div>
             <div class="dbc-footer">
                 <button class="btn btn-secondary" onclick="closeDbcImportModal()">Cancel</button>
-                <button class="btn btn-secondary" id="dbcChannelsBtn" disabled onclick="doDbcImportAsChannels()" title="Create a channel per signal — bound and decoding, ready for widgets">Import as Channels</button>
-                <button class="btn" id="dbcImportBtn" disabled onclick="doDbcImport()">Import</button>
+                <button class="btn btn-secondary" id="dbcImportBtn" disabled onclick="doDbcImport()" title="Save the file as a reusable ECU preset on this dash — needs a name and version">Save as preset</button>
+                <button class="btn btn-primary" id="dbcChannelsBtn" disabled onclick="doDbcImportAsChannels()" title="Create a channel per signal — bound and decoding, ready for widgets">Create channels</button>
             </div>
         </div>
     </div>
@@ -4796,7 +4803,7 @@
                     <button type="button" class="pa-add-row" onclick="_paAddRow()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add signal</button>
                 </div>
                 <div class="dbc-preview pa-error" id="paError" style="display:none;"></div>
-                <div class="pa-hint">Saved to a per-device preset file (<code>/lfs/presets</code>) and shown in the source picker alongside the built-in ECUs. 11-bit and 29-bit extended CAN IDs.</div>
+                <div class="pa-hint">Saved on this dash (<code>/lfs/presets</code>) and listed under <b>+ Add channels › From a pre-defined ECU</b>, in Custom &amp; DBC. 11-bit and 29-bit extended CAN IDs.</div>
             </div>
             <div class="dbc-footer">
                 <button class="btn btn-secondary" onclick="closePresetAuthorModal()">Cancel</button>
@@ -4896,8 +4903,10 @@
                 <div>Zoom Canvas In/Out</div>
                 <div><span class="kbd">Space</span>+<span class="kbd">Drag</span></div>
                 <div>Pan Canvas Workspace</div>
+                <div><span class="kbd">Arrows</span></div>
+                <div>Nudge Widget 1px</div>
                 <div><span class="kbd">Shift</span>+<span class="kbd">Arrows</span></div>
-                <div>Nudge Widget 10px (Snap Size)</div>
+                <div>Nudge Widget 10px</div>
                 <div><span class="kbd">Ctrl</span>+<span class="kbd">C</span> / <span class="kbd">V</span></div>
                 <div>Copy / Paste Widget</div>
                 <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">C</span> / <span
@@ -4907,14 +4916,22 @@
                 <div>Duplicate Widget</div>
                 <div><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> / <span class="kbd">Y</span></div>
                 <div>Undo / Redo</div>
-                <div><span class="kbd">Del</span></div>
+                <div><span class="kbd">Del</span> / <span class="kbd">Backspace</span></div>
                 <div>Delete Widget</div>
+                <div><span class="kbd">Ctrl</span>+<span class="kbd">G</span></div>
+                <div>Group Selected Widgets</div>
+                <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">G</span></div>
+                <div>Ungroup</div>
+                <div><span class="kbd">Ctrl</span>+<span class="kbd">]</span> / <span class="kbd">[</span></div>
+                <div>Bring Forward / Send Backward</div>
+                <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">]</span> / <span class="kbd">[</span></div>
+                <div>Bring to Front / Send to Back</div>
                 <div><span class="kbd">Right-Click</span></div>
                 <div>Show Context Menu</div>
                 <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">S</span></div>
-                <div>Custom CAN Signals (Advanced)</div>
+                <div>Open Channels</div>
             </div>
-            <p style="margin-top:20px; font-size:12px; color:hsl(0, 0%, 53%); text-align:center;">Press any key or click outside to
+            <p style="margin-top:20px; font-size:12px; color:hsl(0, 0%, 53%); text-align:center;">Press Esc or click outside to
                 close</p>
         </div>
     </div>
@@ -5072,7 +5089,7 @@
             <div class="header-divider"></div>
             <button class="btn btn-secondary btn-icon" onclick="undo()" title="Undo (Ctrl+Z)">↶</button>
             <button class="btn btn-secondary btn-icon" onclick="redo()" title="Redo (Ctrl+Y)">↷</button>
-            <button class="btn btn-secondary" id="resetBtnHdr" onclick="resetView()">Reset</button>
+            <button class="btn btn-secondary" id="resetBtnHdr" onclick="resetView()" title="Fit the canvas to the window (doesn't change the layout)">Fit</button>
             <button class="btn btn-secondary btn-icon" id="helpBtn" onclick="document.getElementById('helpModal').style.display='flex'" title="Keyboard Shortcuts">?</button>
             <button class="btn btn-secondary" id="syncBtn" onclick="captureScreenshot()" title="Refresh the device preview thumbnail (runs automatically on Save; use this to force a refresh when the on-device screen changes)">Sync</button>
 
@@ -5162,7 +5179,7 @@
             </div>
             <div class="setup-card" onclick="openSwitcherSetup && openSwitcherSetup()">
                 <div class="card-title"><svg viewBox="0 0 24 24"><polyline points="7 17 2 12 7 7"/><line x1="2" y1="12" x2="22" y2="12"/><polyline points="17 7 22 12 17 17"/></svg>Layout switching</div>
-                <div class="card-body">Change dashboards while driving from a button or a CAN signal.</div>
+                <div class="card-body">Pick which dashboards the arrows on the dash cycle through, and in what order.</div>
                 <div class="card-stat" id="setupSwitcherStat">Configurable</div>
             </div>
             <!-- Two cards used to point at openDeviceInfo(): this one and a
@@ -5171,7 +5188,7 @@
                  version instead of being a line inside Device Info. -->
             <div class="setup-card" onclick="openDeviceInfo && openDeviceInfo()">
                 <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r="0.8" fill="currentColor" stroke="none"/></svg>Device &amp; updates</div>
-                <div class="card-body">Serial number, firmware version and free space — and the update button.</div>
+                <div class="card-body">Serial number, storage and live health. When an update is out, a banner at the top offers to install it.</div>
                 <div class="card-stat" id="setupDeviceStat">—</div>
             </div>
             <div class="setup-card" onclick="openNetworkSetup && openNetworkSetup()">
@@ -5188,7 +5205,7 @@
         <div class="setup-grid">
             <div class="setup-card" onclick="openDataLogger && openDataLogger()">
                 <div class="card-title"><svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>Live data &amp; recording</div>
-                <div class="card-body">Watch every reading arrive — value, min/max, whether it's gone stale. Press Record to write it to the SD card.</div>
+                <div class="card-body">Watch every reading arrive — value, min/max, whether it's gone stale. Press Record to save it to a file — on the SD card, or the dash's own storage without one.</div>
                 <div class="card-stat" id="setupSignalsStat">—</div>
             </div>
         </div>
@@ -5485,7 +5502,7 @@
                     <div id="chDetail" class="ch2-detail-pane" style="flex:1;"></div>
                     <div id="chDirtyBar" style="display:none; align-items:center; gap:10px; padding:9px 14px; border-top:1px solid rgba(255,255,255,0.1); background:rgba(20,26,20,0.95); flex-shrink:0;">
                         <span id="chDirtyLabel" style="font-size:12px; color:var(--text-muted); flex:1;">Unsaved changes</span>
-                        <button class="btn" onclick="_chDiscardEdits()">Cancel</button>
+                        <button class="btn btn-secondary" onclick="_chDiscardEdits()">Cancel</button>
                         <button class="btn btn-primary" onclick="_flushChannelEdits()">Save</button>
                     </div>
                 </div>
@@ -5520,7 +5537,7 @@
             </div>
             <div class="ch2-picker-body" id="chObdScanBody" style="padding:16px 18px; overflow:auto; flex:1;"></div>
             <div class="preset-selection-bar">
-                <button class="btn" id="chObdScanByHand" onclick="closeObdScan(); openCustomPids()" style="margin-right:auto;" title="If your car answers a PID this list doesn't know about, add it yourself">Add a PID by hand&hellip;</button>
+                <button class="btn btn-secondary" id="chObdScanByHand" onclick="closeObdScan(); openCustomPids()" style="margin-right:auto;" title="If your car answers a PID this list doesn't know about, add it yourself">Add a PID by hand&hellip;</button>
                 <span id="chObdScanStatus" class="selection-text"></span>
                 <button class="btn btn-primary" id="chObdScanAddBtn" style="display:none;" onclick="_obdScanAdd()">Add channels</button>
             </div>
@@ -5605,7 +5622,7 @@
                 <button class="close-btn" onclick="closeDataLogger()" style="font-size:18px;">&times;</button>
             </div>
             <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
-                <button id="logToggleBtn" class="btn btn-primary" style="padding:7px 16px;" onclick="toggleDataLogger()" title="Save these values to the SD card at the chosen rate">&#9679; Record</button>
+                <button id="logToggleBtn" class="btn btn-primary" style="padding:7px 16px;" onclick="toggleDataLogger()" title="Save these values to a CSV file at the chosen rate (SD card, or the dash's storage without one)">&#9679; Record</button>
                 <label style="font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:5px;">at
                     <select id="logRateSelect" style="padding:5px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
                         <option value="1">1 Hz</option>
@@ -5710,7 +5727,7 @@
                 </label>
             </div>
             <label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:10px;">Notes (optional)
-                <textarea id="canShareNotes" placeholder="ECU type, year, what's happening in the trace, anything that'd help debug." maxlength="500" rows="3" style="width:100%; margin-top:2px; padding:6px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px; resize:vertical;"></textarea>
+                <textarea id="canShareNotes" placeholder="ECU type, year, what's happening in the trace, anything that'd help debug." maxlength="250" rows="3" style="width:100%; margin-top:2px; padding:6px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px; resize:vertical;"></textarea>
             </label>
             <div id="canShareStatus" style="font-size:11px; color:var(--text-muted); margin-bottom:10px; min-height:14px;"></div>
             <div style="display:flex; gap:10px; justify-content:flex-end;">
@@ -5792,26 +5809,14 @@
                 </label>
 
                 <!-- ────────────────────────────────────────────────────────
-                     Odometer subsection. Lives inside the Gear Setup modal
-                     because they share the same Speed Signal config — the
-                     odometer integrates whichever signal name lives in
-                     `Speed Signal (km/h)` above. Reads /api/odometer on
-                     open and writes back through the same Save button only
-                     if the user actually edited the value.
+                     The odometer integrates the Speed signal chosen above, so
+                     this dialog points to it — but its reading is set only on
+                     the Odometer card. It used to be editable here as well:
+                     two places writing one number.
                      ──────────────────────────────────────────────────────── -->
-                <div style="margin-top:4px; padding-top:10px; border-top:1px dashed var(--border);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <span style="font-size:11px; color:var(--text-muted); font-weight:600; letter-spacing:0.5px;">ODOMETER</span>
-                        <span id="gearOdoLive" style="font-size:10px; color:var(--text-muted); font-family:'JetBrains Mono', monospace;" title="Live reading from the device — refreshes when the modal opens">live: —</span>
-                    </div>
-                    <label style="font-size:11px; color:var(--text-muted);">Manual reading (km)
-                        <input id="gearOdoKm" type="number" step="0.1" min="0" max="9999999" placeholder="e.g. 145320"
-                            style="width:100%; margin-top:2px; padding:5px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
-                    </label>
-                    <div style="font-size:10px; color:var(--text-muted); margin-top:6px; line-height:1.45;">
-                        Auto-accumulates from your selected Speed Signal. Persists every 1 km or 5 min.
-                        Enter a starting reading once to match the vehicle's factory odo.
-                    </div>
+                <div style="font-size:11px; color:var(--text-muted); line-height:1.45; margin-top:4px;">
+                    The odometer counts from the Speed signal above. To set its reading, use the
+                    <a href="#" onclick="closeGearSetup(); openOdometer(); return false;" style="color:var(--accent);">Odometer</a> card.
                 </div>
                 <button class="btn" style="margin-top:6px; padding:8px;" onclick="saveGearSetup()">Save</button>
             </div>
@@ -5964,7 +5969,7 @@
             <div id="odoSource" style="font-size:11px; color:var(--text-muted); margin-top:14px; padding-top:12px; border-top:1px solid var(--border); line-height:1.6;"></div>
 
             <div style="display:flex; gap:8px; margin-top:14px;">
-                <button class="btn" style="flex:1;" onclick="closeOdometer()">Cancel</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="closeOdometer()">Cancel</button>
                 <button class="btn btn-primary" style="flex:1;" onclick="saveOdometer()">Save</button>
             </div>
         </div>
@@ -5986,11 +5991,11 @@
 
             <!-- Status grid: live values from the device. -->
             <div style="display:grid; grid-template-columns:auto 1fr; row-gap:8px; column-gap:16px; font-size:12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:14px;">
-                <span style="color:var(--text-muted);">CAN bus</span>
+                <span style="color:var(--text-muted);">Readings</span>
                 <span id="obd2SetupCan" style="font-family:'JetBrains Mono', monospace;">…</span>
                 <span style="color:var(--text-muted);">ECU preset</span>
                 <span id="obd2SetupEcu" style="font-family:'JetBrains Mono', monospace;">…</span>
-                <span style="color:var(--text-muted);">Enabled signals</span>
+                <span style="color:var(--text-muted);">OBD2 readings</span>
                 <span id="obd2SetupEnabled" style="font-family:'JetBrains Mono', monospace;">…</span>
                 <span style="color:var(--text-muted);">Custom PIDs</span>
                 <span id="obd2SetupCustom" style="font-family:'JetBrains Mono', monospace;">…</span>
@@ -6214,7 +6219,7 @@
             <div style="font-size:10px; color:var(--text-muted); margin-top:8px;">
                 Saved with your layout. Use Export to share with others.
                 Imported packs merge into the current list (duplicates by
-                signal name overwrite). Hit <b>Save Layout</b> in the header
+                signal name overwrite). Hit <b>Save/Apply</b> in the header
                 to persist changes to the device.
             </div>
         </div>
@@ -6518,7 +6523,7 @@
             </div>
 
             <div style="display:flex; gap:8px; margin-top:18px;">
-                <button class="btn" style="flex:1;" onclick="closeDimmerSettings()">Cancel</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="closeDimmerSettings()">Cancel</button>
                 <button class="btn btn-primary" style="flex:1;" onclick="saveDimmerSettings()">Save</button>
             </div>
         </div>
@@ -7456,9 +7461,25 @@
          * Signals are the flattened globalPresets entries for that ecu+version
          * (label / can_id hex / bit_start / bit_length / scale / offset /
          * endianess / is_signed). Emits the same BO_/SG_ form parseDbcFile()
-         * reads, so an exported file re-imports cleanly into RDM. (DBC Motorola
-         * bit numbering differs in some external tools — bit_start is emitted
-         * as-stored, which round-trips here.) */
+         * reads, so an exported file re-imports cleanly into RDM. Motorola
+         * start bits are written in standard DBC numbering (_dbcMotorolaBit), so
+         * the file also opens correctly in Vector, SavvyCAN and friends. */
+        /* DBC and the dash number Motorola (big-endian) bits differently.
+         *   DBC:  start bit = the signal's MSB, in "sawtooth" numbering
+         *         (byte*8 + bit, bit 7 = the byte's MSB).
+         *   Dash: bit_start counts MSB-first from byte 0 (can_decode.c), so
+         *         the MSB of byte b is bit b*8.
+         * The mapping swaps the bit within its byte and is its own inverse,
+         * so the same function converts in both directions. Intel start bits
+         * mean the same thing in both and are never converted. Before this,
+         * Motorola DBC signals imported with their start bit unchanged and
+         * decoded the wrong bits (e.g. a 16-bit value at bytes 0-1, "7|16@0",
+         * read from bit 7 instead of bit 0). */
+        function _dbcMotorolaBit(b) {
+            b = b | 0;
+            return ((b >> 3) << 3) + (7 - (b & 7));
+        }
+
         function _presetToDbc(ecu, version, sigs) {
             const san = (n) => (String(n == null ? 'Sig' : n).replace(/[^A-Za-z0-9_]/g, '_').replace(/^(\d)/, '_$1') || 'Sig');
             const byId = {};
@@ -7481,11 +7502,13 @@
                 if (muxed.length && !existingSw) {
                     const m = muxed[0];
                     const mbo = (m.endianess === 0 || m.is_little_endian === false) ? 0 : 1;
-                    out += ` SG_ ${san('MUX_' + id)} M : ${m.mux_bit_start || 0}|${m.mux_bit_length}@${mbo}+ (1,0) [0|0] "" Vector__XXX\n`;
+                    const mbs = mbo === 0 ? _dbcMotorolaBit(m.mux_bit_start || 0) : (m.mux_bit_start || 0);
+                    out += ` SG_ ${san('MUX_' + id)} M : ${mbs}|${m.mux_bit_length}@${mbo}+ (1,0) [0|0] "" Vector__XXX\n`;
                 }
                 byId[id].forEach(s => {
-                    const bs = s.bit_start || 0, bl = s.bit_length || 16;
+                    const bl = s.bit_length || 16;
                     const bo = (s.endianess === 0 || s.is_little_endian === false) ? 0 : 1; /* 0=Motorola/BE, 1=Intel/LE */
+                    const bs = bo === 0 ? _dbcMotorolaBit(s.bit_start || 0) : (s.bit_start || 0);
                     const vt = s.is_signed ? '-' : '+';
                     const scale = (s.scale != null) ? s.scale : 1;
                     const offset = (s.offset != null) ? s.offset : 0;
@@ -7530,7 +7553,7 @@
             document.getElementById('dbcPreview').textContent = 'Select a .dbc file to preview signals.';
             document.getElementById('dbcImportBtn').disabled = true;
             const _chBtn = document.getElementById('dbcChannelsBtn');
-            if (_chBtn) { _chBtn.disabled = true; _chBtn.textContent = 'Import as Channels'; }
+            if (_chBtn) { _chBtn.disabled = true; _chBtn.textContent = 'Create channels'; }
             _parsedDbcSignals = [];
             /* Attach file change listener */
             document.getElementById('dbcFileInput').onchange = handleDbcFileSelect;
@@ -7548,11 +7571,12 @@
                 _parsedDbcSignals = parseDbcFile(ev.target.result);
                 const preview = document.getElementById('dbcPreview');
                 if (_parsedDbcSignals.length === 0) {
-                    preview.textContent = 'No standard CAN signals found in file.';
+                    preview.textContent = 'No CAN signals found in this file.';
                 } else {
                     const msgCount = new Set(_parsedDbcSignals.map(s => s.can_id)).size;
                     const muxCount = _parsedDbcSignals.filter(s => s.mux_bit_length).length;
-                    preview.innerHTML = `<b>${_parsedDbcSignals.length}</b> signals across <b>${msgCount}</b> messages (standard CAN only).` +
+                    const nReadings = _parsedDbcSignals.filter(s => !s.is_mux_switch).length;
+                    preview.innerHTML = `<b>${nReadings}</b> signal${nReadings === 1 ? '' : 's'} across <b>${msgCount}</b> message${msgCount === 1 ? '' : 's'} (11-bit and 29-bit IDs).` +
                         /* Say so when the file is multiplexed: it changes what
                          * the user should expect on the bus, and it used to be
                          * dropped silently. */
@@ -7640,6 +7664,24 @@
             return orphaned;
         }
 
+        /* DBC files are ASCII, so units arrive as "degC", "deg C", "C", "kpa",
+         * "kph", "lambda"... The dash converts units by exact name ("°C",
+         * "kPa", "km/h", "λ" — main/data/unit_convert.c), so an imported
+         * coolant channel in "degC" could never be shown in °F. Map the common
+         * spellings; anything else passes through untouched. */
+        function _dbcNormUnit(u) {
+            const s = String(u || '').trim();
+            const k = s.toLowerCase().replace(/[\s_.]/g, '');
+            const map = {
+                degc: '°C', c: '°C', celsius: '°C', 'deg c': '°C', '°c': '°C',
+                degf: '°F', f: '°F', fahrenheit: '°F', '°f': '°F',
+                kpa: 'kPa', mpa: 'MPa', bar: 'bar', psi: 'psi', inhg: 'inHg',
+                kmh: 'km/h', 'km/h': 'km/h', kph: 'km/h', mph: 'mph', 'm/s': 'm/s',
+                lambda: 'λ', 'λ': 'λ', afr: 'AFR', rpm: 'rpm', k: 'K',
+            };
+            return map[k] || s;
+        }
+
         function parseDbcFile(text) {
             const signals = [];
             const lines = text.split('\n');
@@ -7696,9 +7738,12 @@
                     if (sgMatch) {
                         const sigName = sgMatch[1];
                         const muxTok = sgMatch[2] || '';
-                        const bitStart = parseInt(sgMatch[3]);
                         const bitLength = parseInt(sgMatch[4]);
                         const byteOrder = parseInt(sgMatch[5]); /* 0=Motorola, 1=Intel */
+                        /* Into the dash's numbering — see _dbcMotorolaBit(). The
+                         * mux switch is a signal too, so its geometry (copied
+                         * onto muxed signals by _dbcResolveMux) is converted here. */
+                        const bitStart = byteOrder === 0 ? _dbcMotorolaBit(parseInt(sgMatch[3])) : parseInt(sgMatch[3]);
                         const isSigned = sgMatch[6] === '-';
                         const scale = parseFloat(sgMatch[7]);
                         const offset = parseFloat(sgMatch[8]);
@@ -7728,7 +7773,7 @@
                              * channel does — keep it so Create Channels can
                              * fill it in instead of making the user retype it
                              * for every signal. */
-                            unit: (sgMatch[11] || '').trim(),
+                            unit: _dbcNormUnit(sgMatch[11]),
                             /* Resolved into real mux fields by _dbcResolveMux()
                              * once the whole message has been read — the "M"
                              * switch is not required to come first. */
@@ -7755,7 +7800,7 @@
             if (!ecu || !version || _parsedDbcSignals.length === 0) return;
 
             const importBtn = document.getElementById('dbcImportBtn');
-            if (importBtn) { importBtn.disabled = true; importBtn.textContent = 'Importing…'; }
+            if (importBtn) { importBtn.disabled = true; importBtn.textContent = 'Saving…'; }
 
             try {
                 const resp = await fetch('/api/presets/custom/save', {
@@ -7832,7 +7877,7 @@
             } catch (e) {
                 updateStatus('Failed to import DBC: ' + e.message, true);
             } finally {
-                if (importBtn) { importBtn.disabled = false; importBtn.textContent = 'Import'; }
+                if (importBtn) { importBtn.disabled = false; importBtn.textContent = 'Save as preset'; }
             }
         }
 
@@ -8037,8 +8082,12 @@
          * sources from, whereas channels are what widgets bind to. */
         async function doDbcImportAsChannels() {
             if (!_parsedDbcSignals || !_parsedDbcSignals.length) return;
+            /* A multiplexer switch (the "M" signal) is the frame index, not a
+             * reading — its position is already copied onto every muxed
+             * signal, so a channel for it would only be clutter. */
+            const readings = _parsedDbcSignals.filter(s => !s.is_mux_switch);
             const res = await _createChannelsFromList(
-                _parsedDbcSignals, document.getElementById('dbcChannelsBtn'));
+                readings, document.getElementById('dbcChannelsBtn'));
             const prev = document.getElementById('dbcPreview');
             if (prev && res) {
                 prev.textContent = res.summary
@@ -10242,6 +10291,7 @@
             const sel = document.getElementById('splashSelect');
             const name = sel.value;
             if (!name) return;
+            if (name === '__disable__') { showToast('Pick a splash screen to delete first', 'info'); return; }
             _showConfirmOverlay(
                 'Delete Splash',
                 'Are you sure you want to delete <strong style="color:#e0e0e0;">"' + name + '"</strong>? This action cannot be undone.',
@@ -11790,7 +11840,7 @@
                 const lockClosed = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>';
                 const lockOpen = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>';
 
-                const visBtn = mkBtn(w.hidden ? eyeClosed : eyeOpen, 'Toggle Visibility', w.hidden ? '' : 'active-state');
+                const visBtn = mkBtn(w.hidden ? eyeClosed : eyeOpen, w.hidden ? 'Show on the canvas' : 'Hide on the canvas (still shown on the dash)', w.hidden ? '' : 'active-state');
                 visBtn.onclick = (e) => { e.stopPropagation(); w.hidden = !w.hidden; pushHistory(); renderEditor(); updateInspector(); };
 
                 const lockBtn = mkBtn(w.locked ? lockClosed : lockOpen, 'Toggle Lock', w.locked ? 'active-state' : '');
@@ -11869,8 +11919,10 @@
             const indices = selectedIndices.size > 0 ? [...selectedIndices] : (selectedIndex >= 0 ? [selectedIndex] : []);
             if (indices.length === 0) return;
             pushHistory();
-            /* Use first selected widget's position as the anchor for center/middle */
-            const anchor = currentLayout.widgets[indices[0]];
+            /* Several widgets centre on the first selected one. A single widget
+             * centres on the screen, like Left/Right/Top/Bottom use the screen
+             * edges — lining it up with itself did nothing. (0,0) = centre. */
+            const anchor = indices.length === 1 ? { x: 0, y: 0 } : currentLayout.widgets[indices[0]];
             indices.forEach(i => {
                 const w = currentLayout.widgets[i];
                 if (!w || w.locked) return;   /* honor lock — matches arrow-nudge + inspector */
@@ -12705,6 +12757,12 @@
              * focused deleted the selected widget — see _keyGoesToField. */
             if (_keyGoesToField(e.target)) return;
 
+            const _help = document.getElementById('helpModal');
+            if (_help && _help.style.display === 'flex') {
+                if (e.key === 'Escape') { e.preventDefault(); _help.style.display = 'none'; }
+                return;
+            }
+
             if (e.ctrlKey || e.metaKey) {
                 if (e.shiftKey) {
                     if (e.key === 'c' || e.key === 'C') { e.preventDefault(); copyStyle(); return; }
@@ -12738,8 +12796,13 @@
             }
 
             if (selectedIndex === -1 && selectedIndices.size === 0) return;
+            /* Delete/arrows act on the canvas — never from the Setup or
+             * Channels page, where the selected widget isn't even visible. */
+            if (!document.body.classList.contains('studio-design')) return;
 
-            if (e.key === 'Delete') {
+            /* Backspace too: a Mac keyboard has no Delete key. */
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
                 deleteWidget();
                 return;
             }
@@ -12833,13 +12896,13 @@
         let previewTimer = null;
         function buildFirmwarePayload() {
             const payload = JSON.parse(JSON.stringify(currentLayout));
-            /* Drop widgets the user has toggled invisible in the layers panel
-             * — this is what "hide" should mean end-to-end. Hidden widgets
-             * stay in currentLayout so the user can flip them back on within
-             * the same editing session, but they don't survive a reload
-             * (firmware doesn't honor a "hidden" flag). */
+            /* The layers-panel eye hides a widget ON THE CANVAS only; it is
+             * still sent to the dash. It used to be dropped from the payload
+             * here, and since auto-save runs a second later and the firmware
+             * has no "hidden" flag, hiding a widget to get it out of the way
+             * while editing silently DELETED it from the dash for good. */
             if (Array.isArray(payload.widgets)) {
-                payload.widgets = payload.widgets.filter(w => !w.hidden);
+                payload.widgets.forEach(w => { delete w.hidden; });
             }
             /* Tag layout with target screen dimensions */
             payload.screen_w = CANVAS_W;
@@ -13933,8 +13996,8 @@
                 <div class="field"><label>H</label><input type="number" value="${w.h}" onchange="updateWidgetField('h', parseInt(this.value), true)" oninput="updateWidgetFieldDeferred('h', parseInt(this.value))" ${disabledAttr}></div>
             </div>`;
             html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px;">
-                <button class="btn btn-secondary" style="font-size:11px" onclick="moveWidgetLayer('up')" ${disabledAttr}>Bring Forward</button>
-                <button class="btn btn-secondary" style="font-size:11px" onclick="moveWidgetLayer('down')" ${disabledAttr}>Send Backward</button>
+                <button class="btn btn-secondary" style="font-size:11px" onclick="moveWidgetLayer('up')" ${disabledAttr}>Bring to Front</button>
+                <button class="btn btn-secondary" style="font-size:11px" onclick="moveWidgetLayer('down')" ${disabledAttr}>Send to Back</button>
             </div>`;
             html += `<button class="btn btn-secondary" style="margin-top:8px; border-color:hsl(0, 100%, 63%); color:hsl(0, 100%, 63%); width:100%; font-size:11px;" onclick="deleteWidget()" ${disabledAttr}>Delete Widget</button>`;
             html += `</div></details>`;
@@ -14738,6 +14801,12 @@
         }
         function addRule() {
             const w = _ensureRules(); if (!w) return;
+            /* The dash keeps 16 rules per widget (WIDGET_MAX_RULES) and
+             * silently drops the rest. */
+            if (w.config.rules.length >= 16) {
+                updateStatus('16 rules is the most one widget can have');
+                return;
+            }
             pushHistory();
             w.config.rules.push({ signal_name: '', op: '>', threshold: 0, overrides: {} });
             /* Flag the new row so updateInspector() can auto-open it + the
@@ -16083,7 +16152,7 @@
                     URL.revokeObjectURL(imgEl.src);
                 };
             };
-            imgEl.onerror = () => { URL.revokeObjectURL(imgEl.src); alert('Failed to load image'); };
+            imgEl.onerror = () => { URL.revokeObjectURL(imgEl.src); showToast('Could not load that image', 'error'); };
             imgEl.src = URL.createObjectURL(file);
         }
 
@@ -16111,19 +16180,26 @@
             try {
                 const rdmimg = convertImageToRDMIMG(img, targetW, targetH);
 
-                /* Delete existing image first to free space for the replacement */
-                statusEl.textContent = `Replacing ${name}...`;
-                try { await fetch(`/api/image/delete?name=${encodeURIComponent(name)}`, { method: 'POST' }); } catch(e) {}
-
                 statusEl.textContent = `Uploading ${name} (${(rdmimg.byteLength / 1024).toFixed(1)} KB)...`;
 
-                const resp = await fetch(`/api/image/upload?name=${encodeURIComponent(name)}`, {
+                const _upload = () => fetch(`/api/image/upload?name=${encodeURIComponent(name)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/octet-stream' },
                     body: rdmimg
                 });
-
-                if (!resp.ok) throw new Error(await resp.text());
+                /* The dash replaces an image atomically, so upload first. The
+                 * old image used to be deleted BEFORE the upload, and a failed
+                 * upload left the layout with no image at all. Only when there
+                 * isn't room for both copies is the old one deleted to make space. */
+                let resp = await _upload();
+                if (!resp.ok) {
+                    const msg = await resp.text();
+                    if (!/not enough storage/i.test(msg)) throw new Error(msg);
+                    statusEl.textContent = `Replacing ${name}...`;
+                    try { await fetch(`/api/image/delete?name=${encodeURIComponent(name)}`, { method: 'POST' }); } catch(e) {}
+                    resp = await _upload();
+                    if (!resp.ok) throw new Error(await resp.text());
+                }
 
                 statusEl.textContent = 'Upload complete!';
                 _refreshImageList();
@@ -16546,6 +16622,7 @@
 
         function moveWidgetLayer(dir) {
             if (selectedIndex === -1) return;
+            pushHistory();
             const w = currentLayout.widgets.splice(selectedIndex, 1)[0];
             if (dir === 'up') {
                 currentLayout.widgets.push(w);
@@ -16750,7 +16827,7 @@
             modal.dataset.mode = mode;
             /* Update header text */
             modal.querySelector('.signal-modal-header span').textContent =
-                mode === 'pick' ? 'Assign Data Source' : 'Custom CAN Signals';
+                mode === 'pick' ? 'Assign Data Source' : 'Preset library';
             /* Update footer Done button label */
             const doneBtn = modal.querySelector('.signal-modal-footer .btn');
             if (doneBtn) doneBtn.textContent = mode === 'pick' ? 'Cancel' : 'Done';
@@ -17496,8 +17573,11 @@
             const sel = document.getElementById('splashSelect');
             const oldName = sel ? sel.value : '';
             if (!oldName) return;
+            if (oldName === '__disable__') { showToast('Pick a splash screen to rename first', 'info'); return; }
             _showRenameOverlay(oldName, async (newName) => {
                 if (newName === oldName) return;
+                /* Stored as "_splash_<name>" and layout names stop at 31. */
+                if (newName.length > 23) { showToast('Splash names can be up to 23 characters', 'error'); return; }
                 try {
                     const resp = await fetch('/api/layout/rename', {
                         method: 'POST',
@@ -20738,7 +20818,7 @@
                             style="width:100%;box-sizing:border-box;background:#111214;border:1px solid #3a3b40;border-radius:6px;padding:9px 12px;color:#fff;font-size:13px;font-family:'JetBrains Mono',monospace;outline:none;"
                             onfocus="this.select()">
                         <div id="_ecuBaseHint" style="font-size:10px;color:#777;margin-top:7px;min-height:13px;"></div>
-                        <div style="font-size:11px;color:#999;margin-top:12px;line-height:1.5;">Applying overwrites your layout&rsquo;s signals with this ECU&rsquo;s decode.</div>
+                        <div style="font-size:11px;color:#999;margin-top:12px;line-height:1.5;">Applying sets up this ECU&rsquo;s standard channels on the dash.</div>
                         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
                             <button id="_ecuBaseCancel" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:#999;font-size:12px;">Cancel</button>
                             <button id="_ecuBaseOk" style="padding:7px 16px;cursor:pointer;background:#3b82f6;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:500;">Apply</button>
@@ -20814,7 +20894,7 @@
             } else {
                 const confirmMsg = isRdmInternal
                     ? 'Switch to RDM-7 Internal? Your existing signals are preserved; the Gear Setup will open so you can configure ratios.'
-                    : `Apply ${make} ${version}? This overwrites your layout's signals with the ECU's default decode.`;
+                    : `Apply ${make} ${version}? This sets up the ECU's standard channels on the dash.`;
                 if (!(await confirmAsync(isRdmInternal ? 'Switch to RDM-7 Internal' : 'Apply ECU Preset', confirmMsg, isRdmInternal ? 'Switch' : 'Apply'))) return;
             }
             try {
@@ -21571,7 +21651,7 @@
                 const vStr = p.v != null ? p.v.toFixed(3) : '';
                 const valStr = p.val != null ? p.val : '';
                 return `<div style="display:grid; grid-template-columns:1fr 1fr auto auto; gap:6px; align-items:center;">
-                    <input type="number" step="0.001" min="0" max="5" value="${vStr}" placeholder="-- V"
+                    <input type="number" step="0.001" min="0" max="3.3" value="${vStr}" placeholder="-- V"
                            oninput="_fuelSetupOnVoltageInput(${i}, this.value)"
                            style="width:100%; padding:6px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px;">
                     <input type="number" step="0.1" value="${valStr}" placeholder="reading"
@@ -21776,6 +21856,16 @@
             sel.innerHTML = '';
             const allSigs = new Set(INTERNAL_SIGNALS);
             (currentLayout.signals || []).forEach(s => { if (s.name) allSigs.add(s.name); });
+            /* Every signal the dash has — channels live outside the layout now,
+             * so a headlight or dimmer channel set up on the Channels page was
+             * missing from this list. */
+            try {
+                const r = await fetch('/api/signals/values');
+                if (r.ok) {
+                    const d = await r.json();
+                    (Array.isArray(d) ? d : (d.signals || [])).forEach(s => { if (s && s.name) allSigs.add(s.name); });
+                }
+            } catch (e) { /* offline: layout + internal only */ }
             allSigs.forEach(name => {
                 const opt = document.createElement('option');
                 opt.value = name; opt.textContent = name;
@@ -22581,10 +22671,12 @@
             /* ECU preset — the layout owns it (ADR-0005 keeps decode on the
              * channels, but the ECU identity still rides the layout). */
             try {
-                const lr = await fetch('/api/layout/current');
+                /* The dash's ECU, not the active layout's tag — a portable
+                 * layout names none, and this read "Not set" on a set-up car. */
+                const lr = await fetch('/api/ecu/current');
                 if (lr.ok) {
                     const l = await lr.json();
-                    const name = [l.ecu, l.ecu_version].filter(Boolean).join(' ');
+                    const name = [l.make, l.version].filter(Boolean).join(' ');
                     set('canSetupEcu', name || 'Not set');
                 }
             } catch (e) { /* leave the dash */ }
@@ -22753,39 +22845,43 @@
                 const el = document.getElementById(id);
                 if (el) el.textContent = val;
             };
+            let sigs = null;
             try {
-                /* Pull live signals — we can infer CAN-bus liveness from
-                 * any non-stale value, and count OBD2-ish signals. */
+                /* Pull live signals: how many readings are arriving, and how
+                 * many of them come from OBD2. */
                 const r = await fetch('/api/signals/values');
                 if (r.ok) {
                     const data = await r.json();
-                    const sigs = Array.isArray(data) ? data : (data.signals || []);
+                    sigs = Array.isArray(data) ? data : (data.signals || []);
                     const liveCount = sigs.filter(s => !s.stale).length;
                     setText('obd2SetupCan',
-                        liveCount > 0 ? `Active (${liveCount} live signals)`
-                                      : 'Idle (no live signals)');
+                        liveCount > 0 ? `${liveCount} live`
+                                      : 'None arriving');
                 }
             } catch (e) { setText('obd2SetupCan', 'Unknown'); }
 
-            /* ECU label comes from the layout JSON (assigned via the ECU
-             * picker / first-run wizard). Falls back to "Generic OBD2"
-             * when nothing is set. */
+            /* ECU label: the dash's ECU (set by the wizard or ECU picker), not
+             * the active layout's tag, which a portable layout doesn't carry.
+             * Falls back to "Generic OBD2" when nothing is set. */
             try {
-                const ecu = (typeof currentLayout !== 'undefined' && currentLayout && currentLayout.ecu) ? currentLayout.ecu : '';
-                const ver = (typeof currentLayout !== 'undefined' && currentLayout && currentLayout.ecu_version) ? currentLayout.ecu_version : '';
+                const er = await fetch('/api/ecu/current');
+                const cur = er.ok ? await er.json() : {};
+                const ecu = cur.make || '';
+                const ver = cur.version || '';
                 let label = '';
                 if (ecu && ver) label = `${ecu} (${ver})`;
                 else if (ecu)   label = ecu;
                 setText('obd2SetupEcu', label || 'Generic OBD2');
             } catch (e) {}
 
-            /* Enabled signal count = signals in the loaded layout (proxy
-             * for "signals the device is actually polling"). */
-            try {
-                const layoutSigs = (typeof currentLayout !== 'undefined' && currentLayout && Array.isArray(currentLayout.signals))
-                                   ? currentLayout.signals : [];
-                setText('obd2SetupEnabled', `${layoutSigs.length}`);
-            } catch (e) {}
+            /* OBD2 readings the dash is polling, and how many answer. (This
+             * used to count the layout's signals[] list, which is empty now
+             * that decode lives on channels.) */
+            if (sigs) {
+                const obd = sigs.filter(s => s.source === 'obd2');
+                const live = obd.filter(s => !s.stale).length;
+                setText('obd2SetupEnabled', obd.length ? `${obd.length} (${live} answering)` : 'None set up');
+            }
 
             /* Custom PID count from layout state. */
             try {
@@ -23200,11 +23296,11 @@
         function customPidEditSave() {
             const p = _readEditForm();
             if (!p.signal_name) {
-                alert('Signal name is required.');
+                showToast('Signal name is required', 'error');
                 return;
             }
             if (!/^[A-Z_][A-Z0-9_]*$/i.test(p.signal_name)) {
-                alert('Signal name must be alphanumeric/underscore (e.g. ATF_TEMP).');
+                showToast('Signal name: letters, digits and _ only (e.g. ATF_TEMP)', 'error');
                 return;
             }
             /* Normalise signal name to UPPER_SNAKE_CASE for registry consistency. */
@@ -23222,7 +23318,7 @@
 
             customPidEditClose();
             _renderCustomPidsTable();
-            updateStatus('Custom PID saved — Save Layout to push to device');
+            updateStatus('Custom PID saved — press Save/Apply to send it to the dash');
         }
 
         async function customPidDelete(index) {
@@ -23231,7 +23327,7 @@
             if (!(await confirmAsync('Delete Custom PID', 'Delete ' + (arr[index].signal_name || 'this PID') + '?', 'Delete'))) return;
             arr.splice(index, 1);
             _renderCustomPidsTable();
-            updateStatus('Custom PID deleted — Save Layout to push to device');
+            updateStatus('Custom PID deleted — press Save/Apply to send it to the dash');
         }
 
         function customPidDuplicate(index) {
@@ -23245,7 +23341,7 @@
 
         async function customPidTest() {
             const p = _readEditForm();
-            if (!p.signal_name) { alert('Signal name is required (used for the test).'); return; }
+            if (!p.signal_name) { showToast('Enter a signal name first — the test reports under it', 'error'); return; }
             const out = document.getElementById('cpidTestResult');
             out.textContent = 'Sending request...';
             out.style.color = 'var(--text-muted)';
@@ -23298,7 +23394,7 @@
                     const j = JSON.parse(r.result);
                     /* Accept either {format, pids:[...]} or a bare array. */
                     const list = Array.isArray(j) ? j : (Array.isArray(j.pids) ? j.pids : null);
-                    if (!list) { alert('Invalid pack file (no pids array).'); return; }
+                    if (!list) { showToast('That file has no PID list in it', 'error'); return; }
                     const arr = _customPidsArray();
                     let added = 0, replaced = 0;
                     list.forEach(p => {
@@ -23325,9 +23421,9 @@
                         else         { arr.push(norm); added++; }
                     });
                     _renderCustomPidsTable();
-                    updateStatus('Imported: ' + added + ' added, ' + replaced + ' replaced — Save Layout to push');
+                    updateStatus('Imported: ' + added + ' added, ' + replaced + ' replaced — press Save/Apply to send them to the dash');
                 } catch (e) {
-                    alert('Failed to parse JSON: ' + (e && e.message || e));
+                    showToast('Could not read that JSON file: ' + (e && e.message || e), 'error');
                 }
             };
             r.readAsText(file);
@@ -23335,7 +23431,7 @@
 
         function customPidExport() {
             const arr = _customPidsArray();
-            if (arr.length === 0) { alert('No custom PIDs to export.'); return; }
+            if (arr.length === 0) { showToast('No custom PIDs to export yet', 'info'); return; }
             const pack = {
                 format: 'rdm7-obd2-pack/1',
                 exported: new Date().toISOString().slice(0, 10),
@@ -25808,21 +25904,28 @@
             if (geom) _probeInvalidate(); else _probeRender();
         }
 
-        /* Accept "0x1F4", "1F4h", "500" — people copy IDs out of DBCs and
-         * datasheets in every format. Returns NaN when unparseable. */
+        /* Scale/offset come back from the dash as float32, so 0.0145 arrives as
+         * 0.014499999582767 and 0.1 as 0.100000001490116. Show the number that
+         * was meant; 7 significant digits is float32's precision anyway. */
+        function _chFmtFloat(v) {
+            const n = Number(v);
+            return isFinite(n) ? String(+n.toPrecision(7)) : '';
+        }
+
+        /* A typed CAN ID is HEX: "360", "0x360" and "360h" all mean 0x360.
+         * That is how ECU manuals, the dash, the probe and every channel row
+         * write them. Bare digits used to be DECIMAL here but HEX in the channel
+         * drawer, so "360" bound one channel to 0x168 and another to 0x360
+         * depending on which box you typed it in. The one exception is a "d"
+         * suffix ("864d") for the rare decimal ID. (DBC files carry decimal IDs,
+         * but those go through the importer, not this box.) NaN if unparseable. */
         function _chParseCanId(raw) {
             let s = String(raw || '').trim().toLowerCase();
-            /* The trailing "h" is the only thing marking "520h" as hex — test for
-             * it before stripping, or the all-digits branch below claims it and
-             * silently binds the channel to 0x208. */
-            const hexSuffix = /h$/.test(s);
-            s = s.replace(/h$/, '');
             if (!s) return NaN;
-            if (s.startsWith('0x')) return parseInt(s.slice(2), 16);
-            if (hexSuffix && /^[0-9a-f]+$/.test(s)) return parseInt(s, 16);
-            if (/^[0-9]+$/.test(s)) return parseInt(s, 10);
-            if (/^[0-9a-f]+$/.test(s)) return parseInt(s, 16);
-            return NaN;
+            if (/^[0-9]+d$/.test(s)) return parseInt(s, 10);
+            s = s.replace(/^0x/, '').replace(/h$/, '');
+            if (!/^[0-9a-f]+$/.test(s)) return NaN;
+            return parseInt(s, 16);
         }
 
         function _chNewSetCanId(el) {
@@ -25837,27 +25940,32 @@
             _probeInvalidate();
         }
 
-        /* Decode a bit-field out of an 8-byte frame, mirroring the firmware's
-         * can_extract_bits: bit_start counts from byte0/bit0, little-endian
-         * (Intel) walks bytes low→high, big-endian (Motorola) high→low. Kept
-         * deliberately simple — it only has to agree with the firmware for the
-         * shapes the form can express. */
+        /* Decode a bit-field out of a frame exactly as the firmware's
+         * can_extract_bits (main/can/can_decode.c) does. Both byte orders count
+         * bit_start from byte 0:
+         *   Intel (little):   bit n = byte n/8, bit (n%8) counted from the LSB;
+         *                     the first bit is the value's LSB.
+         *   Motorola (big):   bit n = byte n/8, bit (n%8) counted from the MSB;
+         *                     the first bit is the value's MSB.
+         * The Motorola branch used to index bytes from the END of the frame, so
+         * the preview disagreed with the dash for every big-endian channel
+         * (Haltech, MegaSquirt, Ford): bit 16 len 16 showed bytes 4-5 while the
+         * dash read bytes 2-3. BigInt so the full 64-bit range decodes. */
         function _chDecodeBits(bytes, bitStart, bitLen, isSigned, littleEndian) {
-            if (!bytes || !bytes.length || bitLen < 1 || bitLen > 32) return null;
-            let raw = 0;
+            if (!bytes || !bytes.length || bitLen < 1 || bitLen > 64) return null;
+            if (((bitStart + bitLen - 1) >> 3) >= bytes.length) return null;
+            let raw = 0n;
             for (let i = 0; i < bitLen; i++) {
                 const bit = bitStart + i;
-                const byteIdx = littleEndian ? (bit >> 3) : (bytes.length - 1 - (bit >> 3));
-                if (byteIdx < 0 || byteIdx >= bytes.length) return null;
-                const bitInByte = bit & 7;
-                const b = (bytes[byteIdx] >> bitInByte) & 1;
-                raw |= (b << i);
+                const byte = bytes[bit >> 3];
+                if (littleEndian) {
+                    if ((byte >> (bit & 7)) & 1) raw |= (1n << BigInt(i));
+                } else {
+                    raw = (raw << 1n) | BigInt((byte >> (7 - (bit & 7))) & 1);
+                }
             }
-            if (isSigned && bitLen < 32) {
-                const signBit = 1 << (bitLen - 1);
-                if (raw & signBit) raw -= (1 << bitLen);
-            }
-            return raw;
+            if (isSigned && (raw & (1n << BigInt(bitLen - 1)))) raw -= (1n << BigInt(bitLen));
+            return Number(raw);
         }
 
         /* Attach the probe to a decode source and start polling. Idempotent
@@ -26025,13 +26133,12 @@
             for (let i = 0; i + 1 < src.data.length; i += 2)
                 bytes.push(parseInt(src.data.substr(i, 2), 16));
 
-            /* Highlight the bytes the bit window actually touches. */
+            /* Highlight the bytes the bit window actually touches. Both byte
+             * orders count from byte 0 (see _chDecodeBits). */
             const firstByte = d.bit_start >> 3;
             const lastByte = (d.bit_start + d.bit_length - 1) >> 3;
             const hex = bytes.map((b, i) => {
-                const inWin = d.endian === 1
-                    ? (i >= firstByte && i <= lastByte)
-                    : (i >= bytes.length - 1 - lastByte && i <= bytes.length - 1 - firstByte);
+                const inWin = i >= firstByte && i <= lastByte;
                 const h = b.toString(16).toUpperCase().padStart(2, '0');
                 return inWin ? `<span class="hit">${h}</span>` : h;
             }).join(' ');
@@ -26111,7 +26218,7 @@
                     <div class="ch2-newform-grid">
                         <div class="ch2-num span2">
                             <span class="ch2-num-label">Name</span>
-                            <input type="text" id="chNewLabel" placeholder="e.g. Turbo Speed" spellcheck="false"
+                            <input type="text" id="chNewLabel" placeholder="e.g. Turbo Speed" spellcheck="false" style="text-align:left;"
                                    value="${_escAttr(d.label)}" oninput="_chNewDraft.label = this.value;">
                         </div>
                         <div class="ch2-num">
@@ -26120,7 +26227,7 @@
                         </div>
                         <div class="ch2-num">
                             <span class="ch2-num-label">Units</span>
-                            <input type="text" placeholder="e.g. rpm" spellcheck="false"
+                            <input type="text" placeholder="e.g. rpm" spellcheck="false" style="text-align:left;"
                                    value="${_escAttr(d.units)}" oninput="_chNewSet('units', this.value)">
                         </div>
                         <div class="ch2-num">
@@ -26142,8 +26249,8 @@
                     <h4>CAN decode</h4>
                     <div class="ch2-newform-grid">
                         <div class="ch2-num">
-                            <span class="ch2-num-label">CAN ID</span>
-                            <input type="text" placeholder="0x1F4 or 500" spellcheck="false" style="font-family:monospace;"
+                            <span class="ch2-num-label">CAN ID (hex)</span>
+                            <input type="text" placeholder="e.g. 360" spellcheck="false" style="font-family:monospace;"
                                    value="${d.can_id ? '0x' + d.can_id.toString(16).toUpperCase().padStart(3,'0') : ''}"
                                    onchange="_chNewSetCanId(this)">
                         </div>
@@ -26161,7 +26268,7 @@
                         </div>
                         <div class="ch2-num">
                             <span class="ch2-num-label">Bit length</span>
-                            <input type="number" min="1" max="32" value="${d.bit_length}"
+                            <input type="number" min="1" max="64" value="${d.bit_length}"
                                    oninput="_chNewSet('bit_length', Number(this.value))">
                         </div>
                         <div class="ch2-num">
@@ -26645,7 +26752,7 @@
                     </div>
                     <div class="ch2-num-row" style="margin-top:8px;">
                         <div class="ch2-num"><span class="ch2-num-label">Then</span>
-                            <select id="chMathOp2">${ops.map(([v, t]) => `<option value="${v}" ${String(cur.op2 ?? 2) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+                            <select id="chMathOp2" ${hasC ? '' : 'disabled title="Pick a third term first"'}>${ops.map(([v, t]) => `<option value="${v}" ${String(cur.op2 ?? 2) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
                         <div class="ch2-num"><span class="ch2-num-label">Channel C (optional)</span>
                             <select id="chMathC" onchange="_chMathCModeSync()">
                                 <option value="" ${hasC ? '' : 'selected'}>(none)</option>
@@ -26658,7 +26765,7 @@
                             <input type="number" step="any" id="chMathCConst" value="${cIsConst ? cur.c : ''}" placeholder="e.g. 100"></div>
                     </div>
                     <div style="margin-top:10px; display:flex; gap:8px;">
-                        <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px;" onclick="_chMathApply('${c.id}')">Apply</button>
+                        <button class="btn btn-primary" style="font-size:12px; padding:6px 14px;" onclick="_chMathApply('${c.id}')">Apply</button>
                         <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px;" onclick="_chMathToggleForm()">Cancel</button>
                     </div>
                 </div>`;
@@ -26672,6 +26779,8 @@
             const row = document.getElementById('chMathConstRowC');
             if (row) row.style.display =
                 document.getElementById('chMathC')?.value === '__const__' ? '' : 'none';
+            const op2 = document.getElementById('chMathOp2');
+            if (op2) op2.disabled = !document.getElementById('chMathC')?.value;
         }
         async function _chMathApply(id) {
             const a = document.getElementById('chMathA')?.value;
@@ -26679,10 +26788,10 @@
             const op = Number(document.getElementById('chMathOp')?.value || 1);
             if (b === '__const__') {
                 const n = Number(document.getElementById('chMathBConst')?.value);
-                if (!Number.isFinite(n)) { alert('Enter a number for operand B.'); return; }
+                if (!Number.isFinite(n)) { showToast('Enter a number for Channel B', 'error'); return; }
                 b = n;   /* typed operand: number = constant */
             }
-            if (!a || b === '' || b == null) { alert('Pick both operands.'); return; }
+            if (!a || b === '' || b == null) { showToast('Pick Channel A and Channel B', 'error'); return; }
             /* Third term. "(none)" sends no "c" key at all rather than an
              * empty one, so a two-operand expression posts byte for byte the
              * request it has always posted. */
@@ -26690,7 +26799,7 @@
             const op2 = Number(document.getElementById('chMathOp2')?.value || 2);
             if (cOp === '__const__') {
                 const n = Number(document.getElementById('chMathCConst')?.value);
-                if (!Number.isFinite(n)) { alert('Enter a number for the third term.'); return; }
+                if (!Number.isFinite(n)) { showToast('Enter a number for Channel C', 'error'); return; }
                 cOp = n;
             }
             const mathBody = { a, b, op };
@@ -26701,7 +26810,7 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ id, fields: { math: mathBody } }),
                 });
-                if (!r.ok) { alert('Calculation rejected: ' + await r.text()); return; }
+                if (!r.ok) { showToast('Calculation rejected: ' + await r.text(), 'error'); return; }
             } catch (e) { console.warn('math apply failed', e); return; }
             _chMathFormOpen = false;
             await _fetchChannelsActive();
@@ -26804,7 +26913,39 @@
             query: '',
         };
 
+        async function _srcPCustomPresetMakes() {
+            let rows = [];
+            try {
+                const r = await fetch('/api/presets/custom?_=' + Date.now(), { cache: 'no-store' });
+                if (r.ok) rows = await r.json();
+            } catch (e) { return []; }
+            const makes = [];
+            (Array.isArray(rows) ? rows : []).forEach(p => {
+                if (p._empty || p.is_mux_switch || !p.label) return;
+                let m = makes.find(x => x.make === p.ecu);
+                if (!m) { m = { make: p.ecu, is_active: false, is_custom_preset: true, versions: [] }; makes.push(m); }
+                let v = m.versions.find(x => x.version === p.version);
+                if (!v) { v = { version: p.version, display: p.ecu + ' ' + p.version, is_active: false, signals: [] }; m.versions.push(v); }
+                const row = {
+                    kind: 'ecu', label: p.label, signal_name: '',
+                    can_id: parseInt(p.can_id, 16) >>> 0,
+                    bit_start: p.bit_start, bit_length: p.bit_length,
+                    scale: p.scale, offset: p.offset, is_signed: p.is_signed,
+                    endian: p.endianess, decimals: p.decimals, unit: p.unit || '',
+                    _preset: p,
+                };
+                if (p.mux_bit_length) {
+                    row.mux_bit_start = p.mux_bit_start || 0;
+                    row.mux_bit_length = p.mux_bit_length;
+                    row.mux_value = p.mux_value || 0;
+                }
+                v.signals.push(row);
+            });
+            return makes;
+        }
+
         function _srcPGroupOf(m) {
+            if (m.is_custom_preset) return 'custom';
             if (m.is_active) return 'active';
             if (m.make === 'OBD2') return 'obd2';
             if (m.make === 'Custom') return 'custom';
@@ -26982,6 +27123,12 @@
             if (mode === 'add') {
                 makes = makes.filter(m => !_SRCP_NOT_AN_ECU.includes(m.make)
                     && (m.versions || []).some(v => (v.signals || []).some(s => s.kind === 'ecu')));
+                /* Presets you saved yourself (a DBC imported as a preset, or
+                 * Create Preset). The dash's source-options only knows its
+                 * built-in tables, so these never showed here even though the
+                 * import told you they would. They are added with their own
+                 * decode rather than through import-preset — see _srcPApplyAdd. */
+                if (!offline) makes = makes.concat(await _srcPCustomPresetMakes());
             }
             _srcP.makes = makes;
             _srcP.offline = offline;
@@ -27311,7 +27458,9 @@
                 .filter(e => _srcP.ticks.has(_srcPSigKey(e.s, e.m, e.v)));
             if (!picked.length) return;
             const byPreset = new Map();
+            const fromMine = [];   /* rows from a preset saved on this dash */
             picked.forEach(e => {
+                if (e.m.is_custom_preset) { fromMine.push(e.s._preset); return; }
                 const k = e.m.make + '||' + e.v.version;
                 if (!byPreset.has(k)) byPreset.set(k, { make: e.m.make, version: e.v.version, labels: [] });
                 byPreset.get(k).labels.push(e.s.label);
@@ -27320,6 +27469,21 @@
             const orig = btn.textContent;
             btn.disabled = true;
             btn.textContent = 'Adding…';
+            if (fromMine.length) {
+                /* The dash's import-preset only resolves its built-in tables,
+                 * so these are created one by one with their decode, the same
+                 * path "Import as Channels" uses. */
+                const res = await _createChannelsFromList(fromMine, btn);
+                if (!byPreset.size) {
+                    if (!res || res.failed.length) showToast(res ? res.summary : 'Import failed', 'warn');
+                    _srcPClose();
+                    await _fetchChannelsActive();
+                    _refreshChannelsList();
+                    return;
+                }
+                btn.disabled = true;
+                btn.textContent = 'Adding…';
+            }
             const before = _chCache.length;
             let queued = 0, asked = 0;
             try {
@@ -27760,8 +27924,8 @@
                     </h3>
                     <div class="ch2-dec-grid">
                         <div class="ch2-num">
-                            <span class="ch2-num-label">CAN ID</span>
-                            <input type="text" value="${hexCanId}" placeholder="0x000" spellcheck="false" style="font-family:monospace;"
+                            <span class="ch2-num-label">CAN ID (hex)</span>
+                            <input type="text" value="${hexCanId}" placeholder="e.g. 360" spellcheck="false" style="font-family:monospace;"
                                    onchange="_chEditDecodeCanId('${id}','${sig}', this)">
                         </div>
                         <div class="ch2-num">
@@ -27776,12 +27940,12 @@
                         </div>
                         <div class="ch2-num">
                             <span class="ch2-num-label">Scale</span>
-                            <input type="number" step="any" value="${d.scale}"
+                            <input type="number" step="any" value="${_chFmtFloat(d.scale)}"
                                    oninput="_chEditDecode('${id}','${sig}','scale', Number(this.value)); _probeRender();">
                         </div>
                         <div class="ch2-num">
                             <span class="ch2-num-label">Offset</span>
-                            <input type="number" step="any" value="${d.offset}"
+                            <input type="number" step="any" value="${_chFmtFloat(d.offset)}"
                                    oninput="_chEditDecode('${id}','${sig}','offset', Number(this.value)); _probeRender();">
                         </div>
                         <div class="ch2-num">
@@ -28238,10 +28402,7 @@
         }
 
         function _chEditSignalCanId(channelId, signalName, inputEl) {
-            const raw = (inputEl.value || '').trim();
-            let val;
-            if (raw.toLowerCase().startsWith('0x')) val = parseInt(raw, 16);
-            else val = parseInt(raw, 16); /* treat bare input as hex */
+            const val = _chParseCanId(inputEl.value);   /* same rule as the new-channel form */
             if (isNaN(val) || val < 0 || val > 0x1FFFFFFF) {
                 inputEl.classList.add('invalid');
                 if (typeof updateStatus === 'function') updateStatus('CAN ID must be 0x000-0x1FFFFFFF (11-bit or 29-bit)', true);
@@ -28828,7 +28989,11 @@
             const file  = document.getElementById('canShareFile').value.trim();
             const make  = document.getElementById('canShareMake').value.trim();
             const model = document.getElementById('canShareModel').value.trim();
-            const notes = document.getElementById('canShareNotes').value.trim();
+            /* The firmware refuses control characters in the notes (they go in
+             * an HTTP header), so a line break used to fail the whole upload
+             * with a vague error. Fold them to spaces; 255 bytes max. */
+            const notes = document.getElementById('canShareNotes').value
+                .replace(/[\r\n\t]+/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 250);
             const status = document.getElementById('canShareStatus');
             const submitBtn = document.getElementById('canShareSubmitBtn');
 
@@ -29248,7 +29413,7 @@
             sections.push({ heading: 'View', items: [
                 { type: 'toggle', label: 'SIM', icon: 'activity', getState: () => {
                         const p = document.getElementById('pillSimulate');
-                        return !!(p && p.classList.contains('active'));
+                        return !!(p && p.classList.contains('sim-active'));
                     }, onclick: 'toggleSimulation()' },
                 { type: 'toggle', label: 'LIVE', icon: 'monitor', getState: () => (typeof _livePreviewOn !== 'undefined' ? _livePreviewOn : true),
                     onclick: 'toggleLivePreview()' },

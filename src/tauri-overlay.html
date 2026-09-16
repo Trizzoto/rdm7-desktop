@@ -225,13 +225,13 @@
             </div>
             <div class="setup-card" onclick="backupAllDeviceLayouts()" id="backupAllItem" style="display:none;">
                 <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Backup All Layouts</div>
-                <div class="card-body">Save every layout on the device into a single ZIP on this computer.</div>
-                <div class="card-stat">ZIP export</div>
+                <div class="card-body">Save every layout on the dash into one .rdmbackup file on this computer (layouts only &mdash; not images, fonts or channels).</div>
+                <div class="card-stat">.rdmbackup</div>
             </div>
             <div class="setup-card" onclick="restoreAllDeviceLayouts()" id="restoreAllItem" style="display:none;">
                 <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Restore Layouts</div>
-                <div class="card-body">Push layouts from a ZIP backup back onto the device.</div>
-                <div class="card-stat">ZIP import</div>
+                <div class="card-body">Put layouts from a .rdmbackup file back on the dash. Layouts with the same name are replaced.</div>
+                <div class="card-stat">.rdmbackup</div>
             </div>
             <div class="setup-card" onclick="importLocalToDevice()" id="importToDeviceItem" style="display:none;">
                 <div class="card-title"><svg viewBox="0 0 24 24"><polyline points="7 17 2 12 7 7"/><line x1="2" y1="12" x2="22" y2="12"/><polyline points="17 7 22 12 17 17"/></svg>Import Local to Device</div>
@@ -13767,8 +13767,8 @@
             if (!refs.length) {
                 h += "<div class='cm-none' style='padding:14px 6px;'>" +
                      (!_caIsLive() ? "No dash link &mdash; connect over WiFi to read the car's OBD2 values."
-                      : L.obdPids ? "The dash is polling, but no ECU has answered yet.<br><br>Check the ignition is on and the car actually supports the requested PIDs (<b>Diagnostics &#9656; OBD2</b> on the dash runs a scan)."
-                      : "OBD2 polling is off.<br><br>Add a channel with <b>Source &#9656; OBD2</b> in the dash editor's <b>Channels</b> tab &mdash; that starts the poll and gives the analyzer a slow reference to hunt the fast CAN copy with.") +
+                      : L.obdPids ? "The dash is polling, but no ECU has answered yet.<br><br>Check the ignition is on and the car actually supports the requested PIDs (<b>Your car &#9656; OBD2 readings</b> on the dash runs a scan)."
+                      : "OBD2 polling is off.<br><br>On the <b>Channels</b> page, use <b>+ Add channels &#9656; From OBD2</b> &mdash; that starts the poll and gives the analyzer a slow reference to hunt the fast CAN copy with.") +
                      "</div>";
                 rail.innerHTML = h; return;
             }
@@ -61264,14 +61264,16 @@
             const el = document.getElementById('dmContent');
             if (!el) return;
             try {
-                const [info, storage, brightness, health] = await Promise.all([
-                    RDM.getDeviceInfo(), RDM.getStorageInfo(), RDM.getBrightness(), RDM.getSystemHealth()
+                const [info, storage, brightness, health, fwVersion] = await Promise.all([
+                    RDM.getDeviceInfo(), RDM.getStorageInfo(), RDM.getBrightness(), RDM.getSystemHealth(),
+                    /* /api/device/info has no version over HTTP — "—" on WiFi. */
+                    _readDeviceFirmwareVersion().catch(() => null)
                 ]);
                 let html = '';
                 if (info) {
                     html += `<div class="dm-section"><div class="dm-section-title">Identity</div>
                         <div class="dm-row"><span class="dm-label">Serial</span><span class="dm-value">${info.serial || '—'}</span></div>
-                        <div class="dm-row"><span class="dm-label">Firmware</span><span class="dm-value">${info.version || '—'}</span></div>
+                        <div class="dm-row"><span class="dm-label">Firmware</span><span class="dm-value">${fwVersion || info.version || '—'}</span></div>
                         <div class="dm-row"><span class="dm-label">Schema</span><span class="dm-value">v${info.schema || '?'}</span></div>
                         ${info.hardware ? `<div class="dm-row"><span class="dm-label">Chip</span><span class="dm-value">${info.hardware.chip || '—'} (${info.hardware.cores || '?'} cores)</span></div>
                         <div class="dm-row"><span class="dm-label">PSRAM</span><span class="dm-value">${info.hardware.psram_mb ? info.hardware.psram_mb.toFixed(1) + ' MB' : '—'}</span></div>` : ''}
@@ -61402,7 +61404,10 @@
         }
 
         async function importLocalToDevice() {
-            showToast('Connect to a device and use "Import Local to Device" from the layout menu', 'info');
+            /* Used to only toast a pointer to a menu item that doesn't exist.
+               Transfer Layouts is the screen that copies This PC -> Device. */
+            if (typeof openTransferModal === 'function') { openTransferModal(); return; }
+            showToast('Connect to a dash, then use Transfer Layouts', 'info');
         }
 
         async function otaFirmwareUpdate() {
@@ -61423,8 +61428,29 @@
                     : 'Connect to a dash over WiFi first — it downloads its own update', 'info');
                 return;
             }
-            if (typeof _otaShowInstall === 'function') { _otaShowInstall(); return; }
-            showToast('OTA update requires a WiFi connection to the device', 'info');
+            /* /api/ota/start answers 409 until a check has found an update, and
+               that surfaced as "Could not start — check network". Check first. */
+            showToast('Checking for a firmware update…', 'info');
+            try {
+                await fetch('/api/ota/check', { method: 'POST' });
+                let st = null;
+                for (let i = 0; i < 15; i++) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    const r = await fetch('/api/ota/status');
+                    if (!r.ok) continue;
+                    st = await r.json();
+                    if (st.status !== 'checking') break;
+                }
+                if (st && st.update_available) {
+                    if (typeof _otaShowInstall === 'function') { _otaShowInstall(); return; }
+                } else if (st && st.status !== 'checking') {
+                    showToast('The dash is up to date' + (st.current_version ? ' (v' + st.current_version + ')' : ''), 'success');
+                    return;
+                }
+                showToast("Couldn't reach the update server — is the dash on a network with internet?", 'error');
+            } catch (e) {
+                showToast("Couldn't reach the dash to check for updates", 'error');
+            }
         }
 
         /* Seed the RDM logo into IndexedDB if the data file was loaded.
