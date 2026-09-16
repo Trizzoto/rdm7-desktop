@@ -2,7 +2,7 @@
 
 From: Tommy (apps) · 17 September 2026 · against v1.1 of 16 September 2026
 
-Nine requests. CR-1 to CR-5 came from reading the spec; CR-6 to CR-9 came
+Ten requests. CR-1 to CR-5 came from reading the spec; CR-6 to CR-10 came
 out of running the Dash web pilot. Each follows the §Governance format: section and token, current
 value, proposed value, the measurement, and what it affects.
 
@@ -300,3 +300,34 @@ suppress-for-one-frame technique beside it.
 
 **What it affects.** Every surface that gains a theme toggle: Studio and Dash
 web. The phone is unaffected, having no CSS transitions.
+
+## CR-10 — there is no ink for a light fill, and no light ground
+
+**Section.** §2.2 (`accent.onFill`) and §2.3 / §2.4.
+
+**Current.** `text.onFill` is `#ffffff`, defined as the "label on an accent
+fill". The grounds all move with the mode.
+
+**Why.** Two related gaps, 17 call sites between them in Dash web:
+
+*Ink on a light fill* (12 sites). A dark label on a pale surface:
+`.cm-item:hover`, `.setup-card .dev-chip`, `#draftToast`,
+`.preset-col-item.active`, `.props-test-momentary.pressed`,
+`.path-add-handle`. Each currently carries `#1a1a1a` or `#000`. `text.onFill`
+is white, so it is wrong here, and `text.primary` inverts with the mode, so it
+is wrong too — in dark mode it would put light ink on the pale fill.
+
+*A ground that stays light* (5 sites). `.resize-handle`, `.path-handle`,
+`#interactionLayer::before/::after` and `.toggle-track::after` are white
+handles and grips drawn over the canvas. They are the mirror of `stage` and
+`bar`: fixed regardless of mode, because they sit on artwork rather than on the
+page. There is no role for that.
+
+**Proposed.** Either a second `onFill` pair — `onFill.light` for a dark label on
+a pale fill, alongside the existing white — or a named fixed-light ground to
+match the fixed-dark `stage` and `bar`, with its own ink. Whichever is chosen,
+it wants the same treatment §2.3 gives `stage`: a note that it does not follow
+the mode.
+
+**What it affects.** 17 call sites in Dash web. They are the last group of raw
+neutrals in the CSS; everything else left is covered by CR-6, CR-7 or CR-8.

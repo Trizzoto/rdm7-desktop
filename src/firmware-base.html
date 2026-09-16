@@ -34,6 +34,11 @@
                and only a forced recalc with transitions off corrected it.
                Every themed element with a transition would be left behind, so
                the swap lands in one frame with transitions suppressed. */
+            /* Clear anything a previous swap left behind before adding another,
+               so rapid switching cannot pile them up. */
+            var stale = document.querySelectorAll('style[data-theme-swap]');
+            for (var i = 0; i < stale.length; i++) stale[i].remove();
+
             var mute = document.createElement('style');
             mute.setAttribute('data-theme-swap', '');
             mute.textContent = '*,*::before,*::after{transition:none !important}';
@@ -43,9 +48,16 @@
             else root.removeAttribute('data-theme');   /* follow the OS */
 
             void root.offsetHeight;                    /* force the recalc now */
-            requestAnimationFrame(function () {
-                requestAnimationFrame(function () { mute.remove(); });
-            });
+
+            /* requestAnimationFrame does NOT run while the tab is hidden, and an
+               OS theme change usually arrives exactly then — the window is in the
+               background, which is why the user changed the OS theme at all. On
+               rAF alone the suppressor was never removed and transitions stayed
+               off for the rest of the session. The timer is the one that always
+               fires; remove() twice is a no-op. */
+            var unmute = function () { mute.remove(); };
+            requestAnimationFrame(function () { requestAnimationFrame(unmute); });
+            setTimeout(unmute, 250);
         }
         /* Anything painted from JS has to repaint: a canvas or an inline style
            written as a literal does not follow a var() swap (§10.2). Listen for
@@ -3494,7 +3506,7 @@
             left: 50%;
             transform: translate(-50%, -50%);
             text-align: center;
-            color: #404040;
+            color: var(--text-secondary);
             pointer-events: none;
             z-index: 1;
         }
@@ -3545,7 +3557,7 @@
         .inspector-empty {
             text-align: center;
             padding: 40px 20px 20px;
-            color: #4a4a4a;
+            color: var(--text-secondary);
         }
 
         .inspector-empty svg {
@@ -3722,7 +3734,7 @@
         .sig-list-empty {
             padding: 16px 12px;
             text-align: center;
-            color: #474747;
+            color: var(--text-secondary);
             font-size: 11px;
             line-height: 1.5;
         }
@@ -3929,11 +3941,11 @@
         .signal-table-empty {
             text-align: center;
             padding: 40px 20px;
-            color: hsl(0, 0%, 33%);
+            color: var(--text-secondary);
         }
         .signal-table-empty .empty-icon { font-size: 32px; margin-bottom: 8px; opacity: 0.4; }
         .signal-table-empty p { margin: 4px 0; font-size: 13px; }
-        .signal-table-empty .hint { font-size: 11px; color: hsl(0, 0%, 27%); }
+        .signal-table-empty .hint { font-size: 11px; color: var(--text-secondary); }
         .signal-table {
             width: 100%;
             border-collapse: collapse;
@@ -4854,7 +4866,7 @@
             <strong>CAN bus graceful start-up</strong>
             <span style="opacity:0.85; margin-left:4px;">An improvement for sensitive CAN bus systems.</span>
         </span>
-        <button onclick="_blShowFinish()" style="background:white; color:hsl(35,85%,35%); border:none;
+        <button onclick="_blShowFinish()" style="background:white; color:var(--status-warn); border:none;
                 font-weight:600; padding:6px 14px; border-radius:4px; cursor:pointer; font-size:12px; flex:0 0 auto;">
             Apply Fix
         </button>
@@ -4887,8 +4899,8 @@
                     Not now
                 </button>
                 <button id="blFinishGo" onclick="_blDoFinish()"
-                        style="padding:7px 16px; cursor:pointer; background:hsl(35,85%,45%); border:none;
-                        border-radius:6px; color:#fff; font-size:12px; font-weight:600;">
+                        style="padding:7px 16px; cursor:pointer; background:var(--status-warn); border:none;
+                        border-radius:6px; color:var(--text-on-fill); font-size:12px; font-weight:600;">
                     Apply now
                 </button>
             </div>
@@ -4936,7 +4948,7 @@
             <!-- ECU Preset Browser (the only view — custom signals live on presets) -->
             <div class="sig-view-body active" id="sigViewPresets">
                 <div class="signal-modal-toolbar" style="border-bottom: 1px solid var(--border);">
-                    <span style="font-size:12px; color:hsl(0, 0%, 53%); flex:1;">Author reusable ECU definitions here — <b>+ New ECU</b>, <b>Create Preset</b>, or import a <b>.dbc</b>. To set <i>this</i> car up, use <b>Channels &rsaquo; + Add channels</b> instead.</span>
+                    <span style="font-size:12px; color:var(--text-secondary); flex:1;">Author reusable ECU definitions here — <b>+ New ECU</b>, <b>Create Preset</b>, or import a <b>.dbc</b>. To set <i>this</i> car up, use <b>Channels &rsaquo; + Add channels</b> instead.</span>
                 </div>
                 <div class="preset-columns" style="flex:1; min-height:0; border-bottom:none;">
                     <div class="preset-col">
@@ -5157,7 +5169,7 @@
                 <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">S</span></div>
                 <div>Open Channels</div>
             </div>
-            <p style="margin-top:20px; font-size:12px; color:hsl(0, 0%, 53%); text-align:center;">Press Esc or click outside to
+            <p style="margin-top:20px; font-size:12px; color:var(--text-secondary); text-align:center;">Press Esc or click outside to
                 close</p>
         </div>
     </div>
@@ -5173,7 +5185,7 @@
             </div>
             <p style="margin:0 0 12px; font-size:11px; color:var(--text-muted);">Paste a layout in firmware JSON format (the same shape an export produces, or what an AI builder generates). It loads straight into the editor for preview &mdash; no device needed. Hit <b>Save</b> afterwards to push it to a connected dash.</p>
             <textarea id="loadJsonText" spellcheck="false" placeholder='{ "name": "my_layout", "widgets": [ ... ] }' style="width:100%; height:280px; padding:10px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:12px; line-height:1.4; resize:vertical; white-space:pre;"></textarea>
-            <div id="loadJsonError" style="display:none; margin-top:8px; font-size:12px; color:hsl(0,70%,62%);"></div>
+            <div id="loadJsonError" style="display:none; margin-top:8px; font-size:12px; color:var(--status-danger);"></div>
             <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
                 <button class="btn btn-secondary" onclick="closeLoadJsonModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="loadJsonFromText()">Load into Editor</button>
@@ -5182,7 +5194,7 @@
     </div>
     <div id="ecuModal" style="display:none; position:fixed; inset:0; background:rgba(10,10,10,0.85); backdrop-filter:blur(8px); z-index:2000; align-items:center; justify-content:center;">
         <div style="background:var(--panel-elevated); border:1px solid var(--border); box-shadow:var(--shadow-md); border-radius:var(--radius-lg); padding:24px; min-width:280px; max-width:min(420px, 90vw); max-height:90vh; overflow-y:auto;">
-            <div style="font-size:13px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:hsl(0,0%,100%); margin-bottom:16px;">Select ECU / Vehicle</div>
+            <div style="font-size:13px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-on-fill); margin-bottom:16px;">Select ECU / Vehicle</div>
             <div id="ecuModalList" style="max-height:min(300px, 60vh); overflow-y:auto; display:flex; flex-direction:column; gap:4px;"></div>
             <div style="margin-top:16px; display:flex; justify-content:space-between; gap:8px;">
                 <!-- Every exit from here used to record a decision: the only
@@ -5294,8 +5306,8 @@
                     <div class="layout-menu-item" onclick="layoutEditorNew(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New dashboard&hellip;</div>
                     <div class="layout-menu-item" onclick="layoutEditorSaveAs(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Save as&hellip;</div>
                     <div class="layout-menu-item" onclick="renameCurrentLayout(); closeLayoutMenu()"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>Rename&hellip;</div>
-                    <div class="layout-menu-item" onclick="resetDefaultLayout(); closeLayoutMenu()" style="color:hsl(0,70%,60%)"><svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Reset default layout</div>
-                    <div class="layout-menu-item" onclick="deleteCurrentLayout(); closeLayoutMenu()" style="color:hsl(0,70%,60%)"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>Delete dashboard</div>
+                    <div class="layout-menu-item" onclick="resetDefaultLayout(); closeLayoutMenu()" style="color:var(--status-danger)"><svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Reset default layout</div>
+                    <div class="layout-menu-item" onclick="deleteCurrentLayout(); closeLayoutMenu()" style="color:var(--status-danger)"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>Delete dashboard</div>
                 </div>
             </div>
             <select id="splashSelect" style="display:none; background:var(--bg); color:var(--text); border:1px solid var(--border); padding:5px 8px; border-radius:var(--radius-sm); font-size:11px; font-family:var(--font-mono);" onchange="switchSplash(this.value)"></select>
@@ -5308,7 +5320,7 @@
                     <div class="layout-menu-item" onclick="splashNew(); closeSplashMenu()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New Splash...</div>
                     <div class="layout-menu-item" onclick="renameSplash(); closeSplashMenu()"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>Rename&hellip;</div>
                     <div class="layout-menu-sep"></div>
-                    <div class="layout-menu-item" onclick="splashDelete(); closeSplashMenu()" style="color:hsl(0,70%,60%)"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>Delete Splash</div>
+                    <div class="layout-menu-item" onclick="splashDelete(); closeSplashMenu()" style="color:var(--status-danger)"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>Delete Splash</div>
                 </div>
             </div>
             <input type="file" id="importRdmInput" accept=".rdm" style="display:none">
@@ -5713,7 +5725,7 @@
                         <span id="chBulkCount" style="font-size:12px; color:var(--text-muted); flex:1;">0 selected</span>
                         <button class="ch2-filter-btn" onclick="_chBulkSelectAllCustom()" title="Select every custom channel (e.g. everything a DBC import created)">All custom</button>
                         <button class="ch2-filter-btn" onclick="_chToggleSelectMode()">Done</button>
-                        <button class="ch2-filter-btn" id="chBulkDeleteBtn" style="color:#ef4444; border-color:#ef4444;" onclick="_chBulkDelete()">Remove</button>
+                        <button class="ch2-filter-btn" id="chBulkDeleteBtn" style="color:var(--status-danger); border-color:var(--status-danger);" onclick="_chBulkDelete()">Remove</button>
                     </div>
                 </div>
                 <!-- Editor. In the modal it is the right-hand pane, as before;
@@ -5726,7 +5738,7 @@
                         <button class="close-btn" onclick="_chCloseDrawer()" style="font-size:18px;">&times;</button>
                     </div>
                     <div id="chDetail" class="ch2-detail-pane" style="flex:1;"></div>
-                    <div id="chDirtyBar" style="display:none; align-items:center; gap:10px; padding:9px 14px; border-top:1px solid rgba(255,255,255,0.1); background:rgba(20,26,20,0.95); flex-shrink:0;">
+                    <div id="chDirtyBar" style="display:none; align-items:center; gap:10px; padding:9px 14px; border-top:1px solid rgba(255,255,255,0.1); background:var(--stage); flex-shrink:0;">
                         <span id="chDirtyLabel" style="font-size:12px; color:var(--text-muted); flex:1;">Unsaved changes</span>
                         <button class="btn btn-secondary" onclick="_chDiscardEdits()">Cancel</button>
                         <button class="btn btn-primary" onclick="_flushChannelEdits()">Save</button>
@@ -6363,7 +6375,7 @@
             <!-- Footer: Clear button (only enabled on Stored tab; two-tap confirm). -->
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; flex:0 0 auto;">
                 <span style="font-size:10px; color:var(--text-muted);">Codes come from <code>Mode 03/07/0A</code>. Clear fires <code>Mode 04</code>.</span>
-                <button id="dtcClearBtn" class="btn" style="background:hsl(0,55%,50%); border-color:hsl(0,55%,40%); font-size:11px; padding:6px 14px;" onclick="_dtcClearTap()">Clear Codes</button>
+                <button id="dtcClearBtn" class="btn" style="background:var(--status-danger); border-color:var(--status-danger); font-size:11px; padding:6px 14px;" onclick="_dtcClearTap()">Clear Codes</button>
             </div>
         </div>
     </div>
@@ -7807,7 +7819,7 @@
                          * the user should expect on the bus, and it used to be
                          * dropped silently. */
                         (muxCount ? `<br><span style="color:var(--text-muted); font-size:10px;">${muxCount} multiplexed signal${muxCount === 1 ? '' : 's'} — frame index preserved.</span>` : '') +
-                        (_dbcMuxOrphans.length ? `<br><span style="color:#e6b800; font-size:10px;">` +
+                        (_dbcMuxOrphans.length ? `<br><span style="color:var(--status-warn); font-size:10px;">` +
                             `${_dbcMuxOrphans.slice(0, 3).join(', ')}${_dbcMuxOrphans.length > 3 ? ', …' : ''}: multiplexed signals with no multiplexor. ` +
                             `Imported without a frame index — set it by hand or they will decode every frame on the ID.</span>` : '') +
                         `<br><span style="color:var(--text-muted); font-size:10px;">` +
@@ -8507,19 +8519,19 @@
             const esc = (s) => String(s == null ? '' : s)
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            const subtitle = _opts.subtitle ? `<div style="font-size:11px;color:#888;margin-bottom:10px;white-space:pre-wrap;">${esc(_opts.subtitle)}</div>` : '';
+            const subtitle = _opts.subtitle ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;white-space:pre-wrap;">${esc(_opts.subtitle)}</div>` : '';
             const overlay = document.createElement('div');
             overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,8,0.82);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
             overlay.innerHTML = `
-                <div style="background:#1a1b1e;border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:320px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
-                    <div style="font-size:13px;font-weight:600;color:#e0e0e0;margin-bottom:14px;letter-spacing:0.03em;">${esc(title)}</div>
+                <div style="background:var(--stage);border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:320px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
+                    <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:14px;letter-spacing:0.03em;">${esc(title)}</div>
                     ${subtitle}
                     <input class="_promptInput" type="text" value="${esc(defaultValue)}" maxlength="64"
-                        style="width:100%;box-sizing:border-box;background:#111214;border:1px solid #3a3b40;border-radius:6px;padding:9px 12px;color:#fff;font-size:13px;font-family:var(--font-mono);outline:none;"
+                        style="width:100%;box-sizing:border-box;background:var(--stage);border:1px solid #3a3b40;border-radius:6px;padding:9px 12px;color:var(--text-on-fill);font-size:13px;font-family:var(--font-mono);outline:none;"
                         onfocus="this.select()">
                     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
-                        <button class="_promptCancel" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:#999;font-size:12px;">Cancel</button>
-                        <button class="_promptOk" style="padding:7px 16px;cursor:pointer;background:#3b82f6;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:500;">OK</button>
+                        <button class="_promptCancel" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:var(--text-secondary);font-size:12px;">Cancel</button>
+                        <button class="_promptOk" style="padding:7px 16px;cursor:pointer;background:#3b82f6;border:none;border-radius:6px;color:var(--text-primary);font-size:12px;font-weight:500;">OK</button>
                     </div>
                 </div>`;
             document.body.appendChild(overlay);
@@ -8542,7 +8554,7 @@
             const accept = () => {
                 let val = inp.value.trim();
                 if (!_opts.raw) val = val.replace(/[^a-zA-Z0-9_-]/g, '_');
-                if (!val) { inp.style.borderColor = '#f44'; return; }
+                if (!val) { inp.style.borderColor = 'var(--status-danger)'; return; }
                 close(val);
             };
             /* Capture phase: the editor has its own Escape (deselect, close
@@ -8580,12 +8592,12 @@
             const overlay = document.createElement('div');
             overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,8,0.82);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
             overlay.innerHTML = `
-                <div style="background:#1a1b1e;border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:320px;max-width:400px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
-                    <div style="font-size:13px;font-weight:600;color:#e0e0e0;margin-bottom:8px;letter-spacing:0.03em;">${title}</div>
-                    <div style="font-size:12px;color:#999;margin-bottom:18px;line-height:1.5;">${String(message).replace(/\n/g, '<br>')}</div>
+                <div style="background:var(--stage);border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:320px;max-width:400px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
+                    <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px;letter-spacing:0.03em;">${title}</div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:18px;line-height:1.5;">${String(message).replace(/\n/g, '<br>')}</div>
                     <div style="display:flex;gap:8px;justify-content:flex-end;">
-                        <button id="_confirmCancel" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:#999;font-size:12px;">${cancelLabel || 'Cancel'}</button>
-                        <button id="_confirmOk" style="padding:7px 16px;cursor:pointer;background:#ef4444;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:500;">${confirmLabel}</button>
+                        <button id="_confirmCancel" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:var(--text-secondary);font-size:12px;">${cancelLabel || 'Cancel'}</button>
+                        <button id="_confirmOk" style="padding:7px 16px;cursor:pointer;background:var(--status-danger);border:none;border-radius:6px;color:var(--text-on-fill);font-size:12px;font-weight:500;">${confirmLabel}</button>
                     </div>
                 </div>`;
             document.body.appendChild(overlay);
@@ -10179,7 +10191,7 @@
 
                 const delBtn = document.createElement('div');
                 delBtn.className = 'cm-item';
-                delBtn.style.color = 'hsl(0, 100%, 63%)';
+                delBtn.style.color = 'var(--status-danger)';
                 delBtn.innerText = 'Delete (Del)';
                 delBtn.onclick = () => { deleteWidget(); contextMenu.style.display = 'none'; };
 
@@ -10309,7 +10321,7 @@
                 if (!badge) {
                     badge = document.createElement('div');
                     badge.id = 'splashModeBadge';
-                    badge.style.cssText = 'position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:100; background:hsl(270,60%,50%); color:#fff; padding:3px 12px; border-radius:4px; font-size:10px; font-weight:700; letter-spacing:0.5px; pointer-events:none; opacity:0.85; font-family:"JetBrains Mono",monospace;';
+                    badge.style.cssText = 'position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:100; background:hsl(270,60%,50%); color:var(--text-primary); padding:3px 12px; border-radius:4px; font-size:10px; font-weight:700; letter-spacing:0.5px; pointer-events:none; opacity:0.85; font-family:"JetBrains Mono",monospace;';
                     badge.textContent = 'SPLASH SCREEN';
                     const container = document.querySelector('.canvas-container');
                     if (container) container.appendChild(badge);
@@ -10520,7 +10532,7 @@
             if (name === '__disable__') { showToast('Pick a splash screen to delete first', 'info'); return; }
             _showConfirmOverlay(
                 'Delete Splash',
-                'Are you sure you want to delete <strong style="color:#e0e0e0;">"' + name + '"</strong>? This action cannot be undone.',
+                'Are you sure you want to delete <strong style="color:var(--text-primary);">"' + name + '"</strong>? This action cannot be undone.',
                 'Delete',
                 async () => {
                     try {
@@ -10635,7 +10647,7 @@
                      * selectable / movable; the real shape appears in the device view. */
                 }
 
-                const sigTag = w.signal ? ` <span style="color:hsl(120, 100%, 50%);font-size:9px;">\u2192 ${w.signal}</span>` : '';
+                const sigTag = w.signal ? ` <span style="color:var(--status-ok);font-size:9px;">\u2192 ${w.signal}</span>` : '';
                 const typeIcon = PALETTE_ICONS[w.type] ? `<div class="type-icon">${PALETTE_ICONS[w.type]}</div>` : '';
                 /* shape_panel + line draw on the device only (their geometry is
                  * never rendered on this canvas) \u2014 flag the box so the empty
@@ -12046,7 +12058,7 @@
                     let hash = 0;
                     for (let c = 0; c < w.group.length; c++) hash = (hash * 31 + w.group.charCodeAt(c)) & 0xffff;
                     const hue = (hash * 67) % 360;
-                    groupBadge = `<span title="Group ${tag}" style="margin-right:4px; padding:1px 5px; border-radius:3px; font-size:9px; background:hsl(${hue}, 60%, 35%); color:#fff; flex-shrink:0;">G·${tag}</span>`;
+                    groupBadge = `<span title="Group ${tag}" style="margin-right:4px; padding:1px 5px; border-radius:3px; font-size:9px; background:hsl(${hue}, 60%, 35%); color:var(--text-primary); flex-shrink:0;">G·${tag}</span>`;
                 }
                 typeInfo.innerHTML = `${groupBadge}<span class="layer-icon" style="color:${iconColor}">${layerIcon}</span><span class="layer-type">${label}</span><span class="layer-id">${_escAttr(w.id)}</span>`;
 
@@ -13896,8 +13908,8 @@
                  * otherwise break (or inject into) this inspector row. */
                 const _afPrefixEsc = _pvEsc(_afPrefix);
                 const _afSummary = _afPrefix
-                    ? `<span style="color:#9aa;font-size:11px;">${_afPrefixEsc}_0 … ${_afPrefixEsc}_${Math.max(0, _afCount - 1)}</span>`
-                    : `<span style="color:#777;font-size:11px;">No frames uploaded yet</span>`;
+                    ? `<span style="color:var(--text-secondary);font-size:11px;">${_afPrefixEsc}_0 … ${_afPrefixEsc}_${Math.max(0, _afCount - 1)}</span>`
+                    : `<span style="color:var(--text-secondary);font-size:11px;">No frames uploaded yet</span>`;
                 html += `<div style="display:flex;gap:8px;align-items:center;">
                     <button type="button" class="btn btn-secondary" style="padding:4px 10px;cursor:pointer;" onclick="document.getElementById('animUploadInput').click()" ${disabledAttr}>&#x1F39E; Upload animation…</button>
                     ${_afSummary}
@@ -13915,7 +13927,7 @@
                     </select>
                     <button type="button" onclick="document.getElementById('trkUploadInput_${f.name}').click()" ${disabledAttr} title="Upload a .rdmtrk track (same name replaces it)" style="padding:4px 8px; cursor:pointer;">&#x2B06;</button>
                     <input type="file" id="trkUploadInput_${f.name}" accept=".rdmtrk" style="display:none" onchange="uploadTrackFile(this, '${f.name}')">
-                    <button type="button" onclick="deleteSelectedTrack('trksel_${f.name}', '${f.name}')" ${disabledAttr} title="Delete this track from the device" style="padding:4px 8px; cursor:pointer; color:hsl(0,70%,60%);">&#x1F5D1;</button>
+                    <button type="button" onclick="deleteSelectedTrack('trksel_${f.name}', '${f.name}')" ${disabledAttr} title="Delete this track from the device" style="padding:4px 8px; cursor:pointer; color:var(--status-danger);">&#x1F5D1;</button>
                 </div>`;
                 setTimeout(() => _populateTrackSelect('trksel_' + f.name, val), 0);
             } else if (f.type === 'image_picker') {
@@ -13925,7 +13937,7 @@
                     </select>
                     <button type="button" onclick="document.getElementById('imgUploadInput_${f.name}').click()" ${disabledAttr} title="Upload image" style="padding:4px 8px; cursor:pointer;">&#x2B06;</button>
                     <input type="file" id="imgUploadInput_${f.name}" accept="image/png,image/jpeg" style="display:none" onchange="openImageResizeDialog(this, '${f.name}')">
-                    <button type="button" onclick="deleteSelectedImage('imgsel_${f.name}', '${f.name}')" ${disabledAttr} title="Delete image from device" style="padding:4px 8px; cursor:pointer; color:hsl(0,70%,60%);">&#x1F5D1;</button>
+                    <button type="button" onclick="deleteSelectedImage('imgsel_${f.name}', '${f.name}')" ${disabledAttr} title="Delete image from device" style="padding:4px 8px; cursor:pointer; color:var(--status-danger);">&#x1F5D1;</button>
                 </div>`;
                 /* Populate dropdown async after render */
                 setTimeout(() => _populateImageSelect('imgsel_' + f.name, val), 0);
@@ -14179,7 +14191,7 @@
                     fuelCalStopPoll();
                     _multiEdit = false;
                     const _nTypes = new Set([...selectedIndices].map(i => currentLayout.widgets[i] && currentLayout.widgets[i].type)).size;
-                    inspectorContent.innerHTML = `<div style="text-align:center; color:hsl(0, 0%, 67%); padding-top:40px;">${selectedIndices.size} widgets selected<br><span style="font-size:11px;color:hsl(0, 0%, 40%);">${_nTypes} types — select one widget type to edit shared properties<br>Drag to move together &bull; Arrow keys to nudge &bull; Delete to remove</span></div>`;
+                    inspectorContent.innerHTML = `<div style="text-align:center; color:var(--text-secondary); padding-top:40px;">${selectedIndices.size} widgets selected<br><span style="font-size:11px;color:hsl(0, 0%, 40%);">${_nTypes} types — select one widget type to edit shared properties<br>Drag to move together &bull; Arrow keys to nudge &bull; Delete to remove</span></div>`;
                     return;
                 }
                 /* Same-type multi-select: edit shared properties for all at once.
@@ -14202,7 +14214,7 @@
              * editing a multi-selection (you'd otherwise stack them / dup ids).
              * Size (W/H) stays editable and fans out. */
             const uniqAttr = (w.locked || _multiEdit) ? 'disabled' : '';
-            const lockMsg = w.locked ? '<div style="background:hsla(0, 100%, 63%, 0.1); border:1px solid hsl(0, 100%, 63%); color:hsl(0, 100%, 63%); padding:4px; font-size:11px; margin-bottom:12px; text-align:center; border-radius:4px;">Widget is Locked</div>' : '';
+            const lockMsg = w.locked ? '<div style="background:hsla(0, 100%, 63%, 0.1); border:1px solid hsl(0, 100%, 63%); color:var(--status-danger); padding:4px; font-size:11px; margin-bottom:12px; text-align:center; border-radius:4px;">Widget is Locked</div>' : '';
 
             let html = lockMsg;
             if (_multiEdit) {
@@ -14225,7 +14237,7 @@
                 <button class="btn btn-secondary" style="font-size:11px" onclick="moveWidgetLayer('up')" ${disabledAttr}>Bring to Front</button>
                 <button class="btn btn-secondary" style="font-size:11px" onclick="moveWidgetLayer('down')" ${disabledAttr}>Send to Back</button>
             </div>`;
-            html += `<button class="btn btn-secondary" style="margin-top:8px; border-color:hsl(0, 100%, 63%); color:hsl(0, 100%, 63%); width:100%; font-size:11px;" onclick="deleteWidget()" ${disabledAttr}>Delete Widget</button>`;
+            html += `<button class="btn btn-secondary" style="margin-top:8px; border-color:var(--status-danger); color:var(--status-danger); width:100%; font-size:11px;" onclick="deleteWidget()" ${disabledAttr}>Delete Widget</button>`;
             html += `</div></details>`;
 
             /* ── Data Accordion (open by default) ── */
@@ -14248,7 +14260,7 @@
                  * so — otherwise the "changes apply to all" banner is misleading
                  * for the data binding specifically. */
                 if (_multiEdit) {
-                    html += `<div style="font-size:10px; color:hsl(40,80%,60%); margin-bottom:8px; line-height:1.4;">Data binding applies to this widget only — bind channels one at a time. (Appearance/behaviour edits below apply to all ${selectedIndices.size}.)</div>`;
+                    html += `<div style="font-size:10px; color:var(--status-warn); margin-bottom:8px; line-height:1.4;">Data binding applies to this widget only — bind channels one at a time. (Appearance/behaviour edits below apply to all ${selectedIndices.size}.)</div>`;
                 }
                 /* Channel binding — primary widget data binding for v2.
                  * Replaces the old "Assign Data Source" signal-picking
@@ -14271,7 +14283,7 @@
                     const sourceLabel = _classifyChannelSource(_effCh.signal);
                     const subline = _effCh.signal
                         ? `from ${sourceLabel}`
-                        : '<span style="color:hsl(40,80%,55%);">No signal</span>';
+                        : '<span style="color:var(--status-warn);">No signal</span>';
                     html += `<div class="inspector-channel-card" data-eff-ch-id="${_effCh.id}" onclick="_widgetOpenChannelPicker()" title="Click to change channel">
                         <div style="min-width:0;">
                             <div class="ch-card-label">${_effCh.label || _effCh.id}</div>
@@ -14309,7 +14321,7 @@
                                 <div class="signal-linked-actions">
                                     <button class="btn btn-secondary" onclick="openSignalManagerAtIndex(${sigIdx})">Edit Signal</button>
                                     <button class="btn btn-secondary" onclick="_widgetOpenChannelPicker()" ${disabledAttr}>Assign channel</button>
-                                    <button class="btn btn-secondary" style="border-color:hsl(0, 100%, 63%); color:hsl(0, 100%, 63%);" onclick="unbindSignal()">Unbind</button>
+                                    <button class="btn btn-secondary" style="border-color:var(--status-danger); color:var(--status-danger);" onclick="unbindSignal()">Unbind</button>
                                 </div>
                             </div>`;
 
@@ -14319,7 +14331,7 @@
                                 html += _valueLabelsCardHTML(w.signal, disabledAttr);
                             }
                         } else {
-                            html += `<div style="font-size:11px; color:hsl(0, 100%, 63%); margin-bottom:4px;">Signal "${w.signal}" not found!</div>`;
+                            html += `<div style="font-size:11px; color:var(--status-danger); margin-bottom:4px;">Signal "${w.signal}" not found!</div>`;
                             html += `<button class="btn-assign-data" onclick="_widgetOpenChannelPicker()" ${disabledAttr}>+ Assign Channel</button>`;
                         }
                     } else {
@@ -14534,7 +14546,7 @@
             const thresholdFields = def.fields.filter(f => f.cat === 'thresholds');
             if (thresholdFields.length) {
                 html += `<details class="inspector-accordion"><summary>Thresholds</summary><div class="accordion-body">`;
-                html += `<div style="font-size:11px; color:#999; margin-bottom:6px;">Set where color transitions occur (0 = first LED, 1 = last LED).</div>`;
+                html += `<div style="font-size:11px; color:var(--text-secondary); margin-bottom:6px;">Set where color transitions occur (0 = first LED, 1 = last LED).</div>`;
                 thresholdFields.forEach(f => {
                     const val = w.config[f.name] !== undefined ? w.config[f.name] : f.def;
                     html += renderFieldHTML(f, val, disabledAttr);
@@ -14592,7 +14604,7 @@
             const RULES_UI_ENABLED = true;
             if (RULES_UI_ENABLED && !NO_RULES_TYPES.has(w.type)) {
             html += `<details class="inspector-accordion" data-rules-group="1"><summary>Rules${rules.length ? ` <span class="badge">${rules.length}</span>` : ''}</summary><div class="accordion-body">`;
-            html += `<div style="font-size:11px; color:#999; margin-bottom:6px;">If a condition is met, override appearance settings.</div>`;
+            html += `<div style="font-size:11px; color:var(--text-secondary); margin-bottom:6px;">If a condition is met, override appearance settings.</div>`;
             rules.forEach((rule, ri) => {
                 /* Rule condition can test ANY available channel, not just the
                  * few this layout's widgets bind: list every active channel (by
@@ -14612,11 +14624,11 @@
                 const overrideCount = Object.keys(overrides).length;
                 html += `<details class="inspector-accordion" data-rule-idx="${ri}" style="border:1px solid #555; border-radius:6px; margin-bottom:6px;"><summary style="padding:6px 8px;">
                     <span style="font-size:11px; font-weight:600;">Rule ${ri+1}</span>
-                    ${overrideCount ? `<span class="badge" style="background:#e67e22;">${overrideCount}</span>` : ''}
-                    <button class="btn btn-secondary" style="font-size:10px; padding:1px 6px; border-color:hsl(0,100%,63%); color:hsl(0,100%,63%); float:right;" onclick="event.stopPropagation(); removeRule(${ri})" ${disabledAttr}>Remove</button>
+                    ${overrideCount ? `<span class="badge" style="background:var(--status-warn);">${overrideCount}</span>` : ''}
+                    <button class="btn btn-secondary" style="font-size:10px; padding:1px 6px; border-color:var(--status-danger); color:var(--status-danger); float:right;" onclick="event.stopPropagation(); removeRule(${ri})" ${disabledAttr}>Remove</button>
                 </summary><div class="accordion-body" style="padding:6px;">`;
                 /* Condition: IF signal op threshold */
-                html += `<div style="font-size:11px; font-weight:600; color:#e67e22; margin-bottom:4px;">IF</div>`;
+                html += `<div style="font-size:11px; font-weight:600; color:var(--status-warn); margin-bottom:4px;">IF</div>`;
                 html += `<div class="field"><label>Signal</label><select onchange="updateRule(${ri},'signal_name',this.value)" ${disabledAttr}>
                     <option value="">--</option>`;
                 sigOpts.forEach(o => { html += `<option value="${o.name}" ${rule.signal_name===o.name?'selected':''}>${o.label}</option>`; });
@@ -14635,7 +14647,7 @@
                 }
                 html += `</div>`;
                 /* THEN: full appearance fields */
-                html += `<div style="font-size:11px; font-weight:600; color:#e67e22; margin:8px 0 4px;">THEN change:</div>`;
+                html += `<div style="font-size:11px; font-weight:600; color:var(--status-warn); margin:8px 0 4px;">THEN change:</div>`;
                 /* Some appearance fields can't be honoured by the firmware's
                  * apply_overrides for a given type, so don't offer them as rule
                  * targets (a control that silently does nothing is worse than
@@ -14737,7 +14749,7 @@
                     }
                     html += `</div>`;
                     if (isOverridden) {
-                        html += `<button class="btn btn-secondary" style="font-size:9px; padding:0 4px; margin:-4px 0 4px; color:#e67e22; border-color:#e67e22;" onclick="clearRuleField(${ri},'${f.name}')" ${disabledAttr}>Reset</button>`;
+                        html += `<button class="btn btn-secondary" style="font-size:9px; padding:0 4px; margin:-4px 0 4px; color:var(--status-warn); border-color:var(--status-warn);" onclick="clearRuleField(${ri},'${f.name}')" ${disabledAttr}>Reset</button>`;
                     }
                 });
                 html += `</div></details>`;
@@ -14750,7 +14762,7 @@
                  * re-subscribe signal callbacks, so newly added rules
                  * otherwise stay dormant until the next real reload. */
                 html += `<button class="btn btn-primary" style="font-size:11px; width:100%; margin-top:6px;" onclick="saveRulesAndApply()" ${disabledAttr}>Save &amp; Apply Rules</button>`;
-                html += `<div style="font-size:10px; color:#999; margin-top:3px; text-align:center;">Saves + reloads the dash so rule subscriptions re-bind.</div>`;
+                html += `<div style="font-size:10px; color:var(--text-secondary); margin-top:3px; text-align:center;">Saves + reloads the dash so rule subscriptions re-bind.</div>`;
             }
             html += `</div></details>`;
             } /* end NO_RULES_TYPES gate */
@@ -14760,12 +14772,12 @@
                 const np = ((w.config.path || []).length / 2) | 0;
                 const sm = !!w.config.smooth;
                 html += `<details class="inspector-accordion" open><summary>Curve</summary><div class="accordion-body">`;
-                html += `<div style="font-size:11px;color:#999;margin-bottom:6px;">${np} point${np === 1 ? '' : 's'}${sm ? ' · <b style="color:var(--accent)">smooth</b> (curve fit through anchors)' : ''}. Smoothing fits a curve through a few anchor points so you don't hand-place every dot.</div>`;
+                html += `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">${np} point${np === 1 ? '' : 's'}${sm ? ' · <b style="color:var(--accent)">smooth</b> (curve fit through anchors)' : ''}. Smoothing fits a curve through a few anchor points so you don't hand-place every dot.</div>`;
                 if (!sm || np > 10)
                     html += `<button class="btn btn-primary" style="font-size:11px;width:100%;" onclick="_pathbarSmoothSimplify()">${sm ? 'Reduce to anchors' : 'Smooth &amp; reduce to anchors'}</button>`;
                 if (sm)
                     html += `<button class="btn btn-secondary" style="font-size:11px;width:100%;margin-top:4px;" onclick="_pathbarSetSmooth(false)">Turn off smoothing</button>`;
-                html += `<div style="font-size:10px;color:#777;margin-top:5px;">Drag a dot to shape the curve · double-click to remove · + to add a point.</div>`;
+                html += `<div style="font-size:10px;color:var(--text-secondary);margin-top:5px;">Drag a dot to shape the curve · double-click to remove · + to add a point.</div>`;
                 html += `</div></details>`;
             }
 
@@ -14773,7 +14785,7 @@
             if (w.type === 'pathbar' && _pathbarIsCustom(w)) {
                 const t = _pathbarTrace[w.id] || {};
                 html += `<details class="inspector-accordion"${t.src ? ' open' : ''}><summary>Trace Image</summary><div class="accordion-body">`;
-                html += `<div style="font-size:11px;color:#999;margin-bottom:6px;">Show an image behind the canvas to trace the track path over. Editor-only — not saved to the dash.</div>`;
+                html += `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">Show an image behind the canvas to trace the track path over. Editor-only — not saved to the dash.</div>`;
                 html += `<div class="field"><label>Image</label><select onchange="_pathbarTracePick(this.value)">`;
                 html += `<option value="">None</option><option value="__file__">Upload file…</option>`;
                 (_cachedImageList || []).forEach(img => {
@@ -15154,7 +15166,7 @@
             list.innerHTML = ecus.map(e => {
                 const isCustom = customEcuVersions.has(`${e.ecu}||${e.version}`);
                 const delBtn = isCustom
-                    ? `<button onclick="event.stopPropagation(); deleteCustomEcuVersion('${e.ecu.replace(/'/g, "\\'")}','${e.version.replace(/'/g, "\\'")}')" style="background:none; border:none; color:#f44; cursor:pointer; font-size:14px; padding:2px 6px; flex-shrink:0;" title="Delete ${e.ecu} ${e.version}">&times;</button>`
+                    ? `<button onclick="event.stopPropagation(); deleteCustomEcuVersion('${e.ecu.replace(/'/g, "\\'")}','${e.version.replace(/'/g, "\\'")}')" style="background:none; border:none; color:var(--status-danger); cursor:pointer; font-size:14px; padding:2px 6px; flex-shrink:0;" title="Delete ${e.ecu} ${e.version}">&times;</button>`
                     : '';
                 return `<div class="assign-ecu-item" onclick="assignPickEcu('${e.ecu.replace(/'/g, "\\'")}','${e.version.replace(/'/g, "\\'")}')">`+
                 `<span>${isCustom ? '<span style="color:#4fc3f7; margin-right:4px;">&#9679;</span>' : ''}${e.ecu} <span class="ecu-version">${e.version}</span></span>`+
@@ -15684,7 +15696,7 @@
             /* Whole-gradient controls row: hint + Disable. */
             html += `<div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-muted); padding-top:2px;">
                 <span>Click the strip to add a stop. Drag a marker to move it.</span>
-                <button class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border-color:hsl(0,70%,60%); color:hsl(0,70%,60%);" ${disAttr}
+                <button class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border-color:var(--status-danger); color:var(--status-danger);" ${disAttr}
                     onclick="_gradDisable('${el.id}', '${fieldName}')">Disable</button>
             </div>`;
 
@@ -16283,35 +16295,35 @@
                 overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(3px);display:flex;flex-direction:column;font-family:inherit;';
                 overlay.innerHTML = `
                     <div id="iio-stage" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:24px 24px 12px;">
-                        <div id="iio-frame" style="position:relative;border:1px solid rgba(255,255,255,0.18);border-radius:3px;overflow:hidden;background:#000;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,0.06),0 16px 56px rgba(0,0,0,0.8);">
+                        <div id="iio-frame" style="position:relative;border:1px solid rgba(255,255,255,0.18);border-radius:3px;overflow:hidden;background:var(--bar);flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,0.06),0 16px 56px rgba(0,0,0,0.8);">
                             <img id="iio-preview" src="${imgEl.src}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:block;">
                             <div style="position:absolute;bottom:4px;right:6px;font-size:10px;color:rgba(255,255,255,0.3);pointer-events:none;font-family:monospace;">${SCREEN_W}×${SCREEN_H}</div>
                         </div>
                     </div>
                     <div style="background:rgba(12,12,20,0.97);border-top:1px solid var(--divider);padding:12px 20px 16px;display:flex;flex-direction:column;gap:10px;">
                         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                            <span style="color:#888;font-size:12px;width:38px;flex-shrink:0;">Name</span>
+                            <span style="color:var(--text-secondary);font-size:12px;width:38px;flex-shrink:0;">Name</span>
                             <input id="iio-name" type="text" value="${suggestedName}" maxlength="27"
-                                style="width:180px;padding:5px 8px;background:#1a1a2e;border:1px solid #444;border-radius:4px;color:#fff;font-size:13px;">
+                                style="width:180px;padding:5px 8px;background:#1a1a2e;border:1px solid #444;border-radius:4px;color:var(--text-primary);font-size:13px;">
                             <span style="margin-left:auto;color:#555;font-size:11px;white-space:nowrap;">${origW} × ${origH} original</span>
                         </div>
                         <div style="display:flex;gap:10px;align-items:center;">
-                            <span style="color:#888;font-size:12px;width:38px;flex-shrink:0;">Scale</span>
+                            <span style="color:var(--text-secondary);font-size:12px;width:38px;flex-shrink:0;">Scale</span>
                             <input id="iio-slider" type="range" min="5" max="${capPct}" value="${startPct}" style="flex:1;cursor:pointer;accent-color:#2979ff;">
-                            <span id="iio-pct" style="color:#bbb;font-size:12px;width:30px;text-align:right;flex-shrink:0;font-family:monospace;"></span>
+                            <span id="iio-pct" style="color:var(--text-secondary);font-size:12px;width:30px;text-align:right;flex-shrink:0;font-family:monospace;"></span>
                             <span style="color:#444;font-size:12px;">·</span>
-                            <span id="iio-dims" style="color:#bbb;font-size:12px;width:90px;flex-shrink:0;font-family:monospace;"></span>
+                            <span id="iio-dims" style="color:var(--text-secondary);font-size:12px;width:90px;flex-shrink:0;font-family:monospace;"></span>
                             <span style="color:#444;font-size:12px;">·</span>
                             <span id="iio-kb" style="font-size:12px;width:58px;flex-shrink:0;text-align:right;font-family:monospace;font-weight:600;"></span>
                         </div>
-                        ${capBinds ? `<div style="color:#8c9a8c;font-size:11px;line-height:1.5;padding:2px 0 0 48px;">
+                        ${capBinds ? `<div style="color:var(--text-secondary);font-size:11px;line-height:1.5;padding:2px 0 0 48px;">
                             The dash keeps an image at three bytes a pixel, so the most it will take is
-                            <b style="color:#cfc;">${_fmtImageSize(maxBytes)}</b> — one whole ${SCREEN_W} × ${SCREEN_H} screen.
-                            This picture reaches that at <b style="color:#cfc;">${capPct}%</b>, so the slider stops there.
+                            <b style="color:var(--status-ok);">${_fmtImageSize(maxBytes)}</b> — one whole ${SCREEN_W} × ${SCREEN_H} screen.
+                            This picture reaches that at <b style="color:var(--status-ok);">${capPct}%</b>, so the slider stops there.
                         </div>` : ''}
                         <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:2px;">
-                            <button id="iio-cancel" style="padding:7px 18px;cursor:pointer;background:transparent;border:1px solid #555;border-radius:4px;color:#ccc;font-size:13px;">Cancel</button>
-                            <button id="iio-upload" style="padding:7px 22px;cursor:pointer;background:#2979ff;border:none;border-radius:4px;color:#fff;font-size:13px;font-weight:600;">Upload</button>
+                            <button id="iio-cancel" style="padding:7px 18px;cursor:pointer;background:transparent;border:1px solid #555;border-radius:4px;color:var(--text-primary);font-size:13px;">Cancel</button>
+                            <button id="iio-upload" style="padding:7px 22px;cursor:pointer;background:#2979ff;border:none;border-radius:4px;color:var(--text-primary);font-size:13px;font-weight:600;">Upload</button>
                         </div>
                     </div>`;
                 document.body.appendChild(overlay);
@@ -16345,7 +16357,7 @@
                      * 7 inch panel: amber over three quarters of it, red past
                      * it. The slider cannot reach red, but a dash swapped mid
                      * dialog for a smaller-screened one could. */
-                    kbEl.style.color   = bytes > maxBytes ? '#f66'
+                    kbEl.style.color   = bytes > maxBytes ? 'var(--status-danger)'
                                        : bytes > maxBytes * 0.75 ? '#fa8' : '#6d6';
                 }
 
@@ -16384,7 +16396,7 @@
 
         async function doImageUpload(img, name, targetW, targetH, fieldName) {
             const statusEl = document.createElement('div');
-            statusEl.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#e0e0e0;padding:8px 16px;border-radius:6px;z-index:9999;border:1px solid var(--border);';
+            statusEl.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:var(--text-primary);padding:8px 16px;border-radius:6px;z-index:9999;border:1px solid var(--border);';
             statusEl.textContent = `Converting ${targetW}x${targetH}...`;
             document.body.appendChild(statusEl);
 
@@ -16398,7 +16410,7 @@
             if (wantBytes > capBytes) {
                 statusEl.textContent = `"${name}" is ${_fmtImageSize(wantBytes)} at ${targetW} × ${targetH}. `
                     + `This dash takes ${_fmtImageSize(capBytes)} — scale it down and try again.`;
-                statusEl.style.borderColor = '#f44';
+                statusEl.style.borderColor = 'var(--status-danger)';
                 setTimeout(() => statusEl.remove(), 6000);
                 return;
             }
@@ -16442,7 +16454,7 @@
                     ? `The dash refused "${name}": ${_fmtImageSize(wantBytes)} is more than the `
                       + `${_fmtImageSize(capBytes)} it stores. Scale it down and try again.`
                     : 'Upload failed: ' + raw;
-                statusEl.style.borderColor = '#f44';
+                statusEl.style.borderColor = 'var(--status-danger)';
             }
             setTimeout(() => statusEl.remove(), 6000);
         }
@@ -16564,7 +16576,7 @@
             if (!files.length) return;
 
             const statusEl = document.createElement('div');
-            statusEl.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#e0e0e0;padding:8px 16px;border-radius:6px;z-index:10000;border:1px solid var(--border);';
+            statusEl.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:var(--text-primary);padding:8px 16px;border-radius:6px;z-index:10000;border:1px solid var(--border);';
             statusEl.textContent = 'Decoding frames…';
             document.body.appendChild(statusEl);
 
@@ -16583,7 +16595,7 @@
                     throw new Error('Need at least 2 frames for an animation');
             } catch (e) {
                 statusEl.textContent = 'Decode failed: ' + e.message;
-                statusEl.style.borderColor = '#f44';
+                statusEl.style.borderColor = 'var(--status-danger)';
                 setTimeout(() => statusEl.remove(), 3500);
                 return;
             }
@@ -16601,33 +16613,33 @@
             overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(3px);display:flex;flex-direction:column;font-family:inherit;';
             overlay.innerHTML = `
                 <div id="afr-stage" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:24px 24px 12px;">
-                    <canvas id="afr-preview" style="max-width:80%;max-height:100%;border:1px solid rgba(255,255,255,0.18);border-radius:3px;background:#000;box-shadow:0 16px 56px rgba(0,0,0,0.8);image-rendering:pixelated;"></canvas>
+                    <canvas id="afr-preview" style="max-width:80%;max-height:100%;border:1px solid rgba(255,255,255,0.18);border-radius:3px;background:var(--bar);box-shadow:0 16px 56px rgba(0,0,0,0.8);image-rendering:pixelated;"></canvas>
                 </div>
                 <div style="background:rgba(12,12,20,0.97);border-top:1px solid var(--divider);padding:12px 20px 16px;display:flex;flex-direction:column;gap:10px;">
                     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                        <span style="color:#888;font-size:12px;width:52px;flex-shrink:0;">Name</span>
+                        <span style="color:var(--text-secondary);font-size:12px;width:52px;flex-shrink:0;">Name</span>
                         <input id="afr-name" type="text" value="${suggestedName}" maxlength="20"
-                            style="width:160px;padding:5px 8px;background:#1a1a2e;border:1px solid #444;border-radius:4px;color:#fff;font-size:13px;">
+                            style="width:160px;padding:5px 8px;background:#1a1a2e;border:1px solid #444;border-radius:4px;color:var(--text-primary);font-size:13px;">
                         <span style="margin-left:auto;color:#555;font-size:11px;white-space:nowrap;">${origW} × ${origH} · ${srcFrames.length} source frames</span>
                     </div>
                     <div style="display:flex;gap:10px;align-items:center;">
-                        <span style="color:#888;font-size:12px;width:52px;flex-shrink:0;">Preview</span>
+                        <span style="color:var(--text-secondary);font-size:12px;width:52px;flex-shrink:0;">Preview</span>
                         <input id="afr-scrub" type="range" min="0" max="${srcFrames.length - 1}" value="0" style="flex:1;cursor:pointer;accent-color:#2979ff;">
-                        <span id="afr-scrub-lbl" style="color:#bbb;font-size:12px;width:56px;text-align:right;font-family:monospace;"></span>
+                        <span id="afr-scrub-lbl" style="color:var(--text-secondary);font-size:12px;width:56px;text-align:right;font-family:monospace;"></span>
                     </div>
                     <div style="display:flex;gap:10px;align-items:center;">
-                        <span style="color:#888;font-size:12px;width:52px;flex-shrink:0;">Frames</span>
+                        <span style="color:var(--text-secondary);font-size:12px;width:52px;flex-shrink:0;">Frames</span>
                         <input id="afr-count" type="range" min="2" max="${Math.min(ANIM_MAX_FRAMES, srcFrames.length)}" value="${defCount}" style="flex:1;cursor:pointer;accent-color:#2979ff;">
-                        <span id="afr-count-lbl" style="color:#bbb;font-size:12px;width:24px;text-align:right;font-family:monospace;"></span>
+                        <span id="afr-count-lbl" style="color:var(--text-secondary);font-size:12px;width:24px;text-align:right;font-family:monospace;"></span>
                         <span style="color:#444;font-size:12px;">·</span>
-                        <span style="color:#888;font-size:12px;width:38px;flex-shrink:0;">Scale</span>
+                        <span style="color:var(--text-secondary);font-size:12px;width:38px;flex-shrink:0;">Scale</span>
                         <input id="afr-scale" type="range" min="5" max="100" value="${fitPct}" style="flex:1;cursor:pointer;accent-color:#2979ff;">
-                        <span id="afr-dims" style="color:#bbb;font-size:12px;width:88px;flex-shrink:0;text-align:right;font-family:monospace;"></span>
+                        <span id="afr-dims" style="color:var(--text-secondary);font-size:12px;width:88px;flex-shrink:0;text-align:right;font-family:monospace;"></span>
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;">
                         <span id="afr-size" style="margin-right:auto;font-size:12px;font-family:monospace;"></span>
-                        <button id="afr-cancel" style="padding:7px 18px;cursor:pointer;background:transparent;border:1px solid #555;border-radius:4px;color:#ccc;font-size:13px;">Cancel</button>
-                        <button id="afr-upload" style="padding:7px 22px;cursor:pointer;background:#2979ff;border:none;border-radius:4px;color:#fff;font-size:13px;font-weight:600;">Upload</button>
+                        <button id="afr-cancel" style="padding:7px 18px;cursor:pointer;background:transparent;border:1px solid #555;border-radius:4px;color:var(--text-primary);font-size:13px;">Cancel</button>
+                        <button id="afr-upload" style="padding:7px 22px;cursor:pointer;background:#2979ff;border:none;border-radius:4px;color:var(--text-primary);font-size:13px;font-weight:600;">Upload</button>
                     </div>
                 </div>`;
             document.body.appendChild(overlay);
@@ -16668,7 +16680,7 @@
                 const perFrame = tw * th * 3 + 12;
                 const total = perFrame * n;
                 const warn = perFrame > ANIM_FRAME_WARN_BYTES || total > ANIM_TOTAL_WARN_BYTES;
-                sizeEl.style.color = warn ? 'hsl(30,90%,60%)' : '#8a9';
+                sizeEl.style.color = warn ? 'var(--status-warn)' : '#8a9';
                 sizeEl.textContent = `${(perFrame / 1024).toFixed(0)} KB/frame · ${(total / 1048576).toFixed(2)} MB total (flash + PSRAM)`
                     + (warn ? ' — big! consider fewer frames or a smaller scale' : '');
             }
@@ -16694,7 +16706,7 @@
 
         async function _animUploadFrames(srcFrames, n, tw, th, prefix) {
             const statusEl = document.createElement('div');
-            statusEl.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#e0e0e0;padding:8px 16px;border-radius:6px;z-index:10000;border:1px solid var(--border);';
+            statusEl.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:var(--text-primary);padding:8px 16px;border-radius:6px;z-index:10000;border:1px solid var(--border);';
             document.body.appendChild(statusEl);
             try {
                 for (let i = 0; i < n; i++) {
@@ -16724,7 +16736,7 @@
                 updateInspector();
             } catch (e) {
                 statusEl.textContent = 'Upload failed: ' + e.message;
-                statusEl.style.borderColor = '#f44';
+                statusEl.style.borderColor = 'var(--status-danger)';
             }
             setTimeout(() => statusEl.remove(), 3000);
         }
@@ -16817,7 +16829,7 @@
                         </div>
                         <div style="display:flex;gap:8px;justify-content:flex-end;">
                             <button id="fontDlgCancel" style="padding:6px 14px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">Cancel</button>
-                            <button id="fontDlgUpload" style="padding:6px 14px;cursor:pointer;background:var(--accent);border:none;border-radius:4px;color:#fff;">Upload</button>
+                            <button id="fontDlgUpload" style="padding:6px 14px;cursor:pointer;background:var(--accent);border:none;border-radius:4px;color:var(--text-primary);">Upload</button>
                         </div>
                     </div>`;
                 document.body.appendChild(overlay);
@@ -17686,7 +17698,7 @@
             }
             _showConfirmOverlay(
                 'Delete Layout',
-                'Are you sure you want to delete <strong style="color:#e0e0e0;">"' + name + '"</strong>? This action cannot be undone.',
+                'Are you sure you want to delete <strong style="color:var(--text-primary);">"' + name + '"</strong>? This action cannot be undone.',
                 'Delete',
                 async () => {
                     try {
@@ -17711,7 +17723,7 @@
         async function resetDefaultLayout() {
             _showConfirmOverlay(
                 'Reset Default Layout',
-                'Restores the factory <strong style="color:#e0e0e0;">"default"</strong> layout. ' +
+                'Restores the factory <strong style="color:var(--text-primary);">"default"</strong> layout. ' +
                 'Your other layouts and your channel setup are not touched. This cannot be undone.',
                 'Reset',
                 async () => {
@@ -17742,14 +17754,14 @@
             const overlay = document.createElement('div');
             overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,8,0.82);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
             overlay.innerHTML = `
-                <div style="background:#1a1b1e;border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:320px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
-                    <div style="font-size:13px;font-weight:600;color:#e0e0e0;margin-bottom:14px;letter-spacing:0.03em;">Rename</div>
+                <div style="background:var(--stage);border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:320px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
+                    <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:14px;letter-spacing:0.03em;">Rename</div>
                     <input id="_renameInput" type="text" value="${currentName}" maxlength="27"
-                        style="width:100%;box-sizing:border-box;background:#111214;border:1px solid #3a3b40;border-radius:6px;padding:9px 12px;color:#fff;font-size:13px;font-family:var(--font-mono);outline:none;"
+                        style="width:100%;box-sizing:border-box;background:var(--stage);border:1px solid #3a3b40;border-radius:6px;padding:9px 12px;color:var(--text-on-fill);font-size:13px;font-family:var(--font-mono);outline:none;"
                         onfocus="this.select()">
                     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
-                        <button id="_renameCancel" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:#999;font-size:12px;">Cancel</button>
-                        <button id="_renameOk" style="padding:7px 16px;cursor:pointer;background:#3b82f6;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:500;">Rename</button>
+                        <button id="_renameCancel" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:var(--text-secondary);font-size:12px;">Cancel</button>
+                        <button id="_renameOk" style="padding:7px 16px;cursor:pointer;background:#3b82f6;border:none;border-radius:6px;color:var(--text-primary);font-size:12px;font-weight:500;">Rename</button>
                     </div>
                 </div>`;
             document.body.appendChild(overlay);
@@ -17760,7 +17772,7 @@
             overlay.addEventListener('click', e => { if (e.target === overlay) cancel(); });
             document.getElementById('_renameOk').onclick = () => {
                 const raw = inp.value.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
-                if (!raw) { inp.style.borderColor = '#f44'; return; }
+                if (!raw) { inp.style.borderColor = 'var(--status-danger)'; return; }
                 overlay.remove();
                 onConfirm(raw);
             };
@@ -18547,8 +18559,8 @@
             if (!pill) return;
             pill.textContent = _livePreviewOn ? 'LIVE' : 'LIVE OFF';
             pill.classList.toggle('active', _livePreviewOn);
-            pill.style.background = _livePreviewOn ? '' : 'hsl(0, 70%, 40%)';
-            pill.style.color = _livePreviewOn ? '' : '#fff';
+            pill.style.background = _livePreviewOn ? '' : 'var(--status-danger)';
+            pill.style.color = _livePreviewOn ? '' : 'var(--text-primary)';
         }
 
         window.addEventListener('load', () => {
@@ -18885,11 +18897,11 @@
                      * (no label/badge). The firmware also rejects these. */
                     if (!isProtected) {
                         html += `<button onclick="_smCopyToSD('${type}','${nameJ}')" class="btn btn-secondary" style="font-size:9px; padding:2px 6px; margin-right:2px;" title="Copy to SD">\u2192 SD</button>`;
-                        html += `<button onclick="_smDeleteInternal('${type}','${nameJ}')" style="background:none; border:none; color:#f44; cursor:pointer; font-size:12px; padding:2px 4px;" title="Delete">&times;</button>`;
+                        html += `<button onclick="_smDeleteInternal('${type}','${nameJ}')" style="background:none; border:none; color:var(--status-danger); cursor:pointer; font-size:12px; padding:2px 4px;" title="Delete">&times;</button>`;
                     }
                 } else {
                     html += `<button onclick="_smCopyFromSD('${type}','${nameJ}')" class="btn btn-secondary" style="font-size:9px; padding:2px 6px; margin-right:4px;" title="Copy to Internal">\u2190 Int</button>`;
-                    html += `<button onclick="_smDeleteFromSD('${type}','${nameJ}')" style="background:none; border:none; color:#f44; cursor:pointer; font-size:12px; padding:2px 4px;" title="Delete from SD">&times;</button>`;
+                    html += `<button onclick="_smDeleteFromSD('${type}','${nameJ}')" style="background:none; border:none; color:var(--status-danger); cursor:pointer; font-size:12px; padding:2px 4px;" title="Delete from SD">&times;</button>`;
                 }
                 html += `</div>`;
             }
@@ -18951,7 +18963,7 @@
                 _switcherState.entries = entries;
                 _renderSwitcherList();
             } catch (e) {
-                body.innerHTML = `<div style="color:hsl(0,70%,60%); padding:20px;">Failed to load: ${e.message}</div>`;
+                body.innerHTML = `<div style="color:var(--status-danger); padding:20px;">Failed to load: ${e.message}</div>`;
             }
         }
 
@@ -19111,7 +19123,7 @@
 
                 body.innerHTML = leftHTML + rightHTML;
             } catch(e) {
-                body.innerHTML = '<div style="text-align:center; padding:40px; color:#f44; grid-column:1/-1;">Failed to load storage info</div>';
+                body.innerHTML = '<div style="text-align:center; padding:40px; color:var(--status-danger); grid-column:1/-1;">Failed to load storage info</div>';
             }
         }
 
@@ -19260,7 +19272,7 @@
                         <div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);">Current: ${origW} x ${origH}</div>
                         <div style="margin-bottom:8px;">
                             <div style="display:flex;gap:6px;margin-bottom:8px;">
-                                <button id="imgEditTabResize" style="padding:4px 12px;cursor:pointer;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:4px;">Resize</button>
+                                <button id="imgEditTabResize" style="padding:4px 12px;cursor:pointer;font-size:12px;background:var(--accent);color:var(--text-primary);border:none;border-radius:4px;">Resize</button>
                                 <button id="imgEditTabCrop" style="padding:4px 12px;cursor:pointer;font-size:12px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;">Crop</button>
                             </div>
                         </div>
@@ -19276,7 +19288,7 @@
                             </div>
                         </div>
                         <div id="imgEditCrop" style="display:none;">
-                            <div style="position:relative;margin-bottom:8px;display:inline-block;background:#111;border:1px solid var(--border);">
+                            <div style="position:relative;margin-bottom:8px;display:inline-block;background:var(--bar);border:1px solid var(--border);">
                                 <canvas id="imgEditPreview" style="display:block;max-width:100%;cursor:crosshair;"></canvas>
                             </div>
                             <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
@@ -19289,7 +19301,7 @@
                         <div id="imgEditSize" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;"></div>
                         <div style="display:flex;gap:8px;justify-content:flex-end;">
                             <button id="imgEditCancel" style="padding:6px 14px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">Cancel</button>
-                            <button id="imgEditSave" style="padding:6px 14px;cursor:pointer;background:var(--accent);border:none;border-radius:4px;color:#fff;">Save</button>
+                            <button id="imgEditSave" style="padding:6px 14px;cursor:pointer;background:var(--accent);border:none;border-radius:4px;color:var(--text-primary);">Save</button>
                         </div>
                     </div>`;
                 document.body.appendChild(overlay);
@@ -19312,10 +19324,10 @@
                 function setTab(tab) {
                     activeTab = tab;
                     tabResize.style.background = tab === 'resize' ? 'var(--accent)' : 'var(--bg)';
-                    tabResize.style.color = tab === 'resize' ? '#fff' : 'var(--text)';
+                    tabResize.style.color = tab === 'resize' ? 'var(--text-primary)' : 'var(--text)';
                     tabResize.style.border = tab === 'resize' ? 'none' : '1px solid var(--border)';
                     tabCrop.style.background = tab === 'crop' ? 'var(--accent)' : 'var(--bg)';
-                    tabCrop.style.color = tab === 'crop' ? '#fff' : 'var(--text)';
+                    tabCrop.style.color = tab === 'crop' ? 'var(--text-primary)' : 'var(--text)';
                     tabCrop.style.border = tab === 'crop' ? 'none' : '1px solid var(--border)';
                     panelResize.style.display = tab === 'resize' ? '' : 'none';
                     panelCrop.style.display = tab === 'crop' ? '' : 'none';
@@ -19337,7 +19349,7 @@
                     }
                     const bytes = 12 + w * h * 3;
                     sizeInfo.textContent = `Output: ${w} x ${h} = ${(bytes / 1024).toFixed(1)} KB`;
-                    sizeInfo.style.color = bytes > 200 * 1024 ? '#f44' : 'var(--text-muted)';
+                    sizeInfo.style.color = bytes > 200 * 1024 ? 'var(--status-danger)' : 'var(--text-muted)';
                 }
 
                 /* Resize tab */
@@ -19365,7 +19377,12 @@
                     const cw = parseInt(cwIn.value) || origW, ch = parseInt(chIn.value) || origH;
                     pctx.drawImage(decoded.canvas, cx, cy, cw, ch,
                         cx * scale, cy * scale, cw * scale, ch * scale);
-                    pctx.strokeStyle = '#e67e22';
+                    /* Canvas is the one paint path a var() swap cannot reach, so
+                     * the token is read at paint time (§10.2). drawPreview runs
+                     * on every change, and on a theme change via the listener
+                     * below, so the marquee never keeps a stale colour. */
+                    pctx.strokeStyle = window.RDMTheme
+                        ? window.RDMTheme.token('--accent') : '#d2232a';
                     pctx.lineWidth = 2;
                     pctx.setLineDash([4, 4]);
                     pctx.strokeRect(cx * scale, cy * scale, cw * scale, ch * scale);
@@ -19395,6 +19412,19 @@
 
                 [cxIn, cyIn, cwIn, chIn].forEach(el => el.addEventListener('input', () => { drawPreview(); updateSizeInfo(); }));
 
+                /* A canvas keeps whatever it last painted, so it has to be told
+                 * when the tokens move. The overlay has several teardown paths,
+                 * so this unhooks itself once the overlay is gone rather than
+                 * relying on every one of them to remember. */
+                const _themeRedraw = () => {
+                    if (!overlay.isConnected) {
+                        window.removeEventListener('rdm-theme-change', _themeRedraw);
+                        return;
+                    }
+                    drawPreview();
+                };
+                window.addEventListener('rdm-theme-change', _themeRedraw);
+
                 updateSizeInfo();
 
                 document.getElementById('imgEditCancel').onclick = () => overlay.remove();
@@ -19419,7 +19449,7 @@
                     const tmpImg = new Image();
                     tmpImg.onload = async () => {
                         const statusEl = document.createElement('div');
-                        statusEl.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#e0e0e0;padding:8px 16px;border-radius:6px;z-index:9999;border:1px solid var(--border);';
+                        statusEl.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:var(--text-primary);padding:8px 16px;border-radius:6px;z-index:9999;border:1px solid var(--border);';
                         statusEl.textContent = `Processing ${targetW}x${targetH}...`;
                         document.body.appendChild(statusEl);
                         try {
@@ -19443,7 +19473,7 @@
                             await _smRefresh();
                         } catch (e) {
                             statusEl.textContent = 'Failed: ' + e.message;
-                            statusEl.style.borderColor = '#f44';
+                            statusEl.style.borderColor = 'var(--status-danger)';
                         }
                         setTimeout(() => statusEl.remove(), 2500);
                     };
@@ -20500,7 +20530,7 @@
                 list.innerHTML = ecus.map(ecu => {
                     const versions = [...new Set(globalPresets.filter(p => p.ecu === ecu).map(p => p.version))].sort();
                     return versions.map(v =>
-                        `<div class="palette-item" style="cursor:pointer;" onclick="ecuModalSelect('${ecu.replace(/'/g, "\\'")}','${v.replace(/'/g, "\\'")}')">${ecu} <span style="color:hsl(0, 0%, 53%);">${v}</span></div>`
+                        `<div class="palette-item" style="cursor:pointer;" onclick="ecuModalSelect('${ecu.replace(/'/g, "\\'")}','${v.replace(/'/g, "\\'")}')">${ecu} <span style="color:var(--text-secondary);">${v}</span></div>`
                     ).join('');
                 }).join('');
                 document.getElementById('ecuModal').style.display = 'flex';
@@ -21033,21 +21063,21 @@
                 const overlay = document.createElement('div');
                 overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,8,0.82);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;';
                 overlay.innerHTML = `
-                    <div style="background:#1a1b1e;border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:360px;max-width:420px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
-                        <div style="font-size:13px;font-weight:600;color:#e0e0e0;margin-bottom:8px;letter-spacing:0.03em;">Apply ${make} ${version}</div>
-                        <div style="font-size:11px;color:#888;margin-bottom:14px;line-height:1.6;">
+                    <div style="background:var(--stage);border:1px solid #2e2f34;border-radius:10px;padding:24px;min-width:360px;max-width:420px;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
+                        <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px;letter-spacing:0.03em;">Apply ${make} ${version}</div>
+                        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6;">
                             Base CAN ID of the stream &mdash; decimal (<code>1300</code>) or hex (<code>0x514</code>).<br>
                             Default is <b>${preset.base_id}</b> (${hex(preset.base_id)}). ${range}<br>
                             Set a different one to run this dash on a second stream, leaving the default id free for another device on the same bus.
                         </div>
                         <input id="_ecuBaseInput" type="text" value="${dflt}" maxlength="12"
-                            style="width:100%;box-sizing:border-box;background:#111214;border:1px solid #3a3b40;border-radius:6px;padding:9px 12px;color:#fff;font-size:13px;font-family:var(--font-mono);outline:none;"
+                            style="width:100%;box-sizing:border-box;background:var(--stage);border:1px solid #3a3b40;border-radius:6px;padding:9px 12px;color:var(--text-on-fill);font-size:13px;font-family:var(--font-mono);outline:none;"
                             onfocus="this.select()">
-                        <div id="_ecuBaseHint" style="font-size:10px;color:#777;margin-top:7px;min-height:13px;"></div>
-                        <div style="font-size:11px;color:#999;margin-top:12px;line-height:1.5;">Applying sets up this ECU&rsquo;s standard channels on the dash.</div>
+                        <div id="_ecuBaseHint" style="font-size:10px;color:var(--text-secondary);margin-top:7px;min-height:13px;"></div>
+                        <div style="font-size:11px;color:var(--text-secondary);margin-top:12px;line-height:1.5;">Applying sets up this ECU&rsquo;s standard channels on the dash.</div>
                         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
-                            <button id="_ecuBaseCancel" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:#999;font-size:12px;">Cancel</button>
-                            <button id="_ecuBaseOk" style="padding:7px 16px;cursor:pointer;background:#3b82f6;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:500;">Apply</button>
+                            <button id="_ecuBaseCancel" style="padding:7px 16px;cursor:pointer;background:transparent;border:1px solid #2e2f34;border-radius:6px;color:var(--text-secondary);font-size:12px;">Cancel</button>
+                            <button id="_ecuBaseOk" style="padding:7px 16px;cursor:pointer;background:#3b82f6;border:none;border-radius:6px;color:var(--text-primary);font-size:12px;font-weight:500;">Apply</button>
                         </div>
                     </div>`;
                 document.body.appendChild(overlay);
@@ -21064,21 +21094,21 @@
                 const validate = () => {
                     const n = _parseCanId(inp.value);
                     if (n === null) {
-                        inp.style.borderColor = '#f44';
-                        hint.style.color = '#f88';
+                        inp.style.borderColor = 'var(--status-danger)';
+                        hint.style.color = 'var(--status-danger)';
                         hint.textContent = 'Not a number. Use 1300 or 0x514.';
                         return null;
                     }
                     if (n + span > max) {
-                        inp.style.borderColor = '#f44';
-                        hint.style.color = '#f88';
+                        inp.style.borderColor = 'var(--status-danger)';
+                        hint.style.color = 'var(--status-danger)';
                         hint.textContent = span
                             ? `Too high — with ${span} more ids the stream would run past ${hex(max)}.`
                             : `Too high — the maximum 11-bit id is ${max} (${hex(max)}).`;
                         return null;
                     }
-                    inp.style.borderColor = '#3a3b40';
-                    hint.style.color = '#777';
+                    inp.style.borderColor = 'var(--divider)';
+                    hint.style.color = 'var(--text-secondary)';
                     hint.textContent = span
                         ? `${n} (${hex(n)}) — stream occupies ${hex(n)}..${hex(n + span)}.`
                         : `${n} (${hex(n)})`;
@@ -21298,7 +21328,7 @@
                  * bootloader still intact, or does this dash now need a cable. */
                 const modified = res && res.flash_modified;
                 body.innerHTML = modified
-                    ? '<b style="color:#f88;">The update did not verify.</b><br><br>' +
+                    ? '<b style="color:var(--status-danger);">The update did not verify.</b><br><br>' +
                       '<b style="color:var(--text);">Do not power-cycle the dash.</b> ' +
                       'Get in touch - it needs to be reconnected to a computer to recover.'
                     : '<b style="color:var(--text);">Nothing was changed.</b><br><br>' +
@@ -21967,7 +21997,7 @@
                 document.getElementById('fuelFwdOffset').value = d.offset ?? 0;
                 const badge = document.getElementById('fuelFwdStateBadge');
                 if (badge) badge.textContent = d.enabled ? 'ON' : '';
-                if (badge) badge.style.color = d.enabled ? 'hsl(140,60%,55%)' : '';
+                if (badge) badge.style.color = d.enabled ? 'var(--status-ok)' : '';
                 const health = document.getElementById('fuelFwdHealth');
                 if (health && d.enabled)
                     health.textContent = `Sent ${d.tx_ok ?? 0} frames since boot` +
@@ -22193,7 +22223,7 @@
             let msg = 'On — polling ' + (d.pids_polled || 0) + ' PID(s).';
             if (d.signal_sim_active) msg += ' ⚠ Turn OFF the signal simulator — it drops injected OBD2 frames.';
             st.textContent = msg;
-            st.style.color = d.signal_sim_active ? '#f59e0b' : '#22c55e';
+            st.style.color = d.signal_sim_active ? 'var(--status-warn)' : '#22c55e';
         }
         async function devToggleObd2Sim(on) {
             const st = document.getElementById('devObd2SimStatus');
@@ -22201,8 +22231,8 @@
             try {
                 const r = await fetch('/api/obd2/sim?on=' + (on ? '1' : '0'), { method: 'POST' });
                 if (r.ok) { _devObd2SimRender(await r.json()); }
-                else { st.textContent = 'Failed (HTTP ' + r.status + ').'; st.style.color = '#ef4444'; }
-            } catch (e) { st.textContent = 'Device not reachable.'; st.style.color = '#ef4444'; }
+                else { st.textContent = 'Failed (HTTP ' + r.status + ').'; st.style.color = 'var(--status-danger)'; }
+            } catch (e) { st.textContent = 'Device not reachable.'; st.style.color = 'var(--status-danger)'; }
         }
         function devToggleRender(on) {
             _previewEnabled = on;
@@ -22982,7 +23012,7 @@
 
             const w = info.wifi || {};
             const connected = w.state === 'connected';
-            if (dot) dot.style.background = connected ? '#22c55e' : (w.ap_enabled ? '#f59e0b' : '#ef4444');
+            if (dot) dot.style.background = connected ? 'var(--status-ok)' : (w.ap_enabled ? '#f59e0b' : '#ef4444');
             set('netHeadline', connected ? `Connected to ${w.ssid || 'a network'}`
                             : w.ap_enabled ? 'Running its own hotspot'
                             : 'Not on a network');
@@ -23425,7 +23455,7 @@
                     <td style="padding:6px 8px; text-align:right; white-space:nowrap;">
                         <button class="btn btn-secondary" style="font-size:10px; padding:3px 7px;" onclick="customPidEditOpen(${i})">Edit</button>
                         <button class="btn btn-secondary" style="font-size:10px; padding:3px 7px;" onclick="customPidDuplicate(${i})">Copy</button>
-                        <button class="btn btn-secondary" style="font-size:10px; padding:3px 7px; color:hsl(0,70%,60%);" onclick="customPidDelete(${i})">Del</button>
+                        <button class="btn btn-secondary" style="font-size:10px; padding:3px 7px; color:var(--status-danger);" onclick="customPidDelete(${i})">Del</button>
                     </td>
                 </tr>`;
             }).join('');
@@ -23583,13 +23613,13 @@
                 });
                 if (!r.ok) {
                     out.textContent = 'Request failed (HTTP ' + r.status + ')';
-                    out.style.color = 'hsl(0,70%,60%)';
+                    out.style.color = 'var(--status-danger)';
                     return;
                 }
                 const j = await r.json();
                 if (!j.ok) {
                     out.textContent = (j.error || 'No response') + (j.elapsed_ms ? ' (' + j.elapsed_ms + 'ms)' : '');
-                    out.style.color = 'hsl(35,85%,60%)';
+                    out.style.color = 'var(--status-warn)';
                     return;
                 }
                 const rawStr = (j.raw || []).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
@@ -23602,7 +23632,7 @@
                     '<div style="color:var(--text-muted); margin-top:4px;">Raw: ' + rawStr + ' (' + j.elapsed_ms + 'ms)</div>';
             } catch (e) {
                 out.textContent = 'Network error: ' + (e && e.message || e);
-                out.style.color = 'hsl(0,70%,60%)';
+                out.style.color = 'var(--status-danger)';
             }
         }
 
@@ -23770,7 +23800,7 @@
                         ['Stale', sigs.stale]
                     ]);
             } catch (e) {
-                body.innerHTML = '<span style="color:hsl(0,70%,60%); grid-column:span 2;">Failed to load device info</span>';
+                body.innerHTML = '<span style="color:var(--status-danger); grid-column:span 2;">Failed to load device info</span>';
             }
         }
 
@@ -24480,7 +24510,7 @@
             const hv = (ch && ch.high_warn != null) ? _chDispRound(_chToDisplay(ch, ch.high_warn)) : '';
             const lv = (ch && ch.low_warn  != null) ? _chDispRound(_chToDisplay(ch, ch.low_warn))  : '';
             const dis = ch ? '' : 'disabled';
-            const hint = ch ? '' : `<div style="font-size:10px; color:#e6b800; margin-top:4px;">Bind a channel to set warn levels.</div>`;
+            const hint = ch ? '' : `<div style="font-size:10px; color:var(--status-warn); margin-top:4px;">Bind a channel to set warn levels.</div>`;
             return `<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
                 <div class="field"><label>Low Warn${unit}</label>
                     <input type="number" step="any" value="${lv}" placeholder="off" ${dis} onchange="_widgetSetWarn('low', this.value)"></div>
@@ -25142,7 +25172,7 @@
             el.textContent = `(${n} of ${_chCapacity} used)`;
             /* Warn as the registry fills — a full registry silently
              * broke activation before; make it visible early. */
-            el.style.color = n >= _chCapacity ? '#ef4444'
+            el.style.color = n >= _chCapacity ? 'var(--status-danger)'
                            : n >= _chCapacity - 12 ? 'hsl(40,80%,60%)' : '';
             el.title = n >= _chCapacity - 12
                 ? 'Channel registry is nearly full — use Select to delete unused channels'
@@ -26348,7 +26378,7 @@
                  * shape this detector can see, so it can also make that change. */
                 const idx = [];
                 for (let i = 0; i < 16; i++) if (_probeMuxSeen & (1 << i)) idx.push(i);
-                muxNote = `<br><span style="color:#e6b800;">Byte 0 varies (${idx.join(', ')}) — `
+                muxNote = `<br><span style="color:var(--status-warn);">Byte 0 varies (${idx.join(', ')}) — `
                         + `this ID looks multiplexed. The reading below mixes frames until you set an index.</span>`
                         + (_probeSetMux
                             ? ` <button class="ch2-probe-adopt" onclick="_probeMuxAdopt(${idx[0] | 0})">Use byte 0 as the frame index</button>`
@@ -27613,7 +27643,7 @@
             if (sub && _srcP.offline && !sub.dataset.off) {
                 sub.dataset.off = '1';
                 sub.innerHTML = (sub.textContent ? _textEscape(sub.textContent) + ' &middot; ' : '')
-                    + '<span style="color:#e6b800;">no dash — showing the catalogue this app ships with</span>';
+                    + '<span style="color:var(--status-warn);">no dash — showing the catalogue this app ships with</span>';
             }
             if (_srcP.mode === 'add') {
                 const n = _srcP.ticks.size;
@@ -28894,20 +28924,20 @@
                         if (active) {
                             const where = storage === 'sd' ? 'SD' : 'flash';
                             line.textContent = `Recording to ${where}: ${s.file || ''} — ${s.samples || 0} samples @ ${s.rate_hz || 0} Hz${canrawLine}`;
-                            line.style.color = 'hsl(140,60%,55%)';
+                            line.style.color = 'var(--status-ok)';
                         } else if (canrawActive) {
                             line.textContent = `Capturing raw CAN${canrawLine.replace(' • Raw: ', ': ')}`;
-                            line.style.color = 'hsl(140,60%,55%)';
+                            line.style.color = 'var(--status-ok)';
                         } else if (s.stop_reason === 'write_failure' ||
                                    canrawStopReason === 'write_failure') {
                             /* Logger auto-stopped after repeated write errors
                              * (typically the SD card was pulled mid-log) —
                              * say so instead of a silent flip to Idle. */
                             line.textContent = 'Stopped: storage write failure — SD card removed? Log saved up to the failure point.';
-                            line.style.color = 'hsl(0,70%,60%)';
+                            line.style.color = 'var(--status-danger)';
                         } else if (s.stop_reason === 'lfs_cap') {
                             line.textContent = 'Stopped: internal-flash log reached its size cap.';
-                            line.style.color = 'hsl(40,80%,60%)';
+                            line.style.color = 'var(--status-warn)';
                         } else {
                             line.textContent = 'Idle';
                             line.style.color = 'var(--text-muted)';
@@ -28921,13 +28951,13 @@
                     const btn = document.getElementById('logToggleBtn');
                     if (btn) {
                         btn.textContent = active ? '■ Stop recording' : '● Record';
-                        btn.style.background = active ? 'hsl(0,65%,45%)' : '';
-                        btn.style.borderColor = active ? 'hsl(0,65%,45%)' : '';
+                        btn.style.background = active ? 'var(--status-danger)' : '';
+                        btn.style.borderColor = active ? 'var(--status-danger)' : '';
                     }
                     const rawBtn = document.getElementById('canrawToggleBtn');
                     if (rawBtn) {
                         rawBtn.textContent = canrawActive ? 'Stop Raw CAN' : 'Record Raw CAN';
-                        rawBtn.style.color = canrawActive ? 'hsl(0,70%,62%)' : '';
+                        rawBtn.style.color = canrawActive ? 'var(--status-danger)' : '';
                     }
 
                     /* Storage-tier legend above the file list — explain WHERE
@@ -28939,7 +28969,7 @@
                             storageLine.textContent = 'Logs (SD card)';
                         } else {
                             const mb = (lfsMax / (1024*1024)).toFixed(1);
-                            storageLine.innerHTML = `Logs (internal flash &mdash; <span style="color:hsl(40,80%,60%);">no SD card detected, each log capped at ${mb} MB</span>)`;
+                            storageLine.innerHTML = `Logs (internal flash &mdash; <span style="color:var(--status-warn);">no SD card detected, each log capped at ${mb} MB</span>)`;
                         }
                     }
                 }
@@ -28969,13 +28999,13 @@
                                  * button on those rows. */
                                 const isRaw = name.toLowerCase().startsWith('canraw_');
                                 const playBtn = isRaw ? '' :
-                                    `<button class="btn btn-secondary" style="padding:2px 10px; font-size:10px; color:hsl(140,60%,55%);" onclick="playLogFile('${name}')">Play</button>`;
+                                    `<button class="btn btn-secondary" style="padding:2px 10px; font-size:10px; color:var(--status-ok);" onclick="playLogFile('${name}')">Play</button>`;
                                 return `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; border-bottom:1px solid var(--border);">
                                     <span>${name}${tierBadge} <span style="color:var(--text-muted); margin-left:8px;">${size}</span></span>
                                     <span style="display:flex; gap:4px;">
                                         ${playBtn}
                                         <a href="/api/log/download?name=${encodeURIComponent(name)}" download="${name}" class="btn btn-secondary" style="padding:2px 10px; font-size:10px; text-decoration:none;">Download</a>
-                                        <button class="btn btn-secondary" style="padding:2px 10px; font-size:10px; color:hsl(0,70%,60%);" onclick="deleteLogFile('${name}')">Delete</button>
+                                        <button class="btn btn-secondary" style="padding:2px 10px; font-size:10px; color:var(--status-danger);" onclick="deleteLogFile('${name}')">Delete</button>
                                     </span>
                                 </div>`;
                             }).join('');
@@ -29289,7 +29319,7 @@
                     </div>`;
             } catch (e) {
                 const el = document.getElementById('fuelStatus');
-                if (el) el.innerHTML = '<span style="color:hsl(0,70%,60%);">No fuel signal available</span>';
+                if (el) el.innerHTML = '<span style="color:var(--status-danger);">No fuel signal available</span>';
             }
         }
 
