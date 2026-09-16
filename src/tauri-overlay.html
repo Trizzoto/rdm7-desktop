@@ -62220,3 +62220,17 @@
         window._dvxOpen = _dvxOpen;
 
 ##[ end ]##
+
+#! Dashboard <-> Splash is a layout change like any other, and the WASM backdrop
+#! has to be told. switchScreenMode loads the other layout through
+#! fetchSplashes()/fetchLayouts(), neither of which touches the backdrop, so the
+#! canvas kept painting the dashboard after switching to Splash: on a phone,
+#! where the backdrop IS the screen, picking Splash looked like it did nothing.
+#! (On a wide window an inspector/panel repaint usually pushed it by accident,
+#! which is why this only ever showed up narrow.)
+##[ block hook-screen-mode-wasm ]##
+##[ anchor ]##
+                updateStatus(mode === 'splash' ? 'Editing splash screen' : 'Editing dashboard');
+##[ insert-after ]##
+                if (typeof scheduleWasmPreview === 'function') scheduleWasmPreview();
+##[ end ]##

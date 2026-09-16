@@ -5010,7 +5010,7 @@
              to the logo on the left. Inside .top-controls the flex-end rule
              pushed it to the middle/right of the header next to the save
              button, which looked like it was floating in the center. -->
-        <button class="mobile-burger" onclick="openMobileMenu()" title="Menu">&#9776;</button>
+        <button class="mobile-burger" onclick="toggleMobileMenu()" title="Menu">&#9776;</button>
         <!-- Studio mode switcher: Setup / Design.
              Setup    = car-level configuration (Channels, Signals, ECU, WiFi, Device)
              Design   = layout authoring (canvas + widget palette + inspector)
@@ -29243,7 +29243,7 @@
                 case 'layers':     openSidebarSheet('layers'); break;
                 case 'sim':        if (typeof toggleSimulation === 'function') toggleSimulation(); break;
                 case 'save':       if (typeof saveActiveLayout === 'function') saveActiveLayout(); break;
-                case 'more':       openMobileMenu(); break;
+                case 'more':       toggleMobileMenu(); break;
             }
         }
 
@@ -29546,6 +29546,16 @@
             const panel   = document.getElementById('mobileMenuPanel');
             if (overlay) overlay.classList.remove('active');
             if (panel)   panel.classList.remove('active');
+        }
+
+        /* The button that opens the menu is the button that closes it. Both
+         * openers (the header burger and the bottom bar's More) called
+         * openMobileMenu, which rebuilds the panel and leaves it open — so
+         * tapping More again on a phone looked like nothing happened. */
+        function toggleMobileMenu() {
+            const panel = document.getElementById('mobileMenuPanel');
+            if (panel && panel.classList.contains('active')) closeMobileMenu();
+            else openMobileMenu();
         }
 
         /* ── Boot loading animation picker (hamburger → Startup) ───────────
