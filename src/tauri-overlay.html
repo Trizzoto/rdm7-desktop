@@ -390,21 +390,10 @@
     <!-- ================= Desktop suite shell: splash / home / keypad ================= -->
     <style>
         /* ---- splash ---- */
-        /* ── Dash editor: channel test-slider panel (desktop preview) ──
-           Sits BELOW the suite overlays (z<15000) so it auto-hides whenever
-           Home or a workspace is open, and shows only over the editor. */
-        body:not(.suite-desktop) .dt-fab, body:not(.suite-desktop) .dt-panel { display: none !important; }
-        .dt-fab {
-            position: fixed; left: 14px; bottom: 14px; z-index: 14500;
-            display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px;
-            background: var(--panel-elevated); border: 1px solid var(--border-light); border-radius: 20px;
-            color: var(--text); font-family: 'Sora', sans-serif; font-size: 12px; font-weight: 600;
-            cursor: pointer; box-shadow: var(--shadow-md);
-        }
-        .dt-fab:hover { border-color: var(--accent); }
-        .dt-fab .dot { width: 8px; height: 8px; border-radius: 50%; background: #6FBF73; }
-        .dt-fab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-        .dt-fab.on .dot { background: #fff; }
+        /* The "Test signals" pill and its slider panel used to live here. The
+           firmware's own Test values drop-up in the status bar does the same
+           job from inside the editor, so the floating pill came out
+           (2026-09-16, "not needed anymore"). */
         /* Auto-save status pill + Revert (the Save button = "restore point") */
         .save-state {
             display: inline-flex; align-items: center; gap: 5px; height: 100%;
@@ -415,26 +404,6 @@
         .save-state .sdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
         #revertBtn:disabled { opacity: .38; cursor: default; }
         header #applyBtn.save-hot { box-shadow: 0 0 0 1px var(--accent) inset; }
-        .dt-panel {
-            position: fixed; left: 14px; bottom: 56px; z-index: 14500; width: 296px; max-height: 62vh;
-            background: var(--panel); border: 1px solid var(--border-light); border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-lg); display: none; flex-direction: column; overflow: hidden;
-        }
-        .dt-panel.show { display: flex; }
-        .dt-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-        .dt-head .t { font-family: 'Sora', sans-serif; font-size: 12px; font-weight: 600; color: var(--text); }
-        .dt-head .clr { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); cursor: pointer; }
-        .dt-head .clr:hover { color: #e05d52; }
-        .dt-body { overflow-y: auto; padding: 6px 12px 12px; }
-        .dt-row { padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
-        .dt-row .lab { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
-        .dt-row .nm { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text); }
-        .dt-row .vv { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-hover); font-weight: 600; }
-        .dt-row.act .nm { color: var(--accent-hover); }
-        .dt-row .x { font-size: 10px; color: var(--text-muted); cursor: pointer; padding: 0 2px; }
-        .dt-row .x:hover { color: #e05d52; }
-        .dt-row input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
-        .dt-none { color: var(--text-muted); font-size: 11px; padding: 16px 4px; text-align: center; line-height: 1.5; }
 
         #suiteSplash {
             position: fixed; inset: 0; z-index: 20000;
@@ -684,9 +653,13 @@
            ground (ADR-0024), and BAND TWO everywhere — the tab row is the one
            strip that stayed light when the surfaces went dark, so Setup /
            Channels / Design and the keypad's sections read the same as the lap
-           timer's. One copy of the values, three places wearing them.
+           timer's. One copy of the values, four places wearing them — the dash
+           editor came back to it on 2026-09-16 ("match the lap timer"), after
+           a day spent going light, then dark, then choosing this. The one
+           thing it kept from the dark run is the black under the dash.
            --ind-stage is dark in both modes; it stays at :root. */
         #gpWorkspace,
+        body.dsb-on,
         body.dsb-on .dsb-nav,
         #kpWorkspace .kpb-nav {
             --ind-bg: #c8c9cc;        /* ground: rails, page band, footer   */
@@ -723,32 +696,7 @@
             --gpb-n200: var(--ind-elev);    --gpb-n800: var(--ind-elev);
             --gpb-red: #d2232a;             --gpb-red-600: #c02026;
         }
-        /* ---- the dash editor's own ground (picked 2026-09-16) ---------------
-           The editor spent a day going light and came back: first "D6D6D6 but
-           darker", then "all too bright now needs darkening", and finally
-           these, chosen a dropdown at a time against the live editor. They are
-           NOT the :root dark palette — the rails sit a step above it and carry
-           a cool tint, which is the half of it that reads as chosen rather
-           than defaulted. The dash editor is the only surface wearing them;
-           Home, the keypad and the lap timer keep the shared palette.
-
-           The line colour is the DEVICE's (#2e302e, ui_theme.c) rather than an
-           alpha of the ink: it was picked next to the dash's own menus, which
-           is the look this is chasing. It is faintly green against these cool
-           greys on purpose — that is what was picked. */
         body.dsb-on {
-            --ind-bg: #2e2f33;        /* rails: sidebars, footer            */
-            --ind-surface: #37383c;   /* cards, panels, inputs              */
-            --ind-elev: #46474b;      /* hover / raised                     */
-            --ind-ink: #e8e8e8;
-            --ind-muted: rgba(232,232,232,0.55);
-            --ind-soft: rgba(232,232,232,0.8);
-            --ind-ghost: rgba(232,232,232,0.4);
-            --ind-div: #2e302e;
-            --ind-div-lt: rgba(232,232,232,0.07);
-            --ind-border-light: rgba(232,232,232,0.38);
-            --ind-highlight: rgba(232,232,232,0.07);
-
             --bg: var(--ind-surface);       --bg-sidebar: var(--ind-bg);
             --bg-toolbar: var(--ind-bg);    --bg-canvas: var(--ind-bg);
             --panel: var(--ind-surface);    --panel-elevated: var(--ind-elev);
@@ -758,58 +706,20 @@
             --highlight: var(--ind-highlight);
             --text: var(--ind-ink);         --text-muted: var(--ind-muted);
             --text-ghost: var(--ind-ghost);
-            /* The deep red, not the bright one: #e8433c is drawn to carry a
-               dark ground on the device's own glass, and next to these greys
-               it buzzes. This one sits down. */
-            --accent: #b3261f;        --accent-hover: #8e1e19;
-            --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
-            --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
-            --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
+            /* Red goes back to #d2232a on this ground, for the same reason the
+               tab row does: #e8433c is the brighter one drawn for a dark
+               surface and it glares against a light grey. Shadows lighten with
+               it — a 55%-black drop shadow reads as dirt on #c8c9cc. */
+            --accent: #d2232a;        --accent-hover: #c02026;
+            --shadow-sm: 0 1px 2px rgba(29,31,32,0.14);
+            --shadow-md: 0 4px 14px rgba(29,31,32,0.16);
+            --shadow-lg: 0 12px 30px rgba(29,31,32,0.20);
             --shadow-inset: none;
             --dsb-bar: #0c0d0e;  --dsb-bar-muted: #9a9a9e; --dsb-bar-div: #26282a;
             --dsb-head: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
             --dsb-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
             background: var(--ind-bg); color: var(--ind-ink);
         }
-        /* ---- type and shape, picked the same way ----------------------------
-           "it still feels very ai designed i dont know if its the font, or the
-           font colours". Three answers came out of the dropdowns:
-
-           - The caps stay, the tracking goes. Every label in the shell was set
-             0.08–0.14em apart, which reads as a title slide. At 0 it reads as
-             a tool. (Everything in these strips is caps now, including the
-             widget and layer names.)
-           - ONE face. The chrome was Barlow for body, Barlow Condensed for
-             heads, Sora for some headings and JetBrains Mono for numbers —
-             four voices in one window. Now it is Barlow throughout, condensed
-             for heads. #workspaceViewport is excluded on purpose: the fonts in
-             there are the DASH's fonts, and overriding them would draw a lie.
-           - Corners at 8. Square-everything survives where it is deliberate —
-             the bar and the tab row set radius 0 on their own children with
-             !important, and still win.
-
-           !important because these have to beat a long tail of firmware rules
-           that name a font, a radius or a tracking inline in the base HTML. */
-        body.dsb-on .dsb-bar *, body.dsb-on .dsb-nav *,
-        body.dsb-on .sidebar *, body.dsb-on .align-bar *,
-        body.dsb-on footer *, body.dsb-on .insp-fold > summary {
-            text-transform: uppercase !important;
-            letter-spacing: 0 !important;
-        }
-        body.dsb-on *:not(#workspaceViewport):not(#workspaceViewport *) {
-            font-family: var(--dsb-body) !important;
-        }
-        body.dsb-on .dsb-bar .dsb-home span, body.dsb-on .dsb-bar .dsb-wsname,
-        body.dsb-on .dsb-nav .studio-mode-btn, body.dsb-on .dsb-navacts .header-pill,
-        body.dsb-on #applyBtn, body.dsb-on .insp-fold > summary {
-            font-family: var(--dsb-head) !important;
-        }
-        body.dsb-on button, body.dsb-on select, body.dsb-on input,
-        body.dsb-on .sidebar, body.dsb-on .layer-item, body.dsb-on .insp-fold,
-        body.dsb-on .card, body.dsb-on .panel {
-            border-radius: 8px !important;
-        }
-
         /* The analyzer and the IO expander never joined the brand: they are
            still the firmware's dark editor with its blue accent, and they do
            not re-bind these tokens for themselves. Pin them so the editor's
@@ -58672,77 +58582,11 @@
         /* boot: splash then home — only inside the Tauri app (the same dist is
            served by dev rigs in plain browsers, where the editor should show
            immediately) */
-        /* ── Dash editor: channel test-slider panel ──────────────────────
-           Drag any bound channel and watch the WASM preview (rules, redlines,
-           warnings) react with no car. Reuses the editor's setTestValue /
-           clearTestValue plumbing; injectWasmSignal gives an immediate paint. */
-        function dtInit() {
-            if (document.getElementById("dtFab")) return;
-            var fab = document.createElement("button");
-            fab.id = "dtFab"; fab.className = "dt-fab";
-            fab.innerHTML = "<span class='dot'></span>Test signals";
-            fab.title = "Drive each bound channel by hand and watch the preview react";
-            fab.addEventListener("click", dtToggle);
-            var panel = document.createElement("div");
-            panel.id = "dtPanel"; panel.className = "dt-panel";
-            panel.innerHTML = "<div class='dt-head'><span class='t'>Test signals</span><span class='clr' onclick='dtClearAll()'>reset all</span></div><div class='dt-body' id='dtBody'></div>";
-            document.body.appendChild(panel);
-            document.body.appendChild(fab);
-        }
-        var _dtActive = {};   /* channel → true while a slider is overriding it */
-        function dtToggle() {
-            var p = document.getElementById("dtPanel"), f = document.getElementById("dtFab");
-            if (!p) return;
-            var show = !p.classList.contains("show");
-            p.classList.toggle("show", show); f.classList.toggle("on", show);
-            if (show) dtBuild();
-        }
-        function dtBuild() {
-            var body = document.getElementById("dtBody");
-            if (!body || typeof currentLayout === "undefined") return;
-            var seen = {}, rows = [];
-            (currentLayout.widgets || []).forEach(function (w) {
-                var sn = _getWidgetSignalName(w);
-                if (!sn || seen[sn]) return;
-                seen[sn] = true;
-                rows.push({ name: sn, b: _getTestBounds(w) });
-            });
-            if (!rows.length) { body.innerHTML = "<div class='dt-none'>No channels bound in this layout yet.<br>Bind a widget to a channel, then drive it here.</div>"; return; }
-            body.innerHTML = rows.map(function (r) {
-                var mid = _dtActive[r.name] !== undefined ? _dtActive[r.name] : (r.b.min + r.b.max) / 2;
-                var dec = (r.b.step < 1) ? 1 : 0;
-                return "<div class='dt-row" + (_dtActive[r.name] !== undefined ? " act" : "") + "' id='dtr_" + _dtId(r.name) + "'>" +
-                    "<div class='lab'><span class='nm'>" + r.name + "</span><span class='vv'>" + (+mid).toFixed(dec) + "</span>" +
-                    "<span class='x' onclick='dtReset(\"" + r.name + "\")' title='release to live/sim'>&#10005;</span></div>" +
-                    "<input type='range' min='" + r.b.min + "' max='" + r.b.max + "' step='" + r.b.step + "' value='" + mid + "' " +
-                    "oninput='dtSet(\"" + r.name + "\", this.value, " + dec + ")'></div>";
-            }).join("");
-        }
-        function _dtId(n) { return n.replace(/[^a-z0-9]/gi, "_"); }
-        window.dtSet = function (name, val, dec) {
-            var v = parseFloat(val);
-            _dtActive[name] = v;
-            try { setTestValue(name, v); } catch (e) {}
-            try { injectWasmSignal(name, v); } catch (e) {}
-            var row = document.getElementById("dtr_" + _dtId(name));
-            if (row) { row.classList.add("act"); var vv = row.querySelector(".vv"); if (vv) vv.textContent = v.toFixed(dec); }
-        };
-        window.dtReset = function (name) {
-            delete _dtActive[name];
-            try { clearTestValue(name); } catch (e) {}
-            dtBuild();
-        };
-        window.dtClearAll = function () {
-            Object.keys(_dtActive).forEach(function (n) { try { clearTestValue(n); } catch (e) {} });
-            _dtActive = {}; dtBuild();
-        };
-
         function bootSuite() {
             /* Splash is display:flex by default (covers first paint). In a plain
                browser (dev server, no Tauri) there's no suite chrome, so hide it. */
             if (!window.__TAURI__) { var sp = document.getElementById("suiteSplash"); if (sp) sp.style.display = "none"; return; }
             document.body.classList.add("suite-desktop");
-            dtInit();
             /* editor header joins the suite: swap the legacy logo image for the
                wordmark and add a Home button at the far left */
             try {
