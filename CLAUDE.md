@@ -101,3 +101,61 @@ verify against the pubkey baked into their config). Local signed builds:
 - The frontend uses `'unsafe-eval'` and `'wasm-unsafe-eval'` CSP directives — required for WASM execution.
 - Serial port auto-detection filters by USB VID/PID to identify RDM-7 hardware.
 - KiCAD schematic files in the repo root are hardware reference designs for display interfaces (DSI-to-LVDS bridge, round LCD), not part of the software build.
+
+---
+
+## Design system
+
+DESIGN.md at the repo root is the design system. It is authoritative for
+colour, type, spacing, radius, elevation, motion, layout, component states
+and voice. Read it before writing any UI code.
+
+Sections 1 to 10 are the specification. Section 11 is the migration map.
+Section 12 is open items. Section 13 is storefront and email, which does
+not apply to the apps.
+
+### Rules
+
+1. No raw values in application code. No hex, no rgba, no literal font
+   size, spacing value, radius, shadow or duration. Reference a token.
+2. A value not in DESIGN.md does not get used. If something is needed that
+   isn't there, stop and say so rather than inventing it. New values are
+   added to DESIGN.md by commit first.
+3. Every interactive component implements all nine states in section 9.2:
+   default, hover, focus, active/pressed, selected, disabled, loading,
+   error, empty.
+4. Focus is never removed. `outline: none` without a replacement is a
+   defect. The ring colour follows section 9.3 and differs by mode.
+5. Values read from JavaScript do not follow a var() swap. Anything painted
+   from JS reads the token at paint time. See section 10.2.
+6. Contrast is verified against the ground a value actually sits on, not the
+   ground it was derived from. This is the single most common failure and
+   has already produced five defects in this project.
+7. Voice rules in section 1.3 apply to all UI copy, including error and
+   empty states. No em-dashes. Australian spelling.
+
+### DESIGN.md is read-only
+
+Never edit, rewrite, patch or reformat DESIGN.md. Not to fix a typo, not
+to add a value, not to reorganise it. James maintains it and this repo
+holds a copy.
+
+If the work needs a value that is not in DESIGN.md, or a value in it is
+wrong, stop and tell Tommy. Do not invent a value, do not work around it
+in code, and do not add it to DESIGN.md. Output a change request
+instead: section, current value, proposed value, the measurement
+supporting it, and what it affects.
+
+A workaround in code is how the previous 934 colours happened.
+
+Before writing UI code, check the version in the DESIGN.md header against
+the last version James sent. If the local copy is older, stop and ask for
+the current one.
+
+### Surfaces
+
+- Studio, Dash web, Phone: light and dark, default `system`, OS-following.
+  The phone is the reference implementation.
+- RDM-7 device: dark only, permanently. Keeps its own fonts. Flash
+  constrained, currently 98.99% full (37,232 bytes free as of 2026-09-17).
+- **This repo is Studio.** The editor HTML is built from RDM-7_Dash (ADR-0007), so Dash web token work lands here too — see `src/tauri-overlay.html` for desktop-only deltas.

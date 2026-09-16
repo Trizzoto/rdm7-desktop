@@ -1,0 +1,191 @@
+# Change requests against DESIGN.md v1.1
+
+From: Tommy (apps) · 17 September 2026 · against v1.1 of 16 September 2026
+
+Five requests. Each follows the §Governance format: section and token, current
+value, proposed value, the measurement, and what it affects.
+
+Everything else in v1.1 verified. Every contrast ratio in the file was
+recomputed against every ground it names, and all of them reproduce exactly:
+the focus-ring figures 2.52 / 2.21 / 1.92, `accent.ink` at 5.60 worst case,
+`line.control` at 3.47 / 3.44 / 3.36, 3.04 on storefront ink `raised`, the
+danger ring at 8.20, and the corrected status colours at 4.60 / 4.54 / 4.51.
+The file is well measured and none of the below disputes a number in it.
+
+---
+
+## CR-1 — `bar` and `stage` have no role bindings (highest priority)
+
+**Section and token.** §2.3 and §2.4, the `bar` and `stage` rows.
+
+**Current.** Both palettes list `stage` `#16181b` and `bar` `#0c0d0e`, annotated
+"dark in both modes". Neither section says which role values apply *on* them.
+
+**Why.** Read literally, light mode puts light-mode ink on a near-black bar.
+Measured against `bar` `#0c0d0e`:
+
+| Light-mode role landing on `bar` | Ratio |
+|---|---|
+| `text.primary` `#1d1f20` | 1.18 |
+| `text.secondary` `#545557` | 2.61 |
+| `divider` `rgba(29,31,32,0.2)` | 1.03 |
+| `line.strong` `rgba(29,31,32,0.38)` | 1.05 |
+| `highlight` `rgba(29,31,32,0.07)` — the §9.2 hover treatment | 1.00 |
+| §9.3 danger focus ring (`text.primary`) | 1.18 |
+
+`stage` `#16181b` is the same picture: 1.07, 2.38, 1.01, 1.03, 1.00.
+
+A hover state at 1.00 is not a weak hover, it is no hover at all.
+
+This is the bug class §"What changed in 1.1" names — a value set against one set
+of grounds and used on another — reappearing where the ground is fixed and the
+*mode* moves underneath it.
+
+**Proposed.** One sentence in §2.3, or a note on both rows:
+
+> Components sitting on `bar` or `stage` resolve dark-mode role values in both
+> modes. These two grounds do not follow the mode.
+
+Ground-scoped rather than mode-scoped, which is the fix pattern 1.1 already
+applied to `accent`.
+
+**What it affects.** Studio first and hardest: its whole shell is the black bar
+carrying the workspace tabs, so the affected elements are interactive and need
+hover, focus and selected states. Dash web and the Phone share the pattern.
+No token value changes; this is a resolution rule.
+
+---
+
+## CR-2 — §9.2 `selected` and `active/pressed` still carry the bug §9.3 was fixed for
+
+**Section and token.** §9.2, the `selected` and `active / pressed` rows.
+
+**Current.**
+- selected: "`accent` fill, or a 2px `accent` bottom border"
+- active / pressed: "`accent.pressed` fill, or `highlight` at double strength"
+
+**Why.** v1.1 fixed the focus ring in §9.3 because `accent` on a dark ground
+falls below the 3:1 in §2.6. Its two siblings were left as they were, and they
+fail the same requirement:
+
+| Treatment | dark `ground` | `surface` | `raised` |
+|---|---|---|---|
+| 2px `accent` bottom border | 2.52 | 2.21 | 1.92 |
+| `accent.pressed` `#c02026` fill | 2.18 | 1.91 | 1.66 |
+
+§2.1's edge rule is written for `accent` only, so `accent.pressed` — which is
+darker, and therefore worse on every dark ground — is not covered by it.
+
+**Proposed.**
+1. Extend the §2.1 edge rule to read "an `accent` or `accent.pressed` fill on a
+   dark ground takes a 1px `line.control` edge".
+2. In §9.2, qualify the bottom-border option: "a 2px `accent` bottom border on
+   light, `accent.ink` on dark", matching §2.6.
+
+**What it affects.** Every selected tab, active nav item and pressed button on
+all three software surfaces in dark mode. No token value changes.
+
+---
+
+## CR-3 — §2.6 and §9.3 disagree about which token on `bar` and `stage`
+
+**Section and token.** §2.6 closing paragraph, and the §9.3 ring table.
+
+**Current.** §2.6: "Any accent line, ring or arc on a dark ground must use
+`accent.ink` instead of `accent`." §9.3 keys the ring on mode: light → `accent`,
+dark → `accent.ink`.
+
+**Why.** On `bar` and `stage` in light mode these give different answers, because
+those grounds are dark while the mode is light. Nothing fails — `accent` measures
+3.40 on `stage` and 3.72 on `bar`, both clearing 3:1 — so this is an ambiguity
+rather than a defect. An implementer still has to guess.
+
+**Proposed.** No change if CR-1 is accepted; its resolution rule settles this.
+Otherwise, make the §9.3 table key on the ground rather than the mode.
+
+**What it affects.** Clarity only. No measured failure.
+
+---
+
+## CR-4 — `#b3261f` is missing from the §11.1 migration map
+
+**Section and token.** §11.1, the accent rows.
+
+**Current.** The map lists `#d2232a`, `#d71900`, `#E01616`, `#CC0000`,
+`#E00000`, `H(0xD2232A)` → `accent`, and `#c02026`, `#A80000`, `#990000` →
+`accent.pressed`. `#b3261f` appears nowhere in the file.
+
+**Why.** It is live: `src/tauri-overlay.html` defines
+`--accent: #b3261f` under `body.dsb-on`, the Studio dash-editor scope. A
+map-driven replacement skips it silently, which is exactly the failure v1.1
+recorded as defect #5 for `#CC0000`.
+
+It is a fifth red, after `#d2232a`, `#d71900`, `#E01616` and `#CC0000`.
+
+**Proposed.** Add `#b3261f` to the `accent` row of §11.1.
+
+**What it affects.** One definition site in the Studio overlay, which drives the
+dash editor's accent. Small, but it is the one that silently survives a
+scripted migration.
+
+---
+
+## CR-5 — `#e8433c` maps to a text colour but is in use as a fill
+
+**Section and token.** §11.1, the row `#e8433c`, `#f2635c`, … → `accent.ink`
+(dark).
+
+**Current.** The map sends `#e8433c` to `accent.ink`.
+
+**Why.** In the Studio overlay `#e8433c` is the value of `--accent` under
+`#suiteHome` and under `#kpWorkspace` — a fill role, not ink. Applying §11.1
+mechanically turns two workspace accent fills into a text colour, which §2.2
+explicitly forbids ("accent is never a text colour", and `accent.ink` is defined
+for text, line, arc and icon).
+
+DESIGN.md already contains the right answer for the fill case, in §2.5: the
+device `accent` is "**corrected** from `#e8433c`" to `#d2232a`. The §11.1 table
+just has no column to express that the same literal maps two ways depending on
+the role it currently fills.
+
+**Proposed.** Split the row, or add a qualifier:
+
+> `#e8433c` → `accent` where it is a fill, `accent.ink` where it is text, a line
+> or an icon. Check the declaration, not just the value.
+
+**What it affects.** 8 occurrences of `#e8433c` in the Studio overlay, two of
+them `--accent` definitions that drive whole workspace scopes.
+
+---
+
+## Not a change request: a scoping note on §11.1
+
+§11.1 says the remainder is "521 single-use values … each maps to the nearest
+role". Measured across Dash web and the Studio overlay only, the tail is larger
+than single-use:
+
+| | |
+|---|---|
+| distinct colour literals in the two surfaces | 415 (1,501 uses) |
+| not named anywhere in DESIGN.md | 366 |
+| of those, used more than once | 154 (599 uses) |
+| used three or more times | 89 |
+| saturated, three or more uses (carry meaning, not chrome) | 44 |
+
+The saturated ones are the concern, because "nearest role" is a judgement call
+where a status colour is involved. Unmapped examples: `#118833` (24 uses) and
+`#6fbf73` (23) are greens where §11.1 maps only `#2e7d43` to `status.ok`; eleven
+further greens and eleven further yellows and oranges sit outside the
+`status.warn` row.
+
+**"The blue goes" is also wider than two values.** §2.2 names `#2d8ceb` and
+`#4da3f2`. In use there are at least a dozen more blue-ish values, including
+`#7cc0ff` (7), `#4fc3f7` (7), `#2979ff` (6), `#3b82f6` (5) and `#5bb8ff` (3).
+
+**Caveat, and it matters.** Some of this tail is certainly user data rather than
+interface chrome — dashboard widgets carry their own colours by design
+(ADR-0075), so a default widget colour like `#00ff00` is not a token candidate.
+The figures above are a bound on the work, not a defect count, and the split
+between chrome and widget defaults has not been separated yet. No change to
+DESIGN.md is proposed; this is for planning the "zero raw colour literals"
+definition of done, which is a larger job than the map implies.
