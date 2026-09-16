@@ -654,12 +654,11 @@
            strip that stayed light when the surfaces went dark, so Setup /
            Channels / Design and the keypad's sections read the same as the lap
            timer's. One copy of the values, four places wearing them — the dash
-           editor came back to it on 2026-09-16 ("match the lap timer"), after
-           a day spent going light, then dark, then choosing this. The one
-           thing it kept from the dark run is the black under the dash.
+           editor wears them in LIGHT mode (body.dsb-on.studio-light), which is
+           why the two look like the same app rather than two apps.
            --ind-stage is dark in both modes; it stays at :root. */
         #gpWorkspace,
-        body.dsb-on,
+        body.dsb-on.studio-light,
         body.dsb-on .dsb-nav,
         #kpWorkspace .kpb-nav {
             --ind-bg: #c8c9cc;        /* ground: rails, page band, footer   */
@@ -696,7 +695,44 @@
             --gpb-n200: var(--ind-elev);    --gpb-n800: var(--ind-elev);
             --gpb-red: #d2232a;             --gpb-red-600: #c02026;
         }
+        /* ---- the editor has two grounds, and a switch in its bar ------------
+           Both were chosen the same way, a dropdown at a time against the live
+           editor, and both are kept because the room decides which one is
+           right: a bench at night wants the dark one, a workshop with the door
+           open wants the light one.
+
+           DARK is the default and is written here as the base, so a browser
+           with nothing stored opens dark. LIGHT is the shared Industry palette
+           (above) behind .studio-light, which is how it stays the lap timer's
+           exact greys instead of a second set that drifts.
+
+           What does NOT change with the switch: the black under the dash and
+           the bezel on it (a dash is a lit object either way), the black top
+           bar, and the light tab row — that strip stayed light through both
+           and reads as the constant it is. */
         body.dsb-on {
+            /* DARK — rails a step above the :root dark, cool-tinted. The line
+               colour is the DEVICE's (#2e302e, ui_theme.c), picked next to the
+               dash's own menus; it is faintly green against these cool greys
+               on purpose. */
+            --ind-bg: #2e2f33;        /* rails: sidebars, footer            */
+            --ind-surface: #37383c;   /* cards, panels, inputs              */
+            --ind-elev: #46474b;      /* hover / raised                     */
+            --ind-ink: #e8e8e8;
+            --ind-muted: rgba(232,232,232,0.55);
+            --ind-soft: rgba(232,232,232,0.8);
+            --ind-ghost: rgba(232,232,232,0.4);
+            --ind-div: #2e302e;
+            --ind-div-lt: rgba(232,232,232,0.07);
+            --ind-border-light: rgba(232,232,232,0.38);
+            --ind-highlight: rgba(232,232,232,0.07);
+            /* The deep red, not the bright one: #e8433c is drawn to carry the
+               device's own glass and buzzes against these greys. */
+            --accent: #b3261f;        --accent-hover: #8e1e19;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+            --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
+
             --bg: var(--ind-surface);       --bg-sidebar: var(--ind-bg);
             --bg-toolbar: var(--ind-bg);    --bg-canvas: var(--ind-bg);
             --panel: var(--ind-surface);    --panel-elevated: var(--ind-elev);
@@ -706,19 +742,21 @@
             --highlight: var(--ind-highlight);
             --text: var(--ind-ink);         --text-muted: var(--ind-muted);
             --text-ghost: var(--ind-ghost);
-            /* Red goes back to #d2232a on this ground, for the same reason the
-               tab row does: #e8433c is the brighter one drawn for a dark
-               surface and it glares against a light grey. Shadows lighten with
-               it — a 55%-black drop shadow reads as dirt on #c8c9cc. */
-            --accent: #d2232a;        --accent-hover: #c02026;
-            --shadow-sm: 0 1px 2px rgba(29,31,32,0.14);
-            --shadow-md: 0 4px 14px rgba(29,31,32,0.16);
-            --shadow-lg: 0 12px 30px rgba(29,31,32,0.20);
             --shadow-inset: none;
             --dsb-bar: #0c0d0e;  --dsb-bar-muted: #9a9a9e; --dsb-bar-div: #26282a;
             --dsb-head: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
             --dsb-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
             background: var(--ind-bg); color: var(--ind-ink);
+        }
+        /* LIGHT — the greys come from the shared block above; what is left is
+           the pair that has to turn over with the ground. Red steps back to
+           #d2232a (the bright one glares on light), and the shadows lighten:
+           a 55%-black drop shadow reads as dirt on #c8c9cc. */
+        body.dsb-on.studio-light {
+            --accent: #d2232a;        --accent-hover: #c02026;
+            --shadow-sm: 0 1px 2px rgba(29,31,32,0.14);
+            --shadow-md: 0 4px 14px rgba(29,31,32,0.16);
+            --shadow-lg: 0 12px 30px rgba(29,31,32,0.20);
         }
         /* The analyzer and the IO expander never joined the brand: they are
            still the firmware's dark editor with its blue accent, and they do
@@ -762,6 +800,14 @@
         }
         .dsb-bar .dsb-home:hover span { color: #ec817b; }
         .dsb-bar .dsb-vr { width: 1px; height: 20px; background: var(--dsb-bar-div); flex: none; }
+        /* the light/dark switch — sits in band one, left of the connection bar */
+        .dsb-bar .dsb-theme {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; padding: 0; flex: none;
+            background: transparent; border: 1px solid var(--dsb-bar-div);
+            color: var(--dsb-bar-muted); cursor: pointer;
+        }
+        .dsb-bar .dsb-theme:hover { color: #fff; border-color: rgba(255,255,255,0.4); }
         .dsb-bar .dsb-wsname {
             font-family: var(--dsb-head); font-weight: 600; font-size: 15px;
             letter-spacing: 0.14em; text-transform: uppercase; color: #cfcfd2; white-space: nowrap;
@@ -58219,7 +58265,8 @@
                 '<button class="dsb-home" onclick="_suiteHomeShow()" title="Home (Esc)">' +
                 '<img src="rdm_logo.png" alt="RDM" draggable="false"><span>Studio</span></button>' +
                 '<span class="dsb-vr"></span><span class="dsb-wsname">Dash</span>' +
-                '<span class="dsb-sp"></span>';
+                '<span class="dsb-sp"></span>' +
+                '<button class="dsb-theme" id="dsbTheme" onclick="_studioThemeToggle()"></button>';
             var nav = document.createElement("div");
             nav.className = "dsb-nav";
             var navActs = document.createElement("div");
@@ -58463,6 +58510,44 @@
            the wrong palette. */
         function _dsbOn(on) { document.body.classList.toggle("dsb-on", !!on); }
 
+        /* ---- light or dark, and which one you get ---------------------------
+         * Dark is the default: nothing stored means dark, which is what the
+         * app opens as on a machine that has never been told otherwise. The
+         * choice is per-machine (localStorage), not per-layout — it is about
+         * the room you are working in, so it has no business in a .rdm.
+         *
+         * The class goes on <body> rather than the editor's own element
+         * because the palette is bound on body.dsb-on; .studio-light out-
+         * specifies it there and the bindings re-resolve with no second copy
+         * of the greys. */
+        var STUDIO_THEME_KEY = "rdm7_studio_theme";
+        var _THEME_SUN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"></circle>' +
+            '<path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.4 5.4l1.7 1.7M16.9 16.9l1.7 1.7M18.6 5.4l-1.7 1.7M7.1 16.9l-1.7 1.7"></path></svg>';
+        var _THEME_MOON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"></path></svg>';
+
+        function _studioThemeGet() {
+            try { return localStorage.getItem(STUDIO_THEME_KEY) === "light" ? "light" : "dark"; }
+            catch (e) { return "dark"; }
+        }
+        function _studioThemeApply(mode) {
+            document.body.classList.toggle("studio-light", mode === "light");
+            var b = document.getElementById("dsbTheme");
+            if (b) {
+                /* The button shows what you would GET, which is the way every
+                   switch with two states and one glyph has to read. */
+                b.innerHTML = mode === "light" ? _THEME_MOON : _THEME_SUN;
+                b.title = mode === "light" ? "Light — switch to dark" : "Dark — switch to light";
+                b.setAttribute("aria-label", b.title);
+            }
+        }
+        window._studioThemeToggle = function () {
+            var next = _studioThemeGet() === "light" ? "dark" : "light";
+            try { localStorage.setItem(STUDIO_THEME_KEY, next); } catch (e) {}
+            _studioThemeApply(next);
+        };
+
         /* ---- the bezel is the panel's, and Fit measures it ------------------
          * Waveshare ESP32-S3-Touch-LCD-7 (the 800x480 board this dash is
          * built on), from its dimension drawing: 192.96 x 110.76 mm of glass
@@ -58534,6 +58619,7 @@
             if (home) home.style.display = "none";
             _dsbBuild();
             _dsbOn(true);
+            _studioThemeApply(_studioThemeGet());   /* the switch's own glyph */
             _bezelApply();   /* the frame, in case the screen changed while away */
             /* connPollTimer stays running — it also drives the editor
              * header's connection dot now, not just the Home heading. */
@@ -58587,6 +58673,7 @@
                browser (dev server, no Tauri) there's no suite chrome, so hide it. */
             if (!window.__TAURI__) { var sp = document.getElementById("suiteSplash"); if (sp) sp.style.display = "none"; return; }
             document.body.classList.add("suite-desktop");
+            _studioThemeApply(_studioThemeGet());   /* before anything paints */
             /* editor header joins the suite: swap the legacy logo image for the
                wordmark and add a Home button at the far left */
             try {
