@@ -693,15 +693,19 @@
                 color: var(--text-muted, var(--text-secondary));
             }
             .wst-test-val.active { color: var(--accent-ink); }
-            /* When the selection toolbar is visible, lift the zoom bar above
-             * it. Offsets account for row-1 wrapping to two lines on ~375px
-             * phones (taller toolbar). */
-            body.wst-active #mobileZoomBar {
-                bottom: calc(210px + env(safe-area-inset-bottom, 0px)) !important;
-            }
-            body.wst-active.wst-has-test #mobileZoomBar {
-                bottom: calc(262px + env(safe-area-inset-bottom, 0px)) !important;
-            }
+            /* The zoom bar clears the selection toolbar by reading its MEASURED
+             * height out of --wst-h (see _syncBottomFurniture), not by a
+             * constant. Three constants used to live here — 210px, 262px and a
+             * 130px landscape variant — each a guess at a toolbar that changes
+             * height when its first row wraps, so each was wrong on some
+             * phone. */
+
+            /* The bottom furniture is fixed-position, so the workspace could
+             * not see it and centred the dash over the whole height, parking
+             * the zoom pill in the middle of the gauges on a short screen.
+             * Reserve the measured stack: the dash then centres in the space
+             * that is actually free, and Fit scales against that. */
+            #workspaceViewport { padding-bottom: var(--bottom-furniture, 0px); }
             #wstLockBtn.locked {
                 color: var(--status-warn); background: var(--tint-warn);
                 border-color: color-mix(in srgb, var(--status-warn) 45%, transparent);
@@ -740,10 +744,8 @@
             #widgetSelToolbar .wst-row { flex: 0 0 auto !important; }
             #widgetSelToolbar .wst-row-test { flex: 1 1 auto !important; min-width: 160px; }
             #widgetSelToolbar .wst-row-2 { padding: 0 !important; gap: 6px !important; }
-            body.wst-active #mobileZoomBar,
-            body.wst-active.wst-has-test #mobileZoomBar {
-                bottom: calc(130px + env(safe-area-inset-bottom, 0px)) !important;
-            }
+            /* No landscape clearance constant either: the single row is
+               shorter, --wst-h measures that, and the zoom bar follows. */
         }
 
         /* ── Mobile menu overlay + slide-in panel (hamburger → More → "…") */
@@ -944,8 +946,11 @@
             position: fixed;
             /* Sit above the bottom action bar (56 content + max(env,14) padding)
              * with a 10px gap. Same max() pattern as #mobileActionBar keeps the
-             * bar clear of Android gesture zones and iPhone home indicators. */
-            bottom: calc(66px + max(env(safe-area-inset-bottom, 0px), 14px));
+             * bar clear of Android gesture zones and iPhone home indicators.
+             * --wst-h is the selection toolbar's measured height when one is
+             * showing and 0px otherwise, so this one expression covers both
+             * states and every phone. */
+            bottom: calc(66px + max(env(safe-area-inset-bottom, 0px), 14px) + var(--wst-h, 0px));
             left: 50%; transform: translateX(-50%);
             z-index: 9995;
             background: var(--bar);
@@ -12680,10 +12685,72 @@
             zoomToFit();
         }
 
+        /* What is parked at the bottom of a phone screen, measured rather than
+         * guessed.
+         *
+         * The action bar, the zoom pill and the widget selection toolbar are
+         * all position:fixed, so the workspace cannot see any of them. It was
+         * centring the dash over the full height and the pill ended up sitting
+         * across the middle of the gauges on a short screen. The toolbar also
+         * changes height when its first row wraps, which is why the constants
+         * that used to encode this (210 / 262 / 130px) were each wrong on some
+         * phone.
+         *
+         *   --wst-h             the toolbar's height plus its gap, or 0px.
+         *                       #mobileZoomBar adds it to its own offset.
+         *   --bottom-furniture  the whole stack. #workspaceViewport reserves
+         *                       it, so nothing is ever parked over the dash.
+         */
+        function _syncBottomFurniture() {
+            const root = document.documentElement;
+            /* offsetParent is ALWAYS null on a position:fixed element, so the
+               usual offsetParent test reports every one of these as hidden.
+               Ask for the computed display instead. */
+            const shown = (el) => !!el && el.offsetHeight > 0 &&
+                                  getComputedStyle(el).display !== 'none';
+            const wst    = document.getElementById('widgetSelToolbar');
+            const zoom   = document.getElementById('mobileZoomBar');
+            const action = document.getElementById('mobileActionBar');
+
+            const wstH = shown(wst) ? wst.offsetHeight + 8 : 0;
+            root.style.setProperty('--wst-h', wstH + 'px');
+
+            /* No action bar means the desktop layout, where nothing is parked
+               over the workspace and there is nothing to reserve. */
+            const actionH = shown(action) ? action.offsetHeight : 0;
+            const zoomH   = shown(zoom)   ? zoom.offsetHeight + 12 : 0;
+            const total   = actionH ? actionH + 10 + wstH + zoomH : 0;
+            root.style.setProperty('--bottom-furniture', total + 'px');
+
+            /* Says whether it MOVED, so callers can re-fit on a real change
+               instead of on every tick of the 250ms selection poll. */
+            const changed = total !== _bottomFurniturePx;
+            _bottomFurniturePx = total;
+            return changed;
+        }
+        let _bottomFurniturePx = -1;
+
+        /* The toolbar's height changes as its rows wrap, and showing or hiding
+           it changes the whole stack, so re-measure on both. */
+        (function _watchBottomFurniture() {
+            const run = () => { if (_syncBottomFurniture() && !_userZoomed) zoomToFit(); };
+            window.addEventListener('resize', run);
+            const wst = document.getElementById('widgetSelToolbar');
+            if (wst && typeof ResizeObserver !== 'undefined') {
+                new ResizeObserver(run).observe(wst);
+            }
+            run();
+        })();
+
         function zoomToFit() {
             const vp = document.getElementById('workspaceViewport');
             if (!vp) return;
             const rect = vp.getBoundingClientRect();
+            /* getBoundingClientRect is the border box, so it still counts the
+               padding that reserves the bottom furniture. Fit has to scale
+               against the space the dash can actually occupy. */
+            const _cs = getComputedStyle(vp);
+            const _padY = (parseFloat(_cs.paddingTop) || 0) + (parseFloat(_cs.paddingBottom) || 0);
             /* bezel padding: rect=16+16 x 12+12; round=50+50; round-slim=20+20 */
             const bezelOn = canvasContainer.classList.contains('bezel-on');
             let bezelPad = 0;
@@ -12698,7 +12765,7 @@
             const contentH = CANVAS_H + bezelPadY;
             const padW = 40, padH = 40; /* breathing room */
             const scaleX = (rect.width - padW) / contentW;
-            const scaleY = (rect.height - padH) / contentH;
+            const scaleY = (rect.height - _padY - padH) / contentH;
             zoomLevel = Math.min(scaleX, scaleY, 3.0);
             zoomLevel = Math.max(0.2, zoomLevel);
             panX = 0; panY = 0;
@@ -30334,6 +30401,15 @@
                 if (_wstLastIdx !== -1 && window._zoomBarWake) window._zoomBarWake();
                 _wstLastIdx = -1;
             }
+            /* Showing or hiding the toolbar changes what is parked at the
+               bottom, so the workspace is told here rather than waiting on the
+               ResizeObserver: an observer callback is delivered with the
+               rendering steps, which is a frame late and does not arrive at
+               all while the page is not being painted. Re-fits only when the
+               reserved height actually moved, because this runs on the 250ms
+               selection poll. */
+            if (typeof _syncBottomFurniture === 'function' &&
+                _syncBottomFurniture() && !_userZoomed) zoomToFit();
         }
 
         /* Backwards-compat shim: some code paths still call updateMobileSelToolbar() */
