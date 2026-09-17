@@ -517,12 +517,17 @@
     function _rememberPin(base, pin) {
         try { localStorage.setItem(_PIN_KEY + base, pin); } catch (e) {}
     }
-    function _askForPin(base) {
-        const entered = window.prompt(
-            'This dash is locked.' + String.fromCharCode(10, 10) +
-            'Enter its PIN, shown on the dash under Menu > Connect:', '');
+    /* promptAsync, never the bare prompt(): under the desktop webview
+       window.prompt hangs the app outright (ADR-0016's sibling problem). The
+       editor defines promptAsync; look it up at call time because transport.js
+       loads first, and fall back to prompt() only in a plain browser. */
+    async function _askForPin(base) {
+        const entered = (typeof window.promptAsync === 'function')
+            ? await window.promptAsync('Dash PIN', '', { raw: true,
+                  subtitle: 'This dash is locked. Its PIN is on the dash under Menu > Connect.' })
+            : window.prompt('Dash PIN (on the dash under Menu > Connect):', '');
         if (!entered) return '';
-        const pin = entered.trim();
+        const pin = String(entered).trim();
         _rememberPin(base, pin);
         return pin;
     }
@@ -547,7 +552,7 @@
                         headers: { ...(opts?.headers || {}), ..._pinHeaders(baseUrl) },
                     }
                 });
-                if (resp.status === 401 && !_retried && _askForPin(baseUrl))
+                if (resp.status === 401 && !_retried && await _askForPin(baseUrl))
                     return api(path, opts, true);
                 if (resp.status < 200 || resp.status >= 300)
                     throw new Error(`HTTP ${resp.status}: ${resp.body}`);
@@ -558,7 +563,7 @@
                 headers: { ...(opts?.headers || {}), ..._pinHeaders(baseUrl) },
                 signal: AbortSignal.timeout(opts?.timeout || 10000),
             });
-            if (r.status === 401 && !_retried && _askForPin(baseUrl))
+            if (r.status === 401 && !_retried && await _askForPin(baseUrl))
                 return api(path, opts, true);
             if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
             const ct = r.headers.get('content-type') || '';
@@ -2574,7 +2579,7 @@
                     let resp = await callOnce();
                     /* The dash is locked and we have not been told the PIN, or
                        the one we remember is stale. Ask once, then repeat. */
-                    if (resp.status === 401 && _askForPin(base)) resp = await callOnce();
+                    if (resp.status === 401 && await _askForPin(base)) resp = await callOnce();
                     return makeResp(resp.body, resp.status);
                 } catch (e) {
                     return makeResp({ error: String(e) }, 0);
