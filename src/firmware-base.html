@@ -9277,12 +9277,29 @@
             if (c.auto_ticks == null) {
                 c.auto_ticks = (c.minor_tick_count == null);
             }
-            if (c.minor_tick_step == null && typeof c.minor_tick_count === 'number') {
+            /* The METER firmware persists minor_tick_count / major_tick_every,
+             * and those are what the dash actually draws; minor_tick_step is
+             * only the inspector's way of saying the same thing. A layout can
+             * carry both and have them disagree, and _meterSyncDerived runs
+             * straight after this and rebuilds the count FROM the step — so
+             * the two were being brought into agreement on the wrong one and
+             * the widget silently stopped matching the dash. RDM_Analog's
+             * throttle gauge arrived as count 9 with a stale step of 3 and was
+             * rewritten to 34 ticks; coolant 7 became 38. That is the crammed
+             * dial that looks nothing like the same layout on the Marketplace,
+             * and saving it would have written the damage back.
+             *
+             * So the step is DERIVED from the count whenever the count is
+             * there, rather than merely filled in when it is missing. For a
+             * config the inspector wrote the two already agree, and the round
+             * trip is exact. The arc is the other way round on purpose — see
+             * the note in _arcDeriveNewFromLegacy. */
+            if (typeof c.minor_tick_count === 'number') {
                 const min = (typeof c.min === 'number') ? c.min : 0;
                 const max = (typeof c.max === 'number') ? c.max : 100;
                 c.minor_tick_step = (max - min) / Math.max(1, c.minor_tick_count - 1);
             }
-            if (c.major_tick_step == null && typeof c.minor_tick_step === 'number'
+            if (typeof c.minor_tick_step === 'number'
                 && typeof c.major_tick_every === 'number') {
                 c.major_tick_step = c.minor_tick_step * c.major_tick_every;
             }

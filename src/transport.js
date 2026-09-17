@@ -439,7 +439,17 @@
         async setBrightness() { },
         async getCanConfig() { return null; },
         async setCanConfig() { },
-        async injectSignal() { },
+        /* Not a stub. The editor's test controls all funnel through
+         * setTestValue -> POST /api/signal/inject, and offline there is no
+         * device to answer that, so this used to swallow the value and the
+         * widget toolbar's TEST slider moved while nothing on the canvas did.
+         * The WASM backdrop IS the dash here, so push straight at it, the same
+         * way the Test values drop-up already does. */
+        async injectSignal(name, value) {
+            if (typeof window !== 'undefined' && typeof window.injectWasmSignal === 'function') {
+                window.injectWasmSignal(name, Number(value));
+            }
+        },
         /* Offline sim is REAL state, not a stub. There is no device to run the
          * firmware simulator, but the desktop draws its preview with the WASM
          * engine and sweeps it with a bench sim — so the SIM pill has something
@@ -1715,6 +1725,18 @@
         }
         if (pathname === '/api/track/delete' && params.name) { await T.deleteTrack(params.name); return ok(); }
         if (pathname === '/api/signals/values') return ok({ signals: [] });
+        /* Test values. The editor posts {signal, value} here (the device's HTTP
+           spelling); the serial API calls the same field `name`, so accept
+           either rather than depending on which caller got there first. There
+           was no route at all before, so the POST fell through to the
+           catch-all `ok({ok:true})` and every test control reported success
+           while the canvas ignored it. */
+        if (pathname === '/api/signal/inject' && method === 'POST') {
+            const nm = body && (body.signal || body.name);
+            if (nm !== undefined) await T.injectSignal(nm, body.value);
+            return ok();
+        }
+        if (pathname === '/api/signal/clear') return ok();
         /* Sim toggle. Without this the path fell through to the catch-all
          * `ok({ok:true})` at the bottom: the POST looked like it worked, but the
          * GET carried no `enabled`, so the editor's _pollSimState() read
@@ -1939,7 +1961,12 @@
             return { enabled: !!(s && (s.enabled !== undefined ? s.enabled : s.active)) };
         }
         if (pathname === '/api/signal/inject' && method === 'POST') {
-            await t.injectSignal(body.name, body.value); return { ok: true };
+            /* The editor sends {signal, value}, which is what the device's
+               HTTP handler reads; the serial method calls it `name`. Reading
+               only `name` here passed undefined down the wire, so over USB
+               every test control did nothing at all. */
+            await t.injectSignal(body.signal !== undefined ? body.signal : body.name, body.value);
+            return { ok: true };
         }
         if (pathname === '/api/signal/clear') return { ok: true };
         if (pathname === '/api/fuel/status') return t.getFuelStatus();
