@@ -388,6 +388,32 @@
             const fonts = await this.listFonts();
             const assetBytes = [].concat(images, fonts).reduce(
                 (n, x) => n + ((x && typeof x === 'object' && x.size) || 0), 0);
+
+            /* Two stores, two ceilings, and they are not interchangeable.
+             *
+             * Layouts are localStorage, which really is about 5 MB and really
+             * does run out. Images and fonts are IndexedDB, bounded by the
+             * ORIGIN quota instead, which is hundreds of MB.
+             *
+             * Reporting one 5 MB ceiling for both is what refused a 1.1 MB
+             * full-screen background out of the Marketplace with "Not enough
+             * storage: need 1147 KB, only 653 KB free" on an origin with
+             * gigabytes spare: the asset bytes were counted against a limit
+             * they never consume. The import check reads `free` off this, so
+             * this is where it has to be right. */
+            const LS_MAX = 5 * 1024 * 1024;
+            /* Clamped at both ends. The origin quota is often tens of GB, and
+               a Storage Manager meter reading "0 KB of 16963 MB" tells you
+               nothing, which is the one thing that page is for. 256 MB is far
+               more than any set of dash assets and still reads as a number. */
+            const ASSET_MAX = 256 * 1024 * 1024;
+            let assetRoom = 64 * 1024 * 1024;   /* floor, if the browser won't say */
+            try {
+                const est = await navigator.storage.estimate();
+                if (est && est.quota) assetRoom = Math.max(0, est.quota - (est.usage || 0));
+            } catch (e) { /* no Storage API: keep the floor */ }
+            assetRoom = Math.min(assetRoom, ASSET_MAX);
+
             return {
                 layouts: layoutKeys.map(k => ({
                     name: k.replace('rdm7_layout_', ''),
@@ -396,7 +422,13 @@
                 images,
                 fonts,
                 totalBytes: totalBytes + assetBytes,
-                maxBytes: 5 * 1024 * 1024
+                maxBytes: LS_MAX + assetBytes + assetRoom,
+                /* Broken out so a caller can ask about the store it is about
+                   to write to rather than about the pair of them. */
+                layoutBytes: totalBytes,
+                layoutMaxBytes: LS_MAX,
+                assetBytes,
+                assetFreeBytes: assetRoom
             };
         },
 
@@ -1698,13 +1730,21 @@
             /* The real numbers, from the store itself. This used to answer a
                fixed `used: 0` — so the Storage Manager's meter read
                "0 KB / 8.0 MB used" however much you had saved, which is the
-               one number that page exists to show. The ceiling is
-               localStorage's, because that is what actually runs out: the
-               layouts live there. */
+               one number that page exists to show.
+
+               The ceiling is no longer localStorage's alone. Layouts live
+               there and it really does run out at about 5 MB, but images and
+               fonts live in IndexedDB against the origin quota, and charging
+               them to the 5 MB refused a 1.1 MB background with room to
+               spare. getStorageInfo breaks the two apart; the asset figures
+               are passed through so a caller about to write an image can ask
+               about the store it is actually writing to. */
             const s = await T.getStorageInfo();
             return ok({ total: s.maxBytes, used: s.totalBytes,
                         free: Math.max(0, s.maxBytes - s.totalBytes),
                         maxBytes: s.maxBytes, totalBytes: s.totalBytes,
+                        layoutBytes: s.layoutBytes, layoutMaxBytes: s.layoutMaxBytes,
+                        assetBytes: s.assetBytes, assetFree: s.assetFreeBytes,
                         offline: true });
         }
         if (pathname === '/api/device/info') {
