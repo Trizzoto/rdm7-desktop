@@ -57,7 +57,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZDQjZBNDMyQzgwNjcwODEKUldTQmNBYklNcVMyL0JwbkNJYjVjOUtkdnlPWUluNzdxTEQrQWZGQlI4OTBqWUhGSHhYQ3M3elkK",
       "endpoints": [
-        "https://github.com/Trizzoto/rdm7-desktop/releases/latest/download/latest.json"
+        "https://github.com/Trizzoto/rdm7-studio-releases/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

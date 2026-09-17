@@ -88,3 +88,30 @@ jobs:
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
+
+  # ── Mirror the installers to the PUBLIC releases repo ───────────────────
+  # The code repo is private, so its release assets 404 for anyone without
+  # access: downloads AND the updater manifest installed copies poll. This
+  # copies the finished assets (nothing else) to rdm7-studio-releases, which
+  # is public and holds build output only.
+  #
+  # Needs a RELEASES_TOKEN secret: a fine-grained PAT scoped to
+  # Trizzoto/rdm7-studio-releases with Contents: read and write. The built-in
+  # GITHUB_TOKEN cannot write to another repository.
+  mirror-public:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy the release assets to the public repo
+        env:
+          TAG: ${{ github.ref_name }}
+          SRC: ${{ github.repository }}
+          DST: Trizzoto/rdm7-studio-releases
+        run: |
+          set -euo pipefail
+          mkdir -p assets && cd assets
+          GH_TOKEN=${{ secrets.GITHUB_TOKEN }} gh release download "$TAG" --repo "$SRC"
+          ls -la
+          export GH_TOKEN=${{ secrets.RELEASES_TOKEN }}
+          gh release view "$TAG" --repo "$DST" >/dev/null 2>&1 ||             gh release create "$TAG" --repo "$DST"               --title "RDM Studio $TAG"               --notes "Installers for RDM Studio $TAG. Installed copies update themselves."
+          gh release upload "$TAG" --repo "$DST" --clobber *
