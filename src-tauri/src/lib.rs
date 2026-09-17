@@ -1483,6 +1483,10 @@ struct HttpFetchRequest {
     method: Option<String>,
     body: Option<String>,
     timeout_ms: Option<u64>,
+    /* Extra headers the caller needs on the wire. The dash's API lock wants
+       X-RDM-Pin on every write; http_upload_binary already took headers, and
+       this is the same door for the JSON path. */
+    headers: Option<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1664,6 +1668,10 @@ async fn http_fetch(req: HttpFetchRequest) -> Result<HttpFetchResponse, String> 
     };
 
     builder = builder.timeout(timeout);
+
+    for (k, v) in req.headers.clone().unwrap_or_default() {
+        builder = builder.header(k, v);
+    }
 
     if let Some(body) = req.body {
         builder = builder

@@ -502,12 +502,41 @@
         async importRdmBundle(data) { return data; },
     };
 
+    /* ── The dash's API lock ──────────────────────────────────────────
+     * Firmware 1.5.1 on: reads are open, every POST needs the dash's
+     * six-digit PIN in an X-RDM-Pin header. The PIN is on the dash under
+     * Menu > Connect. Kept per dash address, so a laptop that works on two
+     * dashes does not offer the wrong one, and asked for once on the first
+     * 401 of a session. An older dash ignores the header, so this is safe
+     * to send at all times. */
+    const _PIN_KEY = 'rdm7_api_pin:';
+
+    function _pinFor(base) {
+        try { return localStorage.getItem(_PIN_KEY + base) || ''; } catch (e) { return ''; }
+    }
+    function _rememberPin(base, pin) {
+        try { localStorage.setItem(_PIN_KEY + base, pin); } catch (e) {}
+    }
+    function _askForPin(base) {
+        const entered = window.prompt(
+            'This dash is locked.' + String.fromCharCode(10, 10) +
+            'Enter its PIN, shown on the dash under Menu > Connect:', '');
+        if (!entered) return '';
+        const pin = entered.trim();
+        _rememberPin(base, pin);
+        return pin;
+    }
+    function _pinHeaders(base) {
+        const pin = _pinFor(base);
+        return pin ? { 'X-RDM-Pin': pin } : {};
+    }
+
     /* ═══════════════════════════════════════════════════════════════
      *  WifiTransport — HTTP fetch to ESP32 on the network
      * ═══════════════════════════════════════════════════════════════ */
 
     function createWifiTransport(baseUrl) {
-        const api = async (path, opts) => {
+        const api = async (path, opts, _retried) => {
             if (_isTauri()) {
                 const resp = await _tauriInvoke('http_fetch', {
                     req: {
@@ -515,20 +544,25 @@
                         method: opts?.method || 'GET',
                         body: opts?.body || null,
                         timeout_ms: opts?.timeout || 10000,
+                        headers: { ...(opts?.headers || {}), ..._pinHeaders(baseUrl) },
                     }
                 });
+                if (resp.status === 401 && !_retried && _askForPin(baseUrl))
+                    return api(path, opts, true);
                 if (resp.status < 200 || resp.status >= 300)
                     throw new Error(`HTTP ${resp.status}: ${resp.body}`);
                 try { return JSON.parse(resp.body); } catch { return resp.body; }
             }
-            return fetch(baseUrl + path, {
+            const r = await fetch(baseUrl + path, {
                 ...opts,
+                headers: { ...(opts?.headers || {}), ..._pinHeaders(baseUrl) },
                 signal: AbortSignal.timeout(opts?.timeout || 10000),
-            }).then(async r => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-                const ct = r.headers.get('content-type') || '';
-                return ct.includes('json') ? r.json() : r.text();
             });
+            if (r.status === 401 && !_retried && _askForPin(baseUrl))
+                return api(path, opts, true);
+            if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+            const ct = r.headers.get('content-type') || '';
+            return ct.includes('json') ? r.json() : r.text();
         };
 
         const apiBlob = async (path) => {
@@ -2506,6 +2540,7 @@
                     try {
                         const respText = await _tauriInvoke('http_upload_binary', {
                             url: fullUrl, data: Array.from(binBody), timeout_ms: 30000,
+                            headers: _pinHeaders(t.baseUrl || 'http://192.168.4.1'),
                         });
                         return makeResp(respText || { ok: true }, 200);
                     } catch (e) {
@@ -2528,10 +2563,18 @@
                         return makeResp({ error: String(e) }, 0);
                     }
                 }
+                const base = t.baseUrl || 'http://192.168.4.1';
+                const callOnce = () => _tauriInvoke('http_fetch', {
+                    req: {
+                        url: fullUrl, method, body: bodyText, timeout_ms: 15000,
+                        headers: _pinHeaders(base),
+                    }
+                });
                 try {
-                    const resp = await _tauriInvoke('http_fetch', {
-                        req: { url: fullUrl, method, body: bodyText, timeout_ms: 15000 }
-                    });
+                    let resp = await callOnce();
+                    /* The dash is locked and we have not been told the PIN, or
+                       the one we remember is stale. Ask once, then repeat. */
+                    if (resp.status === 401 && _askForPin(base)) resp = await callOnce();
                     return makeResp(resp.body, resp.status);
                 } catch (e) {
                     return makeResp({ error: String(e) }, 0);
