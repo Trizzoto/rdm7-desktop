@@ -776,6 +776,17 @@
             --ind-div-lt: var(--highlight);
             --ind-border-light: var(--line-strong);
             --ind-highlight: var(--highlight);
+            /* Status ink, and a line strong enough to outline a control (2.6
+               asks 3:1 of one, which --ind-div does not reach). Stated per
+               mode rather than bound to --status-*: those follow the page
+               theme, and this editor has a switch of its own, so a bound value
+               would put dark-mode status ink on a light shelf. DESIGN.md 2.4
+               here, 2.3 in the light block. */
+            --ind-ok: #3ccf7a;
+            --ind-warn: #f0a53a;
+            --ind-danger: #f6938e;
+            --ind-accent-ink: #f3b1ad;
+            --ind-line-control: rgba(255,255,255,0.45);
             /* The deep red, not the bright one: #e8433c is drawn to carry the
                device's own glass and buzzes against these greys. */
             --accent: #b3261f;        --accent-hover: #8e1e19;
@@ -804,6 +815,11 @@
            a 55%-black drop shadow reads as dirt on #c8c9cc. */
         body.dsb-on.studio-light {
             --accent: #d2232a;        --accent-hover: #c02026;
+            --ind-ok: #235f33;
+            --ind-warn: #774b06;
+            --ind-danger: #a61c21;
+            --ind-accent-ink: #9c1a1f;
+            --ind-line-control: #666666;
             --shadow-sm: 0 1px 2px rgba(29,31,32,0.14);
             --shadow-md: 0 4px 14px rgba(29,31,32,0.16);
             --shadow-lg: 0 12px 30px rgba(29,31,32,0.20);
@@ -1054,16 +1070,46 @@
         body.dsb-on #mobileZoomBar { background: var(--ind-surface); border: 1px solid var(--ind-div); }
         body.dsb-on #mobileZoomBar button { color: var(--ind-muted); }
         body.dsb-on #mobileZoomBar button:hover { background: rgba(29,31,32,0.09); color: var(--ind-ink); }
-        /* rgba(217,218,221,...) is --ind-surface on this scope (#d9dadd)
-           decomposed — a custom property can't be blended with an alpha
-           inline without a CSS feature this file doesn't otherwise rely on,
-           so the decimal triplet is kept in sync with the hex by hand. */
-        body.dsb-on #widgetSelToolbar { background: rgba(217,218,221,0.96); border-color: var(--ind-div); }
-        body.dsb-on .wst-btn, body.dsb-on .wst-size-btn,
+        /* The shelf is painted FROM the surface token, not from a copy of one
+           mode's value. The copy was #d9dadd decomposed to
+           rgba(217,218,221,0.96) and kept in sync by hand, which held until
+           the editor gained a dark mode and became the default: a light panel
+           wearing dark-mode ink, every control on it at about 1.2:1.
+           Each part states its own fill, line and ink from this scope as well,
+           because the firmware's rules give them dark-mode literals
+           (rgba(255,255,255,0.04) and friends) that disappear on a light
+           shelf — the same failure the other way round. */
+        body.dsb-on #widgetSelToolbar {
+            background: var(--ind-surface); border-color: var(--ind-line-control);
+        }
+        body.dsb-on .wst-btn, body.dsb-on .wst-step, body.dsb-on .wst-size-btn {
+            background: var(--ind-elev);
+            border-color: var(--ind-line-control);
+            color: var(--ind-ink);
+        }
+        body.dsb-on .wst-btn:active, body.dsb-on .wst-step:active,
+        body.dsb-on .wst-size-btn:active { background: var(--ind-highlight); }
+        body.dsb-on .wst-btn:hover, body.dsb-on .wst-size-btn:hover { color: var(--ind-ink); }
+        body.dsb-on .wst-size, body.dsb-on .wst-row-test {
+            background: var(--ind-bg); border-color: var(--ind-div);
+        }
         body.dsb-on .wst-label, body.dsb-on .wst-test-val,
         body.dsb-on .wst-test-toggle { color: var(--ind-muted); }
-        body.dsb-on .wst-btn:hover, body.dsb-on .wst-size-btn:hover { color: var(--ind-ink); }
         body.dsb-on .wst-size-val { color: var(--ind-ink); }
+        /* State chips keep the same fill and say what they are with ink AND
+           line, so the state never rests on colour alone. */
+        body.dsb-on .wst-step { color: var(--ind-accent-ink); border-color: var(--ind-accent-ink); }
+        body.dsb-on .wst-step.active-10 { color: var(--ind-warn); border-color: var(--ind-warn); }
+        body.dsb-on .wst-btn.wst-danger { color: var(--ind-danger); }
+        body.dsb-on #wstLockBtn.locked {
+            color: var(--ind-warn); border-color: var(--ind-warn); background: var(--ind-elev);
+        }
+        body.dsb-on .wst-test-toggle[aria-pressed="true"] {
+            color: var(--ind-ok); border-color: var(--ind-ok); background: var(--ind-elev);
+        }
+        body.dsb-on .wst-row-test input[type="range"] { accent-color: var(--accent); }
+        /* 9.4 puts a disabled control at 0.45, not 0.35. */
+        body.dsb-on .wst-btn[aria-disabled="true"] { opacity: 0.45; }
 
         /* controls inside the panels */
         body.dsb-on .accordion-body input[type="text"], body.dsb-on .accordion-body input[type="number"],
