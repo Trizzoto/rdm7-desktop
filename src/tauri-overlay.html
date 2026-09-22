@@ -660,17 +660,18 @@
             --ind-highlight: var(--highlight);
         }
         /* ---- the light end, for what still wants it -------------------------
-           Two things do: the lap timer, which was designed around a light
-           ground (ADR-0024), and BAND TWO everywhere — the tab row is the one
-           strip that stayed light when the surfaces went dark, so Setup /
-           Channels / Design and the keypad's sections read the same as the lap
-           timer's. One copy of the values, four places wearing them — the dash
-           editor wears them in LIGHT mode (body.dsb-on.studio-light), which is
-           why the two look like the same app rather than two apps.
+           The lap timer, which was designed around a light ground (ADR-0024);
+           the dash editor in LIGHT mode (body.dsb-on.studio-light); and the
+           keypad's tab row. One copy of the values, every place wearing them,
+           which is why they look like the same app rather than two apps.
+           The EDITOR's tab row used to be on this list too, light in both
+           modes: on 2026-09-22 it left, so in dark mode it is dark like the
+           rest of the editor (and the Marketplace's), and in light mode it is
+           light because the body is. The keypad's stays, because its action
+           button is ink with a white label, drawn for a light row.
            --ind-stage is dark in both modes; it stays at :root. */
         #gpWorkspace,
         body.dsb-on.studio-light,
-        body.dsb-on .dsb-nav,
         #kpWorkspace .kpb-nav {
             /* These scopes are light islands in a dark app, so they move the
                ROLES here, not just the --ind-* aliases. Everything the merged
@@ -714,12 +715,11 @@
             --border: var(--divider); --border-light: var(--line-strong);
         }
         /* A var() inside a custom property is resolved where it is DECLARED, so
-           the bindings above (on body.dsb-on / #kpWorkspace) reach band two as
+           the bindings above (on #kpWorkspace) reach the keypad's tab row as
            values already resolved against the dark palette. Re-derive the ones
            the tab row actually paints with, against the light values it just
            set for itself. Red goes back to #d2232a here: the brighter #e8433c
            exists for the dark ground and is hot against this one. */
-        body.dsb-on .dsb-nav,
         #kpWorkspace .kpb-nav {
             --bg: var(--ind-surface);       --panel: var(--ind-surface);
             --panel-elevated: var(--ind-elev);
@@ -751,28 +751,22 @@
            bar, and the light tab row — that strip stayed light through both
            and reads as the constant it is. */
         body.dsb-on {
-            /* DARK — rails a step above the :root dark, cool-tinted. The line
-               colour is the DEVICE's (#2e302e, ui_theme.c), picked next to the
-               dash's own menus; it is faintly green against these cool greys
-               on purpose. */
-            --ind-bg: #2e2f33;        /* rails: sidebars, footer            */
-            --ind-surface: #37383c;   /* cards, panels, inputs              */
-            --ind-elev: #46474b;      /* hover / raised                     */
-            /* Two tiers, as at :root. Measured against THIS band's grounds the
-               old four gave muted 3.54 and ghost 2.59; the opaque roles give
-               4.23 and 4.23.
-               4.23 is still under 4.5, and the reason is --ind-elev above:
-               #46474b sits 0.87 rel-lum lighter than DESIGN.md's raised
-               (#424242), and a neutral secondary needs #b5b5b5 or lighter to
-               clear 4.5 on it. --ind-bg and --ind-surface are within 0.12 of
-               canonical and read the same; only this one is a real outlier.
-               Left as it is rather than flattened, because the cool tint is a
-               deliberate choice made on 2026-09-02. Raised as CR-11. */
+            /* DARK — DESIGN.md 2.4 exactly: ground, surface, raised. These
+               were a cool-tinted set (#2e2f33 / #37383c / #46474b) with the
+               device's faintly green line, chosen 2026-09-02; on 2026-09-22 the
+               editor was brought onto the Marketplace's greys so the two read
+               as one product. That also closes CR-11: the tinted --ind-elev
+               held secondary text to 4.23, and on #424242 it clears 4.5.
+               Literal values, not var(--ground): the base re-binds --ground
+               from the OS preference, and this switch is the editor's own. */
+            --ind-bg: #303030;        /* ground: the stage, rails, footer   */
+            --ind-surface: #393939;   /* cards, panels, inputs              */
+            --ind-elev: #424242;      /* hover / raised                     */
             --ind-ink: var(--text-primary);
             --ind-muted: var(--text-secondary);
             --ind-soft: var(--text-primary);
             --ind-ghost: var(--text-secondary);
-            --ind-div: #2e302e;
+            --ind-div: rgba(255,255,255,0.14);
             --ind-div-lt: var(--highlight);
             --ind-border-light: var(--line-strong);
             --ind-highlight: var(--highlight);
@@ -787,9 +781,10 @@
             --ind-danger: #f6938e;
             --ind-accent-ink: #f3b1ad;
             --ind-line-control: rgba(255,255,255,0.45);
-            /* The deep red, not the bright one: #e8433c is drawn to carry the
-               device's own glass and buzzes against these greys. */
-            --accent: #b3261f;        --accent-hover: #8e1e19;
+            /* The brand red, DESIGN.md 2.2, the same in both modes. This was a
+               deeper #b3261f, which is not in the file; 2.1 says an accent fill
+               on a dark ground takes a line.control edge instead of moving. */
+            --accent: #d2232a;        --accent-hover: #c02026;
             --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
             --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
@@ -1251,38 +1246,56 @@
                                 rgba(255,255,255,0.07), rgba(255,255,255,0) 72%),
                 var(--ind-stage);
         }
-        /* ---- the bezel the hardware actually has ----------------------------
-           The frame around the canvas was a designer's 16 x 12 px. The dash is
-           a Waveshare ESP32-S3-Touch-LCD-7 (the 800x480 board), and its
-           published dimension drawing gives the glass as 192.96 x 110.76 mm
-           around an active area of 154.88 x 86.72 — 19.04 mm at each side,
-           13.04 above and 11.00 below. Those fractions of the active area are
-           what _bezelApply() sets as padding, so the frame is the same share
-           of the panel on screen as in your hand, bottom edge thinner, and it
-           stays right at any canvas size. Colour and corner here; the corner
-           radius is a judgement, the drawing doesn't dimension it.
+        /* ---- the unit, the way the Marketplace draws it ---------------------
+           The dash is a Waveshare ESP32-S3-Touch-LCD-7, and everything here is
+           off its dimension drawing: 192.96 x 110.76 mm of glass around a
+           154.88 x 86.72 mm viewing area, 19.04 at each side, 11.00 above and
+           13.04 below (the heavier edge is the BOTTOM one; this had them the
+           wrong way up), and an R7.88 corner, which the drawing dimensions.
+           _bezelApply() turns them into pixels per axis and hands this rule
+           --bz-mmx / --bz-mmy, pixels per millimetre across and down.
+
+           It is the same unit as rdm7-marketplace's DashUnit, so the product
+           looks like one thing on both:
+           - ONE piece of glass, the surround printed black on its underside:
+             `bar`, the darkest token, which is what an unlit panel looks like
+             through the same glass. It was #202225, a grey frame round a black
+             screen, which reads as a window glued into plastic.
+           - the polished top edge and the machined rim, as inset lines, and
+             one still highlight off the top left across the frame. Only the
+             frame: the canvas is where colours get judged, so nothing tints it.
+           - the edge of the stack 2 mm below the glass, then shadow.lg (§6).
+             The drawing gives the lens and LCD as 5 mm deep; from a hair above
+             centre you see that edge as a band under the glass. It is `stage`,
+             one step up from the glass's `bar`: the same black as the front, it
+             only made the silhouette longer and the unit read flat.
+           The glass is dark in both themes, so its lines are pinned to the
+           dark roles (2.4) rather than following the switch.
 
            Round screens keep the round bezels, hence the :not()s — those rules
            carry their own padding and this one would out-specify them. */
         body.dsb-on .display-bezel.bezel-on:not(.bezel-round):not(.bezel-round-slim) {
-            /* A shade up from the stage's black, so the frame is an object on
-               a ground rather than a hole in it. */
-            background: #202225;
-            border-radius: 12px;
-            box-shadow:
-                0 0 0 1px rgba(0,0,0,0.6),
-                0 18px 44px rgba(0,0,0,0.5);
-        }
-        /* The editor's stage is BLACK — picked over eleven greys, and the one
-           thing here that isn't a tint of the chrome. A dash is a lit object
-           in a dark car; on anything grey the bezel and the screen stop being
-           one object. Same soft lift under the middle so it reads as lit
-           rather than pasted. */
-        body.dsb-on .main-stage {
+            --bz-edge: rgba(255,255,255,0.3);    /* line.strong, 2.4 */
+            --bz-rim: rgba(255,255,255,0.14);    /* divider, 2.4     */
+            --bz-hl: rgba(255,255,255,0.07);     /* highlight, 2.4   */
             background:
-                radial-gradient(ellipse 62% 52% at 50% 44%,
-                                rgba(255,255,255,0.07), rgba(255,255,255,0) 72%),
-                #000000;
+                linear-gradient(152deg, var(--bz-hl) 0%, transparent 26%),
+                var(--bar);
+            border-radius: calc(var(--bz-mmx, 5.165px) * 7.88);
+            box-shadow:
+                inset 0 1px 0 var(--bz-edge),
+                inset 0 0 0 1px var(--bz-rim),
+                0 calc(var(--bz-mmy, 5.535px) * 2) 0 0 var(--stage),
+                var(--shadow-lg);
+        }
+        /* The stage is the page's ground, as the Marketplace puts the unit on
+           its page: #303030 dark, #c8c9cc light, from the palette above. It
+           was black in both modes with a radial "lift" under the middle; the
+           Marketplace took the same kind of glow out of its hero because
+           nothing in DESIGN.md makes a light source. The unit's own shadow is
+           the depth now. */
+        body.dsb-on .main-stage {
+            background: var(--ind-bg);
         }
         /* Bare text sitting straight on that ground has to turn over with it.
            Only this one does — the editor's id-label is a light chip and the
@@ -58631,43 +58644,67 @@
            the wrong palette. */
         function _dsbOn(on) { document.body.classList.toggle("dsb-on", !!on); }
 
-        /* ---- light or dark, and which one you get ---------------------------
-         * Dark is the default: nothing stored means dark, which is what the
-         * app opens as on a machine that has never been told otherwise. The
-         * choice is per-machine (localStorage), not per-layout — it is about
-         * the room you are working in, so it has no business in a .rdm.
+        /* ---- light, dark, or whatever the machine is set to -----------------
+         * DESIGN.md 10.1: three settings, `system` by default, following the
+         * OS and picking up a change to it live. The Phone is the reference
+         * and the Marketplace already works this way; the editor used to have
+         * two states with dark as the default, which is the one thing here
+         * that disagreed with the rest of the suite.
+         *
+         * `mode` is what is stored; the class follows the RESOLVED theme, so
+         * `system` on a light machine wears exactly the light palette. The
+         * choice is per-machine (localStorage), not per-layout: it is about
+         * the room you are working in, so it has no business in a .rdm. An
+         * old stored "dark" or "light" still means what it did.
          *
          * The class goes on <body> rather than the editor's own element
          * because the palette is bound on body.dsb-on; .studio-light out-
          * specifies it there and the bindings re-resolve with no second copy
          * of the greys. */
         var STUDIO_THEME_KEY = "rdm7_studio_theme";
-        var _THEME_SUN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-            'stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"></circle>' +
-            '<path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.4 5.4l1.7 1.7M16.9 16.9l1.7 1.7M18.6 5.4l-1.7 1.7M7.1 16.9l-1.7 1.7"></path></svg>';
-        var _THEME_MOON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-            'stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"></path></svg>';
+        var _THEME_ORDER = ["system", "light", "dark"];
+        var _THEME_LABEL = { system: "Match system", light: "Light", dark: "Dark" };
+        var _THEME_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+        /* The same three glyphs as the Marketplace's switch, showing the
+           setting it is ON, with the name in the label so nobody has to read
+           it off the glyph. */
+        var _THEME_GLYPH = {
+            system: _THEME_SVG + '<rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg>',
+            light: _THEME_SVG + '<circle cx="12" cy="12" r="4"></circle>' +
+                '<path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>',
+            dark: _THEME_SVG + '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>'
+        };
+        var _themeMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
 
         function _studioThemeGet() {
-            try { return localStorage.getItem(STUDIO_THEME_KEY) === "light" ? "light" : "dark"; }
-            catch (e) { return "dark"; }
+            try {
+                var v = localStorage.getItem(STUDIO_THEME_KEY);
+                return v === "light" || v === "dark" ? v : "system";
+            } catch (e) { return "system"; }
         }
         function _studioThemeApply(mode) {
-            document.body.classList.toggle("studio-light", mode === "light");
+            var light = mode === "light" || (mode === "system" && !!(_themeMq && _themeMq.matches));
+            document.body.classList.toggle("studio-light", light);
             var b = document.getElementById("dsbTheme");
             if (b) {
-                /* The button shows what you would GET, which is the way every
-                   switch with two states and one glyph has to read. */
-                b.innerHTML = mode === "light" ? _THEME_MOON : _THEME_SUN;
-                b.title = mode === "light" ? "Light, switch to dark" : "Dark, switch to light";
-                b.setAttribute("aria-label", b.title);
+                b.innerHTML = _THEME_GLYPH[mode] || _THEME_GLYPH.system;
+                b.title = "Theme: " + _THEME_LABEL[mode];
+                b.setAttribute("aria-label", "Theme: " + _THEME_LABEL[mode] + ". Change it.");
             }
         }
         window._studioThemeToggle = function () {
-            var next = _studioThemeGet() === "light" ? "dark" : "light";
+            var cur = _studioThemeGet();
+            var next = _THEME_ORDER[(_THEME_ORDER.indexOf(cur) + 1) % _THEME_ORDER.length];
             try { localStorage.setItem(STUDIO_THEME_KEY, next); } catch (e) {}
             _studioThemeApply(next);
         };
+        /* `system` follows the machine live, the way 10.1 asks. */
+        if (_themeMq) {
+            var _themeFollow = function () { if (_studioThemeGet() === "system") _studioThemeApply("system"); };
+            if (_themeMq.addEventListener) _themeMq.addEventListener("change", _themeFollow);
+            else if (_themeMq.addListener) _themeMq.addListener(_themeFollow);
+        }
 
         /* ---- the bezel is the panel's, and Fit measures it ------------------
          * Waveshare ESP32-S3-Touch-LCD-7 (the 800x480 board this dash is
@@ -58682,7 +58719,11 @@
          * constants, so with a frame this size Fit would zoom to something
          * that doesn't fit. Ours reads the padding back off the element,
          * which also means the round bezels need no second set of numbers. */
-        var WS7_BEZEL = { side: 19.04 / 154.88, top: 13.04 / 86.72, bottom: 11.00 / 86.72 };
+        /* 11.00 above and 13.04 below: the drawing's 11.00 is dimensioned from
+         * the TOP edge, so the heavier border is the bottom one. This had them
+         * swapped until 2026-09-22. */
+        var WS7_BEZEL = { side: 19.04 / 154.88, top: 11.00 / 86.72, bottom: 13.04 / 86.72 };
+        var WS7_VA = { w: 154.88, h: 86.72 };
 
         function _bezelApply() {
             var el = document.getElementById("canvasContainer");
@@ -58696,6 +58737,10 @@
             el.style.padding = Math.round(h * WS7_BEZEL.top) + "px " +
                                Math.round(w * WS7_BEZEL.side) + "px " +
                                Math.round(h * WS7_BEZEL.bottom) + "px";
+            /* Pixels per millimetre, per axis, for the corner and the case lip
+             * in the CSS (the panel's pixels are not square). */
+            el.style.setProperty("--bz-mmx", (w / WS7_VA.w) + "px");
+            el.style.setProperty("--bz-mmy", (h / WS7_VA.h) + "px");
         }
 
         /* Wrapped at DOM-ready, not here: these are firmware functions from a
@@ -58725,8 +58770,14 @@
                 var padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
                 var r = vp.getBoundingClientRect();
                 if (!r.width || !r.height) return fwFit.apply(this, arguments);
-                var z = Math.min((r.width - 40) / (CANVAS_W + padX),    /* 40 = the firmware's breathing room */
-                                 (r.height - 40) / (CANVAS_H + padY), 3.0);
+                /* The case lip hangs 2 mm under the glass, outside the padding,
+                 * and its shadow needs room too. Fit then takes 88% of what
+                 * would touch: at the firmware's 40 px of breathing room the
+                 * unit sat right up against the rails and felt too close. */
+                var lip = el.classList.contains("bezel-on") ? (CANVAS_H / WS7_VA.h) * 2 : 0;
+                var z = 0.88 * Math.min((r.width - 40) / (CANVAS_W + padX),
+                                        (r.height - 40) / (CANVAS_H + padY + lip));
+                z = Math.min(z, 3.0);
                 zoomLevel = Math.max(0.2, z);
                 panX = 0; panY = 0;
                 updateCanvasTransform();
