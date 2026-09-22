@@ -724,7 +724,9 @@
             --bg: var(--ind-surface);       --panel: var(--ind-surface);
             --panel-elevated: var(--ind-elev);
             --border: var(--ind-div);       --border-light: var(--ind-border-light);
-            --highlight: var(--ind-highlight);
+            /* No --highlight here: the light block above sets it on this same
+               element and derives --ind-highlight from it, so restating it
+               from --ind-highlight made a cycle and both went invalid. */
             --text: var(--ind-ink);         --text-muted: var(--ind-muted);
             --text-ghost: var(--ind-ghost);
             --accent: #d2232a;              --accent-hover: #c02026;
@@ -769,7 +771,12 @@
             --ind-div: rgba(255,255,255,0.14);
             --ind-div-lt: var(--highlight);
             --ind-border-light: var(--line-strong);
-            --ind-highlight: var(--highlight);
+            /* A value, not var(--highlight): this block also says --highlight:
+               var(--ind-highlight) further down, on the same element, and two
+               properties defined by each other are a cycle, which CSS resolves
+               to invalid for both. Every hover and pressed overlay in the dark
+               editor was painting nothing. DESIGN.md 2.4 highlight. */
+            --ind-highlight: rgba(255,255,255,0.07);
             /* Status ink, and a line strong enough to outline a control (2.6
                asks 3:1 of one, which --ind-div does not reach). Stated per
                mode rather than bound to --status-*: those follow the page
@@ -1293,9 +1300,19 @@
            was black in both modes with a radial "lift" under the middle; the
            Marketplace took the same kind of glow out of its hero because
            nothing in DESIGN.md makes a light source. The unit's own shadow is
-           the depth now. */
+           the depth now.
+           The pour lines are the Marketplace hero's, which are the
+           storefront hero's: a 64 px grid in `highlight`, so all three read
+           as one brand. They sit on the stage, not the canvas, so they stay
+           put like a cutting mat while the dash pans and zooms over them,
+           and the editor's own snap grid inside the canvas is untouched. */
         body.dsb-on .main-stage {
-            background: var(--ind-bg);
+            background-color: var(--ind-bg);
+            background-image:
+                linear-gradient(var(--ind-highlight) 1px, transparent 1px),
+                linear-gradient(90deg, var(--ind-highlight) 1px, transparent 1px);
+            background-size: 64px 64px;
+            background-position: center center;
         }
         /* Bare text sitting straight on that ground has to turn over with it.
            Only this one does — the editor's id-label is a light chip and the
