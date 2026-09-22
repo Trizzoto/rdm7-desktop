@@ -753,17 +753,16 @@
            bar, and the light tab row — that strip stayed light through both
            and reads as the constant it is. */
         body.dsb-on {
-            /* DARK — DESIGN.md 2.4 exactly: ground, surface, raised. These
-               were a cool-tinted set (#2e2f33 / #37383c / #46474b) with the
-               device's faintly green line, chosen 2026-09-02; on 2026-09-22 the
-               editor was brought onto the Marketplace's greys so the two read
-               as one product. That also closes CR-11: the tinted --ind-elev
-               held secondary text to 4.23, and on #424242 it clears 4.5.
-               Literal values, not var(--ground): the base re-binds --ground
-               from the OS preference, and this switch is the editor's own. */
-            --ind-bg: #303030;        /* ground: the stage, rails, footer   */
-            --ind-surface: #393939;   /* cards, panels, inputs              */
-            --ind-elev: #424242;      /* hover / raised                     */
+            /* DARK — DESIGN.md 2.4, the Marketplace's greys (2026-09-22; was a
+               cool tint, which closes CR-11). Literal, because the base re-binds
+               --ground from the OS and this switch is the editor's own. One
+               grey per layer: stage (--ed-stage), the frame a step up, what
+               sits in it the last step. Tones separate; edges stay hairlines. */
+            --ind-bg: #393939;        /* surface: the frame: rails, tab row, footer */
+            --ind-surface: #424242;   /* raised: cards, bands, row hovers  */
+            --ind-elev: #424242;      /* raised: inputs and controls       */
+            --ed-stage: #303030;      /* ground: under the unit            */
+            --ed-edge: var(--ind-div);         /* divider                  */
             --ind-ink: var(--text-primary);
             --ind-muted: var(--text-secondary);
             --ind-soft: var(--text-primary);
@@ -771,11 +770,8 @@
             --ind-div: rgba(255,255,255,0.14);
             --ind-div-lt: var(--highlight);
             --ind-border-light: var(--line-strong);
-            /* A value, not var(--highlight): this block also says --highlight:
-               var(--ind-highlight) further down, on the same element, and two
-               properties defined by each other are a cycle, which CSS resolves
-               to invalid for both. Every hover and pressed overlay in the dark
-               editor was painting nothing. DESIGN.md 2.4 highlight. */
+            /* A value: --highlight is var(--ind-highlight) below, and two
+               properties defined by each other are invalid for both. */
             --ind-highlight: rgba(255,255,255,0.07);
             /* Status ink, and a line strong enough to outline a control (2.6
                asks 3:1 of one, which --ind-div does not reach). Stated per
@@ -816,6 +812,14 @@
            #d2232a (the bright one glares on light), and the shadows lighten:
            a 55%-black drop shadow reads as dirt on #c8c9cc. */
         body.dsb-on.studio-light {
+            /* The light palette runs the other way: its darkest grey is the
+               ground, so the frame takes it (the rails were already there, and
+               the tab row and toolbar come down to meet them) and the stage
+               goes to the lightest, raised, where the dark unit reads hardest.
+               The rails cannot go darker than #c8c9cc without a value that is
+               not in DESIGN.md 2.3. */
+            --ed-stage: #e4e5e8;      /* raised                            */
+            --ed-edge: var(--ind-div);         /* divider                  */
             --accent: #d2232a;        --accent-hover: #c02026;
             --ind-ok: #235f33;
             --ind-warn: #774b06;
@@ -923,7 +927,14 @@
             display: none; align-items: stretch; gap: 4px; flex: none; height: 50px;
             padding: 0 12px; background: var(--ind-surface); border-bottom: 1px solid var(--ind-div);
         }
-        body.dsb-on .dsb-nav { display: flex; }
+        /* The row is frame; what sits in it is a step up. --bg is restated
+           because the firmware's layout and screen selects carry
+           background:var(--bg) inline, which no stylesheet outranks, and the
+           body's --bg is the page ground in light mode. */
+        body.dsb-on .dsb-nav {
+            display: flex; background: var(--ind-bg); border-bottom-color: var(--ed-edge);
+            --bg: var(--ind-surface);
+        }
         body.dsb-on .dsb-nav #studioModeSwitcher {
             display: flex; align-items: stretch; gap: 2px; background: none;
             border: none; padding: 0; border-radius: 0;
@@ -957,7 +968,7 @@
            Save makes neither of them mean anything — the lap timer's sub-tabs
            mark themselves with ink for the same reason. */
         body.dsb-on .dsb-navacts .header-pill.active {
-            background: var(--ind-ink); border-color: var(--ind-ink); color: var(--ind-bg); font-weight: 600;
+            background: var(--ind-surface); border-color: var(--ind-line-control); color: var(--ind-ink); font-weight: 600;
         }
         body.dsb-on .dsb-navacts .header-divider { width: 1px; height: 18px; background: var(--border); margin: 0 3px; }
         /* Setup and Channels have no canvas, so the canvas tools are noise
@@ -991,8 +1002,12 @@
             color: var(--text); cursor: pointer;
         }
         body.dsb-on .dsb-tools select { padding: 0 22px 0 10px; }
+        /* Selected is the Marketplace's selected: one step up, a control
+           edge, ink text. A solid ink fill made Bezel and Widgets the two
+           brightest things on the screen, brighter than the dash. */
+        body.dsb-on .dsb-tools .header-pill { background: transparent; color: var(--text-muted); }
         body.dsb-on .dsb-tools .header-pill.active {
-            background: var(--ind-ink); border-color: var(--ind-ink); color: var(--ind-bg); font-weight: 600;
+            background: var(--ind-surface); border-color: var(--ind-line-control); color: var(--ind-ink); font-weight: 600;
         }
         body.dsb-on .dsb-tools .btn-icon { min-width: 28px; padding: 0 6px; }
         body.dsb-on .dsb-tools .header-divider { width: 1px; height: 18px; background: var(--border); margin: 0 3px; }
@@ -1038,13 +1053,13 @@
         body.dsb-on .layer-item { font-family: var(--dsb-body); font-size: 12px; border-bottom: 1px solid var(--ind-div-lt); background: transparent; }
         body.dsb-on .layer-item:hover { background: var(--ind-surface); }
         body.dsb-on .layer-item.active { background: var(--ind-surface); color: var(--ind-ink); border-left: 3px solid var(--ind-ink); }
-        body.dsb-on .sidebar-resize { background: var(--ind-bg); border-color: var(--ind-div); }
+        body.dsb-on .sidebar-resize { background: var(--ind-bg); border-color: var(--ed-edge); }
         body.dsb-on .sidebar-resize:hover, body.dsb-on .sidebar-resize.active { background: var(--ind-ink); }
         /* The align bar belongs to the stage, not to the page — so when the
            stage turned light (2026-09-16) this turned with it, or it would
            have been left as a dark band across a light room. Still the
            canvas's own toolbar, still the top edge of the ground under it. */
-        body.dsb-on .align-bar { background: var(--ind-surface); border-bottom: 1px solid var(--ind-div); padding: 4px 8px; }
+        body.dsb-on .align-bar { background: var(--ind-bg); border-bottom: 1px solid var(--ed-edge); padding: 4px 8px; }
         body.dsb-on .align-bar .align-sep { background: var(--ind-div); }
         body.dsb-on .align-btn { color: var(--ind-muted); }
         body.dsb-on .align-btn:hover { background: rgba(29,31,32,0.09); border-color: transparent; color: var(--ind-ink); }
@@ -1133,7 +1148,7 @@
         body.dsb-on .accordion-body .btn-danger:hover { background: var(--accent); color: #fff; }
         /* the status bar at the bottom */
         body.dsb-on footer {
-            background: var(--ind-bg); border-top: 1px solid var(--ind-div);
+            background: var(--ind-bg); border-top: 1px solid var(--ed-edge);
             padding: 5px 16px; font-size: 10.5px; color: var(--ind-muted);
             align-items: center; min-height: 28px; box-sizing: border-box;
         }
@@ -1271,14 +1286,15 @@
            - the polished top edge and the machined rim, as inset lines, and
              one still highlight off the top left across the frame. Only the
              frame: the canvas is where colours get judged, so nothing tints it.
+             (Taken out for an afternoon on 2026-09-22 and put back: it is the
+             Marketplace unit's glass, and it was wanted.)
+           The glass is dark in both themes, so its lines are pinned to the
+           dark roles (2.4) rather than following the switch.
            - the edge of the stack 2 mm below the glass, then shadow.lg (§6).
              The drawing gives the lens and LCD as 5 mm deep; from a hair above
              centre you see that edge as a band under the glass. It is `stage`,
              one step up from the glass's `bar`: the same black as the front, it
              only made the silhouette longer and the unit read flat.
-           The glass is dark in both themes, so its lines are pinned to the
-           dark roles (2.4) rather than following the switch.
-
            Round screens keep the round bezels, hence the :not()s — those rules
            carry their own padding and this one would out-specify them. */
         body.dsb-on .display-bezel.bezel-on:not(.bezel-round):not(.bezel-round-slim) {
@@ -1307,7 +1323,7 @@
            put like a cutting mat while the dash pans and zooms over them,
            and the editor's own snap grid inside the canvas is untouched. */
         body.dsb-on .main-stage {
-            background-color: var(--ind-bg);
+            background-color: var(--ed-stage);
             background-image:
                 linear-gradient(var(--ind-highlight) 1px, transparent 1px),
                 linear-gradient(90deg, var(--ind-highlight) 1px, transparent 1px);
