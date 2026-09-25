@@ -974,9 +974,15 @@ console.log('\nthe gateway the wizard rides on');
        with the firmware at its root or under Software/. */
     const dashRoot = ['RDM-7_Dash', 'RDM-7 Dash']
         .flatMap(n => [path.join(ROOT, '..', n), path.join(ROOT, '..', n, 'Software')])
-        .find(d => fs.existsSync(path.join(d, 'main'))) || path.join(ROOT, '..', 'RDM-7_Dash');
-    const canFile = path.join(dashRoot, 'main/net/web_server_can.c');
-    if (!fs.existsSync(canFile)) {
+        .find(d => fs.existsSync(path.join(d, 'main')));
+    const canFile = dashRoot && path.join(dashRoot, 'main/net/web_server_can.c');
+    /* CI checks out this repo alone, so there is no firmware to read. That
+       is not the same as firmware without the gateway: say so and move on.
+       A checkout that IS here but lacks the file still fails, because that
+       is a real, stale dash tree. */
+    if (!dashRoot) {
+        console.log('  skip the dash firmware checks: no RDM-7 Dash checkout next to this repo');
+    } else if (!fs.existsSync(canFile)) {
         ok('the dash firmware exposes a CAN gateway', false, canFile + ' is missing');
     } else {
         const c = fs.readFileSync(canFile, 'utf8');
