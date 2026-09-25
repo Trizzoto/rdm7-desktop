@@ -15,14 +15,21 @@ from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_FW = ROOT.parent / "RDM-7_Dash"
+# The checkout is named differently on different machines.
+FW_CANDIDATES = [ROOT.parent / "RDM-7_Dash", ROOT.parent / "RDM-7 Dash"]
+DEFAULT_FW = next((p for p in FW_CANDIDATES if p.exists()), FW_CANDIDATES[0])
+# The firmware tree sits at the repo root, or under Software/ since the repo
+# was split into Documentation/Hardware/Software.
+FW_EDITOR = Path("main") / "web" / "index.html"
 
 
 def main():
     fw = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_FW
-    src = fw / "main" / "web" / "index.html"
-    if not src.exists():
-        print(f"sync_firmware: {src} not found", file=sys.stderr)
+    src = next((p for p in (fw / FW_EDITOR, fw / "Software" / FW_EDITOR)
+                if p.exists()), None)
+    if src is None:
+        print(f"sync_firmware: {FW_EDITOR} not found under {fw} or "
+              f"{fw / 'Software'}", file=sys.stderr)
         sys.exit(1)
 
     dest = ROOT / "src" / "firmware-base.html"
@@ -30,10 +37,10 @@ def main():
 
     try:
         sha = subprocess.check_output(
-            ["git", "-C", str(fw), "rev-parse", "HEAD"], text=True
+            ["git", "-C", str(src.parent), "rev-parse", "HEAD"], text=True
         ).strip()
         dirty = subprocess.run(
-            ["git", "-C", str(fw), "diff", "--quiet", "--", "main/web/index.html"]
+            ["git", "-C", str(src.parent), "diff", "--quiet", "--", src.name]
         ).returncode != 0
     except Exception:
         sha, dirty = "unknown", False

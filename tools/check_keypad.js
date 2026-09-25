@@ -750,7 +750,11 @@ console.log('\nthe gateway the wizard rides on');
 {
     /* Firmware side, checked as text: these three are what make the wizard
        possible, and the wizard silently degrades to useless without them. */
-    const dashRoot = path.join(ROOT, '..', 'RDM-7_Dash');
+    /* The checkout is RDM-7_Dash or "RDM-7 Dash" depending on the machine,
+       with the firmware at its root or under Software/. */
+    const dashRoot = ['RDM-7_Dash', 'RDM-7 Dash']
+        .flatMap(n => [path.join(ROOT, '..', n), path.join(ROOT, '..', n, 'Software')])
+        .find(d => fs.existsSync(path.join(d, 'main'))) || path.join(ROOT, '..', 'RDM-7_Dash');
     const canFile = path.join(dashRoot, 'main/net/web_server_can.c');
     if (!fs.existsSync(canFile)) {
         ok('the dash firmware exposes a CAN gateway', false, canFile + ' is missing');
