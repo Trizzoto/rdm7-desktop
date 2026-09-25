@@ -1885,6 +1885,20 @@
             content: ""; position: absolute; top: -4px; left: -4px;
             border: 5px solid transparent; border-top-color: #fff;
         }
+        /* what the row IS: the ignition coming on at its left edge, and where
+           the start-up hands over to normal use */
+        .kpfx-phases { position: relative; height: 16px; margin-bottom: 3px; }
+        .kpfx-phases span {
+            position: absolute; top: 0; padding-left: 6px; border-left: 2px solid #fff; white-space: nowrap;
+            font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 700; font-size: 11.5px;
+            letter-spacing: 0.1em; text-transform: uppercase; color: #fff; line-height: 16px;
+        }
+        .kpfx-phases span.end { border-left-color: rgba(255,255,255,0.35); color: rgba(233,235,237,0.6); }
+        .kpfx-ecuend {
+            display: flex; align-items: center; height: 46px; padding: 0 12px;
+            background: repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0 6px, transparent 6px 12px);
+            border: 1px solid rgba(255,255,255,0.13); font-size: 12px; color: #e9ebed;
+        }
         .kpfx-ruler { position: relative; height: 13px; margin-top: 2px; }
         .kpfx-ruler i { position: absolute; top: 0; width: 1px; height: 4px; background: rgba(255,255,255,0.22); }
         .kpfx-ruler i b {
@@ -11677,6 +11691,10 @@
             if (!el) return;
             el.textContent = kpfxLive.on ? (kpfxLive.sent + " frames sent · " + kpfxLive.fps + " a second") : "";
         }
+        /* The MaxxECU paints the rings (kpmx*): then the only start-up there is
+           is the keypad's own, and this page shrinks to that one choice.
+           typeof-guarded because the harnesses lift this block on its own. */
+        function kpfxEcuOwns() { return typeof kpmxOwnsRings === "function" && kpmxOwnsRings(); }
         function kpfxCanStream() {
             if (kpmxOwnsRings()) return KPMX_RINGS_WHY;
             if (kpIsJ()) return "J1939 has no documented LED command, so a boot can only be played on a CANopen keypad.";
@@ -11973,9 +11991,22 @@
             kpfx.raf = 0;
             if (!kpfxVisible()) return;
             var now = (window.performance && performance.now) ? performance.now() : Date.now();
-            if (kpfx.playing) kpfx.t += Math.min(0.25, (now - (kpfx.last || now)) / 1000);
+            /* Every pass starts with the key off: a dark beat, then ignition.
+               That is what makes a loop read as "what happens when I turn the
+               key" rather than as a lighting effect going round. */
+            var dark = now < (kpfx.darkUntil || 0);
+            if (kpfx.playing && !dark) {
+                var before = kpfxNowT();
+                kpfx.t += Math.min(0.25, (now - (kpfx.last || now)) / 1000);
+                if (!kpfx._drag && kpfxNowT() < before) {
+                    kpfx.t -= kpfxNowT();                 /* hold at the top of the pass */
+                    kpfx.darkUntil = now + KPFX_DARK_MS; dark = true;
+                }
+            }
             kpfx.last = now;
-            var fr = kpfxPreviewFrame(kpfx.t);
+            kpfx.dark = dark;
+            var fr = dark ? kpfxFrame(kp.model, { steps: [], idle: { fx: "dark" }, press: { fx: "none" } }, { t: 0 })
+                          : kpfxPreviewFrame(kpfx.t);
             kpfxPaint(fr);
             if (now - kpfx._miniAt > 66) { kpfx._miniAt = now; kpfxPaintMinis(kpfx.t); }
             kpfxUpdateStrip(fr);
@@ -11994,6 +12025,10 @@
             var show = kpfxShow(), lit = 0, i;
             for (i = 0; i < fr.n; i++) if (fr.led[i]) lit++;
             var total = kpfxStepsSecs(show), now = kpfxNowT();
+            if (kpfx.dark) {
+                el.innerHTML = "<span class='kpfx-what'>Ignition off</span>";
+                return;
+            }
             if (kpfxOnStart()) {
                 var sd = kpfxStartupDef(kp.startShow);
                 el.innerHTML = "<span class='kpfx-what'>Power-up &#8212; " + kpfxEsc(sd.name) + "</span>" +
@@ -12001,7 +12036,7 @@
                 return;
             }
             var what = fr.moment === "boot"
-                ? "Step " + (fr.step + 1) + " of " + show.steps.length + " – " + kpfxDef(show.steps[fr.step].fx).name
+                ? (now < 1 ? "Ignition on · " : "") + "Step " + (fr.step + 1) + " of " + show.steps.length + " – " + kpfxDef(show.steps[fr.step].fx).name
                 : fr.moment === "react"
                     ? "Key " + (fr.press + 1) + " – " + kpfxPressDef(show.press.fx).name
                     : "At rest — " + kpfxDef(show.idle.fx).name;
@@ -12015,7 +12050,13 @@
                 "<span class='kpfx-lit'>" + lit + " of " + fr.n + " lit</span>";
         }
         window.kpfxPlayPause = function () { kpfx.playing = !kpfx.playing; kpfxRenderBar(); };
-        window.kpfxRestart = function () { kpfx.t = 0; kpfxMoveHead(); if (!kpfx.playing) kpfxPaintOnce(); };
+        /* Turn the key: dark for a beat, then the start-up from the top. */
+        var KPFX_DARK_MS = 700;
+        window.kpfxRestart = function () {
+            kpfx.t = 0; kpfx.playing = true;
+            kpfx.darkUntil = ((window.performance && performance.now) ? performance.now() : Date.now()) + KPFX_DARK_MS;
+            kpfxMoveHead(); kpfxRenderBar();
+        };
         function kpfxPaintOnce() {
             var fr = kpfxPreviewFrame(kpfx.t);
             kpfxPaint(fr); kpfxPaintMinis(kpfx.t); kpfxUpdateStrip(fr); kpfxMarkSeg();
@@ -12023,10 +12064,13 @@
         function kpfxRenderBar() {
             var el = document.getElementById("kpFxBar");
             if (!el) return;
+            /* With the MaxxECU on the rings there is nothing of ours to play:
+               the start-up is the keypad's own, which Studio cannot draw. */
+            var ours = !kpfxEcuOwns();
             el.innerHTML =
-                "<button class='kpfx-tbtn play" + (kpfx.playing ? " on" : "") + "' onclick='kpfxPlayPause()'>" +
+                (ours ? "<button class='kpfx-tbtn play" + (kpfx.playing ? " on" : "") + "' onclick='kpfxPlayPause()'>" +
                 (kpfx.playing ? "&#9646;&#9646; Pause" : "&#9654; Play") + "</button>" +
-                "<button class='kpfx-tbtn' onclick='kpfxRestart()'>&#9198; From the top</button>" +
+                "<button class='kpfx-tbtn' onclick='kpfxRestart()' title='Ignition off, then on: the start-up from the top'>Turn the key</button>" : "") +
                 /* the one button on this page that makes the preview stop being
                    a mime: with a dash on the bus, a real thumb drives it */
                 "<button class='kpfx-tbtn" + (kpfxWatch.on ? " on" : "") + "' onclick='kpfxWatchToggle()'" +
@@ -12052,7 +12096,18 @@
                does before anything is talking to it. Same click target as a
                block, and it opens into the same panel. */
             var sd = kpfxStartupDef(kp.startShow);
-            var h = "<button type='button' class='kpfx-pre" + (kpfxOnStart() ? " on" : "") + "' onclick='kpfxPickBlock(" + KPFX_START_I + ")'" +
+            if (kpfxEcuOwns()) {
+                /* The whole start-up, when a MaxxECU owns the rings: the
+                   keypad's own show, then the ECU. Nothing of ours in between. */
+                box.innerHTML = "<div class='kpfx-phases'><span style='left:0'>Ignition on</span></div>" +
+                    "<button type='button' class='kpfx-pre on' onclick='kpfxPickBlock(" + KPFX_START_I + ")'>" +
+                    "<span class='k'>At ignition</span><span class='v'>" + kpfxEsc(sd.name) + "</span></button>" +
+                    "<div class='kpfx-ecuend'>Then the MaxxECU lights the rings</div>";
+                return;
+            }
+            var h = "<div class='kpfx-phases'><span style='left:0'>Ignition on</span>" +
+                "<span class='end' style='left:" + (total / loop * 100).toFixed(3) + "%'>Normal use</span></div>";
+            h += "<button type='button' class='kpfx-pre" + (kpfxOnStart() ? " on" : "") + "' onclick='kpfxPickBlock(" + KPFX_START_I + ")'" +
                 " title='What the keypad does at power-up with nothing attached: its own, not yours.'>" +
                 "<span class='k'>On its own, first</span><span class='v'>" + kpfxEsc(sd.name) + "</span>" +
                 "<span class='a'>Change</span></button>";
@@ -12206,14 +12261,16 @@
                    tile for any of them: this animation is Blink's, inside the
                    part, and Studio has never seen it — drawing a guess would be
                    the one lie this page is built to avoid. */
-                box.innerHTML = "<div class='kp-rail-title'>The keypad on its own</div>" +
+                box.innerHTML = "<div class='kp-rail-title'>" + (kpfxEcuOwns() ? "At ignition" : "The keypad on its own") + "</div>" +
                     "<div class='kpfx-tiles'>" + KPFX_STARTUP.map(function (d) {
                         return "<button class='kpfx-tile wide" + (kp.startShow === d.v ? " on" : "") + "' onclick='kpfxSetStartup(" + d.v + ")'" +
                             " title='" + kpfxEsc(d.blurb) + "'>" +
                             "<span class='kpfx-tilenone' style='width:100%'>" + (d.v === 0 ? "&#8212;" : d.v === 1 ? "&#9673;" : "&#9678;") + "</span>" +
                             "<span class='nm'>" + kpfxEsc(d.name) + "</span></button>";
                     }).join("") + "</div>" +
-                    "<div class='kpfx-railnote'>Written to the keypad with the rest of the setup file. It is the only animation it can play with nothing attached.</div>";
+                    "<div class='kpfx-railnote'>" + (kpfxEcuOwns()
+                        ? "MTune calls this STARTUP LED SHOW."
+                        : "Written to the keypad with the rest of the setup file. It is the only animation it can play with nothing attached.") + "</div>";
                 return;
             }
             var groups = [], by = {};
@@ -12451,6 +12508,26 @@
            bench supply. */
         function kpfxRenderStartProps(box, show) {
             var d = kpfxStartupDef(kp.startShow), n = show.steps.length;
+            if (kpfxEcuOwns()) {
+                /* The one choice there is, and nothing to send: MaxxECU writes
+                   it to the keypad itself. An old tape on the dash is the only
+                   thing left to act on here. */
+                var t = "<h2>At ignition</h2>" +
+                    "<div class='kp-sub'>STARTUP LED SHOW in MTune</div>" +
+                    "<div class='kp-grp'><div class='kp-field'><select id='kpFxStartup' onchange='kpfxSetStartup(this.value)'>" +
+                    KPFX_STARTUP.map(function (x) {
+                        return "<option value='" + x.v + "'" + (kp.startShow === x.v ? " selected" : "") + ">" + kpfxEsc(x.name) + "</option>";
+                    }).join("") + "</select></div>" +
+                    "<table class='kpb-facts'><tbody>" +
+                    "<tr><td class='k'>1. Ignition on</td><td>" + kpfxEsc(d.name) + "</td></tr>" +
+                    "<tr><td class='k'>2. Then</td><td>The MaxxECU lights each ring for its button</td></tr>" +
+                    "</tbody></table></div>";
+                if (kpfxDash.st && kpfxDash.st.present)
+                    t += "<div class='kp-grp'><div class='kp-bus-note'>" + kpfxEsc(kpfxDashLine()) + "</div>" +
+                        "<div class='kp-keyacts'><button onclick='kpfxDashForget()'>Forget it</button></div></div>";
+                box.innerHTML = t;
+                return;
+            }
             var h = "<h2>On its own, first</h2>" +
                 "<div class='kp-sub'>" + kpfxEsc(d.name) + " &middot; CANopen 2014h</div>" +
                 "<div class='kp-bus-note'>" + kpfxEsc(d.blurb) + "</div>" +
@@ -12824,6 +12901,8 @@
         }
         function kpfxRenderAll() {
             kp.show = kpfxNormalise(kpfxShow());
+            /* a MaxxECU keypad's start-up is the keypad's own and nothing else */
+            if (kpfxEcuOwns()) kpfx.stepI = KPFX_START_I;
             kpfx._cards = {};
             kpfxApplyNight();
             kpfxDashRefresh();
@@ -13300,7 +13379,10 @@
            where LIBRARY / LIVE / ANALYSE / DRIFT need no numbering either. */
         var KP_SECS = [
             { id: "design",     label: "Design",     view: "kpViewDesign" },
-            { id: "show",       label: "Lights",     view: "kpViewShow" },
+            /* "Start-up", not "Lights": what this page makes is what the keypad
+               does when the ignition comes on, and "Lights" read as a colour
+               editor. The id stays "show" so saved views still land here. */
+            { id: "show",       label: "Start-up",   view: "kpViewShow" },
             { id: "connection", label: "Connection", view: "kpViewConnection" },
             { id: "ecu",        label: "ECU",        view: "kpViewEcu" }
         ];
@@ -13390,8 +13472,10 @@
                        kind of duplication this pass exists to remove. */
                     break;
                 case "show":
-                    name = "Lights";
-                    meta = kpfxHeadMeta();
+                    name = "Start-up";
+                    meta = kpfxEcuOwns()
+                        ? "at ignition: " + kpfxStartupDef(kp.startShow).name.toLowerCase() + ", then the MaxxECU lights the rings"
+                        : kpfxHeadMeta();
                     break;
                 case "ecu":
                     name = "ECU";
