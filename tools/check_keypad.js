@@ -140,6 +140,7 @@ function makeSandbox(rig) {
                  kpwAbortText: kpwAbortText,
                  kpwRateIdx: kpwRateIdx, kpwRateK: kpwRateK,
                  kpwDiffRows: kpwDiffRows, kpwNeedsChange: kpwNeedsChange,
+                 kpwMxTestFacts: kpwMxTestFacts,
                  clock: __clock };
     `;
     const calls = { kpSaveCfg: 0, kpBusChanged: 0 };
@@ -184,7 +185,7 @@ function makeRig(o) {
        all the time at its own rate. At any OTHER rate its frames are line
        noise to everyone, so nobody on the bus hears anybody: the car-side
        trap the MaxxECU flow is built around. */
-    const ecu = o.ecu ? { present: o.ecu.present !== false, k: o.ecu.k || 500 } : null;
+    const ecu = o.ecu ? { present: o.ecu.present !== false, k: o.ecu.k || 500, answers: o.ecu.answers || null } : null;
     function jammed() { return !!(ecu && ecu.present && ecu.k !== RATE_K[dash.live]); }
     function ecuBroadcast() {
         if (ecu && ecu.present && ecu.k === RATE_K[dash.live]) record(0x520, false, [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -319,6 +320,17 @@ function makeRig(o) {
 
     return {
         fetch: fetchImpl, keypad: kpad, dash: dash, log: log, ecu: ecu,
+        /* A thumb on key n (1-based): the keypad's own J1939 key event, and,
+           if the ECU knows that button, the ECU repainting its ring, which
+           changes the ECU's frame to the keypad on a press. */
+        keyEvent: (n, down) => {
+            if (!kpad.present || kpad.proto !== 'j1939' || RATE_K[dash.live] !== kpad.baud || jammed()) return;
+            record((0x18EFFF00 | kpad.sa) >>> 0, true, [0x04, 0x1B, 0x01, n, down ? 1 : 0, kpad.sa, 0xFF, 0xFF]);
+            if (down && ecu && ecu.present && ecu.k === RATE_K[dash.live] && (!ecu.answers || ecu.answers.indexOf(n) >= 0)) {
+                ecu.painted = (ecu.painted || 0) + 1;
+                record((0x18EF0000 | (kpad.sa << 8) | 0xF0) >>> 0, true, [0x04, 0x1B, 0x5A, n, ecu.painted & 0xFF, 0, 0, 0]);
+            }
+        },
         /* unplug and replug the keypad: a pending J1939 rate takes effect */
         powerCycle: () => { if (kpad.pendingBaud) { kpad.baud = kpad.pendingBaud; kpad.pendingBaud = null; } },
         bindClock: (c) => { clockRef = c; },
@@ -871,6 +883,86 @@ console.log('\nMaxxECU: set up with the ECU on the same wires');
         ok('no keypad, off the bus: it says to check power and wiring',
            api.kpw.result && !api.kpw.result.ok && /12 V/.test(api.kpw.result.msg), JSON.stringify(api.kpw.result));
         ok('and reminds the user to put the ECU back', /Put the MaxxECU back on the bus/.test(api.kpw.result.msg), api.kpw.result.msg);
+    }
+}
+
+console.log('\nMaxxECU: every button, proved');
+{
+    const tick = async (n) => { for (let i = 0; i < (n || 6); i++) await new Promise(r => setImmediate(r)); };
+    const mxKeys = (steps, colors) => ({
+        baud: 500, backlight: 'AMBER', brightness: 48, show: 'OFF',
+        keys: Array.from({ length: 15 }, (_, i) => ({ desc: 'B' + (i + 1), steps: steps[i] == null ? 'UNUSED' : steps[i],
+                                                    keep: 'RESET', fn: '', colors: (colors && colors[i]) || 'OFF' }))
+    });
+    /* Start the check, wait for it to have listened for the ECU, then press
+       keys one at a time: down, a few polls, up, a few polls. */
+    async function check(api, rig, presses) {
+        const p = api.win.kpwMxTest();
+        while (api.kpw.mxt == null || api.kpw.mxt.ecu == null) await tick(1);
+        await tick(4);
+        for (const k of presses) { rig.keyEvent(k, true); await tick(4); rig.keyEvent(k, false); await tick(4); }
+        await tick(30);
+        api.win.kpwMxTestDone();
+        await p;
+        return api.kpwMxTestFacts ? api.kpwMxTestFacts() : null;
+    }
+    const setup = (o, steps, colors) => {
+        const b = boot(Object.assign({ proto: 'j1939', baud: 500, sa: 0x21, dashRate: 2 }, o));
+        target(b.api, { proto: 'j1939', sa: 0x21, baud: 500, ecuBrand: 'maxxecu', mx: mxKeys(steps, colors) });
+        return b;
+    };
+    {
+        const { rig, api } = setup({ ecu: { k: 500 } }, ['MOMENTARY', 2, 3, 2]);
+        await check(api, rig, [1, 2, 3, 4]);
+        ok('all four buttons pressed, the ECU answering each: all four check out',
+           api.kpw.result && api.kpw.result.ok && /All 4 buttons/.test(api.kpw.result.msg), JSON.stringify(api.kpw.result));
+        ok('the ECU was found on the bus', api.kpw.mxt.ecu === true);
+        ok('and the dash is handed back as it was', rig.dash.live === 2 && rig.dash.promisc === false);
+    }
+    {
+        const { rig, api } = setup({ ecu: { k: 500 } }, ['MOMENTARY', 2, 3, 2]);
+        await check(api, rig, [1, 2, 3]);
+        ok('a button never pressed keeps the result from passing', api.kpw.result && !api.kpw.result.ok, JSON.stringify(api.kpw.result));
+    }
+    {
+        /* MTune has button 2 set up in Studio's copy, but the ECU does not
+           act on it: its steps are wrong, or the keypad module is off. */
+        const { rig, api } = setup({ ecu: { k: 500, answers: [1, 3, 4] } }, ['MOMENTARY', 2, 3, 2]);
+        await check(api, rig, [1, 2, 3, 4]);
+        const f = api.kpwMxTestFacts();
+        ok('a button the ECU does not answer is named, and only that one',
+           f[1].st === 'noecu' && f[0].st === 'ok' && f[2].st === 'ok' && f[3].st === 'ok', f.map(x => x.key + ':' + x.st).join(' '));
+        ok('and fails the check', !api.kpw.result.ok);
+    }
+    {
+        /* The ECU is on the bus but never addresses the keypad the way
+           Studio looks for. Silence there proves nothing about any button. */
+        const { rig, api } = setup({ ecu: { k: 500, answers: [] } }, ['MOMENTARY', 2, 3, 2]);
+        await check(api, rig, [1, 2, 3, 4]);
+        ok('an ECU never seen talking to the keypad is not blamed button by button',
+           api.kpw.result.ok && api.kpw.mxt.ecuToKeypad === false, JSON.stringify(api.kpw.result));
+    }
+    {
+        /* Studio thinks 4 keys; the thumb found a fifth. */
+        const { rig, api } = setup({ ecu: { k: 500 } }, ['MOMENTARY', 2, 3, 2]);
+        await check(api, rig, [1, 2, 3, 4, 5]);
+        const f = api.kpwMxTestFacts();
+        ok('a key beyond the model says the model is wrong', f[4] && f[4].st === 'model', f.map(x => x.key + ':' + x.st).join(' '));
+    }
+    {
+        /* A 3-position button, pressed four times: state 4 mod 3 = 1. */
+        const { rig, api } = setup({ ecu: { k: 500 } }, [3, 2, 2, 2]);
+        await check(api, rig, [1, 1, 1, 1, 2, 3, 4]);
+        ok('presses are counted per button, so its step is known',
+           api.kpw.mxt.keys[1] && api.kpw.mxt.keys[1].presses === 4, JSON.stringify(api.kpw.mxt.keys[1]));
+    }
+    {
+        /* No ECU on the bus: the dash hearing each button is still worth
+           proving, and the ECU is not blamed for what it cannot do. */
+        const { rig, api } = setup({ ecu: { k: 500, present: false } }, ['MOMENTARY', 2]);
+        await check(api, rig, [1, 2]);
+        ok('with no ECU heard, buttons still check out on the dash alone',
+           api.kpw.mxt.ecu === false && api.kpw.result.ok, JSON.stringify(api.kpw.result));
     }
 }
 

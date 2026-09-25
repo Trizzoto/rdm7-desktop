@@ -2069,6 +2069,23 @@
         .kpw-ask-s { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin-top: 4px; }
         .kpw-ask-live { font-size: 11px; color: var(--text-muted); margin-top: 8px; min-height: 1em; }
         .kpw-ask .kpw-btns { margin: 12px 0 0; }
+        /* the button check: the keypad drawn as tiles, filling in as pressed */
+        .kpw-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+        .kpw-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+        .kpw-chip.ok { color: #52c46a; border-color: currentColor; }
+        .kpw-chip.no { color: #E05D52; border-color: currentColor; }
+        .kpw-keys { display: grid; gap: 8px; margin: 0 0 12px; }
+        .kpw-k { position: relative; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px; min-height: 64px; display: flex; flex-direction: column; gap: 3px; color: var(--text-muted); }
+        .kpw-k b { font-family: 'Sora', sans-serif; font-size: 16px; color: var(--text); }
+        .kpw-k span { font-size: 11px; line-height: 1.3; }
+        .kpw-k small { font-size: 10px; }
+        .kpw-k em { position: absolute; top: 8px; right: 10px; font-style: normal; font-weight: 700; }
+        .kpw-k.ok { border-color: #52c46a; } .kpw-k.ok em { color: #52c46a; }
+        .kpw-k.noecu, .kpw-k.model, .kpw-k.unused { border-color: #E0A24E; } .kpw-k em { color: #E0A24E; }
+        .kpw-k.ok em { color: #52c46a; }
+        .kpw-k.skip { opacity: 0.45; }
+        .kpw-kdot { position: absolute; top: 12px; right: 30px; width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--border); }
+        .kpw-probs { margin: 0 0 12px; padding-left: 18px; font-size: 11.5px; color: var(--text); line-height: 1.6; }
         /* Frame log. Every frame, both ways, in plain language and in hex —
            the hex is what makes a support conversation possible. */
         .kpw-log { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); max-height: 210px; overflow-y: auto; padding: 8px 10px; margin: 0 0 12px; }
@@ -8576,6 +8593,107 @@
                 kpw.busy = false; kpw.status = ""; kpwRender();
             }
         };
+        /* ── Every button, proved ─────────────────────────────────────────────
+           The keypad reports each press as key number + down/up (18EFFF<sa>,
+           04 1B 01 <key> <state>), so "the dash hears button 3" is a fact, not
+           a guess. What the ECU does with it shows up as the ECU's own frame to
+           the keypad (18EF<sa><ecu>) CHANGING right after the press: MaxxECU
+           repaints the ring when the state moves, and a repeat of the same
+           frame is only a refresh, so it does not count. Which colour it
+           painted is not decodable (the J1939 manual documents no LED
+           command), so the picture shows the colour it should be and the user
+           compares it with the real keypad. */
+        var KPW_MX_ANSWER_MS = 1500;   /* an ECU reply this soon after a press is the press's */
+        function kpwMxTestFacts() {
+            /* per key: what MTune says it is, and what the test saw */
+            var t = kpw.mxt, n = kp.model.rows * kp.model.cols, out = [];
+            var mxk = (kp.mx && kp.mx.keys) || [];
+            for (var i = 1; i <= Math.max(n, t ? t.maxKey : 0); i++) {
+                var m = mxk[i - 1] || null, s = (t && t.keys[i]) || null;
+                var used = !!(m && m.steps !== "UNUSED") && i <= n;
+                /* Only blame the ECU for a silent button once it has been seen
+                   talking to this keypad at all: if its ring frames are
+                   addressed some other way, silence proves nothing. */
+                var wantsEcu = used && m.colors !== "UNUSED" && !!(t && t.ecu && t.ecuToKeypad);
+                var st = !s ? (used ? "wait" : "skip")
+                    : i > n ? "model"
+                    : !used ? "unused"
+                    : wantsEcu && !s.answered ? (Date.now() - s.heardAt < KPW_MX_ANSWER_MS ? "wait" : "noecu")
+                    : "ok";
+                out.push({ key: i, m: m, s: s, used: used, st: st });
+            }
+            return out;
+        }
+        function kpwMxTestVerdict() {
+            var f = kpwMxTestFacts(), bad = f.filter(function (x) { return x.st === "model" || x.st === "unused" || x.st === "noecu"; });
+            var waiting = f.filter(function (x) { return x.used && x.st === "wait"; });
+            var ok = f.filter(function (x) { return x.st === "ok"; }).length;
+            return { ok: !bad.length && !waiting.length && ok > 0, good: ok, bad: bad, waiting: waiting,
+                     used: f.filter(function (x) { return x.used; }).length };
+        }
+        window.kpwMxTestDone = function () { if (kpw.mxt) kpw.mxt.stop = true; };
+        window.kpwMxTest = async function () {
+            if (kpw.busy) return;
+            kpw.busy = true; kpw.cancel = false; kpw.result = null; kpw.steps = []; kpw.ask = null;
+            var T = kp.baud, SA = kp.sa & 0xFF;
+            var t = kpw.mxt = { keys: {}, ecu: null, ecuToKeypad: false, stop: false, finished: false, maxKey: 0 };
+            kpw.stage = "mxtest"; kpwRender();
+            try {
+                await kpwTakeDash();
+                var hop = await kpwDashRate(kpwRateIdx(T), false);
+                if (!hop.ok) throw new Error("Could not put the dash on " + T + "k: " + hop.error);
+                await kpwTrackerReset();
+                /* Is the ECU on the bus at all? A second and a half of listening. */
+                var until = Date.now() + 1500, heard = false;
+                while (!heard && Date.now() < until) { await kpwSleep(KPW_POLL_MS); heard = await kpwMxOthersHeard(SA); }
+                t.ecu = heard; kpwRender();
+                var keyCount = 0, ecuSeen = {}, lastKey = 0, lastPressAt = -1e9, sig = "";
+                var first = true;
+                while (!t.stop) {
+                    if (kpw.cancel) throw new Error("cancelled");
+                    var mon = await kpwMonitor();
+                    Object.keys(mon).forEach(function (k) {
+                        var e = mon[k], id = e.id >>> 0;
+                        if (!e.ext || ((id >> 16) & 0xFF) !== 0xEF) return;
+                        var b = kpwHexToBytes(e.data);
+                        if (((id >> 8) & 0xFF) === 0xFF && (id & 0xFF) === SA && b[0] === 0x04 && b[1] === 0x1B && b[2] === 0x01) {
+                            var d = e.count - keyCount;
+                            if (d <= 0) return;
+                            keyCount = e.count;
+                            var key = b[3], down = b[4] === 1;
+                            var s = t.keys[key] || (t.keys[key] = { presses: 0, held: false, answered: false, heardAt: 0 });
+                            /* the tracker keeps only the last frame: a press and
+                               its release between two polls arrive as one */
+                            s.presses += down ? Math.ceil(d / 2) : Math.floor(d / 2);
+                            s.held = down; s.heardAt = Date.now();
+                            t.maxKey = Math.max(t.maxKey, key);
+                            lastKey = key; lastPressAt = Date.now();
+                        } else if (((id >> 8) & 0xFF) === SA && (id & 0xFF) !== SA) {
+                            var prev = ecuSeen[k];
+                            ecuSeen[k] = { count: e.count, data: e.data };
+                            t.ecuToKeypad = true;
+                            if (first) return;   /* what was already there is a baseline, not an answer */
+                            if ((!prev || (e.count > prev.count && e.data !== prev.data)) &&
+                                lastKey && t.keys[lastKey] && Date.now() - lastPressAt <= KPW_MX_ANSWER_MS)
+                                t.keys[lastKey].answered = true;
+                        }
+                    });
+                    first = false;
+                    var now = JSON.stringify(t.keys) + t.ecu;
+                    if (now !== sig) { sig = now; kpwRender(); }
+                    await kpwSleep(KPW_POLL_MS);
+                }
+                var v = kpwMxTestVerdict();
+                kpw.result = { ok: v.ok, msg: v.ok ? "All " + v.good + " buttons check out." : "" };
+            } catch (e) {
+                kpw.result = { ok: false, msg: e && e.message === "cancelled" ? "Stopped." : String((e && e.message) || e) };
+            } finally {
+                t.finished = true;
+                await kpwRestoreDash();
+                kpw.busy = false; kpw.status = ""; kpwRender();
+            }
+        };
+        window.kpwMxTestOpen = function () { kpwOpen(); kpw.mx = { how: "test", ecuAt: kp.baud }; kpwMxTest(); };
         window.kpwOpen = function () {
             _kpwEnsureModal();
             kpw.stage = (typeof kpmxOn === "function" && kpmxOn()) ? "mxintro" : "intro";
@@ -8605,7 +8723,7 @@
             d.innerHTML =
                 "<div class='kpw-card'>" +
                   "<div class='kpw-head'>" +
-                    "<div><div class='kpw-title'>Set it up for me</div>" +
+                    "<div><div class='kpw-title' id='kpwTitle'>Set it up for me</div>" +
                     "<div class='kpw-sub' id='kpwSub'>Your dash talks to the keypad, no CAN adapter needed.</div></div>" +
                     "<button class='kpw-x' onclick='kpwClose()' title='Close'>&times;</button>" +
                   "</div>" +
@@ -8662,6 +8780,8 @@
             if (!body) return;
             var link = kpwLinkState(), canRun = link === "ok";
             var h = "";
+            var title = document.getElementById("kpwTitle");
+            if (title) title.textContent = kpw.stage === "mxtest" ? "Check the buttons" : "Set it up for me";
             var stepsHtml = function () {
                 return "<ul class='kpw-steps'>" + kpw.steps.map(function (s) {
                     var glyph = s.state === "ok" ? "&#10003;" : s.state === "fail" ? "&times;" : s.state === "run" ? "&#9679;" : "&#9675;";
@@ -8696,6 +8816,49 @@
                 }
                 h += "<div class='kpw-btns'><button class='kpw-btn sec' onclick='kpwCancel()'>Stop</button></div>";
                 h += _kpwLogHtml(false);
+            } else if (kpw.stage === "mxtest") {
+                var t = kpw.mxt || { keys: {}, ecu: null }, facts = kpwMxTestFacts(), v = kpwMxTestVerdict();
+                var chip = function (good, text) { return "<span class='kpw-chip " + (good ? "ok" : good === false ? "no" : "") + "'>" + text + "</span>"; };
+                h += "<div class='kpw-chips'>" +
+                    chip(Object.keys(t.keys).length ? true : null, "Keypad at " + kp.baud + "k") +
+                    chip(t.ecu, t.ecu == null ? "Looking for the MaxxECU" : t.ecu ? "MaxxECU on the bus" : "MaxxECU not heard") + "</div>";
+                /* the keypad, in its own layout: a tile per button */
+                h += "<div class='kpw-keys' style='grid-template-columns:repeat(" + kp.model.cols + ",1fr)'>";
+                facts.forEach(function (x) {
+                    var m = x.m, s = x.s, dot = "";
+                    if (x.used && s && typeof kpmxState === "function" && m.colors !== "UNUSED") {
+                        var N = m.steps === "MOMENTARY" ? 2 : m.steps;
+                        var state = m.steps === "MOMENTARY" ? (s.held ? 1 : 0) : s.presses % N;
+                        var c = kpmxState(m, state);
+                        dot = "<i class='kpw-kdot' style='background:" + (c === "off" ? "transparent" : HEX[c]) + "' title='Should be " + c + "'></i>";
+                    }
+                    var glyph = x.st === "ok" ? "&#10003;" : (x.st === "noecu" || x.st === "model" || x.st === "unused") ? "!" : "";
+                    h += "<div class='kpw-k " + x.st + "'><b>" + x.key + "</b>" + dot +
+                        "<span>" + kpwEsc((m && m.desc) || (x.used ? "" : "Not used")) + "</span>" +
+                        (glyph ? "<em>" + glyph + "</em>" : "") +
+                        (s && m && typeof m.steps === "number" ? "<small>" + s.presses + " press" + (s.presses === 1 ? "" : "es") + "</small>" : "") + "</div>";
+                });
+                h += "</div>";
+                /* what is wrong, one line each, only when something is */
+                var probs = facts.filter(function (x) { return x.st === "noecu" || x.st === "model" || x.st === "unused"; }).map(function (x) {
+                    if (x.st === "model") return "Button " + x.key + " exists, so this is not a " + kp.model.name + ". Pick the right keypad on the ECU tab.";
+                    if (x.st === "unused") return "Button " + x.key + " works, but it is not set up in MTune.";
+                    return "Button " + x.key + ": the MaxxECU did not answer. Check its Button steps in MTune, and that the CAN keypad is enabled.";
+                });
+                if (t.ecu === false) probs.unshift("Studio cannot hear the MaxxECU at " + kp.baud + "k, so it only checks that the dash hears each button.");
+                else if (t.ecu && !t.ecuToKeypad && Object.keys(t.keys).length)
+                    probs.unshift("Studio has not seen the MaxxECU send the keypad anything, so watch the rings change on the keypad itself.");
+                if (probs.length) h += "<ul class='kpw-probs'>" + probs.map(function (p) { return "<li>" + kpwEsc(p) + "</li>"; }).join("") + "</ul>";
+                if (!t.finished) {
+                    h += "<div class='kpw-ask'><div class='kpw-ask-t'>" + (v.used && v.good === v.used ? "All " + v.used + " buttons check out" : "Press each button") + "</div>" +
+                        "<div class='kpw-ask-s'>The dot is the colour its ring should be now. Compare it with the keypad.</div>" +
+                        "<div class='kpw-ask-live'>" + v.good + " of " + v.used + " checked</div>" +
+                        "<div class='kpw-btns'><button class='kpw-btn' onclick='kpwMxTestDone()'>Done</button></div></div>";
+                } else {
+                    if (kpw.result && kpw.result.msg) h += "<div class='kpw-warn " + (kpw.result.ok ? "kpw-good" : "kpw-bad") + "'>" + kpwEsc(kpw.result.msg) + "</div>";
+                    h += "<div class='kpw-btns'><button class='kpw-btn' onclick='kpwMxTest()'>Check again</button>" +
+                        "<button class='kpw-btn sec' onclick='kpwClose()'>Close</button></div>";
+                }
             } else if (kpw.stage === "intro") {
                 h += "<p class='kpw-p'>Finds your keypad at whatever speed and protocol it&#8217;s on, and programs it to match your design here, using the dash as the CAN interface.</p>";
                 h += _kpwPreHtml();
@@ -8757,7 +8920,8 @@
                             kpwEsc(s.label) + (s.detail ? "<small>" + kpwEsc(s.detail) + "</small>" : "") + "</span></li>";
                     }).join("") + "</ul>";
                 h += "<div class='kpw-btns'>" +
-                    (kpw.mx ? "<button class='kpw-btn' onclick=\"kpwMxRun('quick')\">Check again</button>"
+                    (kpw.mx && r.ok ? "<button class='kpw-btn' onclick='kpwMxTest()'>Check every button</button>" : "") +
+                    (kpw.mx ? "<button class='kpw-btn" + (r.ok ? " sec" : "") + "' onclick=\"kpwMxRun('quick')\">Check again</button>"
                             : "<button class='kpw-btn' onclick='kpwFind(false)'>Find it again</button>") +
                     "<button class='kpw-btn sec' onclick='kpwClose()'>Close</button></div>";
                 h += _kpwLogHtml(false);
@@ -13028,7 +13192,8 @@
                 "<tr><td class='k'>Brightness</td><td>" + kpfxPct(kp.ledBright) + "</td></tr>" +
                 "<tr><td class='k'>At power-up</td><td>" + (["Nothing", "Its own full show", "A quick flash"][kp.startShow] || "Nothing") + "</td></tr>" +
                 "</tbody></table>" +
-                "<div class='kpmx-go'><button class='kpb-act red' onclick='kpwOpen()'>Set it up for me</button></div>";
+                "<div class='kpmx-go'><button class='kpb-act red' onclick='kpwOpen()'>Set it up for me</button>" +
+                "<button class='kpb-act ghost' onclick='kpwMxTestOpen()'>Check the buttons</button></div>";
             col.innerHTML = h;
             col.querySelectorAll("[data-mx]").forEach(function (el) {
                 el.addEventListener("change", function () {
