@@ -2062,6 +2062,13 @@
         .kpw-steps li.fail .mark { color: #E05D52; }
         .kpw-steps li.skip { opacity: 0.6; }
         .kpw-steps small { display: block; color: var(--text-muted); font-size: 10.5px; margin-top: 2px; }
+        /* MaxxECU flow: the one thing the user has to do right now, big enough
+           to read from the driver's seat with a hand on the keypad. */
+        .kpw-ask { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-md); padding: 14px 16px; margin: 0 0 14px; }
+        .kpw-ask-t { font-family: 'Sora', sans-serif; font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.35; }
+        .kpw-ask-s { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin-top: 4px; }
+        .kpw-ask-live { font-size: 11px; color: var(--text-muted); margin-top: 8px; min-height: 1em; }
+        .kpw-ask .kpw-btns { margin: 12px 0 0; }
         /* Frame log. Every frame, both ways, in plain language and in hex —
            the hex is what makes a support conversation possible. */
         .kpw-log { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); max-height: 210px; overflow-y: auto; padding: 8px 10px; margin: 0 0 12px; }
@@ -7693,7 +7700,9 @@
             result: null,       /* {ok, msg, powerCycle} once finished            */
             dashSaved: null,    /* dash bitrate index to put back, always         */
             promisc: false,     /* we turned promiscuous on and owe an off        */
-            status: ""          /* one line of "what is happening right now"      */
+            status: "",         /* one line of "what is happening right now"      */
+            ask: null,          /* MaxxECU flow: the thing the user must do now   */
+            mx: null            /* MaxxECU flow: {how, ecuAt} while it runs       */
         };
         window.__kpw = kpw;     /* support/debug handle (mirrors window.__kp) */
 
@@ -8302,9 +8311,275 @@
             if (typeof showToast === "function")
                 showToast("Using the keypad as it is — " + (f.proto === "j1939" ? "J1939" : "CANopen") + " @ " + f.baud + "k", "success");
         };
+        /* ══ MaxxECU: the same tools, in the order a MaxxECU car needs ═══════
+           A MaxxECU keypad ends up J1939, at the ECU's own rate, on 0x21. The
+           generic flow above gets there by walking the dash through every
+           rate, which is fine on a bench and wrong on a car: the ECU keeps
+           talking at 500k the whole time, so at any other rate the bus is
+           nothing but errors and the keypad is never heard.
+
+           So: first look where it should already be, at the ECU's rate, which
+           moves nothing. Only if it is not there does anything move, and then
+           one of two ways, because only the user knows which their car allows:
+
+             off     the ECU is off the bus (fuse out, CAN unplugged). Studio
+                     moves the dash wherever it likes.
+             guided  the ECU has to stay on. Every rate Studio needs, the ECU
+                     is asked to go to first, in MTune, and Studio waits until
+                     it HEARS the ECU there before saying a word to the keypad.
+
+           Whatever happens, the ECU is put back (or the user is told exactly
+           how) and the dash ends up saved on the ECU's rate. */
+        var KPW_MX_PRESS_MS = 20000;   /* "press a key" waits this long        */
+        var KPW_MX_ECU_MS = 180000;    /* an ECU restart, done by hand in MTune */
+        var KPW_MX_TAP_MS = 2500;      /* dwell per rate while the user taps    */
+
+        /* Frames the keypad itself sends. Anything else heard is the ECU (or
+           another node), which is exactly what "the ECU is at this rate" means. */
+        function kpwMxIsKeypad(e, sa) {
+            var id = e.id >>> 0;
+            if (e.ext) return ((id >> 16) & 0xFF) === 0xEF && (id & 0xFF) === sa;
+            var n = id & 0x7F;
+            return id >= 0x180 && id < 0x800 && (n === ((kp.curNode || 0x15) & 0x7F) || n === 0x15);
+        }
+        async function kpwMxOthersHeard(sa) {
+            var mon = await kpwMonitor();
+            return Object.keys(mon).some(function (k) { return !kpwMxIsKeypad(mon[k], sa); });
+        }
+        /* One thing the user has to do, on screen until it is done. `auto`
+           polls for the evidence that it has been done, so the user is only
+           ever asked to act, never to report back, when Studio can see it. */
+        async function kpwMxAsk(o) {
+            kpw.ask = { title: o.title, sub: o.sub || "", btn: o.btn || "", alt: o.alt || "", live: "", answer: null };
+            kpwRender();
+            var t0 = Date.now(), until = o.ms ? t0 + o.ms : 0;
+            try {
+                while (kpw.ask.answer == null) {
+                    if (kpw.cancel) throw new Error("cancelled");
+                    if (o.auto) {
+                        var hit = await o.auto(Date.now() - t0);
+                        if (hit) { kpw.ask.answer = hit; break; }
+                    }
+                    if (until && Date.now() >= until) { kpw.ask.answer = "timeout"; break; }
+                    if (o.live) { kpw.ask.live = o.live(until ? until - Date.now() : 0); kpwMxRenderLive(); }
+                    await kpwSleep(300);
+                }
+                return kpw.ask.answer;
+            } finally { kpw.ask = null; kpwRender(); }
+        }
+        window.kpwMxAnswer = function (v) { if (kpw.ask) kpw.ask.answer = v || "done"; };
+        function kpwMxRenderLive() {
+            var el = document.getElementById("kpwAskLive");
+            if (el && kpw.ask) el.textContent = kpw.ask.live;
+        }
+        function kpwMxHit(k, h) {
+            return { proto: "j1939", baud: k, rateIdx: kpwRateIdx(k), sa: h.sa, node: kp.curNode || 0x15, hw: "", looksBlink: true };
+        }
+        /* A J1939 keypad only speaks when pressed, so hearing it IS a press. */
+        async function kpwMxHear(k, title) {
+            var hop = await kpwDashRate(kpwRateIdx(k), false);
+            if (!hop.ok) throw new Error("Could not put the dash on " + k + "k: " + hop.error);
+            await kpwTrackerReset();
+            var a = await kpwMxAsk({
+                title: title || "Press any key on the keypad",
+                sub: "Studio is listening at " + k + "k.",
+                alt: "Nothing happens", ms: KPW_MX_PRESS_MS,
+                auto: async function () { var h = kpwFindJ1939In(await kpwMonitor()); return h ? kpwMxHit(k, h) : null; },
+                live: function (left) { return left > 0 ? Math.ceil(left / 1000) + "s" : ""; }
+            });
+            return (a && typeof a === "object") ? a : null;
+        }
+        /* With the ECU gone: one prompt, and the dash walks the rates under
+           the user's thumb instead of asking for a press at each. */
+        async function kpwMxTapSweep(rates) {
+            var i = -1, next = 0;
+            var a = await kpwMxAsk({
+                title: "Keep tapping any key on the keypad",
+                sub: "Studio is trying each bus speed in turn.",
+                alt: "Stop looking", ms: rates.length * KPW_MX_TAP_MS * 3,
+                auto: async function (el) {
+                    if (el >= next) {
+                        i = (i + 1) % rates.length; next = el + KPW_MX_TAP_MS;
+                        await kpwDashRate(kpwRateIdx(rates[i]), false);
+                        await kpwTrackerReset();
+                        kpwLog("", "Dash now listening at " + rates[i] + "k.");
+                        return null;
+                    }
+                    var h = kpwFindJ1939In(await kpwMonitor());
+                    return h ? kpwMxHit(rates[i], h) : null;
+                },
+                live: function () { return i >= 0 ? "Listening at " + rates[i] + "k" : ""; }
+            });
+            return (a && typeof a === "object") ? a : null;
+        }
+        /* Put the whole bus on k. Off the bus that is only the dash; guided,
+           the ECU goes first and has to be heard there. */
+        async function kpwMxBusTo(k) {
+            var hop = await kpwDashRate(kpwRateIdx(k), false);
+            if (!hop.ok) throw new Error("Could not put the dash on " + k + "k: " + hop.error);
+            await kpwTrackerReset();
+            if (kpw.mx.how !== "guided" || kpw.mx.ecuAt === k) return;
+            var si = kpwStepPush("MaxxECU to " + k + "k");
+            kpwStepSet(si, "run");
+            var a = await kpwMxAsk({
+                title: "In MTune, set CAN bitrate to " + k + "k, then restart the ECU",
+                sub: "CAN Bus › CAN settings. Studio carries on by itself when it hears the ECU at " + k + "k.",
+                btn: "I’ve done it", ms: KPW_MX_ECU_MS,
+                auto: async function () { return (await kpwMxOthersHeard(kp.sa & 0xFF)) ? "heard" : null; }
+            });
+            if (a === "timeout") { kpwStepSet(si, "fail", "Not heard at " + k + "k."); throw new Error("Studio did not hear the MaxxECU at " + k + "k."); }
+            kpw.mx.ecuAt = k;
+            kpwStepSet(si, "ok", a === "heard" ? "Heard it." : "");
+            await kpwTrackerReset();
+        }
+        async function kpwMxFind(T) {
+            var fi = kpwStepPush("Find the keypad");
+            kpwStepSet(fi, "run");
+            var f = null, i;
+            if (kpw.mx.how === "guided") {
+                /* Where an unconfigured keypad can be, cheapest move first:
+                   CANopen at the ECU's rate costs nothing, then the two
+                   factory defaults, each one ECU restart. */
+                var tries = [{ k: T, p: "canopen" }, { k: 125, p: "canopen" }, { k: 250, p: "j1939" }];
+                for (i = 0; i < tries.length && !f; i++) {
+                    if (kpw.cancel) throw new Error("cancelled");
+                    await kpwMxBusTo(tries[i].k);
+                    f = tries[i].p === "canopen" ? await kpwProbeCanopenAt(tries[i].k) : await kpwMxHear(tries[i].k);
+                }
+            } else {
+                var order = [125, 250, 500, 1000];
+                for (i = 0; i < order.length && !f; i++) {
+                    if (kpw.cancel) throw new Error("cancelled");
+                    await kpwMxBusTo(order[i]);
+                    f = await kpwProbeCanopenAt(order[i]);
+                }
+                if (!f) f = await kpwMxTapSweep([250, 500, 125, 1000]);
+            }
+            kpwStepSet(fi, f ? "ok" : "fail", f
+                ? (f.proto === "j1939" ? "J1939, address " + kpHex(f.sa) : "CANopen, node " + kpHex(f.node)) + ", " + f.baud + "k."
+                : "Not found.");
+            return f;
+        }
+        function kpwMxPutBack() {
+            if (!kpw.mx) return "";
+            if (kpw.mx.how === "guided" && kpw.mx.ecuAt !== kp.baud)
+                return " Set MaxxECU CAN bitrate back to " + kp.baud + "k and restart it.";
+            if (kpw.mx.how === "off" && kpw.mx.ecuAt !== kp.baud) return " Put the MaxxECU back on the bus.";
+            return "";
+        }
+        window.kpwMxRun = async function (how) {
+            if (kpw.busy) return;
+            kpw.busy = true; kpw.cancel = false; kpw.steps = []; kpw.result = null; kpw.found = null;
+            var T = kp.baud, SA = kp.sa & 0xFF;
+            kpw.mx = { how: how, ecuAt: how === "off" ? null : T };
+            kpw.stage = "mxrun"; kpwRender();
+            try {
+                await kpwTakeDash();
+                var f;
+                if (how === "quick") {
+                    /* 1. Where it should already be. Nothing on the bus moves. */
+                    var qi = kpwStepPush("Listen at " + T + "k");
+                    kpwStepSet(qi, "run");
+                    f = await kpwMxHear(T);
+                    kpwStepSet(qi, f ? "ok" : "fail", f ? "Heard it, address " + kpHex(f.sa) + "." : "Not at " + T + "k yet.");
+                    if (!f) { kpw.stage = "mxwhere"; return; }
+                    if (f.sa === SA) {
+                        /* Already exactly where MaxxECU wants it (the MaxxECU
+                           wrote the rest itself). Touch nothing. */
+                        kp.curSa = SA; kpSaveCfg();
+                        kpw.found = f;
+                        kpw.dashSaved = kpwRateIdx(T);
+                        kpw.result = { ok: true, msg: "Already set up: J1939, address " + kpHex(SA) + ", " + T + "k. Nothing was changed." };
+                        kpw.stage = "done";
+                        return;
+                    }
+                } else {
+                    f = await kpwMxFind(T);
+                    if (!f) {
+                        kpw.result = { ok: false, msg: (how === "guided"
+                            ? "It is not at a factory speed. Take the MaxxECU off the bus and run this again, so Studio can try every speed."
+                            : "Nothing answered at any speed. Check the keypad has 12 V and its CAN-H and CAN-L are connected.") + kpwMxPutBack() };
+                        kpw.stage = "done";
+                        return;
+                    }
+                }
+                kpw.found = f;
+                /* 2. CANopen to J1939. It restarts at J1939's own 250k. */
+                if (f.proto === "canopen") {
+                    var si = kpwStepPush("Switch it to J1939");
+                    kpwStepSet(si, "run");
+                    var t = await kpwTx(kpSwitchToJ1939Frame(f.node));
+                    if (!t.ok) { kpwStepSet(si, "fail", t.error); throw new Error(t.error); }
+                    await kpwSleep(KPW_BLIND_MS + 800);
+                    kpwStepSet(si, "ok", "It restarts as J1939 at 250k.");
+                    await kpwMxBusTo(250);
+                    var g = await kpwMxHear(250, "Press any key again");
+                    if (!g) throw new Error("After the switch the keypad did not answer at 250k. Unplug it, plug it back in, and run this again.");
+                    f = g; kpw.found = f;
+                }
+                /* 3. The MTune settings, then address, then speed last: sent at
+                      the rate it is on, so all of it lands. */
+                var moves = f.baud !== T || f.sa !== SA;
+                var wi = kpwStepPush("Write your MTune settings");
+                kpwStepSet(wi, "run");
+                await kpwMxBusTo(f.baud);
+                var steps = kpProvisionSteps({ proto: "j1939", sa: f.sa }), sent = 0;
+                for (var i = 0; i < steps.length; i++) {
+                    if (kpw.cancel) throw new Error("cancelled");
+                    if (steps[i].kind === "baud" && f.baud === T) continue;
+                    kpwStatus(steps[i].note);
+                    var r = await kpwTx(steps[i]);
+                    if (!r.ok) { kpwStepSet(wi, "fail", r.error); throw new Error(r.error); }
+                    sent++;
+                    await kpwSleep(KPW_BLIND_MS);
+                }
+                kpwStepSet(wi, "ok", sent + " sent.");
+                /* 4. New speed and address take at power-up. Unplugging only
+                      the keypad keeps the dash (and this connection) alive. */
+                if (moves) {
+                    var pi = kpwStepPush("Restart the keypad");
+                    kpwStepSet(pi, "run");
+                    await kpwMxAsk({ title: "Unplug the keypad, then plug it back in",
+                                     sub: "It starts up on " + T + "k at address " + kpHex(SA) + ".", btn: "Done" });
+                    kpwStepSet(pi, "ok", "");
+                }
+                /* 5. At the ECU's rate, and proved by a press. */
+                await kpwMxBusTo(T);
+                var vi = kpwStepPush("Check it at " + T + "k");
+                kpwStepSet(vi, "run");
+                var v = await kpwMxHear(T, "Press any key one more time");
+                if (!v || v.sa !== SA) {
+                    kpwStepSet(vi, "fail", v ? "It answered on " + kpHex(v.sa) + ", not " + kpHex(SA) + "." : "No answer at " + T + "k.");
+                    throw new Error(v ? "The keypad is on the wrong address." : "The keypad did not answer at " + T + "k after its restart.");
+                }
+                kpwStepSet(vi, "ok", "J1939, address " + kpHex(SA) + ", " + T + "k.");
+                kp.curSa = SA; kp._exported = true; kpSaveCfg();
+                /* 6. The ECU back where it belongs. */
+                if (how === "off") {
+                    var ei = kpwStepPush("MaxxECU back on the bus");
+                    kpwStepSet(ei, "run");
+                    var e = await kpwMxAsk({ title: "Put the MaxxECU back on the bus",
+                                             sub: "Refit its fuse, or plug its CAN back in.", btn: "Done", ms: KPW_MX_ECU_MS,
+                                             auto: async function () { return (await kpwMxOthersHeard(SA)) ? "heard" : null; } });
+                    kpw.mx.ecuAt = T;
+                    kpwStepSet(ei, "ok", e === "heard" ? "Heard it at " + T + "k." : "");
+                }
+                /* The dash lives on the ECU's rate from now on. */
+                kpw.dashSaved = kpwRateIdx(T);
+                kpw.result = { ok: true, msg: "Done. The keypad, the MaxxECU and the dash are all on " + T + "k." };
+                kpw.stage = "done";
+            } catch (e) {
+                kpw.result = { ok: false, msg: (e && e.message === "cancelled" ? "Stopped." : String((e && e.message) || e)) + kpwMxPutBack() };
+                kpw.stage = "done";
+            } finally {
+                await kpwRestoreDash();
+                kpw.busy = false; kpw.status = ""; kpwRender();
+            }
+        };
         window.kpwOpen = function () {
             _kpwEnsureModal();
-            kpw.stage = "intro"; kpw.log = []; kpw.steps = []; kpw.result = null; kpw.found = null;
+            kpw.stage = (typeof kpmxOn === "function" && kpmxOn()) ? "mxintro" : "intro";
+            kpw.log = []; kpw.steps = []; kpw.result = null; kpw.found = null; kpw.ask = null; kpw.mx = null;
             document.getElementById("kpwModal").classList.add("show");
             kpwRender();
         };
@@ -8363,7 +8638,7 @@
                 "<button class='kpw-btn sec' onclick='kpwCopyLog()' style='font-size:11px; padding:6px 12px;'>Copy log</button>" +
                 "</details>";
         }
-        function _kpwPreHtml() {
+        function _kpwPreHtml(quick) {   /* quick: the MaxxECU check, which moves nothing */
             var link = kpwLinkState(), rows = [];
             var mark = function (cls, glyph, text, sub) {
                 return "<li><span class='mark " + cls + "'>" + glyph + "</span><span>" + text +
@@ -8378,7 +8653,7 @@
                 "Connect one over WiFi first."));
             rows.push(mark("q", "!", "Keypad powered and wired to the same bus",
                 "12&nbsp;V, ground, CAN-H/L, 120&nbsp;&#937; at each end."));
-            rows.push(mark("q", "!", "Engine off, ignition on",
+            if (!quick) rows.push(mark("q", "!", "Engine off, ignition on",
                 "The dash's bus speed changes while it hunts, briefly affecting other devices."));
             return "<ul class='kpw-pre'>" + rows.join("") + "</ul>";
         }
@@ -8387,7 +8662,41 @@
             if (!body) return;
             var link = kpwLinkState(), canRun = link === "ok";
             var h = "";
-            if (kpw.stage === "intro") {
+            var stepsHtml = function () {
+                return "<ul class='kpw-steps'>" + kpw.steps.map(function (s) {
+                    var glyph = s.state === "ok" ? "&#10003;" : s.state === "fail" ? "&times;" : s.state === "run" ? "&#9679;" : "&#9675;";
+                    return "<li class='" + s.state + "'><span class='mark'>" + glyph + "</span><span>" +
+                        kpwEsc(s.label) + (s.detail ? "<small>" + kpwEsc(s.detail) + "</small>" : "") + "</span></li>";
+                }).join("") + "</ul>";
+            };
+            if (kpw.stage === "mxintro") {
+                h += "<p class='kpw-p'>First Studio listens for the keypad at <b>" + kp.baud + "k</b>, where your MaxxECU wants it. Nothing on the bus changes for that.</p>";
+                h += _kpwPreHtml(true);
+                h += "<div class='kpw-btns'><button class='kpw-btn' onclick=\"kpwMxRun('quick')\"" + (canRun ? "" : " disabled") + ">Check my keypad</button></div>";
+            } else if (kpw.stage === "mxwhere") {
+                h += "<div class='kpw-warn'>The keypad is not at " + kp.baud + "k yet, so the bus speed has to change while Studio sets it up.</div>";
+                h += "<div class='kpw-ask'><div class='kpw-ask-t'>Can the MaxxECU come off the bus for a few minutes?</div>" +
+                    "<div class='kpw-ask-s'>Pull its fuse or unplug its CAN, and anything else on the bus such as a PDM. The dash and keypad stay powered.</div>" +
+                    "<div class='kpw-btns'><button class='kpw-btn' onclick=\"kpwMxRun('off')\">Yes, it is off the bus</button>" +
+                    "<button class='kpw-btn sec' onclick=\"kpwMxRun('guided')\">No, it stays on</button></div>" +
+                    "<div class='kpw-ask-live'>If it stays on, Studio tells you each CAN bitrate to set in MTune.</div></div>";
+                h += stepsHtml();
+            } else if (kpw.stage === "mxrun") {
+                h += stepsHtml();
+                if (kpw.ask) {
+                    h += "<div class='kpw-ask'><div class='kpw-ask-t'>" + kpwEsc(kpw.ask.title) + "</div>" +
+                        (kpw.ask.sub ? "<div class='kpw-ask-s'>" + kpwEsc(kpw.ask.sub) + "</div>" : "") +
+                        "<div class='kpw-ask-live' id='kpwAskLive'>" + kpwEsc(kpw.ask.live) + "</div>" +
+                        ((kpw.ask.btn || kpw.ask.alt) ? "<div class='kpw-btns'>" +
+                            (kpw.ask.btn ? "<button class='kpw-btn' onclick=\"kpwMxAnswer('done')\">" + kpwEsc(kpw.ask.btn) + "</button>" : "") +
+                            (kpw.ask.alt ? "<button class='kpw-btn sec' onclick=\"kpwMxAnswer('no')\">" + kpwEsc(kpw.ask.alt) + "</button>" : "") +
+                            "</div>" : "") + "</div>";
+                } else {
+                    h += "<p class='kpw-p'><span class='kpw-spin'></span> &nbsp;" + kpwEsc(kpw.status || "Working…") + "</p>";
+                }
+                h += "<div class='kpw-btns'><button class='kpw-btn sec' onclick='kpwCancel()'>Stop</button></div>";
+                h += _kpwLogHtml(false);
+            } else if (kpw.stage === "intro") {
                 h += "<p class='kpw-p'>Finds your keypad at whatever speed and protocol it&#8217;s on, and programs it to match your design here, using the dash as the CAN interface.</p>";
                 h += _kpwPreHtml();
                 if (kpw.result && !kpw.result.ok)
@@ -8448,7 +8757,8 @@
                             kpwEsc(s.label) + (s.detail ? "<small>" + kpwEsc(s.detail) + "</small>" : "") + "</span></li>";
                     }).join("") + "</ul>";
                 h += "<div class='kpw-btns'>" +
-                    "<button class='kpw-btn' onclick='kpwFind(false)'>Find it again</button>" +
+                    (kpw.mx ? "<button class='kpw-btn' onclick=\"kpwMxRun('quick')\">Check again</button>"
+                            : "<button class='kpw-btn' onclick='kpwFind(false)'>Find it again</button>") +
                     "<button class='kpw-btn sec' onclick='kpwClose()'>Close</button></div>";
                 h += _kpwLogHtml(false);
             }
