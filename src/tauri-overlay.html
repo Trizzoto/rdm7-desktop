@@ -1534,6 +1534,19 @@
         #kpWorkspace .kpb-col .kp-bus-in,
         #kpWorkspace .kpb-col .kp-seg2 { max-width: 280px; }
         #kpWorkspace .kpb-col .kp-bus-row { margin-bottom: 12px; }
+        /* MaxxECU: MTune's CAN Keypad page, field for field. Wider than a
+           settings column because the button table is MTune's own grid. */
+        #kpWorkspace .kpb-col.kpmx { max-width: 1040px; }
+        #kpWorkspace .kpmx-form { display: grid; grid-template-columns: max-content minmax(0, 280px); gap: 8px 16px; align-items: center; }
+        #kpWorkspace .kpmx-form label { font-family: var(--gpb-head); font-weight: 600; font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--gpb-muted); }
+        #kpWorkspace .kpmx-wrap { overflow-x: auto; }
+        #kpWorkspace .kpmx-keys { min-width: 860px; }
+        #kpWorkspace .kpmx-keys td { padding: 5px 8px 5px 0; vertical-align: middle; }
+        #kpWorkspace .kpmx-keys .kp-bus-in { max-width: none; }
+        #kpWorkspace .kpmx-keys tr.off td:not(.k) { opacity: 0.55; }
+        #kpWorkspace .kpmx-dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+        #kpWorkspace .kpmx-dots i { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--gpb-div); }
+        #kpWorkspace .kpmx-go { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
         /* ---- the keypad's parts, brought into line ---------------------------
            Same pass as the editor's, same reason: the re-bind changed the
            colours and left the grammar. Section labels become condensed type
@@ -7335,6 +7348,7 @@
             startShow: 1, activeStart: true, periodMs: 0, hbMs: 0,   /* device config */
             blColor: "amber", blBright: 18,   /* icon backlight (all 9 colours valid here) */
             ecuBrand: "generic",   /* tailors the "What your ECU needs" setup steps */
+            mx: null,   /* MaxxECU: the MTune CAN Keypad values the user copied in (kpmx*) */
             clip: null   /* copied key style (icon/mode/preset/follows/color/behavior) */
         };
         window.__kp = kp;   /* debug/support handle (mirrors window.__ca / __ltMap) */
@@ -8455,7 +8469,7 @@
            it, saving writes it back. */
         var KP_FIELDS = ["ledBright", "proto", "node", "sa", "baud",
                          "startShow", "activeStart", "periodMs", "hbMs",
-                         "curNode", "curSa", "blColor", "blBright", "ecuBrand"];
+                         "curNode", "curSa", "blColor", "blBright", "ecuBrand", "mx"];
         function kpNewId() {
             return "kp_" + Math.random().toString(36).slice(2, 9);
         }
@@ -8546,6 +8560,9 @@
             kp.model = kpModelOf(c.model);
             kp.keys = JSON.parse(JSON.stringify(DEFAULT_KEYS));
             (c.keys || []).forEach(function (k, i) { if (i < kp.keys.length) kp.keys[i] = Object.assign(kp.keys[i], k); });
+            /* mx is optional: a keypad saved without it must not inherit the
+               previous keypad's MTune settings through the cursor. */
+            kp.mx = null;
             KP_FIELDS.forEach(function (f) { if (c[f] !== undefined) kp[f] = c[f]; });
             /* The one LED brightness was called brightDay, from back when the
                panel offered a night value the keypad has never had (ADR-0063). */
@@ -12434,6 +12451,204 @@
             if (b.id === "haltech") return "Not Haltech’s own keypad, so you read its CAN frame as an input.";
             return b.name.split(" ")[0] + " reads a Blink keypad over CAN.";
         }
+        /* ── MaxxECU: enter what MTune says, Studio works out the keypad ─────
+           MaxxECU owns a Blink keypad outright: it speaks J1939 to it, counts
+           the button steps, and drives the rings. So for a MaxxECU car the
+           question is never "what should the keypad be", it is "what did you
+           set in MTune". This page is MTune's CAN Keypad page, field for field
+           and in MTune's own words (so the labels keep MaxxECU's spelling),
+           and every value is carried straight into the keypad config that the
+           Design picture, the setup wizard and the files all read.
+
+           Source: maxxecu.com/webhelp settings-can_keypad*.html and
+           input_functions.html, read 2026-09-25. */
+        var KPMX_BAUD = [250, 500];
+        var KPMX_BACKLIGHT = [["OFF", null], ["WHITE", "white"], ["AMBER", "amber"], ["YELLOW/GREEN", "lime"]];
+        var KPMX_SHOW = ["OFF", "LED SHOW", "FLASH"];   /* index = kp.startShow, same three the part has */
+        var KPMX_STEPS = [["UNUSED", "NOT USED/USED BY OTHER ECU/PDM"], ["MOMENTARY", "MOMENTARY"],
+            [2, "2 POSITIONS"], [3, "3 POSITIONS"], [4, "4 POSITIONS"], [5, "5 POSITIONS"], [6, "6 POSITIONS"]];
+        var KPMX_KEEP = [["RESET", "RESET TO OFF WHEN POWER IS LOST"], ["KEEP", "KEEP LAST STATE WHEN POWER IS LOST"]];
+        /* BUTTON STATE COLORS: state 0 is dark or red, then the same five. */
+        var KPMX_COLORS = [["OFF", "OFF, GREEN, BLUE, YELLOW, CYAN, PURPLE"], ["RED", "RED, GREEN, BLUE, YELLOW, CYAN, PURPLE"], ["UNUSED", "NOT USED"]];
+        var KPMX_SEQ = ["green", "blue", "yellow", "cyan", "purple"];
+        var KPMX_MODELS = { pkp2200: "4 KEY", pkp2400: "8 KEY", pkp2600: "12 KEY", pkp3500: "15 KEY" };
+        var KPMX_FNS = ["AC CLUTCH DISABLE", "AC REQUEST/IDLE UP", "ADVANCED WARNING SYSTEM, ENABLE", "ADVANCED WARNING SYSTEM, ENABLE CUT",
+            "AFTER LAUNCH POWER LIMIT DISABLE", "ANGLE LOGGER", "ANTI-LAG ENABLE", "AUTO TRANSMISSION LOCKUP ENABLE",
+            "AUTO TRANSMISSION MANUAL MODE SWITCH", "AUTO TRANSMISSION, ENABLE WOT RPM SHIFT", "AUTO TRANSMISSION, SWITCH TO 2ND SHIFT TABLE",
+            "AVG FUEL CONSUMPTION RESET", "BOOST CONTROL ENABLE", "BOOST TARGET SWITCH", "BRAKE PEDAL/STOP LIGHT ACTIVE", "CAN, DISABLE ALL TX",
+            "CHASSIS SPORT MODE", "CLUTCH SWITCH", "COUNTERS", "CRUISE CONTROL, ABORT", "CRUISE CONTROL, ACCELERATE", "CRUISE CONTROL, DECELERATE",
+            "CRUISE CONTROL, RESUME", "CRUISE CONTROL, SET", "DIRECT ECU OUTPUT CONTROL", "DCT DRIVELOGIC DOWN", "DCT DRIVELOGIC UP",
+            "DISABLE TRACTION CONTROL", "EGT POWER CUT, ENABLE", "ELECTRIC WATERPUMP OVERRIDE INPUT", "ENGINE RUNTIME+MAX RESET",
+            "ERROR CODES, CLEAR ALL CODES", "EXTRA FUEL TABLE X TABLE ACTIVATION SWITCH", "EXTRA IGNITION TABLE X TABLE ACTIVATION SWITCH",
+            "EXTRA FUEL/IGN TABLE ACTIVATION SWITCH (ALL)", "FAN + ELECTRIC WATERPUMP OVERRIDE INPUT", "FAN OVERRIDE INPUT",
+            "FUEL ADAPTATION, ENABLE ADAPTATION", "FUEL PUMP OVERRIDE", "IDLE CONTROL DISABLE", "IGNITION KEY", "IGNITION TRIM TABLE, RESET",
+            "LAUNCH CONTROL SWITCH, ENABLE STAGE", "LEAN POWER CUT, ENABLE", "LOGGING, RESET AND START NEW FILE", "LOGGING, RUN",
+            "MDASH PAGE/RESET CEL (HOLD)", "NITROUS ENABLE SWITCH", "NITROUS PURGE", "NITROUS STAGE X ACTIVATE", "NITROUS TIMER RUN",
+            "POWER MANAGEMENT SYSTEM DISABLE", "POWER MANAGEMENT SYSTEM ENABLE", "PULSE OUTPUT X TRIGGER INPUT", "ROLLING LAUNCH CONTROL SWITCH",
+            "RPM LIMIT, ENABLE GP LIMITER", "RPM LIMIT, USE SECONDARY LIMIT RPM", "RPM LIMIT, USE SECONDARY MODE", "SHIFTCUT", "SHIFTCUT ENABLE",
+            "SPEED LIMIT X ENABLE/SET", "SPEED LIMIT RESET", "STARTER MOTOR INPUT", "STOP ENGINE/PREVENT START", "THROTTLE BLIP ENABLE",
+            "THROTTLE BLIP TRIGGER", "TRACTION CONTROL, DISABLE", "TIMER X START/STOP/RESET", "TRANSBRAKE BUMP/CREEP BUTTON",
+            "TRANSBRAKE HOLD BUTTON", "TRANSMISSION CLUTCHKICK/BURNOUT MODE (8HP)", "TRANSMISSION CONVERTER SLIP REQUEST",
+            "TRANSMISSION DOWN SHIFT", "TRANSMISSION DRIVE SWITCH", "TRANSMISSION GEAR 1 LOCKOUT", "TRANSMISSION MODE SWITCH",
+            "TRANSMISSION NEUTRAL SWITCH", "TRANSMISSION REVERSE SWITCH", "TRANSMISSION UP SHIFT", "TRIPMETER, RESET",
+            "TRIPMETER, USE TRIPMETER 2/ FUEL USED 2", "USER CUT TABLE X, ENABLE", "USER PID ENABLE CONTROL", "VIRTUAL FUEL TANK DECREASE",
+            "VIRTUAL FUEL TANK INCREASE", "VIRTUAL FUEL TANK RESET LEVEL", "WATER/METHANOL INJECTION, ENABLE",
+            "WHEEL SETUP (USE SETUP 2 WHEN ACTIVE)", "WIFI, ENABLE"];
+        /* The cap icon a function suggests; anything else keeps its text legend. */
+        var KPMX_ICON = [[/LAUNCH/, "bolt"], [/FAN/, "fan"], [/FUEL PUMP/, "pump"], [/RPM LIMIT|SPEED LIMIT|PIT/, "turtle"],
+            [/UP SHIFT|DRIVELOGIC UP|ACCELERATE|INCREASE/, "up"], [/DOWN SHIFT|DRIVELOGIC DOWN|DECELERATE|DECREASE/, "down"],
+            [/IGNITION KEY|STOP ENGINE|STARTER/, "power"], [/MDASH PAGE/, "page"], [/LIGHT/, "light"]];
+
+        /* First visit: seed from the keypad as Studio already has it, so
+           choosing MaxxECU never throws away a design. */
+        function kpmxSeed() {
+            var n = kp.model.rows * kp.model.cols, keys = [];
+            for (var i = 0; i < 15; i++) {
+                var k = kp.keys[i] || {}, used = i < n && k.label !== undefined && keyAssigned(k);
+                var steps = !used ? "UNUSED" : k.mode === "toggle" ? 2 : k.mode === "state3" ? Math.max(2, Math.min(6, _kpPositions(k).length)) : "MOMENTARY";
+                var first = k.mode === "state3" && k.positions && k.positions[0] ? k.positions[0].color : "off";
+                keys.push({ desc: used ? (k.label || k.preset || "") : "", steps: steps, keep: "RESET", fn: "", colors: first === "red" ? "RED" : "OFF" });
+            }
+            var bl = KPMX_BACKLIGHT.filter(function (b) { return b[1] === kp.blColor; })[0];
+            return { baud: kp.baud === 250 ? 250 : 500, backlight: kp.blBright > 0 && bl ? bl[0] : (kp.blBright > 0 ? "AMBER" : "OFF"),
+                     brightness: kp.ledBright, show: KPMX_SHOW[kp.startShow] || "OFF", keys: keys };
+        }
+        function kpmxState(m, s) {   /* state s of a button, as the ring colour MaxxECU paints */
+            if (m.colors === "UNUSED") return "off";
+            return s === 0 ? (m.colors === "RED" ? "red" : "off") : KPMX_SEQ[(s - 1) % KPMX_SEQ.length];
+        }
+        /* MTune values -> the keypad config every other page reads. */
+        function kpmxApply() {
+            var mx = kp.mx, n = kp.model.rows * kp.model.cols;
+            kp.proto = "j1939"; kp.sa = 0x21; kp.baud = mx.baud;
+            kp.ledBright = mx.brightness;
+            kp.startShow = Math.max(0, KPMX_SHOW.indexOf(mx.show));
+            var bl = KPMX_BACKLIGHT.filter(function (b) { return b[0] === mx.backlight; })[0];
+            if (!bl || !bl[1]) kp.blBright = 0;
+            else { kp.blColor = bl[1]; if (!kp.blBright) kp.blBright = 18; }
+            for (var i = 0; i < n; i++) {
+                var m = mx.keys[i], k = kp.keys[i];
+                if (!m || !k) continue;
+                if (m.steps === "UNUSED") {
+                    Object.assign(k, { label: "", text: true, icon: "blank", mode: "momentary", preset: "— unassigned —", color: "off", behavior: "solid", positions: [] });
+                    continue;
+                }
+                var icon = "blank";
+                KPMX_ICON.some(function (r) { if (r[0].test(m.fn || "")) { icon = r[1]; return true; } return false; });
+                var name = (m.desc || m.fn || "").trim();
+                k.label = name.toUpperCase().slice(0, 12);
+                k.text = icon === "blank"; k.icon = icon;
+                k.preset = m.fn ? m.fn.charAt(0) + m.fn.slice(1).toLowerCase() : (name || "Button " + (i + 1));
+                k.behavior = "solid"; k.follows = "self";
+                var dark0 = kpmxState(m, 0) === "off";
+                if (m.steps === "MOMENTARY" || (m.steps === 2 && dark0)) {
+                    /* Studio's momentary and toggle keys are dark at 0, which is
+                       exactly MaxxECU's OFF-first set. */
+                    k.mode = m.steps === 2 ? "toggle" : "momentary";
+                    k.color = m.colors === "UNUSED" ? "off" : kpmxState(m, 1);
+                    k.positions = [];
+                } else {
+                    /* Anything that is lit at 0, or has more than two states,
+                       is a position list: one entry per MaxxECU state. */
+                    var N = m.steps === "MOMENTARY" ? 2 : m.steps;
+                    k.mode = "state3";
+                    k.color = kpmxState(m, 1);
+                    k.positions = [];
+                    for (var s = 0; s < N; s++) k.positions.push({ name: String(s), color: kpmxState(m, s), behavior: "solid" });
+                }
+            }
+        }
+        function kpmxOpts(list, cur) {
+            return list.map(function (o) {
+                var v = Array.isArray(o) ? o[0] : o, l = Array.isArray(o) ? o[1] : o;
+                return "<option value='" + _kpEsc(String(v)) + "'" + (String(v) === String(cur) ? " selected" : "") + ">" + _kpEsc(String(l)) + "</option>";
+            }).join("");
+        }
+        function kpmxDots(m, N) {
+            var h = "<span class='kpmx-dots'>";
+            for (var s = 0; s < N; s++) {
+                var c = kpmxState(m, s);
+                h += "<i style='background:" + (c === "off" ? "transparent" : HEX[c]) + "'></i>";
+            }
+            return h + "</span>";
+        }
+        function kpmxRender(col, headHtml) {
+            if (!kp.mx) {
+                kp.mx = kpmxSeed(); kpmxApply(); kpSaveCfg();
+                /* the other pages drew the keypad before it became J1939 */
+                setTimeout(kpAfterKeypadChange, 0);
+            }
+            var mx = kp.mx, n = kp.model.rows * kp.model.cols;
+            var h = headHtml;
+            h += "<div class='kpb-sec'>Keypad setup</div><div class='kpmx-form'>" +
+                "<label for='kpmxBaud'>Bus baudrate</label><select id='kpmxBaud' class='kp-bus-in' data-mx='baud'>" +
+                    kpmxOpts(KPMX_BAUD.map(function (b) { return [b, b + "KBIT"]; }), mx.baud) + "</select>" +
+                "<label for='kpmxBl'>Backlight color</label><select id='kpmxBl' class='kp-bus-in' data-mx='backlight'>" +
+                    kpmxOpts(KPMX_BACKLIGHT.map(function (b) { return b[0]; }), mx.backlight) + "</select>" +
+                "<label for='kpmxBr'>Default brightness</label><input id='kpmxBr' class='kp-bus-in' type='number' min='0' max='63' data-mx='brightness' value='" + mx.brightness + "'>" +
+                "<label for='kpmxShow'>Startup LED show</label><select id='kpmxShow' class='kp-bus-in' data-mx='show'>" + kpmxOpts(KPMX_SHOW, mx.show) + "</select>" +
+                "</div>";
+            h += "<div class='kpb-sec'>Keypad settings</div><div class='kpmx-form'>" +
+                "<label for='kpmxModel'>Keypad</label><select id='kpmxModel' class='kp-bus-in' data-mx='model'>" +
+                MODELS.map(function (m) {
+                    return "<option value='" + m.id + "'" + (m.id === kp.model.id ? " selected" : "") + ">" + KPMX_MODELS[m.id] + " (" + m.name + ")</option>";
+                }).join("") + "</select></div>";
+
+            h += "<div class='kpb-sec'>Button settings</div><div class='kpmx-wrap'><table class='kpb-facts kpmx-keys'><thead><tr>" +
+                "<th>#</th><th>Description</th><th>Button steps</th><th>Keep state</th><th>Input function</th><th>Button state colors</th></tr></thead><tbody>";
+            for (var i = 0; i < n; i++) {
+                var m = mx.keys[i], off = m.steps === "UNUSED";
+                var N = m.steps === "MOMENTARY" ? 2 : off ? 0 : m.steps;
+                h += "<tr" + (off ? " class='off'" : "") + "><td class='k'>" + (i + 1) + "</td>" +
+                    "<td><input class='kp-bus-in' data-mx='desc' data-i='" + i + "' value='" + _kpEsc(m.desc) + "' aria-label='Button " + (i + 1) + " description'></td>" +
+                    "<td><select class='kp-bus-in' data-mx='steps' data-i='" + i + "' aria-label='Button " + (i + 1) + " steps'>" + kpmxOpts(KPMX_STEPS, m.steps) + "</select></td>" +
+                    "<td><select class='kp-bus-in' data-mx='keep' data-i='" + i + "' aria-label='Button " + (i + 1) + " keep state'" + (off ? " disabled" : "") + ">" + kpmxOpts(KPMX_KEEP, m.keep) + "</select></td>" +
+                    "<td><input class='kp-bus-in' list='kpmxFns' data-mx='fn' data-i='" + i + "' value='" + _kpEsc(m.fn) + "' aria-label='Button " + (i + 1) + " input function'" + (off ? " disabled" : "") + "></td>" +
+                    "<td style='white-space:nowrap'><select class='kp-bus-in' style='width:auto' data-mx='colors' data-i='" + i + "' aria-label='Button " + (i + 1) + " state colours'" + (off ? " disabled" : "") + ">" + kpmxOpts(KPMX_COLORS, m.colors) + "</select>" +
+                    (off || m.colors === "UNUSED" ? "" : kpmxDots(m, N)) + "</td></tr>";
+            }
+            h += "</tbody></table></div><datalist id='kpmxFns'>" + KPMX_FNS.map(function (f) { return "<option value='" + _kpEsc(f) + "'>"; }).join("") + "</datalist>";
+
+            /* What all of that means, said once, as facts. */
+            var used = mx.keys.slice(0, n).filter(function (m) { return m.steps !== "UNUSED"; });
+            var ecuLeds = used.some(function (m) { return m.colors !== "UNUSED"; });
+            var cnt = function (f) { return used.filter(f).length; };
+            var parts = [];
+            if (cnt(function (m) { return m.steps === "MOMENTARY"; })) parts.push(cnt(function (m) { return m.steps === "MOMENTARY"; }) + " momentary");
+            if (cnt(function (m) { return m.steps === 2; })) parts.push(cnt(function (m) { return m.steps === 2; }) + " on/off");
+            if (cnt(function (m) { return typeof m.steps === "number" && m.steps > 2; })) parts.push(cnt(function (m) { return typeof m.steps === "number" && m.steps > 2; }) + " multi-position");
+            h += "<div class='kpb-sec'>What Studio will set</div><table class='kpb-facts'><tbody>" +
+                "<tr><td class='k'>Keypad</td><td>J1939, address " + kpHex(kp.sa) + ", " + kp.baud + "k</td></tr>" +
+                "<tr><td class='k'>Dash</td><td>Listens at " + kp.baud + "k, same bus as the MaxxECU</td></tr>" +
+                "<tr><td class='k'>Buttons</td><td>" + (used.length ? used.length + " in use: " + parts.join(", ") : "None in use yet") + "</td></tr>" +
+                "<tr><td class='k'>Rings</td><td>" + (ecuLeds ? "Lit by the MaxxECU, so Studio and the dash leave them alone" : "Not used by the MaxxECU") + "</td></tr>" +
+                "<tr><td class='k'>Backlight</td><td>" + (kp.blBright ? kp.blColor.charAt(0).toUpperCase() + kp.blColor.slice(1) : "Off") + "</td></tr>" +
+                "<tr><td class='k'>Brightness</td><td>" + kpfxPct(kp.ledBright) + "</td></tr>" +
+                "<tr><td class='k'>At power-up</td><td>" + (["Nothing", "Its own full show", "A quick flash"][kp.startShow] || "Nothing") + "</td></tr>" +
+                "</tbody></table>" +
+                "<div class='kpmx-go'><button class='kpb-act red' onclick='kpwOpen()'>Set it up for me</button></div>";
+            col.innerHTML = h;
+            col.querySelectorAll("[data-mx]").forEach(function (el) {
+                el.addEventListener("change", function () {
+                    var f = el.getAttribute("data-mx"), i = el.getAttribute("data-i"), v = el.value;
+                    kpUndoPush("a MaxxECU setting");
+                    if (f === "model") {
+                        kp.model = kpModelOf(v);
+                        if (kp.selected >= kp.model.rows * kp.model.cols) kp.selected = 0;
+                        if (!kp.name || MODELS.some(function (x) { return x.name === kp.name; })) kp.name = kp.model.name;
+                    } else if (i != null) {
+                        var m = kp.mx.keys[+i];
+                        if (f === "steps") m.steps = /^\d+$/.test(v) ? +v : v;
+                        else if (f === "fn") { m.fn = v.trim().toUpperCase(); if (!m.desc && m.fn) m.desc = m.fn.split(/[,(]/)[0].trim(); }
+                        else m[f] = v;
+                    } else if (f === "baud") kp.mx.baud = +v;
+                    else if (f === "brightness") kp.mx.brightness = Math.max(0, Math.min(63, Math.round(+v) || 0));
+                    else kp.mx[f] = v;
+                    kpmxApply(); kpSaveCfg(); kpAfterKeypadChange();
+                });
+            });
+        }
+
         /* The ECU page. What used to be a rail dropdown plus a paragraph, plus
            a second copy of the same explanation inside every key's inspector,
            plus a modal. One page, one table. */
@@ -12448,6 +12663,12 @@
                 }).join("") +
                 "</select>" +
                 "<div class='kp-bus-note' style='margin-top:8px'>" + _kpEcuLine(b) + "</div>";
+            col.classList.toggle("kpmx", kp.ecuBrand === "maxxecu");
+            if (kp.ecuBrand === "maxxecu") {
+                h = h.replace(_kpEcuLine(b), "Copy each value across from MTune, CAN Bus &#8250; CAN Keypad.");
+                kpmxRender(col, h);
+                return;
+            }
 
             /* The frame, as a table. This is the whole of what an ECU
                integrator needs from us, and it was previously five sentences
