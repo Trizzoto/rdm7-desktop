@@ -18,7 +18,19 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const VBO = process.argv[2] || path.join(ROOT, 'mallala-drift.vbo');
+let VBO = process.argv[2] || path.join(ROOT, 'mallala-drift.vbo');
+/* The fixture is gitignored, so a clean checkout (CI, check_all) has none.
+   The generator is deterministic, so build it rather than skip: a harness
+   that skips on every machine but one is the DEAD harness check_all exists
+   to catch, just quieter. */
+if (!process.argv[2] && !fs.existsSync(VBO)) {
+    const os = require('os');
+    VBO = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rdm-mallala-')), 'mallala-drift.vbo');
+    const r = require('child_process').spawnSync(process.execPath,
+        [path.join(__dirname, 'make_drift_fixture.js'), VBO], { encoding: 'utf8' });
+    if (r.status !== 0) throw new Error('make_drift_fixture.js failed:\n' + r.stdout + r.stderr);
+    console.log('no mallala-drift.vbo at the repo root; generated one at ' + VBO);
+}
 const SRC = fs.readFileSync(path.join(ROOT, 'src/tauri-overlay.html'), 'utf8');
 
 /* ---- pull the real code out of the app -------------------------------- */
@@ -55,7 +67,8 @@ const K = {};
  'GP_BREAK_SLACK', 'GP_BREAK_FLOOR_M', 'GP_BREAK_QUIET_M',
  'GP_BREAK_QUIET_K', 'GP_BREAK_MAX_FRAC',
  'GP_COAST_G', 'GP_BRAKE_G', 'GP_CORNER_PAD',
- 'GP_TURN_DPS', 'GP_TURN_MIN_S', 'GP_TURN_MIN_DEG', 'GP_TURN_SAME_S'].forEach(n => K[n] = constOf(n));
+ 'GP_TURN_DPS', 'GP_TURN_MIN_S', 'GP_TURN_MIN_DEG', 'GP_TURN_SAME_S',
+ 'GP_CNAME_M'].forEach(n => K[n] = constOf(n));
 K.GP_DRIFT_STAR_W = eval('(' + /var GP_DRIFT_STAR_W = (\{[^}]*\})/.exec(SRC)[1] + ')');
 
 const FNS = [
@@ -70,6 +83,7 @@ const FNS = [
     'gpDriftRefLap', 'gpDriftCorners', 'gpDriftCornerRead', 'gpDriftStars',
     'gpDriftLinkMap', 'gpDriftUnits', 'gpDriftSpun',
     'gpDriftBoard', 'gpDriftBest', 'gpDriftForget',
+    'gpCornerLabel', 'gpCornerNameAt', 'gpCornerNames',
     'gpVboClockMs', 'gpVboSpeedScale', 'gpVboParse', 'gpHaversineM'
 ];
 
