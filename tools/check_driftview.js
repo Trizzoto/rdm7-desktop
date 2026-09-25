@@ -76,7 +76,7 @@ const CONSTS = ['GP_DRIFT_MIN_KPH', 'GP_DRIFT_ON', 'GP_DRIFT_OFF', 'GP_DRIFT_HOL
     'GP_BREAK_SLACK', 'GP_BREAK_FLOOR_M', 'GP_BREAK_QUIET_M', 'GP_BREAK_QUIET_K',
     'GP_BREAK_MAX_FRAC', 'GP_COAST_G', 'GP_BRAKE_G', 'GP_CORNER_PAD', 'GP_TURN_DPS',
     'GP_TURN_MIN_S', 'GP_TURN_MIN_DEG', 'GP_TURN_SAME_S', 'GP_CORNER_RUNUP',
-    'GP_DLANE_H', 'GP_DLANE_PAD'];
+    'GP_DLANE_H', 'GP_DLANE_PAD', 'GP_CNAME_M'];
 
 const FNS = ['gpN', 'gpMetres', 'gpMetresPerDeg', 'gpHaversineM', 'gpSecs', 'gpStep', 'gpHz',
     'gpChanDefsById', 'gpChanFixes', 'gpChanFixApply', 'gpChanFixFor', 'gpChanRawRange',
@@ -92,7 +92,9 @@ const FNS = ['gpN', 'gpMetres', 'gpMetresPerDeg', 'gpHaversineM', 'gpSecs', 'gpS
     'gpSplitRows', 'gpMoveRuns', 'gpOrientGates', 'gpRunsFromCrossings', 'gpRunGapMs',
     'gpRunBreakM', 'gpGradeRuns', 'gpDeadMs',
     /* the view's own */
-    'gpDriftLaneData', 'gpIdxSecondsBefore', 'gpIdxSecondsAfter'];
+    'gpDriftLaneData', 'gpIdxSecondsBefore', 'gpIdxSecondsAfter',
+    /* the corner names the board labels its units with */
+    'gpCornerLabel', 'gpCornerNameAt', 'gpCornerNames'];
 
 function sandbox(track) {
     const gp = { tracks: { active: null, tracks: track ? [track] : [] } };
@@ -281,8 +283,9 @@ console.log('\nthe view owns its class names');
    and its transport are on the CARD now, and the card is .gpb-ccard, shared
    with Corners. What is still drift's alone is the lane, the live readout, the
    angle picture, the disclosure, and the feed wrapper that scopes the card's
-   drift-only styling. */
-['gpb-dlane', 'gpb-dlive', 'gpb-dfeed', 'gpb-dspark', 'gpb-dhow']
+   drift-only styling. gpb-dspark went too (f14af57): the angle picture is
+   a bare canvas[data-gp-dspark] inside the card's .pic, sized by the card. */
+['gpb-dlane', 'gpb-dlive', 'gpb-dfeed', 'gpb-dhow']
     .forEach(function (c) {
         /* .gpb-phead was already the Analyse panel drag header when the shell
            change reused it; the page head inherited its layout and came out

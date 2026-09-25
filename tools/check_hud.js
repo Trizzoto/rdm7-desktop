@@ -65,7 +65,7 @@ const VARS = ['GP_HUD_WIDGETS', 'GP_HUD_ROLES', 'GP_HUD_INK', 'GP_HUD_RED', 'GP_
               'GP_HUD_PRESETS', 'GP_HUD_SUG_SLIDE_S'];
 const FNS = ['gpChanValue', 'gpChanQuiet', 'gpMetresPerDeg', 'gpHeadingAt', 'gpHudOn', 'gpHudChans',
              'gpHudChan', 'gpHudData', 'gpHudRR', 'gpHudPanel', 'gpHudGlow', 'gpHudMiniWindow',
-             'gpHudMinimap', 'gpHudTacho', 'gpHudGrip', 'gpHudPedal', 'gpHudRender', 'gpHudClock',
+             'gpHudMinimap', 'gpHudTacho', 'gpHudGrip', 'gpGripX', 'gpGripY', 'gpHudPedal', 'gpHudRender', 'gpHudClock',
              'gpVideoPictureRect', 'gpExportMime', 'gpExportPlan', 'gpHudMapStyle',
              'gpHudNightColour', 'gpHudTile', 'gpHudTiles', 'gpExportName',
              'gpAngleColour', 'gpAngleScale',
@@ -849,7 +849,7 @@ console.log('\nwidgets made from the recording\'s own channels');
         env({ cam }).render(g, 1280, 720, 20);
         const txt = g.calls.filter(k => k[0] === 'text').map(k => String(k[1]));
         ok('a widget bound to a missing channel reads as a dash, not a zero',
-           txt.indexOf('GHOST') >= 0 && txt.indexOf('—') >= 0, txt.join('|'));
+           txt.indexOf('GHOST') >= 0 && txt.indexOf('–') >= 0, txt.join('|'));
     }
     {
         const cam = { overlay: true, hud: { v: 1, seq: 2, add: [
@@ -1008,7 +1008,7 @@ console.log('\nthe dash\'s widget set, drawn over footage');
                 .render(g3, 1280, 720, 20);
             const t3 = g3.calls.filter(k => k[0] === 'text').map(k => String(k[1]));
             ok('a widget with no channel chosen reads as a dash',
-               t3.indexOf('UNBOUND') >= 0 && t3.indexOf('—') >= 0, t3.join('|'));
+               t3.indexOf('UNBOUND') >= 0 && t3.indexOf('–') >= 0, t3.join('|'));
         }
         const g2 = shot('no_such_type_at_all');
         ok('a type this build has never heard of falls back to a Panel',
@@ -1391,7 +1391,7 @@ console.log('\nclock and picture rectangle');
     const E = env();
     ok('a lap time reads m:ss.hh', E.clock(86.4) === '1:26.40', 'got ' + E.clock(86.4));
     ok('under ten seconds keeps the leading zero', E.clock(5.25) === '0:05.25', 'got ' + E.clock(5.25));
-    ok('no time is a dash', E.clock(null) === '—');
+    ok('no time is a dash', E.clock(null) === '–');
 
     const el = (bw, bh, vw, vh) => ({ clientWidth: bw, clientHeight: bh, videoWidth: vw, videoHeight: vh });
     /* A 16:9 picture in a WIDER box leaves bars at the sides; in a TALLER box
@@ -1612,7 +1612,7 @@ function rectOf(r, key) { return r.filter(q => q.key === key)[0] || null; }
         run: { name: 'Turn 3', secs: 0.3, held: 4, peak: 6, rough: false,
                spun: null, stars: null } }), 1280, 720);
     ok('an unrated corner is a dash, never nought out of five',
-       unrated.texts.includes('—') && !unrated.texts.some(t => /^0\.0\/5$/.test(t)),
+       unrated.texts.includes('–') && !unrated.texts.some(t => /^0\.0\/5$/.test(t)),
        unrated.texts.join('|'));
 
     const spun = drawRects(env({ drift: driftOf(24),

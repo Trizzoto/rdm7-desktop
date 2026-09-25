@@ -63,7 +63,7 @@ const NEEDED_FN = ['gpN', 'gpInt', 'gpEsc', 'gpReadyRow', 'gpReadyCardHtml',
     'gpRowsPack', 'gpRowsUnpack', 'gpSessionFileBuild', 'gpSessionFileParse', 'gpB64', 'gpB64Dec',
     'gpSesUid', 'gpChannels', 'gpCsvBuild', 'gpCsvUnit', 'gpSpdN', 'gpSmoothPath',
     'gpSectorGates', 'gpSectorName', 'gpSectorNamed', 'gpSortSectors', 'gpSectorOfSample',
-    'gpBusSeenHtml', 'gpElsewhereSays',
+    'gpBusSeenHtml', 'gpBusHealthPoll', 'gpBusHealthHtml', 'gpDev', 'gpElsewhereSays',
     'gpGapS', 'gpDriftChans', 'gpDriftCanChans', 'gpHaveGyro', 'gpDriftGuess', 'gpDriftSrcPrefs', 'gpDriftSrcKey', 'gpDriftSource', 'gpDriftAngle', 'gpChanQuiet', 'gpChanDefsById', 'gpChanFixes', 'gpChanFixApply', 'gpChanFixFor', 'gpChanRawRange', 'gpChanWouldRead', 'gpChanDef', 'gpChanValue', 'gpChanDefsFor', 'gpDashChansCached',
     'gpSlipLane',
     'gpReadyRows', 'gpTraceFixBytes', 'gpFramed',
@@ -80,7 +80,7 @@ const NEEDED_VAR = ['GP_SMOOTH_LIVE', 'GP_SMOOTH_MAXW', 'GP_OUTLINE_MAX', 'GP_OU
     'GP_SHOW_LS', 'GP_GRP_PUCK', 'GP_GRP_HERE', 'GP_GRP_CAR', 'GP_GRP_NONE', 'GP_UNITS',
     'GP_MYCHAN_LS', 'GP_GRP_DASH', 'GP_GRP_DBC', 'GP_GRP_MINE', 'GP_BITRATES',
     'GP_NO_T', 'GP_CHAN_STALE', 'GP_SESFILE_FMT', 'GP_TRACKS_LS', 'GP_REC_BASE_BYTES',
-    'GP_DRIFT_MIN_KPH', 'GP_DRIFT_ON', 'GP_DRIFT_ROUGH', 'GP_DRIFT_RHO_MIN_KPH', 'GP_DRIFT_SRC_LS'];
+    'GP_DRIFT_MIN_KPH', 'GP_DRIFT_ON', 'GP_DRIFT_ROUGH', 'GP_DRIFT_RHO_MIN_KPH', 'GP_DRIFT_SRC_LS', 'GP_RING_LOW_MIN', 'GP_BUSHEALTH_MS'];
 
 let code = '';
 NEEDED_VAR.forEach(v => { code += grabVar(v) + '\n'; });
@@ -1001,15 +1001,26 @@ ok('each range starts exactly where the last one finished',
 ok('a sector index outside the lap returns nothing',
     F.gpSectorRange(lapR, -1) === null && F.gpSectorRange(lapR, 3) === null);
 
-console.log('\nthe heat colour runs green to red and clamps at the ends');
-ok('the best of a column is the green endpoint', F.gpHeatColour(0) === 'rgba(111,191,115,1)');
-ok('the worst of a column is the red endpoint', F.gpHeatColour(1) === 'rgba(224,93,82,1)');
+console.log('\nthe heat colour: green one side of the middle, red the other, faint between');
+/* 093d582: the hue is chosen by which SIDE of the middle a time falls on and
+   the strength says how far, so an ordinary sector is nearly white. It used
+   to mix green into red in RGB, which put olive-brown on every mid cell. */
+const heat = (f) => F.gpHeatColour(f).match(/[\d.]+/g).map(Number);
+ok('the best of a column is the green endpoint at full strength',
+    F.gpHeatColour(0) === 'rgba(46,125,70,1.000)', F.gpHeatColour(0));
+ok('the worst of a column is the red endpoint at full strength',
+    F.gpHeatColour(1) === 'rgba(192,39,45,1.000)', F.gpHeatColour(1));
 ok('going past either end just holds the endpoint',
     F.gpHeatColour(-5) === F.gpHeatColour(0) && F.gpHeatColour(5) === F.gpHeatColour(1));
-const mid4 = F.gpHeatColour(0.5).match(/[\d.]+/g).map(Number);
-ok('the midpoint sits between green and red on every channel',
-    mid4[0] > 111 && mid4[0] < 224 && mid4[1] < 191 && mid4[1] > 93 && mid4[2] < 115 && mid4[2] > 82,
-    F.gpHeatColour(0.5));
+ok('the hue never mixes: just quick is green, just slow is red',
+    heat(0.45).slice(0, 3).join() === '46,125,70' && heat(0.55).slice(0, 3).join() === '192,39,45',
+    F.gpHeatColour(0.45) + ' / ' + F.gpHeatColour(0.55));
+ok('the middle is the faintest cell, but still on the scale',
+    heat(0.5)[3] > 0 && heat(0.5)[3] < heat(0.25)[3] && heat(0.25)[3] < heat(0)[3], F.gpHeatColour(0.5));
+ok('the strength is the same distance either side of the middle',
+    heat(0.2)[3] === heat(0.8)[3], F.gpHeatColour(0.2) + ' / ' + F.gpHeatColour(0.8));
+ok('a caller\'s alpha scales the whole ramp',
+    F.gpHeatColour(0, 0.55) === 'rgba(46,125,70,0.550)', F.gpHeatColour(0, 0.55));
 
 console.log('\nthe table itself: headers, grading, and a lap that lost a split');
 const html4 = F.gpSplitsHtml();

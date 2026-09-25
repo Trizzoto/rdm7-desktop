@@ -171,12 +171,14 @@ ok('the Channels topbar still has the title span the hide targets',
    'the title-hide selector expects .ch2-topbar > span:first-child holding #chCount');
 ok('and the hide outranks the inline font-size it has to beat',
    /\.ch2-topbar > span:first-child \{ font-size: 0 !important; \}/.test(OVERLAY));
-/* The stage colour is --ind-stage now, not the literal it used to be — the
-   point of the check is that the align bar still gets the dark stage, by
-   whichever name. */
+/* Which layer the align bar is painted as has moved with the stage (dark
+   --ind-stage, then --ind-bg once the stage went light in 2b4b4a5), and that
+   is a design call, not this check's. What is pinned is that the restyle
+   still reaches the firmware's class and paints it from a token, so it
+   cannot go quietly inert. */
 ok('the align bar still carries the class the stage restyle targets',
    /class="align-bar"/.test(BASE) &&
-   /body\.dsb-on \.align-bar \{[^}]*var\(--ind-stage\)/.test(OVERLAY));
+   /body\.dsb-on \.align-bar \{[^}]*background: var\(--ind-[\w-]+\)/.test(OVERLAY));
 ok('the accordion summary the dark smear is lifted from still exists',
    /\.inspector-accordion > summary \{/.test(BASE) &&
    /body\.dsb-on \.inspector-accordion > summary \{[^}]*background: transparent/.test(OVERLAY));

@@ -250,7 +250,8 @@ async function call(url, method, body) {
         ok('the CAN page stops before it reads a bus that is not there',
            /if \(!info \|\| info\.offline\)/.test(can),
            'it printed "check the dash has power on its CAN pins" with no dash attached');
-        ok('and clears the arriving count with it', /set\('canSetupSignals', '—'\)/.test(can));
+        /* An en dash: the firmware's placeholders follow the no-em-dash voice rule. */
+        ok('and clears the arriving count with it', /set\('canSetupSignals', '–'\)/.test(can));
 
         const veh = grabFn(SRC, 'async function _vehInfoRefresh');
         ok('Vehicle Info names the state instead of blaming the ECU',

@@ -752,7 +752,11 @@ console.log('\nthe gateway the wizard rides on');
        possible, and the wizard silently degrades to useless without them. */
     const dashRoot = path.join(ROOT, '..', 'RDM-7_Dash');
     const canFile = path.join(dashRoot, 'main/net/web_server_can.c');
-    if (!fs.existsSync(canFile)) {
+    /* No sibling checkout at all (CI, a worktree) is not the same finding as
+       a checkout that has lost the gateway: only the second one fails. */
+    if (!fs.existsSync(path.join(dashRoot, 'main'))) {
+        console.log('  -- no RDM-7_Dash checkout beside this repo, skipping the firmware half');
+    } else if (!fs.existsSync(canFile)) {
         ok('the dash firmware exposes a CAN gateway', false, canFile + ' is missing');
     } else {
         const c = fs.readFileSync(canFile, 'utf8');
