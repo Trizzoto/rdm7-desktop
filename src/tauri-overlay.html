@@ -1534,6 +1534,19 @@
         #kpWorkspace .kpb-col .kp-bus-in,
         #kpWorkspace .kpb-col .kp-seg2 { max-width: 280px; }
         #kpWorkspace .kpb-col .kp-bus-row { margin-bottom: 12px; }
+        /* MaxxECU: MTune's CAN Keypad page, field for field. Wider than a
+           settings column because the button table is MTune's own grid. */
+        #kpWorkspace .kpb-col.kpmx { max-width: 1040px; }
+        #kpWorkspace .kpmx-form { display: grid; grid-template-columns: max-content minmax(0, 280px); gap: 8px 16px; align-items: center; }
+        #kpWorkspace .kpmx-form label { font-family: var(--gpb-head); font-weight: 600; font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--gpb-muted); }
+        #kpWorkspace .kpmx-wrap { overflow-x: auto; }
+        #kpWorkspace .kpmx-keys { min-width: 860px; }
+        #kpWorkspace .kpmx-keys td { padding: 5px 8px 5px 0; vertical-align: middle; }
+        #kpWorkspace .kpmx-keys .kp-bus-in { max-width: none; }
+        #kpWorkspace .kpmx-keys tr.off td:not(.k) { opacity: 0.55; }
+        #kpWorkspace .kpmx-dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+        #kpWorkspace .kpmx-dots i { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--gpb-div); }
+        #kpWorkspace .kpmx-go { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
         /* ---- the keypad's parts, brought into line ---------------------------
            Same pass as the editor's, same reason: the re-bind changed the
            colours and left the grammar. Section labels become condensed type
@@ -1872,6 +1885,20 @@
             content: ""; position: absolute; top: -4px; left: -4px;
             border: 5px solid transparent; border-top-color: #fff;
         }
+        /* what the row IS: the ignition coming on at its left edge, and where
+           the start-up hands over to normal use */
+        .kpfx-phases { position: relative; height: 16px; margin-bottom: 3px; }
+        .kpfx-phases span {
+            position: absolute; top: 0; padding-left: 6px; border-left: 2px solid #fff; white-space: nowrap;
+            font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 700; font-size: 11.5px;
+            letter-spacing: 0.1em; text-transform: uppercase; color: #fff; line-height: 16px;
+        }
+        .kpfx-phases span.end { border-left-color: rgba(255,255,255,0.35); color: rgba(233,235,237,0.6); }
+        .kpfx-ecuend {
+            display: flex; align-items: center; height: 46px; padding: 0 12px;
+            background: repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0 6px, transparent 6px 12px);
+            border: 1px solid rgba(255,255,255,0.13); font-size: 12px; color: #e9ebed;
+        }
         .kpfx-ruler { position: relative; height: 13px; margin-top: 2px; }
         .kpfx-ruler i { position: absolute; top: 0; width: 1px; height: 4px; background: rgba(255,255,255,0.22); }
         .kpfx-ruler i b {
@@ -1919,13 +1946,28 @@
         .kpfx-mineadd button:hover { border-color: var(--gpb-ink); }
         .kpfx-railnote { font-size: 10.5px; color: var(--gpb-muted); line-height: 1.45; margin-top: 8px; }
         /* the inspector's own bits */
-        .kpfx-play { width: 100%; margin-bottom: 6px; }
-        /* "Put it on the dash" sits under Play and is the same size: they are
-           the same decision at two levels of commitment — play it now, or
-           leave it there. */
+        /* "Put it on the dash" is the page's one action; playing it live and
+           the files fold away under More. */
         .kpfx-todash { width: 100%; margin-bottom: 4px; }
         #kpWorkspace .kpfx-todash:disabled { opacity: 0.35; cursor: default; }
-        .kpfx-play.on { background: var(--gpb-red-600); border-color: var(--gpb-red-600); }
+        .kpfx-more { margin-top: 6px; }
+        .kpfx-more summary {
+            cursor: pointer; font-family: var(--gpb-head); font-weight: 600; font-size: 11px;
+            letter-spacing: 0.09em; text-transform: uppercase; color: var(--gpb-muted); padding: 4px 0;
+        }
+        .kpfx-more summary:hover { color: var(--gpb-ink); }
+        .kpfx-more summary:focus-visible { outline: 2px solid var(--gpb-red); outline-offset: 2px; }
+        .kpfx-more[open] summary { margin-bottom: 6px; }
+        #kpWorkspace .kp-keyacts button.on { background: var(--gpb-red-600); border-color: var(--gpb-red-600); color: #fff; }
+        /* what the car does at power-up, right now: the page's headline fact */
+        .kpfx-car {
+            margin-left: auto; padding: 3px 10px; border: 1px solid rgba(255,255,255,0.2); white-space: nowrap;
+            font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 600; font-size: 12.5px;
+            letter-spacing: 0.05em; text-transform: uppercase; color: rgba(233,235,237,0.6);
+        }
+        .kpfx-car:empty { display: none; }
+        .kpfx-car.ok { color: #52c46a; border-color: #52c46a; }
+        .kpfx-car.warn { color: #E0A24E; border-color: #E0A24E; }
         /* the 5-step flow strip under the keypad render (Design mode only) */
         .kp-steps { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 12px; }
         .kp-step { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 10.5px; font-weight: 600; }
@@ -2049,6 +2091,30 @@
         .kpw-steps li.fail .mark { color: #E05D52; }
         .kpw-steps li.skip { opacity: 0.6; }
         .kpw-steps small { display: block; color: var(--text-muted); font-size: 10.5px; margin-top: 2px; }
+        /* MaxxECU flow: the one thing the user has to do right now, big enough
+           to read from the driver's seat with a hand on the keypad. */
+        .kpw-ask { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-md); padding: 14px 16px; margin: 0 0 14px; }
+        .kpw-ask-t { font-family: 'Sora', sans-serif; font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.35; }
+        .kpw-ask-s { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin-top: 4px; }
+        .kpw-ask-live { font-size: 11px; color: var(--text-muted); margin-top: 8px; min-height: 1em; }
+        .kpw-ask .kpw-btns { margin: 12px 0 0; }
+        /* the button check: the keypad drawn as tiles, filling in as pressed */
+        .kpw-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+        .kpw-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+        .kpw-chip.ok { color: #52c46a; border-color: currentColor; }
+        .kpw-chip.no { color: #E05D52; border-color: currentColor; }
+        .kpw-keys { display: grid; gap: 8px; margin: 0 0 12px; }
+        .kpw-k { position: relative; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px; min-height: 64px; display: flex; flex-direction: column; gap: 3px; color: var(--text-muted); }
+        .kpw-k b { font-family: 'Sora', sans-serif; font-size: 16px; color: var(--text); }
+        .kpw-k span { font-size: 11px; line-height: 1.3; }
+        .kpw-k small { font-size: 10px; }
+        .kpw-k em { position: absolute; top: 8px; right: 10px; font-style: normal; font-weight: 700; }
+        .kpw-k.ok { border-color: #52c46a; } .kpw-k.ok em { color: #52c46a; }
+        .kpw-k.noecu, .kpw-k.model, .kpw-k.unused { border-color: #E0A24E; } .kpw-k em { color: #E0A24E; }
+        .kpw-k.ok em { color: #52c46a; }
+        .kpw-k.skip { opacity: 0.45; }
+        .kpw-kdot { position: absolute; top: 12px; right: 30px; width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--border); }
+        .kpw-probs { margin: 0 0 12px; padding-left: 18px; font-size: 11.5px; color: var(--text); line-height: 1.6; }
         /* Frame log. Every frame, both ways, in plain language and in hex —
            the hex is what makes a support conversation possible. */
         .kpw-log { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); max-height: 210px; overflow-y: auto; padding: 8px 10px; margin: 0 0 12px; }
@@ -7335,6 +7401,7 @@
             startShow: 1, activeStart: true, periodMs: 0, hbMs: 0,   /* device config */
             blColor: "amber", blBright: 18,   /* icon backlight (all 9 colours valid here) */
             ecuBrand: "generic",   /* tailors the "What your ECU needs" setup steps */
+            mx: null,   /* MaxxECU: the MTune CAN Keypad values the user copied in (kpmx*) */
             clip: null   /* copied key style (icon/mode/preset/follows/color/behavior) */
         };
         window.__kp = kp;   /* debug/support handle (mirrors window.__ca / __ltMap) */
@@ -7679,7 +7746,9 @@
             result: null,       /* {ok, msg, powerCycle} once finished            */
             dashSaved: null,    /* dash bitrate index to put back, always         */
             promisc: false,     /* we turned promiscuous on and owe an off        */
-            status: ""          /* one line of "what is happening right now"      */
+            status: "",         /* one line of "what is happening right now"      */
+            ask: null,          /* MaxxECU flow: the thing the user must do now   */
+            mx: null            /* MaxxECU flow: {how, ecuAt} while it runs       */
         };
         window.__kpw = kpw;     /* support/debug handle (mirrors window.__kp) */
 
@@ -8288,9 +8357,376 @@
             if (typeof showToast === "function")
                 showToast("Using the keypad as it is — " + (f.proto === "j1939" ? "J1939" : "CANopen") + " @ " + f.baud + "k", "success");
         };
+        /* ══ MaxxECU: the same tools, in the order a MaxxECU car needs ═══════
+           A MaxxECU keypad ends up J1939, at the ECU's own rate, on 0x21. The
+           generic flow above gets there by walking the dash through every
+           rate, which is fine on a bench and wrong on a car: the ECU keeps
+           talking at 500k the whole time, so at any other rate the bus is
+           nothing but errors and the keypad is never heard.
+
+           So: first look where it should already be, at the ECU's rate, which
+           moves nothing. Only if it is not there does anything move, and then
+           one of two ways, because only the user knows which their car allows:
+
+             off     the ECU is off the bus (fuse out, CAN unplugged). Studio
+                     moves the dash wherever it likes.
+             guided  the ECU has to stay on. Every rate Studio needs, the ECU
+                     is asked to go to first, in MTune, and Studio waits until
+                     it HEARS the ECU there before saying a word to the keypad.
+
+           Whatever happens, the ECU is put back (or the user is told exactly
+           how) and the dash ends up saved on the ECU's rate. */
+        var KPW_MX_PRESS_MS = 20000;   /* "press a key" waits this long        */
+        var KPW_MX_ECU_MS = 180000;    /* an ECU restart, done by hand in MTune */
+        var KPW_MX_TAP_MS = 2500;      /* dwell per rate while the user taps    */
+
+        /* Frames the keypad itself sends. Anything else heard is the ECU (or
+           another node), which is exactly what "the ECU is at this rate" means. */
+        function kpwMxIsKeypad(e, sa) {
+            var id = e.id >>> 0;
+            if (e.ext) return ((id >> 16) & 0xFF) === 0xEF && (id & 0xFF) === sa;
+            var n = id & 0x7F;
+            return id >= 0x180 && id < 0x800 && (n === ((kp.curNode || 0x15) & 0x7F) || n === 0x15);
+        }
+        async function kpwMxOthersHeard(sa) {
+            var mon = await kpwMonitor();
+            return Object.keys(mon).some(function (k) { return !kpwMxIsKeypad(mon[k], sa); });
+        }
+        /* One thing the user has to do, on screen until it is done. `auto`
+           polls for the evidence that it has been done, so the user is only
+           ever asked to act, never to report back, when Studio can see it. */
+        async function kpwMxAsk(o) {
+            kpw.ask = { title: o.title, sub: o.sub || "", btn: o.btn || "", alt: o.alt || "", live: "", answer: null };
+            kpwRender();
+            var t0 = Date.now(), until = o.ms ? t0 + o.ms : 0;
+            try {
+                while (kpw.ask.answer == null) {
+                    if (kpw.cancel) throw new Error("cancelled");
+                    if (o.auto) {
+                        var hit = await o.auto(Date.now() - t0);
+                        if (hit) { kpw.ask.answer = hit; break; }
+                    }
+                    if (until && Date.now() >= until) { kpw.ask.answer = "timeout"; break; }
+                    if (o.live) { kpw.ask.live = o.live(until ? until - Date.now() : 0); kpwMxRenderLive(); }
+                    await kpwSleep(300);
+                }
+                return kpw.ask.answer;
+            } finally { kpw.ask = null; kpwRender(); }
+        }
+        window.kpwMxAnswer = function (v) { if (kpw.ask) kpw.ask.answer = v || "done"; };
+        function kpwMxRenderLive() {
+            var el = document.getElementById("kpwAskLive");
+            if (el && kpw.ask) el.textContent = kpw.ask.live;
+        }
+        function kpwMxHit(k, h) {
+            return { proto: "j1939", baud: k, rateIdx: kpwRateIdx(k), sa: h.sa, node: kp.curNode || 0x15, hw: "", looksBlink: true };
+        }
+        /* A J1939 keypad only speaks when pressed, so hearing it IS a press. */
+        async function kpwMxHear(k, title) {
+            var hop = await kpwDashRate(kpwRateIdx(k), false);
+            if (!hop.ok) throw new Error("Could not put the dash on " + k + "k: " + hop.error);
+            await kpwTrackerReset();
+            var a = await kpwMxAsk({
+                title: title || "Press any key on the keypad",
+                sub: "Studio is listening at " + k + "k.",
+                alt: "Nothing happens", ms: KPW_MX_PRESS_MS,
+                auto: async function () { var h = kpwFindJ1939In(await kpwMonitor()); return h ? kpwMxHit(k, h) : null; },
+                live: function (left) { return left > 0 ? Math.ceil(left / 1000) + "s" : ""; }
+            });
+            return (a && typeof a === "object") ? a : null;
+        }
+        /* With the ECU gone: one prompt, and the dash walks the rates under
+           the user's thumb instead of asking for a press at each. */
+        async function kpwMxTapSweep(rates) {
+            var i = -1, next = 0;
+            var a = await kpwMxAsk({
+                title: "Keep tapping any key on the keypad",
+                sub: "Studio is trying each bus speed in turn.",
+                alt: "Stop looking", ms: rates.length * KPW_MX_TAP_MS * 3,
+                auto: async function (el) {
+                    if (el >= next) {
+                        i = (i + 1) % rates.length; next = el + KPW_MX_TAP_MS;
+                        await kpwDashRate(kpwRateIdx(rates[i]), false);
+                        await kpwTrackerReset();
+                        kpwLog("", "Dash now listening at " + rates[i] + "k.");
+                        return null;
+                    }
+                    var h = kpwFindJ1939In(await kpwMonitor());
+                    return h ? kpwMxHit(rates[i], h) : null;
+                },
+                live: function () { return i >= 0 ? "Listening at " + rates[i] + "k" : ""; }
+            });
+            return (a && typeof a === "object") ? a : null;
+        }
+        /* Put the whole bus on k. Off the bus that is only the dash; guided,
+           the ECU goes first and has to be heard there. */
+        async function kpwMxBusTo(k) {
+            var hop = await kpwDashRate(kpwRateIdx(k), false);
+            if (!hop.ok) throw new Error("Could not put the dash on " + k + "k: " + hop.error);
+            await kpwTrackerReset();
+            if (kpw.mx.how !== "guided" || kpw.mx.ecuAt === k) return;
+            var si = kpwStepPush("MaxxECU to " + k + "k");
+            kpwStepSet(si, "run");
+            var a = await kpwMxAsk({
+                title: "In MTune, set CAN bitrate to " + k + "k, then restart the ECU",
+                sub: "CAN Bus › CAN settings. Studio carries on by itself when it hears the ECU at " + k + "k.",
+                btn: "I’ve done it", ms: KPW_MX_ECU_MS,
+                auto: async function () { return (await kpwMxOthersHeard(kp.sa & 0xFF)) ? "heard" : null; }
+            });
+            if (a === "timeout") { kpwStepSet(si, "fail", "Not heard at " + k + "k."); throw new Error("Studio did not hear the MaxxECU at " + k + "k."); }
+            kpw.mx.ecuAt = k;
+            kpwStepSet(si, "ok", a === "heard" ? "Heard it." : "");
+            await kpwTrackerReset();
+        }
+        async function kpwMxFind(T) {
+            var fi = kpwStepPush("Find the keypad");
+            kpwStepSet(fi, "run");
+            var f = null, i;
+            if (kpw.mx.how === "guided") {
+                /* Where an unconfigured keypad can be, cheapest move first:
+                   CANopen at the ECU's rate costs nothing, then the two
+                   factory defaults, each one ECU restart. */
+                var tries = [{ k: T, p: "canopen" }, { k: 125, p: "canopen" }, { k: 250, p: "j1939" }];
+                for (i = 0; i < tries.length && !f; i++) {
+                    if (kpw.cancel) throw new Error("cancelled");
+                    await kpwMxBusTo(tries[i].k);
+                    f = tries[i].p === "canopen" ? await kpwProbeCanopenAt(tries[i].k) : await kpwMxHear(tries[i].k);
+                }
+            } else {
+                var order = [125, 250, 500, 1000];
+                for (i = 0; i < order.length && !f; i++) {
+                    if (kpw.cancel) throw new Error("cancelled");
+                    await kpwMxBusTo(order[i]);
+                    f = await kpwProbeCanopenAt(order[i]);
+                }
+                if (!f) f = await kpwMxTapSweep([250, 500, 125, 1000]);
+            }
+            kpwStepSet(fi, f ? "ok" : "fail", f
+                ? (f.proto === "j1939" ? "J1939, address " + kpHex(f.sa) : "CANopen, node " + kpHex(f.node)) + ", " + f.baud + "k."
+                : "Not found.");
+            return f;
+        }
+        function kpwMxPutBack() {
+            if (!kpw.mx) return "";
+            if (kpw.mx.how === "guided" && kpw.mx.ecuAt !== kp.baud)
+                return " Set MaxxECU CAN bitrate back to " + kp.baud + "k and restart it.";
+            if (kpw.mx.how === "off" && kpw.mx.ecuAt !== kp.baud) return " Put the MaxxECU back on the bus.";
+            return "";
+        }
+        window.kpwMxRun = async function (how) {
+            if (kpw.busy) return;
+            kpw.busy = true; kpw.cancel = false; kpw.steps = []; kpw.result = null; kpw.found = null;
+            var T = kp.baud, SA = kp.sa & 0xFF;
+            kpw.mx = { how: how, ecuAt: how === "off" ? null : T };
+            kpw.stage = "mxrun"; kpwRender();
+            try {
+                await kpwTakeDash();
+                var f;
+                if (how === "quick") {
+                    /* 1. Where it should already be. Nothing on the bus moves. */
+                    var qi = kpwStepPush("Listen at " + T + "k");
+                    kpwStepSet(qi, "run");
+                    f = await kpwMxHear(T);
+                    kpwStepSet(qi, f ? "ok" : "fail", f ? "Heard it, address " + kpHex(f.sa) + "." : "Not at " + T + "k yet.");
+                    if (!f) { kpw.stage = "mxwhere"; return; }
+                    if (f.sa === SA) {
+                        /* Already exactly where MaxxECU wants it (the MaxxECU
+                           wrote the rest itself). Touch nothing. */
+                        kp.curSa = SA; kpSaveCfg();
+                        kpw.found = f;
+                        kpw.dashSaved = kpwRateIdx(T);
+                        kpw.result = { ok: true, msg: "Already set up: J1939, address " + kpHex(SA) + ", " + T + "k. Nothing was changed." };
+                        kpw.stage = "done";
+                        return;
+                    }
+                } else {
+                    f = await kpwMxFind(T);
+                    if (!f) {
+                        kpw.result = { ok: false, msg: (how === "guided"
+                            ? "It is not at a factory speed. Take the MaxxECU off the bus and run this again, so Studio can try every speed."
+                            : "Nothing answered at any speed. Check the keypad has 12 V and its CAN-H and CAN-L are connected.") + kpwMxPutBack() };
+                        kpw.stage = "done";
+                        return;
+                    }
+                }
+                kpw.found = f;
+                /* 2. CANopen to J1939. It restarts at J1939's own 250k. */
+                if (f.proto === "canopen") {
+                    var si = kpwStepPush("Switch it to J1939");
+                    kpwStepSet(si, "run");
+                    var t = await kpwTx(kpSwitchToJ1939Frame(f.node));
+                    if (!t.ok) { kpwStepSet(si, "fail", t.error); throw new Error(t.error); }
+                    await kpwSleep(KPW_BLIND_MS + 800);
+                    kpwStepSet(si, "ok", "It restarts as J1939 at 250k.");
+                    await kpwMxBusTo(250);
+                    var g = await kpwMxHear(250, "Press any key again");
+                    if (!g) throw new Error("After the switch the keypad did not answer at 250k. Unplug it, plug it back in, and run this again.");
+                    f = g; kpw.found = f;
+                }
+                /* 3. The MTune settings, then address, then speed last: sent at
+                      the rate it is on, so all of it lands. */
+                var moves = f.baud !== T || f.sa !== SA;
+                var wi = kpwStepPush("Write your MTune settings");
+                kpwStepSet(wi, "run");
+                await kpwMxBusTo(f.baud);
+                var steps = kpProvisionSteps({ proto: "j1939", sa: f.sa }), sent = 0;
+                for (var i = 0; i < steps.length; i++) {
+                    if (kpw.cancel) throw new Error("cancelled");
+                    if (steps[i].kind === "baud" && f.baud === T) continue;
+                    kpwStatus(steps[i].note);
+                    var r = await kpwTx(steps[i]);
+                    if (!r.ok) { kpwStepSet(wi, "fail", r.error); throw new Error(r.error); }
+                    sent++;
+                    await kpwSleep(KPW_BLIND_MS);
+                }
+                kpwStepSet(wi, "ok", sent + " sent.");
+                /* 4. New speed and address take at power-up. Unplugging only
+                      the keypad keeps the dash (and this connection) alive. */
+                if (moves) {
+                    var pi = kpwStepPush("Restart the keypad");
+                    kpwStepSet(pi, "run");
+                    await kpwMxAsk({ title: "Unplug the keypad, then plug it back in",
+                                     sub: "It starts up on " + T + "k at address " + kpHex(SA) + ".", btn: "Done" });
+                    kpwStepSet(pi, "ok", "");
+                }
+                /* 5. At the ECU's rate, and proved by a press. */
+                await kpwMxBusTo(T);
+                var vi = kpwStepPush("Check it at " + T + "k");
+                kpwStepSet(vi, "run");
+                var v = await kpwMxHear(T, "Press any key one more time");
+                if (!v || v.sa !== SA) {
+                    kpwStepSet(vi, "fail", v ? "It answered on " + kpHex(v.sa) + ", not " + kpHex(SA) + "." : "No answer at " + T + "k.");
+                    throw new Error(v ? "The keypad is on the wrong address." : "The keypad did not answer at " + T + "k after its restart.");
+                }
+                kpwStepSet(vi, "ok", "J1939, address " + kpHex(SA) + ", " + T + "k.");
+                kp.curSa = SA; kp._exported = true; kpSaveCfg();
+                /* 6. The ECU back where it belongs. */
+                if (how === "off") {
+                    var ei = kpwStepPush("MaxxECU back on the bus");
+                    kpwStepSet(ei, "run");
+                    var e = await kpwMxAsk({ title: "Put the MaxxECU back on the bus",
+                                             sub: "Refit its fuse, or plug its CAN back in.", btn: "Done", ms: KPW_MX_ECU_MS,
+                                             auto: async function () { return (await kpwMxOthersHeard(SA)) ? "heard" : null; } });
+                    kpw.mx.ecuAt = T;
+                    kpwStepSet(ei, "ok", e === "heard" ? "Heard it at " + T + "k." : "");
+                }
+                /* The dash lives on the ECU's rate from now on. */
+                kpw.dashSaved = kpwRateIdx(T);
+                kpw.result = { ok: true, msg: "Done. The keypad, the MaxxECU and the dash are all on " + T + "k." };
+                kpw.stage = "done";
+            } catch (e) {
+                kpw.result = { ok: false, msg: (e && e.message === "cancelled" ? "Stopped." : String((e && e.message) || e)) + kpwMxPutBack() };
+                kpw.stage = "done";
+            } finally {
+                await kpwRestoreDash();
+                kpw.busy = false; kpw.status = ""; kpwRender();
+            }
+        };
+        /* ── Every button, proved ─────────────────────────────────────────────
+           The keypad reports each press as key number + down/up (18EFFF<sa>,
+           04 1B 01 <key> <state>), so "the dash hears button 3" is a fact, not
+           a guess. What the ECU does with it shows up as the ECU's own frame to
+           the keypad (18EF<sa><ecu>) CHANGING right after the press: MaxxECU
+           repaints the ring when the state moves, and a repeat of the same
+           frame is only a refresh, so it does not count. Which colour it
+           painted is not decodable (the J1939 manual documents no LED
+           command), so the picture shows the colour it should be and the user
+           compares it with the real keypad. */
+        var KPW_MX_ANSWER_MS = 1500;   /* an ECU reply this soon after a press is the press's */
+        function kpwMxTestFacts() {
+            /* per key: what MTune says it is, and what the test saw */
+            var t = kpw.mxt, n = kp.model.rows * kp.model.cols, out = [];
+            var mxk = (kp.mx && kp.mx.keys) || [];
+            for (var i = 1; i <= Math.max(n, t ? t.maxKey : 0); i++) {
+                var m = mxk[i - 1] || null, s = (t && t.keys[i]) || null;
+                var used = !!(m && m.steps !== "UNUSED") && i <= n;
+                /* Only blame the ECU for a silent button once it has been seen
+                   talking to this keypad at all: if its ring frames are
+                   addressed some other way, silence proves nothing. */
+                var wantsEcu = used && m.colors !== "UNUSED" && !!(t && t.ecu && t.ecuToKeypad);
+                var st = !s ? (used ? "wait" : "skip")
+                    : i > n ? "model"
+                    : !used ? "unused"
+                    : wantsEcu && !s.answered ? (Date.now() - s.heardAt < KPW_MX_ANSWER_MS ? "wait" : "noecu")
+                    : "ok";
+                out.push({ key: i, m: m, s: s, used: used, st: st });
+            }
+            return out;
+        }
+        function kpwMxTestVerdict() {
+            var f = kpwMxTestFacts(), bad = f.filter(function (x) { return x.st === "model" || x.st === "unused" || x.st === "noecu"; });
+            var waiting = f.filter(function (x) { return x.used && x.st === "wait"; });
+            var ok = f.filter(function (x) { return x.st === "ok"; }).length;
+            return { ok: !bad.length && !waiting.length && ok > 0, good: ok, bad: bad, waiting: waiting,
+                     used: f.filter(function (x) { return x.used; }).length };
+        }
+        window.kpwMxTestDone = function () { if (kpw.mxt) kpw.mxt.stop = true; };
+        window.kpwMxTest = async function () {
+            if (kpw.busy) return;
+            kpw.busy = true; kpw.cancel = false; kpw.result = null; kpw.steps = []; kpw.ask = null;
+            var T = kp.baud, SA = kp.sa & 0xFF;
+            var t = kpw.mxt = { keys: {}, ecu: null, ecuToKeypad: false, stop: false, finished: false, maxKey: 0 };
+            kpw.stage = "mxtest"; kpwRender();
+            try {
+                await kpwTakeDash();
+                var hop = await kpwDashRate(kpwRateIdx(T), false);
+                if (!hop.ok) throw new Error("Could not put the dash on " + T + "k: " + hop.error);
+                await kpwTrackerReset();
+                /* Is the ECU on the bus at all? A second and a half of listening. */
+                var until = Date.now() + 1500, heard = false;
+                while (!heard && Date.now() < until) { await kpwSleep(KPW_POLL_MS); heard = await kpwMxOthersHeard(SA); }
+                t.ecu = heard; kpwRender();
+                var keyCount = 0, ecuSeen = {}, lastKey = 0, lastPressAt = -1e9, sig = "";
+                var first = true;
+                while (!t.stop) {
+                    if (kpw.cancel) throw new Error("cancelled");
+                    var mon = await kpwMonitor();
+                    Object.keys(mon).forEach(function (k) {
+                        var e = mon[k], id = e.id >>> 0;
+                        if (!e.ext || ((id >> 16) & 0xFF) !== 0xEF) return;
+                        var b = kpwHexToBytes(e.data);
+                        if (((id >> 8) & 0xFF) === 0xFF && (id & 0xFF) === SA && b[0] === 0x04 && b[1] === 0x1B && b[2] === 0x01) {
+                            var d = e.count - keyCount;
+                            if (d <= 0) return;
+                            keyCount = e.count;
+                            var key = b[3], down = b[4] === 1;
+                            var s = t.keys[key] || (t.keys[key] = { presses: 0, held: false, answered: false, heardAt: 0 });
+                            /* the tracker keeps only the last frame: a press and
+                               its release between two polls arrive as one */
+                            s.presses += down ? Math.ceil(d / 2) : Math.floor(d / 2);
+                            s.held = down; s.heardAt = Date.now();
+                            t.maxKey = Math.max(t.maxKey, key);
+                            lastKey = key; lastPressAt = Date.now();
+                        } else if (((id >> 8) & 0xFF) === SA && (id & 0xFF) !== SA) {
+                            var prev = ecuSeen[k];
+                            ecuSeen[k] = { count: e.count, data: e.data };
+                            t.ecuToKeypad = true;
+                            if (first) return;   /* what was already there is a baseline, not an answer */
+                            if ((!prev || (e.count > prev.count && e.data !== prev.data)) &&
+                                lastKey && t.keys[lastKey] && Date.now() - lastPressAt <= KPW_MX_ANSWER_MS)
+                                t.keys[lastKey].answered = true;
+                        }
+                    });
+                    first = false;
+                    var now = JSON.stringify(t.keys) + t.ecu;
+                    if (now !== sig) { sig = now; kpwRender(); }
+                    await kpwSleep(KPW_POLL_MS);
+                }
+                var v = kpwMxTestVerdict();
+                kpw.result = { ok: v.ok, msg: v.ok ? "All " + v.good + " buttons check out." : "" };
+            } catch (e) {
+                kpw.result = { ok: false, msg: e && e.message === "cancelled" ? "Stopped." : String((e && e.message) || e) };
+            } finally {
+                t.finished = true;
+                await kpwRestoreDash();
+                kpw.busy = false; kpw.status = ""; kpwRender();
+            }
+        };
+        window.kpwMxTestOpen = function () { kpwOpen(); kpw.mx = { how: "test", ecuAt: kp.baud }; kpwMxTest(); };
         window.kpwOpen = function () {
             _kpwEnsureModal();
-            kpw.stage = "intro"; kpw.log = []; kpw.steps = []; kpw.result = null; kpw.found = null;
+            kpw.stage = (typeof kpmxOn === "function" && kpmxOn()) ? "mxintro" : "intro";
+            kpw.log = []; kpw.steps = []; kpw.result = null; kpw.found = null; kpw.ask = null; kpw.mx = null;
             document.getElementById("kpwModal").classList.add("show");
             kpwRender();
         };
@@ -8316,7 +8752,7 @@
             d.innerHTML =
                 "<div class='kpw-card'>" +
                   "<div class='kpw-head'>" +
-                    "<div><div class='kpw-title'>Set it up for me</div>" +
+                    "<div><div class='kpw-title' id='kpwTitle'>Set it up for me</div>" +
                     "<div class='kpw-sub' id='kpwSub'>Your dash talks to the keypad, no CAN adapter needed.</div></div>" +
                     "<button class='kpw-x' onclick='kpwClose()' title='Close'>&times;</button>" +
                   "</div>" +
@@ -8349,7 +8785,7 @@
                 "<button class='kpw-btn sec' onclick='kpwCopyLog()' style='font-size:11px; padding:6px 12px;'>Copy log</button>" +
                 "</details>";
         }
-        function _kpwPreHtml() {
+        function _kpwPreHtml(quick) {   /* quick: the MaxxECU check, which moves nothing */
             var link = kpwLinkState(), rows = [];
             var mark = function (cls, glyph, text, sub) {
                 return "<li><span class='mark " + cls + "'>" + glyph + "</span><span>" + text +
@@ -8364,7 +8800,7 @@
                 "Connect one over WiFi first."));
             rows.push(mark("q", "!", "Keypad powered and wired to the same bus",
                 "12&nbsp;V, ground, CAN-H/L, 120&nbsp;&#937; at each end."));
-            rows.push(mark("q", "!", "Engine off, ignition on",
+            if (!quick) rows.push(mark("q", "!", "Engine off, ignition on",
                 "The dash's bus speed changes while it hunts, briefly affecting other devices."));
             return "<ul class='kpw-pre'>" + rows.join("") + "</ul>";
         }
@@ -8373,7 +8809,86 @@
             if (!body) return;
             var link = kpwLinkState(), canRun = link === "ok";
             var h = "";
-            if (kpw.stage === "intro") {
+            var title = document.getElementById("kpwTitle");
+            if (title) title.textContent = kpw.stage === "mxtest" ? "Check the buttons" : "Set it up for me";
+            var stepsHtml = function () {
+                return "<ul class='kpw-steps'>" + kpw.steps.map(function (s) {
+                    var glyph = s.state === "ok" ? "&#10003;" : s.state === "fail" ? "&times;" : s.state === "run" ? "&#9679;" : "&#9675;";
+                    return "<li class='" + s.state + "'><span class='mark'>" + glyph + "</span><span>" +
+                        kpwEsc(s.label) + (s.detail ? "<small>" + kpwEsc(s.detail) + "</small>" : "") + "</span></li>";
+                }).join("") + "</ul>";
+            };
+            if (kpw.stage === "mxintro") {
+                h += "<p class='kpw-p'>First Studio listens for the keypad at <b>" + kp.baud + "k</b>, where your MaxxECU wants it. Nothing on the bus changes for that.</p>";
+                h += _kpwPreHtml(true);
+                h += "<div class='kpw-btns'><button class='kpw-btn' onclick=\"kpwMxRun('quick')\"" + (canRun ? "" : " disabled") + ">Check my keypad</button></div>";
+            } else if (kpw.stage === "mxwhere") {
+                h += "<div class='kpw-warn'>The keypad is not at " + kp.baud + "k yet, so the bus speed has to change while Studio sets it up.</div>";
+                h += "<div class='kpw-ask'><div class='kpw-ask-t'>Can the MaxxECU come off the bus for a few minutes?</div>" +
+                    "<div class='kpw-ask-s'>Pull its fuse or unplug its CAN, and anything else on the bus such as a PDM. The dash and keypad stay powered.</div>" +
+                    "<div class='kpw-btns'><button class='kpw-btn' onclick=\"kpwMxRun('off')\">Yes, it is off the bus</button>" +
+                    "<button class='kpw-btn sec' onclick=\"kpwMxRun('guided')\">No, it stays on</button></div>" +
+                    "<div class='kpw-ask-live'>If it stays on, Studio tells you each CAN bitrate to set in MTune.</div></div>";
+                h += stepsHtml();
+            } else if (kpw.stage === "mxrun") {
+                h += stepsHtml();
+                if (kpw.ask) {
+                    h += "<div class='kpw-ask'><div class='kpw-ask-t'>" + kpwEsc(kpw.ask.title) + "</div>" +
+                        (kpw.ask.sub ? "<div class='kpw-ask-s'>" + kpwEsc(kpw.ask.sub) + "</div>" : "") +
+                        "<div class='kpw-ask-live' id='kpwAskLive'>" + kpwEsc(kpw.ask.live) + "</div>" +
+                        ((kpw.ask.btn || kpw.ask.alt) ? "<div class='kpw-btns'>" +
+                            (kpw.ask.btn ? "<button class='kpw-btn' onclick=\"kpwMxAnswer('done')\">" + kpwEsc(kpw.ask.btn) + "</button>" : "") +
+                            (kpw.ask.alt ? "<button class='kpw-btn sec' onclick=\"kpwMxAnswer('no')\">" + kpwEsc(kpw.ask.alt) + "</button>" : "") +
+                            "</div>" : "") + "</div>";
+                } else {
+                    h += "<p class='kpw-p'><span class='kpw-spin'></span> &nbsp;" + kpwEsc(kpw.status || "Working…") + "</p>";
+                }
+                h += "<div class='kpw-btns'><button class='kpw-btn sec' onclick='kpwCancel()'>Stop</button></div>";
+                h += _kpwLogHtml(false);
+            } else if (kpw.stage === "mxtest") {
+                var t = kpw.mxt || { keys: {}, ecu: null }, facts = kpwMxTestFacts(), v = kpwMxTestVerdict();
+                var chip = function (good, text) { return "<span class='kpw-chip " + (good ? "ok" : good === false ? "no" : "") + "'>" + text + "</span>"; };
+                h += "<div class='kpw-chips'>" +
+                    chip(Object.keys(t.keys).length ? true : null, "Keypad at " + kp.baud + "k") +
+                    chip(t.ecu, t.ecu == null ? "Looking for the MaxxECU" : t.ecu ? "MaxxECU on the bus" : "MaxxECU not heard") + "</div>";
+                /* the keypad, in its own layout: a tile per button */
+                h += "<div class='kpw-keys' style='grid-template-columns:repeat(" + kp.model.cols + ",1fr)'>";
+                facts.forEach(function (x) {
+                    var m = x.m, s = x.s, dot = "";
+                    if (x.used && s && typeof kpmxState === "function" && m.colors !== "UNUSED") {
+                        var N = m.steps === "MOMENTARY" ? 2 : m.steps;
+                        var state = m.steps === "MOMENTARY" ? (s.held ? 1 : 0) : s.presses % N;
+                        var c = kpmxState(m, state);
+                        dot = "<i class='kpw-kdot' style='background:" + (c === "off" ? "transparent" : HEX[c]) + "' title='Should be " + c + "'></i>";
+                    }
+                    var glyph = x.st === "ok" ? "&#10003;" : (x.st === "noecu" || x.st === "model" || x.st === "unused") ? "!" : "";
+                    h += "<div class='kpw-k " + x.st + "'><b>" + x.key + "</b>" + dot +
+                        "<span>" + kpwEsc((m && m.desc) || (x.used ? "" : "Not used")) + "</span>" +
+                        (glyph ? "<em>" + glyph + "</em>" : "") +
+                        (s && m && typeof m.steps === "number" ? "<small>" + s.presses + " press" + (s.presses === 1 ? "" : "es") + "</small>" : "") + "</div>";
+                });
+                h += "</div>";
+                /* what is wrong, one line each, only when something is */
+                var probs = facts.filter(function (x) { return x.st === "noecu" || x.st === "model" || x.st === "unused"; }).map(function (x) {
+                    if (x.st === "model") return "Button " + x.key + " exists, so this is not a " + kp.model.name + ". Pick the right keypad on the ECU tab.";
+                    if (x.st === "unused") return "Button " + x.key + " works, but it is not set up in MTune.";
+                    return "Button " + x.key + ": the MaxxECU did not answer. Check its Button steps in MTune, and that the CAN keypad is enabled.";
+                });
+                if (t.ecu === false) probs.unshift("Studio cannot hear the MaxxECU at " + kp.baud + "k, so it only checks that the dash hears each button.");
+                else if (t.ecu && !t.ecuToKeypad && Object.keys(t.keys).length)
+                    probs.unshift("Studio has not seen the MaxxECU send the keypad anything, so watch the rings change on the keypad itself.");
+                if (probs.length) h += "<ul class='kpw-probs'>" + probs.map(function (p) { return "<li>" + kpwEsc(p) + "</li>"; }).join("") + "</ul>";
+                if (!t.finished) {
+                    h += "<div class='kpw-ask'><div class='kpw-ask-t'>" + (v.used && v.good === v.used ? "All " + v.used + " buttons check out" : "Press each button") + "</div>" +
+                        "<div class='kpw-ask-s'>The dot is the colour its ring should be now. Compare it with the keypad.</div>" +
+                        "<div class='kpw-ask-live'>" + v.good + " of " + v.used + " checked</div>" +
+                        "<div class='kpw-btns'><button class='kpw-btn' onclick='kpwMxTestDone()'>Done</button></div></div>";
+                } else {
+                    if (kpw.result && kpw.result.msg) h += "<div class='kpw-warn " + (kpw.result.ok ? "kpw-good" : "kpw-bad") + "'>" + kpwEsc(kpw.result.msg) + "</div>";
+                    h += "<div class='kpw-btns'><button class='kpw-btn' onclick='kpwMxTest()'>Check again</button>" +
+                        "<button class='kpw-btn sec' onclick='kpwClose()'>Close</button></div>";
+                }
+            } else if (kpw.stage === "intro") {
                 h += "<p class='kpw-p'>Finds your keypad at whatever speed and protocol it&#8217;s on, and programs it to match your design here, using the dash as the CAN interface.</p>";
                 h += _kpwPreHtml();
                 if (kpw.result && !kpw.result.ok)
@@ -8434,7 +8949,9 @@
                             kpwEsc(s.label) + (s.detail ? "<small>" + kpwEsc(s.detail) + "</small>" : "") + "</span></li>";
                     }).join("") + "</ul>";
                 h += "<div class='kpw-btns'>" +
-                    "<button class='kpw-btn' onclick='kpwFind(false)'>Find it again</button>" +
+                    (kpw.mx && r.ok ? "<button class='kpw-btn' onclick='kpwMxTest()'>Check every button</button>" : "") +
+                    (kpw.mx ? "<button class='kpw-btn" + (r.ok ? " sec" : "") + "' onclick=\"kpwMxRun('quick')\">Check again</button>"
+                            : "<button class='kpw-btn' onclick='kpwFind(false)'>Find it again</button>") +
                     "<button class='kpw-btn sec' onclick='kpwClose()'>Close</button></div>";
                 h += _kpwLogHtml(false);
             }
@@ -8455,7 +8972,7 @@
            it, saving writes it back. */
         var KP_FIELDS = ["ledBright", "proto", "node", "sa", "baud",
                          "startShow", "activeStart", "periodMs", "hbMs",
-                         "curNode", "curSa", "blColor", "blBright", "ecuBrand"];
+                         "curNode", "curSa", "blColor", "blBright", "ecuBrand", "mx"];
         function kpNewId() {
             return "kp_" + Math.random().toString(36).slice(2, 9);
         }
@@ -8546,6 +9063,9 @@
             kp.model = kpModelOf(c.model);
             kp.keys = JSON.parse(JSON.stringify(DEFAULT_KEYS));
             (c.keys || []).forEach(function (k, i) { if (i < kp.keys.length) kp.keys[i] = Object.assign(kp.keys[i], k); });
+            /* mx is optional: a keypad saved without it must not inherit the
+               previous keypad's MTune settings through the cursor. */
+            kp.mx = null;
             KP_FIELDS.forEach(function (f) { if (c[f] !== undefined) kp[f] = c[f]; });
             /* The one LED brightness was called brightDay, from back when the
                panel offered a night value the keypad has never had (ADR-0063). */
@@ -9624,7 +10144,9 @@
             kp.ecuBrand = id; kpSaveCfg();
             /* One source of truth: the ECU page, the connection recommendation
                and the per-key row all read kp.ecuBrand. */
-            kpRenderEcuPage(); kpRenderConnection(); kpRenderInspector(); kpRenderPageHead();
+            /* Everything, not just the ECU pages: MaxxECU takes the rings, so
+               the lighting rail, the inspector and the Lights page all change. */
+            kpAfterKeypadChange();
         };
 
         /* ── ECU setup guide modal (MaxxECU / Link / Haltech) ────────────────
@@ -10021,6 +10543,26 @@
             var iconOpts =[["up", "▲ arrow"], ["down", "▼ arrow"], ["turtle", "turtle (limiter)"], ["power", "power"], ["fan", "fan"], ["pump", "fuel pump"], ["light", "headlight"], ["moon", "night"], ["bolt", "launch"], ["page", "page"], ["blank", "text label"]];
             var N = kp.model.rows * kp.model.cols;
             var presetList = ["— unassigned —", "Pit limiter", "Ignition / main", "Launch arm", "Anti-lag", "Boost maps", "Fan override", "Fuel pump", "Headlights", "Map up", "Map down", "Map switch", "Wiper sequence", "Log marker", "Dash: next page", "Dash: night mode"];
+            /* A MaxxECU key is MTune's: what it does, how it steps and what
+               colour it is all come from the ECU tab. Only the cap is ours. */
+            if (kpmxOn() && kp.mx.keys[i]) {
+                box.innerHTML =
+                    "<h2>Key " + (i + 1) + " – " + _kpEsc(k.label || "unassigned") + "</h2>" +
+                    '<div class="kp-sub">Key ' + (i + 1) + " of " + N + " &middot; " + kp.model.name + "-SI</div>" +
+                    '<div class="kp-grp"><div class="kp-gt">Cap</div>' +
+                    '<div class="kp-field"><label>Label on the cap</label><input type="text" id="kpFLabel" value="' + _kpEsc(k.label) + '" maxlength="7"></div>' +
+                    '<div class="kp-field"><label>Button face</label><select id="kpFIcon">' +
+                    iconOpts.map(function (o) { return opt(o[0], o[1], k.text ? "blank" : k.icon); }).join("") +
+                    "</select></div></div>" +
+                    kpmxInspectorHtml(i);
+                document.getElementById("kpFLabel").addEventListener("input", function (e) { k.label = e.target.value.toUpperCase(); kpSaveCfg(); kpRenderStage(); });
+                document.getElementById("kpFIcon").addEventListener("change", function (e) {
+                    if (e.target.value === "blank") { k.text = true; k.icon = "blank"; }
+                    else { k.text = false; k.icon = e.target.value; }
+                    kpSaveCfg(); kpRenderStage();
+                });
+                return;
+            }
             var html =
                 "<h2>Key " + (i + 1) + " – " + _kpEsc(k.label || "unassigned") + "</h2>" +
                 '<div class="kp-sub">Key ' + (i + 1) + " of " + N + " &middot; " + kp.model.name + "-SI</div>" +
@@ -11115,7 +11657,7 @@
         }
         window.kpfxWatchToggle = async function () {
             if (kpfxWatch.on) { kpfxWatch.stop = true; return; }
-            var why = kpfxCanStream();
+            var why = kpfxCanWatch();
             if (why) { if (typeof showToast === "function") showToast(why, "error"); return; }
             kpfxWatch = { on: true, stop: false, own: false, keys: {}, at: 0, err: "", count: -1 };
             window.__kpfxWatch = kpfxWatch;
@@ -11130,7 +11672,9 @@
                     await kpwTakeDash();
                     var hop = await kpwDashRate(kpwRateIdx(kp.baud), false);
                     if (!hop.ok) throw new Error("Could not put the dash on " + kp.baud + "k: " + hop.error);
-                    await kpwTx({ id: 0x000, ext: false, data: [0x01, kp.node & 0x7F, 0, 0, 0, 0, 0, 0] });
+                    /* NMT start is CANopen's; a J1939 keypad talks unasked, and
+                       an extra frame on a MaxxECU's bus is one it did not want. */
+                    if (!kpIsJ()) await kpwTx({ id: 0x000, ext: false, data: [0x01, kp.node & 0x7F, 0, 0, 0, 0, 0, 0] });
                 }
                 while (!kpfxWatch.stop && !kpw.cancel) {
                     await kpfxWatchPoll();
@@ -11162,8 +11706,18 @@
             if (!el) return;
             el.textContent = kpfxLive.on ? (kpfxLive.sent + " frames sent · " + kpfxLive.fps + " a second") : "";
         }
+        /* The MaxxECU paints the rings (kpmx*): then the only start-up there is
+           is the keypad's own, and this page shrinks to that one choice.
+           typeof-guarded because the harnesses lift this block on its own. */
+        function kpfxEcuOwns() { return typeof kpmxOwnsRings === "function" && kpmxOwnsRings(); }
         function kpfxCanStream() {
+            if (kpmxOwnsRings()) return KPMX_RINGS_WHY;
             if (kpIsJ()) return "J1939 has no documented LED command, so a boot can only be played on a CANopen keypad.";
+            return kpfxCanWatch();
+        }
+        /* Watching only listens, so it works on either protocol and whoever
+           owns the rings: it is how a MaxxECU keypad proves its keys arrive. */
+        function kpfxCanWatch() {
             if (kpwLinkState() !== "ok") return "This needs a dash on WiFi to put the frames on the bus.";
             if (kpw.busy && kpw.busyBy !== "watch") return "The keypad setup wizard is running.";
             return "";
@@ -11452,9 +12006,22 @@
             kpfx.raf = 0;
             if (!kpfxVisible()) return;
             var now = (window.performance && performance.now) ? performance.now() : Date.now();
-            if (kpfx.playing) kpfx.t += Math.min(0.25, (now - (kpfx.last || now)) / 1000);
+            /* Every pass starts with the key off: a dark beat, then ignition.
+               That is what makes a loop read as "what happens when I turn the
+               key" rather than as a lighting effect going round. */
+            var dark = now < (kpfx.darkUntil || 0);
+            if (kpfx.playing && !dark) {
+                var before = kpfxNowT();
+                kpfx.t += Math.min(0.25, (now - (kpfx.last || now)) / 1000);
+                if (!kpfx._drag && kpfxNowT() < before) {
+                    kpfx.t -= kpfxNowT();                 /* hold at the top of the pass */
+                    kpfx.darkUntil = now + KPFX_DARK_MS; dark = true;
+                }
+            }
             kpfx.last = now;
-            var fr = kpfxPreviewFrame(kpfx.t);
+            kpfx.dark = dark;
+            var fr = dark ? kpfxFrame(kp.model, { steps: [], idle: { fx: "dark" }, press: { fx: "none" } }, { t: 0 })
+                          : kpfxPreviewFrame(kpfx.t);
             kpfxPaint(fr);
             if (now - kpfx._miniAt > 66) { kpfx._miniAt = now; kpfxPaintMinis(kpfx.t); }
             kpfxUpdateStrip(fr);
@@ -11473,6 +12040,10 @@
             var show = kpfxShow(), lit = 0, i;
             for (i = 0; i < fr.n; i++) if (fr.led[i]) lit++;
             var total = kpfxStepsSecs(show), now = kpfxNowT();
+            if (kpfx.dark) {
+                el.innerHTML = "<span class='kpfx-what'>Ignition off</span>";
+                return;
+            }
             if (kpfxOnStart()) {
                 var sd = kpfxStartupDef(kp.startShow);
                 el.innerHTML = "<span class='kpfx-what'>Power-up &#8212; " + kpfxEsc(sd.name) + "</span>" +
@@ -11480,7 +12051,7 @@
                 return;
             }
             var what = fr.moment === "boot"
-                ? "Step " + (fr.step + 1) + " of " + show.steps.length + " – " + kpfxDef(show.steps[fr.step].fx).name
+                ? (now < 1 ? "Ignition on · " : "") + "Step " + (fr.step + 1) + " of " + show.steps.length + " – " + kpfxDef(show.steps[fr.step].fx).name
                 : fr.moment === "react"
                     ? "Key " + (fr.press + 1) + " – " + kpfxPressDef(show.press.fx).name
                     : "At rest — " + kpfxDef(show.idle.fx).name;
@@ -11494,7 +12065,13 @@
                 "<span class='kpfx-lit'>" + lit + " of " + fr.n + " lit</span>";
         }
         window.kpfxPlayPause = function () { kpfx.playing = !kpfx.playing; kpfxRenderBar(); };
-        window.kpfxRestart = function () { kpfx.t = 0; kpfxMoveHead(); if (!kpfx.playing) kpfxPaintOnce(); };
+        /* Turn the key: dark for a beat, then the start-up from the top. */
+        var KPFX_DARK_MS = 700;
+        window.kpfxRestart = function () {
+            kpfx.t = 0; kpfx.playing = true;
+            kpfx.darkUntil = ((window.performance && performance.now) ? performance.now() : Date.now()) + KPFX_DARK_MS;
+            kpfxMoveHead(); kpfxRenderBar();
+        };
         function kpfxPaintOnce() {
             var fr = kpfxPreviewFrame(kpfx.t);
             kpfxPaint(fr); kpfxPaintMinis(kpfx.t); kpfxUpdateStrip(fr); kpfxMarkSeg();
@@ -11502,10 +12079,13 @@
         function kpfxRenderBar() {
             var el = document.getElementById("kpFxBar");
             if (!el) return;
+            /* With the MaxxECU on the rings there is nothing of ours to play:
+               the start-up is the keypad's own, which Studio cannot draw. */
+            var ours = !kpfxEcuOwns();
             el.innerHTML =
-                "<button class='kpfx-tbtn play" + (kpfx.playing ? " on" : "") + "' onclick='kpfxPlayPause()'>" +
+                (ours ? "<button class='kpfx-tbtn play" + (kpfx.playing ? " on" : "") + "' onclick='kpfxPlayPause()'>" +
                 (kpfx.playing ? "&#9646;&#9646; Pause" : "&#9654; Play") + "</button>" +
-                "<button class='kpfx-tbtn' onclick='kpfxRestart()'>&#9198; From the top</button>" +
+                "<button class='kpfx-tbtn' onclick='kpfxRestart()' title='Ignition off, then on: the start-up from the top'>Turn the key</button>" : "") +
                 /* the one button on this page that makes the preview stop being
                    a mime: with a dash on the bus, a real thumb drives it */
                 "<button class='kpfx-tbtn" + (kpfxWatch.on ? " on" : "") + "' onclick='kpfxWatchToggle()'" +
@@ -11513,7 +12093,9 @@
                 " title='" + kpfxEsc(kpfxCanStream() || "Read the real keypad's key frame through your dash, so pressing a key on the KEYPAD is what you see here") + "'>" +
                 (kpfxWatch.on ? "&#9673; Watching the keypad" : "&#9678; Watch the keypad") + "</button>" +
                 "<span class='kpfx-now' id='kpFxNow'></span>" +
-                "<span class='kpfx-lit' id='kpFxWatchLine'></span>";
+                "<span class='kpfx-lit' id='kpFxWatchLine'></span>" +
+                "<span class='kpfx-car' id='kpFxCar'></span>";
+            kpfxRenderCar();
         }
 
         /* ---- the sequence, laid out in time --------------------------------
@@ -11531,7 +12113,18 @@
                does before anything is talking to it. Same click target as a
                block, and it opens into the same panel. */
             var sd = kpfxStartupDef(kp.startShow);
-            var h = "<button type='button' class='kpfx-pre" + (kpfxOnStart() ? " on" : "") + "' onclick='kpfxPickBlock(" + KPFX_START_I + ")'" +
+            if (kpfxEcuOwns()) {
+                /* The whole start-up, when a MaxxECU owns the rings: the
+                   keypad's own show, then the ECU. Nothing of ours in between. */
+                box.innerHTML = "<div class='kpfx-phases'><span style='left:0'>Ignition on</span></div>" +
+                    "<button type='button' class='kpfx-pre on' onclick='kpfxPickBlock(" + KPFX_START_I + ")'>" +
+                    "<span class='k'>At ignition</span><span class='v'>" + kpfxEsc(sd.name) + "</span></button>" +
+                    "<div class='kpfx-ecuend'>Then the MaxxECU lights the rings</div>";
+                return;
+            }
+            var h = "<div class='kpfx-phases'><span style='left:0'>Ignition on</span>" +
+                "<span class='end' style='left:" + (total / loop * 100).toFixed(3) + "%'>Normal use</span></div>";
+            h += "<button type='button' class='kpfx-pre" + (kpfxOnStart() ? " on" : "") + "' onclick='kpfxPickBlock(" + KPFX_START_I + ")'" +
                 " title='What the keypad does at power-up with nothing attached: its own, not yours.'>" +
                 "<span class='k'>On its own, first</span><span class='v'>" + kpfxEsc(sd.name) + "</span>" +
                 "<span class='a'>Change</span></button>";
@@ -11685,14 +12278,16 @@
                    tile for any of them: this animation is Blink's, inside the
                    part, and Studio has never seen it — drawing a guess would be
                    the one lie this page is built to avoid. */
-                box.innerHTML = "<div class='kp-rail-title'>The keypad on its own</div>" +
+                box.innerHTML = "<div class='kp-rail-title'>" + (kpfxEcuOwns() ? "At ignition" : "The keypad on its own") + "</div>" +
                     "<div class='kpfx-tiles'>" + KPFX_STARTUP.map(function (d) {
                         return "<button class='kpfx-tile wide" + (kp.startShow === d.v ? " on" : "") + "' onclick='kpfxSetStartup(" + d.v + ")'" +
                             " title='" + kpfxEsc(d.blurb) + "'>" +
                             "<span class='kpfx-tilenone' style='width:100%'>" + (d.v === 0 ? "&#8212;" : d.v === 1 ? "&#9673;" : "&#9678;") + "</span>" +
                             "<span class='nm'>" + kpfxEsc(d.name) + "</span></button>";
                     }).join("") + "</div>" +
-                    "<div class='kpfx-railnote'>Written to the keypad with the rest of the setup file. It is the only animation it can play with nothing attached.</div>";
+                    "<div class='kpfx-railnote'>" + (kpfxEcuOwns()
+                        ? "MTune calls this STARTUP LED SHOW."
+                        : "Written to the keypad with the rest of the setup file. It is the only animation it can play with nothing attached.") + "</div>";
                 return;
             }
             var groups = [], by = {};
@@ -11770,6 +12365,7 @@
         };
         window.kpfxSetStartup = function (v) {
             kp.startShow = (v | 0);
+            kpmxPull();
             kpSaveCfg();
             kpRenderConnection();
             kpfxRenderRail(); kpfxRenderTime(); kpfxRenderProps(); kpRenderPageHead();
@@ -11868,6 +12464,7 @@
         function kpfxRenderProps() {
             var box = document.getElementById("kpFxInsp");
             if (!box) return;
+            kpfxRenderCar();   /* an edit can make the car's copy out of date */
             var show = kpfxShow(), sel = kpfxSel(), h = "";
             if (kpfxOnStart()) { kpfxRenderStartProps(box, show); return; }
             if (kpfxOnRest()) { kpfxRenderRestProps(box, show); return; }
@@ -11929,6 +12526,26 @@
            bench supply. */
         function kpfxRenderStartProps(box, show) {
             var d = kpfxStartupDef(kp.startShow), n = show.steps.length;
+            if (kpfxEcuOwns()) {
+                /* The one choice there is, and nothing to send: MaxxECU writes
+                   it to the keypad itself. An old tape on the dash is the only
+                   thing left to act on here. */
+                var t = "<h2>At ignition</h2>" +
+                    "<div class='kp-sub'>STARTUP LED SHOW in MTune</div>" +
+                    "<div class='kp-grp'><div class='kp-field'><select id='kpFxStartup' onchange='kpfxSetStartup(this.value)'>" +
+                    KPFX_STARTUP.map(function (x) {
+                        return "<option value='" + x.v + "'" + (kp.startShow === x.v ? " selected" : "") + ">" + kpfxEsc(x.name) + "</option>";
+                    }).join("") + "</select></div>" +
+                    "<table class='kpb-facts'><tbody>" +
+                    "<tr><td class='k'>1. Ignition on</td><td>" + kpfxEsc(d.name) + "</td></tr>" +
+                    "<tr><td class='k'>2. Then</td><td>The MaxxECU lights each ring for its button</td></tr>" +
+                    "</tbody></table></div>";
+                if (kpfxDash.st && kpfxDash.st.present)
+                    t += "<div class='kp-grp'><div class='kp-bus-note'>" + kpfxEsc(kpfxDashLine()) + "</div>" +
+                        "<div class='kp-keyacts'><button onclick='kpfxDashForget()'>Forget it</button></div></div>";
+                box.innerHTML = t;
+                return;
+            }
             var h = "<h2>On its own, first</h2>" +
                 "<div class='kp-sub'>" + kpfxEsc(d.name) + " &middot; CANopen 2014h</div>" +
                 "<div class='kp-bus-note'>" + kpfxEsc(d.blurb) + "</div>" +
@@ -12172,32 +12789,38 @@
         }
 
         /* ---- send it ----------------------------------------------------------- */
+        window.kpfxMoreToggle = function (open) { kpfx._moreOpen = !!open; };
         function kpfxSendHtml() {
             var show = kpfxShow(), node = kp.node & 0x7F, baked = kpfxBakeBoot(show, node), peak = kpfxPeakRate(baked);
-            var why = kpfxCanStream();
+            var why = kpfxCanStream(), fits = kpfxDashFits(baked);
+            /* One button, because there is one thing to do: put it on the car.
+               Everything else (rehearse it live, files for a USB-CAN tool) is
+               for the rare day, and folds away under More. */
             return "<div class='kp-grp'><div class='kp-gt'>Send it</div>" +
-                "<button class='kpb-act red kpfx-play" + (kpfxLive.on ? " on" : "") + "'" + (why && !kpfxLive.on ? " disabled" : "") + " onclick='kpfxPlayLive()'>" +
-                (kpfxLive.on ? "Stop" : "Play it on the keypad") + "</button>" +
-                /* The one that makes the boot real: the tape goes ON the dash,
-                   and the dash plays it at every power-up with no laptop in
-                   the car. Everything above it is a rehearsal. */
-                "<button class='kpb-act kpfx-todash'" + (why || kpfxDashFits(baked) ? " disabled" : "") + " onclick='kpfxSendToDash()'" +
-                " title='" + kpfxEsc(why || kpfxDashFits(baked) || "Store this boot on the dash. It plays it at every power-up, with Studio shut.") + "'>" +
+                "<button class='kpb-act red kpfx-todash'" + (why || fits ? " disabled" : "") + " onclick='kpfxSendToDash()'" +
+                " title='" + kpfxEsc(why || fits || "Store this start-up on the dash. It plays it at every power-up, with Studio shut.") + "'>" +
                 "Put it on the dash</button>" +
+                /* the reason it cannot, said, not hidden in a tooltip */
+                ((why || fits) && !kpfxLive.on ? "<div class='kp-bus-note'>" + kpfxEsc(why || fits) + "</div>" : "") +
                 "<div class='kp-bus-note' id='kpFxDashLine'>" + kpfxEsc(kpfxDashLine()) + "</div>" +
                 /* only once there is something there to act on */
                 (kpfxDash.st && kpfxDash.st.present
                     ? "<div class='kp-keyacts'>" +
-                      "<button onclick='kpfxDashPlay()' title='Play the boot the dash is holding, now'>Play it there</button>" +
+                      "<button onclick='kpfxDashPlay()' title='Play the start-up the dash is holding, now'>Play it there</button>" +
                       "<button onclick='kpfxDashForget()' title='Remove it from the dash, so power-up does nothing'>Forget it</button></div>"
                     : "") +
+                "<details class='kpfx-more'" + (kpfx._moreOpen || kpfxLive.on ? " open" : "") +
+                " ontoggle='kpfxMoreToggle(this.open)'><summary>More</summary>" +
                 "<div class='kp-keyacts'>" +
-                "<button onclick='kpfxExportShow()' title='The boot as a small readable file.'>Save</button>" +
-                "<button onclick='kpfxImportClick()' title='Load a boot file saved from Studio.'>Load</button>" +
+                "<button class='" + (kpfxLive.on ? "on" : "") + "'" + (why && !kpfxLive.on ? " disabled" : "") + " onclick='kpfxPlayLive()'" +
+                " title='Stream it to the keypad now, through the dash, while Studio is open'>" + (kpfxLive.on ? "Stop" : "Play it live") + "</button>" +
+                "<button onclick='kpfxExportShow()' title='The start-up as a small readable file.'>Save</button>" +
+                "<button onclick='kpfxImportClick()' title='Load a start-up file saved from Studio.'>Load</button>" +
                 "<button onclick='kpfxExportFrames()' title='Every frame with its timing, for a USB-CAN tool.'>Frames</button></div>" +
-                "<div class='kp-bus-note' id='kpFxLiveLine'>" + (kpfxLive.on ? "" : kpfxEsc(why)) + "</div>" +
+                "<div class='kp-bus-note' id='kpFxLiveLine'></div>" +
                 "<div class='kp-bus-note'>" + baked.length + " frames &middot; busiest second " + peak +
                 (peak > KPFX_BUDGET ? " — over the dash's limit" : "") + " &middot; rings on " + kpHex(0x200 + node) + "</div>" +
+                "</details>" +
                 "<input type='file' id='kpFxFile' accept='.json,application/json' style='display:none' onchange='kpfxImportShow(event)'>" +
                 "</div>";
         }
@@ -12217,11 +12840,39 @@
             if (kpfxDash.err) return kpfxDash.err;
             var s = kpfxDash.st;
             if (!s) return "";
-            if (!s.present) return "No boot on the dash yet.";
+            if (!s.present) return kpfxEcuOwns() ? "" : "No boot on the dash yet.";
+            /* A tape from before the MaxxECU took the rings still plays at
+               every power-up, onto the ECU's bus. */
+            if (kpfxEcuOwns() && s.at_boot) return "The dash still plays an old boot at power-up. Forget it so only the MaxxECU lights the rings.";
             return "On the dash: " + (s.frames || 0) + " frames" +
                 (s.keypad ? " for " + s.keypad : "") +
                 (s.at_boot ? ", played at every power-up" : ", but not at power-up") +
                 (s.reason ? " – " + s.reason : "");
+        }
+        /* The one fact this page is for, at the top of it: what the car does
+           at power-up right now. [text, state] where state is ok | warn | "". */
+        function kpfxCarLine() {
+            if (kpfxCanWatch()) return ["No dash connected", ""];
+            var s = kpfxDash.st;
+            if (!s) return ["", ""];
+            if (kpfxEcuOwns())
+                return s.present && s.at_boot ? ["The dash still plays an old start-up", "warn"] : ["", ""];
+            if (!s.present) return ["Not on the car yet", "warn"];
+            if (!s.at_boot) return ["On the dash, but not played at power-up", "warn"];
+            /* Only a frame count to compare, so only a difference is a fact:
+               equal counts could still be a different boot, and it says so
+               by not claiming anything either way. */
+            var here = kpfxBakeBoot(kpfxShow(), kp.node & 0x7F).length;
+            return s.frames && s.frames !== here
+                ? ["On the car: an older version of this", "warn"]
+                : ["On the car: plays at every power-up", "ok"];
+        }
+        function kpfxRenderCar() {
+            var el = document.getElementById("kpFxCar");
+            if (!el) return;
+            var c = kpfxCarLine();
+            el.textContent = c[0];
+            el.className = "kpfx-car" + (c[1] ? " " + c[1] : "");
         }
         /* Will the dash hold this one? "" if it will. */
         function kpfxDashFits(baked) {
@@ -12280,11 +12931,14 @@
            about it when there is no dash: an error line about a device you
            have not connected is noise, not information. */
         async function kpfxDashRefresh() {
-            if (kpfxCanStream()) { kpfxDash.st = null; kpfxDash.err = ""; return; }
+            /* asked whenever a dash is there, even when this keypad cannot
+               stream: that is exactly when an old tape has to be found */
+            if (kpfxCanWatch() || (kpIsJ() && !kpmxOwnsRings())) { kpfxDash.st = null; kpfxDash.err = ""; return; }
             var r = await kpwHttp("/api/keypad/lights");
             if (r.ok && r.body) { kpfxDash.st = r.body; kpfxDash.err = ""; }
             var el = document.getElementById("kpFxDashLine");
             if (el) el.textContent = kpfxDashLine();
+            kpfxRenderCar();
         }
         window.kpfxImportClick = function () { var el = document.getElementById("kpFxFile"); if (el) el.click(); };
 
@@ -12297,6 +12951,8 @@
         }
         function kpfxRenderAll() {
             kp.show = kpfxNormalise(kpfxShow());
+            /* a MaxxECU keypad's start-up is the keypad's own and nothing else */
+            if (kpfxEcuOwns()) kpfx.stepI = KPFX_START_I;
             kpfx._cards = {};
             kpfxApplyNight();
             kpfxDashRefresh();
@@ -12401,7 +13057,10 @@
                 '<div class="kp-field" data-demo="all"><label>Legend backlight' +
                 '<i class="gp-lamp info" data-tip="<b>Legend backlight</b>A separate lamp behind the printed legends, one colour for the whole keypad (2003h:04). All nine colours work here, including amber and lime, which a ring cannot make."></i></label><div class="kp-swatches">' +
                 LED_COLORS.map(function (c) {
-                    return '<button class="kp-blsw' + (kp.blColor === c.id ? " on" : "") + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + c.id + '"></button>';
+                    /* MTune offers white, amber and yellow/green; on a MaxxECU
+                       keypad the others would be undone by its next write. */
+                    var no = kpmxOn() && !kpmxBacklightOk(c.id);
+                    return '<button class="kp-blsw' + (kp.blColor === c.id ? " on" : "") + '" data-c="' + c.id + '" style="background:' + c.hex + '" title="' + (no ? "Not a MaxxECU backlight colour" : c.id) + '"' + (no ? " disabled" : "") + '></button>';
                 }).join("") + "</div></div>" +
                 '<div class="kp-field" data-demo="all"><label>Legend brightness' +
                 '<i class="gp-lamp info" data-tip="<b>Legend brightness</b>How hard the legend lamp is driven (2003h:06), 0 to 63. At zero the legends are unlit dark windows in the caps, which is what they look like on the bench with no power to the backlight."></i></label>' +
@@ -12414,11 +13073,11 @@
                 '<button class="kp-showall" data-demo="all">Show every colour</button>';
             kpBindDemo(box);
             var g = function (id) { return document.getElementById(id); };
-            g("kpFLed").addEventListener("input", function (e) { kp.ledBright = +e.target.value; g("kpVLed").textContent = kpfxPct(kp.ledBright); kpSaveCfg(); kpRenderStage(); });
+            g("kpFLed").addEventListener("input", function (e) { kp.ledBright = +e.target.value; g("kpVLed").textContent = kpfxPct(kp.ledBright); kpmxPull(); kpSaveCfg(); kpRenderStage(); });
             box.querySelectorAll(".kp-blsw").forEach(function (b) {
-                b.addEventListener("click", function () { kp.blColor = b.getAttribute("data-c"); kpSaveCfg(); kpRenderLighting(); kpRenderStage(); });
+                b.addEventListener("click", function () { kp.blColor = b.getAttribute("data-c"); kpmxPull(); kpSaveCfg(); kpRenderLighting(); kpRenderStage(); });
             });
-            g("kpFBl").addEventListener("input", function (e) { kp.blBright = +e.target.value; g("kpVBl").textContent = kpfxPct(kp.blBright); kpSaveCfg(); kpRenderStage(); });
+            g("kpFBl").addEventListener("input", function (e) { kp.blBright = +e.target.value; g("kpVBl").textContent = kpfxPct(kp.blBright); kpmxPull(); kpSaveCfg(); kpRenderStage(); });
             g("kpFDayNight").querySelectorAll("button").forEach(function (b) {
                 b.addEventListener("click", function () { kp.night = b.getAttribute("data-n") === "1"; kpRenderLighting(); kpRenderStage(); });
             });
@@ -12434,6 +13093,258 @@
             if (b.id === "haltech") return "Not Haltech’s own keypad, so you read its CAN frame as an input.";
             return b.name.split(" ")[0] + " reads a Blink keypad over CAN.";
         }
+        /* ── MaxxECU: enter what MTune says, Studio works out the keypad ─────
+           MaxxECU owns a Blink keypad outright: it speaks J1939 to it, counts
+           the button steps, and drives the rings. So for a MaxxECU car the
+           question is never "what should the keypad be", it is "what did you
+           set in MTune". This page is MTune's CAN Keypad page, field for field
+           and in MTune's own words (so the labels keep MaxxECU's spelling),
+           and every value is carried straight into the keypad config that the
+           Design picture, the setup wizard and the files all read.
+
+           Source: maxxecu.com/webhelp settings-can_keypad*.html and
+           input_functions.html, read 2026-09-25. */
+        var KPMX_BAUD = [250, 500];
+        var KPMX_BACKLIGHT = [["OFF", null], ["WHITE", "white"], ["AMBER", "amber"], ["YELLOW/GREEN", "lime"]];
+        var KPMX_SHOW = ["OFF", "LED SHOW", "FLASH"];   /* index = kp.startShow, same three the part has */
+        var KPMX_STEPS = [["UNUSED", "NOT USED/USED BY OTHER ECU/PDM"], ["MOMENTARY", "MOMENTARY"],
+            [2, "2 POSITIONS"], [3, "3 POSITIONS"], [4, "4 POSITIONS"], [5, "5 POSITIONS"], [6, "6 POSITIONS"]];
+        var KPMX_KEEP = [["RESET", "RESET TO OFF WHEN POWER IS LOST"], ["KEEP", "KEEP LAST STATE WHEN POWER IS LOST"]];
+        /* BUTTON STATE COLORS: state 0 is dark or red, then the same five. */
+        var KPMX_COLORS = [["OFF", "OFF, GREEN, BLUE, YELLOW, CYAN, PURPLE"], ["RED", "RED, GREEN, BLUE, YELLOW, CYAN, PURPLE"], ["UNUSED", "NOT USED"]];
+        var KPMX_SEQ = ["green", "blue", "yellow", "cyan", "purple"];
+        var KPMX_MODELS = { pkp2200: "4 KEY", pkp2400: "8 KEY", pkp2600: "12 KEY", pkp3500: "15 KEY" };
+        var KPMX_FNS = ["AC CLUTCH DISABLE", "AC REQUEST/IDLE UP", "ADVANCED WARNING SYSTEM, ENABLE", "ADVANCED WARNING SYSTEM, ENABLE CUT",
+            "AFTER LAUNCH POWER LIMIT DISABLE", "ANGLE LOGGER", "ANTI-LAG ENABLE", "AUTO TRANSMISSION LOCKUP ENABLE",
+            "AUTO TRANSMISSION MANUAL MODE SWITCH", "AUTO TRANSMISSION, ENABLE WOT RPM SHIFT", "AUTO TRANSMISSION, SWITCH TO 2ND SHIFT TABLE",
+            "AVG FUEL CONSUMPTION RESET", "BOOST CONTROL ENABLE", "BOOST TARGET SWITCH", "BRAKE PEDAL/STOP LIGHT ACTIVE", "CAN, DISABLE ALL TX",
+            "CHASSIS SPORT MODE", "CLUTCH SWITCH", "COUNTERS", "CRUISE CONTROL, ABORT", "CRUISE CONTROL, ACCELERATE", "CRUISE CONTROL, DECELERATE",
+            "CRUISE CONTROL, RESUME", "CRUISE CONTROL, SET", "DIRECT ECU OUTPUT CONTROL", "DCT DRIVELOGIC DOWN", "DCT DRIVELOGIC UP",
+            "DISABLE TRACTION CONTROL", "EGT POWER CUT, ENABLE", "ELECTRIC WATERPUMP OVERRIDE INPUT", "ENGINE RUNTIME+MAX RESET",
+            "ERROR CODES, CLEAR ALL CODES", "EXTRA FUEL TABLE X TABLE ACTIVATION SWITCH", "EXTRA IGNITION TABLE X TABLE ACTIVATION SWITCH",
+            "EXTRA FUEL/IGN TABLE ACTIVATION SWITCH (ALL)", "FAN + ELECTRIC WATERPUMP OVERRIDE INPUT", "FAN OVERRIDE INPUT",
+            "FUEL ADAPTATION, ENABLE ADAPTATION", "FUEL PUMP OVERRIDE", "IDLE CONTROL DISABLE", "IGNITION KEY", "IGNITION TRIM TABLE, RESET",
+            "LAUNCH CONTROL SWITCH, ENABLE STAGE", "LEAN POWER CUT, ENABLE", "LOGGING, RESET AND START NEW FILE", "LOGGING, RUN",
+            "MDASH PAGE/RESET CEL (HOLD)", "NITROUS ENABLE SWITCH", "NITROUS PURGE", "NITROUS STAGE X ACTIVATE", "NITROUS TIMER RUN",
+            "POWER MANAGEMENT SYSTEM DISABLE", "POWER MANAGEMENT SYSTEM ENABLE", "PULSE OUTPUT X TRIGGER INPUT", "ROLLING LAUNCH CONTROL SWITCH",
+            "RPM LIMIT, ENABLE GP LIMITER", "RPM LIMIT, USE SECONDARY LIMIT RPM", "RPM LIMIT, USE SECONDARY MODE", "SHIFTCUT", "SHIFTCUT ENABLE",
+            "SPEED LIMIT X ENABLE/SET", "SPEED LIMIT RESET", "STARTER MOTOR INPUT", "STOP ENGINE/PREVENT START", "THROTTLE BLIP ENABLE",
+            "THROTTLE BLIP TRIGGER", "TRACTION CONTROL, DISABLE", "TIMER X START/STOP/RESET", "TRANSBRAKE BUMP/CREEP BUTTON",
+            "TRANSBRAKE HOLD BUTTON", "TRANSMISSION CLUTCHKICK/BURNOUT MODE (8HP)", "TRANSMISSION CONVERTER SLIP REQUEST",
+            "TRANSMISSION DOWN SHIFT", "TRANSMISSION DRIVE SWITCH", "TRANSMISSION GEAR 1 LOCKOUT", "TRANSMISSION MODE SWITCH",
+            "TRANSMISSION NEUTRAL SWITCH", "TRANSMISSION REVERSE SWITCH", "TRANSMISSION UP SHIFT", "TRIPMETER, RESET",
+            "TRIPMETER, USE TRIPMETER 2/ FUEL USED 2", "USER CUT TABLE X, ENABLE", "USER PID ENABLE CONTROL", "VIRTUAL FUEL TANK DECREASE",
+            "VIRTUAL FUEL TANK INCREASE", "VIRTUAL FUEL TANK RESET LEVEL", "WATER/METHANOL INJECTION, ENABLE",
+            "WHEEL SETUP (USE SETUP 2 WHEN ACTIVE)", "WIFI, ENABLE"];
+        /* The cap icon a function suggests; anything else keeps its text legend. */
+        var KPMX_ICON = [[/LAUNCH/, "bolt"], [/FAN/, "fan"], [/FUEL PUMP/, "pump"], [/RPM LIMIT|SPEED LIMIT|PIT/, "turtle"],
+            [/UP SHIFT|DRIVELOGIC UP|ACCELERATE|INCREASE/, "up"], [/DOWN SHIFT|DRIVELOGIC DOWN|DECELERATE|DECREASE/, "down"],
+            [/IGNITION KEY|STOP ENGINE|STARTER/, "power"], [/MDASH PAGE/, "page"], [/LIGHT/, "light"]];
+
+        /* First visit: seed from the keypad as Studio already has it, so
+           choosing MaxxECU never throws away a design. */
+        function kpmxSeed() {
+            var n = kp.model.rows * kp.model.cols, keys = [];
+            for (var i = 0; i < 15; i++) {
+                var k = kp.keys[i] || {}, used = i < n && k.label !== undefined && keyAssigned(k);
+                var steps = !used ? "UNUSED" : k.mode === "toggle" ? 2 : k.mode === "state3" ? Math.max(2, Math.min(6, _kpPositions(k).length)) : "MOMENTARY";
+                var first = k.mode === "state3" && k.positions && k.positions[0] ? k.positions[0].color : "off";
+                keys.push({ desc: used ? (k.label || k.preset || "") : "", steps: steps, keep: "RESET", fn: "", colors: first === "red" ? "RED" : "OFF" });
+            }
+            var bl = KPMX_BACKLIGHT.filter(function (b) { return b[1] === kp.blColor; })[0];
+            return { baud: kp.baud === 250 ? 250 : 500, backlight: kp.blBright > 0 && bl ? bl[0] : (kp.blBright > 0 ? "AMBER" : "OFF"),
+                     brightness: kp.ledBright, show: KPMX_SHOW[kp.startShow] || "OFF", keys: keys };
+        }
+        /* ---- one owner for the rings ----------------------------------------
+           MaxxECU sends the ring colours itself, continuously. A second sender
+           (Studio streaming a boot, the dash playing a stored tape) does not
+           add to that, it fights it: the rings flicker between the two. So when
+           the MaxxECU paints them, everything else that could keeps its hands
+           off, and the pages that edit a ring show MTune's values instead. */
+        function kpmxOn() { return kp.ecuBrand === "maxxecu" && !!kp.mx; }
+        function kpmxOwnsRings() {
+            if (!kpmxOn()) return false;
+            var n = kp.model.rows * kp.model.cols;
+            return kp.mx.keys.slice(0, n).some(function (m) { return m.steps !== "UNUSED" && m.colors !== "UNUSED"; });
+        }
+        var KPMX_RINGS_WHY = "Your MaxxECU lights the rings, so Studio and the dash leave them alone.";
+        window.kpmxEditKey = function (i) {
+            kpSetView("ecu");
+            setTimeout(function () {
+                var el = document.querySelector("[data-mx='desc'][data-i='" + i + "']");
+                if (el) { el.scrollIntoView({ block: "center" }); el.focus(); }
+            }, 0);
+        };
+        /* The Design rail and the Lights page still move the three settings
+           MTune also has. Carry them back so the next apply cannot undo them. */
+        function kpmxPull() {
+            if (!kpmxOn()) return;
+            kp.mx.brightness = kp.ledBright;
+            kp.mx.show = KPMX_SHOW[kp.startShow] || "OFF";
+            var bl = KPMX_BACKLIGHT.filter(function (b) { return b[1] === kp.blColor; })[0];
+            kp.mx.backlight = !kp.blBright ? "OFF" : (bl ? bl[0] : kp.mx.backlight);
+        }
+        function kpmxBacklightOk(id) { return KPMX_BACKLIGHT.some(function (b) { return b[1] === id; }); }
+        /* The inspector for a key MaxxECU runs: MTune's values as facts. */
+        function kpmxInspectorHtml(i) {
+            var m = kp.mx.keys[i], off = m.steps === "UNUSED";
+            var N = m.steps === "MOMENTARY" ? 2 : off ? 0 : m.steps;
+            var steps = (KPMX_STEPS.filter(function (s) { return String(s[0]) === String(m.steps); })[0] || [0, ""])[1];
+            return "<div class='kp-grp'><div class='kp-gt'>From MTune</div>" +
+                "<table class='kpb-facts'><tbody>" +
+                "<tr><td class='k'>Description</td><td>" + (_kpEsc(m.desc) || "&#8211;") + "</td></tr>" +
+                "<tr><td class='k'>Button steps</td><td>" + _kpEsc(steps) + "</td></tr>" +
+                (off ? "" :
+                "<tr><td class='k'>Keep state</td><td>" + (m.keep === "KEEP" ? "Keeps last state" : "Resets to off") + "</td></tr>" +
+                "<tr><td class='k'>Input function</td><td>" + (_kpEsc(m.fn) || "&#8211;") + "</td></tr>" +
+                "<tr><td class='k'>Rings</td><td>" + (m.colors === "UNUSED" ? "Not used" : kpmxDots(m, N)) + "</td></tr>") +
+                "</tbody></table>" +
+                "<button class='kpb-act ghost' style='margin-top:10px' onclick='kpmxEditKey(" + i + ")'>Change on the ECU tab</button></div>";
+        }
+        function kpmxState(m, s) {   /* state s of a button, as the ring colour MaxxECU paints */
+            if (m.colors === "UNUSED") return "off";
+            return s === 0 ? (m.colors === "RED" ? "red" : "off") : KPMX_SEQ[(s - 1) % KPMX_SEQ.length];
+        }
+        /* MTune values -> the keypad config every other page reads. */
+        function kpmxApply() {
+            var mx = kp.mx, n = kp.model.rows * kp.model.cols;
+            kp.proto = "j1939"; kp.sa = 0x21; kp.baud = mx.baud;
+            kp.ledBright = mx.brightness;
+            kp.startShow = Math.max(0, KPMX_SHOW.indexOf(mx.show));
+            var bl = KPMX_BACKLIGHT.filter(function (b) { return b[0] === mx.backlight; })[0];
+            if (!bl || !bl[1]) kp.blBright = 0;
+            else { kp.blColor = bl[1]; if (!kp.blBright) kp.blBright = 18; }
+            for (var i = 0; i < n; i++) {
+                var m = mx.keys[i], k = kp.keys[i];
+                if (!m || !k) continue;
+                if (m.steps === "UNUSED") {
+                    Object.assign(k, { label: "", text: true, icon: "blank", mode: "momentary", preset: "— unassigned —", color: "off", behavior: "solid", positions: [] });
+                    continue;
+                }
+                var name = (m.desc || m.fn || "").trim();
+                /* The cap is a printed insert, not an ECU setting: refill the
+                   legend only when MTune's name for the button changes, so a
+                   label typed on the Design page survives every other edit. */
+                var sig = name + "|" + (m.fn || "");
+                if (m.sig !== sig || k.label === "") {
+                    var icon = "blank";
+                    KPMX_ICON.some(function (r) { if (r[0].test(m.fn || "")) { icon = r[1]; return true; } return false; });
+                    k.label = name.toUpperCase().slice(0, 7);
+                    k.text = icon === "blank"; k.icon = icon;
+                    m.sig = sig;
+                }
+                k.preset = m.fn ? m.fn.charAt(0) + m.fn.slice(1).toLowerCase() : (name || "Button " + (i + 1));
+                k.behavior = "solid"; k.follows = "self";
+                var dark0 = kpmxState(m, 0) === "off";
+                if (m.steps === "MOMENTARY" || (m.steps === 2 && dark0)) {
+                    /* Studio's momentary and toggle keys are dark at 0, which is
+                       exactly MaxxECU's OFF-first set. */
+                    k.mode = m.steps === 2 ? "toggle" : "momentary";
+                    k.color = m.colors === "UNUSED" ? "off" : kpmxState(m, 1);
+                    k.positions = [];
+                } else {
+                    /* Anything that is lit at 0, or has more than two states,
+                       is a position list: one entry per MaxxECU state. */
+                    var N = m.steps === "MOMENTARY" ? 2 : m.steps;
+                    k.mode = "state3";
+                    k.color = kpmxState(m, 1);
+                    k.positions = [];
+                    for (var s = 0; s < N; s++) k.positions.push({ name: String(s), color: kpmxState(m, s), behavior: "solid" });
+                }
+            }
+        }
+        function kpmxOpts(list, cur) {
+            return list.map(function (o) {
+                var v = Array.isArray(o) ? o[0] : o, l = Array.isArray(o) ? o[1] : o;
+                return "<option value='" + _kpEsc(String(v)) + "'" + (String(v) === String(cur) ? " selected" : "") + ">" + _kpEsc(String(l)) + "</option>";
+            }).join("");
+        }
+        function kpmxDots(m, N) {
+            var h = "<span class='kpmx-dots'>";
+            for (var s = 0; s < N; s++) {
+                var c = kpmxState(m, s);
+                h += "<i style='background:" + (c === "off" ? "transparent" : HEX[c]) + "'></i>";
+            }
+            return h + "</span>";
+        }
+        function kpmxRender(col, headHtml) {
+            if (!kp.mx) {
+                kp.mx = kpmxSeed(); kpmxApply(); kpSaveCfg();
+                /* the other pages drew the keypad before it became J1939 */
+                setTimeout(kpAfterKeypadChange, 0);
+            }
+            var mx = kp.mx, n = kp.model.rows * kp.model.cols;
+            var h = headHtml;
+            h += "<div class='kpb-sec'>Keypad setup</div><div class='kpmx-form'>" +
+                "<label for='kpmxBaud'>Bus baudrate</label><select id='kpmxBaud' class='kp-bus-in' data-mx='baud'>" +
+                    kpmxOpts(KPMX_BAUD.map(function (b) { return [b, b + "KBIT"]; }), mx.baud) + "</select>" +
+                "<label for='kpmxBl'>Backlight color</label><select id='kpmxBl' class='kp-bus-in' data-mx='backlight'>" +
+                    kpmxOpts(KPMX_BACKLIGHT.map(function (b) { return b[0]; }), mx.backlight) + "</select>" +
+                "<label for='kpmxBr'>Default brightness</label><input id='kpmxBr' class='kp-bus-in' type='number' min='0' max='63' data-mx='brightness' value='" + mx.brightness + "'>" +
+                "<label for='kpmxShow'>Startup LED show</label><select id='kpmxShow' class='kp-bus-in' data-mx='show'>" + kpmxOpts(KPMX_SHOW, mx.show) + "</select>" +
+                "</div>";
+            h += "<div class='kpb-sec'>Keypad settings</div><div class='kpmx-form'>" +
+                "<label for='kpmxModel'>Keypad</label><select id='kpmxModel' class='kp-bus-in' data-mx='model'>" +
+                MODELS.map(function (m) {
+                    return "<option value='" + m.id + "'" + (m.id === kp.model.id ? " selected" : "") + ">" + KPMX_MODELS[m.id] + " (" + m.name + ")</option>";
+                }).join("") + "</select></div>";
+
+            h += "<div class='kpb-sec'>Button settings</div><div class='kpmx-wrap'><table class='kpb-facts kpmx-keys'><thead><tr>" +
+                "<th>#</th><th>Description</th><th>Button steps</th><th>Keep state</th><th>Input function</th><th>Button state colors</th></tr></thead><tbody>";
+            for (var i = 0; i < n; i++) {
+                var m = mx.keys[i], off = m.steps === "UNUSED";
+                var N = m.steps === "MOMENTARY" ? 2 : off ? 0 : m.steps;
+                h += "<tr" + (off ? " class='off'" : "") + "><td class='k'>" + (i + 1) + "</td>" +
+                    "<td><input class='kp-bus-in' data-mx='desc' data-i='" + i + "' value='" + _kpEsc(m.desc) + "' aria-label='Button " + (i + 1) + " description'></td>" +
+                    "<td><select class='kp-bus-in' data-mx='steps' data-i='" + i + "' aria-label='Button " + (i + 1) + " steps'>" + kpmxOpts(KPMX_STEPS, m.steps) + "</select></td>" +
+                    "<td><select class='kp-bus-in' data-mx='keep' data-i='" + i + "' aria-label='Button " + (i + 1) + " keep state'" + (off ? " disabled" : "") + ">" + kpmxOpts(KPMX_KEEP, m.keep) + "</select></td>" +
+                    "<td><input class='kp-bus-in' list='kpmxFns' data-mx='fn' data-i='" + i + "' value='" + _kpEsc(m.fn) + "' aria-label='Button " + (i + 1) + " input function'" + (off ? " disabled" : "") + "></td>" +
+                    "<td style='white-space:nowrap'><select class='kp-bus-in' style='width:auto' data-mx='colors' data-i='" + i + "' aria-label='Button " + (i + 1) + " state colours'" + (off ? " disabled" : "") + ">" + kpmxOpts(KPMX_COLORS, m.colors) + "</select>" +
+                    (off || m.colors === "UNUSED" ? "" : kpmxDots(m, N)) + "</td></tr>";
+            }
+            h += "</tbody></table></div><datalist id='kpmxFns'>" + KPMX_FNS.map(function (f) { return "<option value='" + _kpEsc(f) + "'>"; }).join("") + "</datalist>";
+
+            /* What all of that means, said once, as facts. */
+            var used = mx.keys.slice(0, n).filter(function (m) { return m.steps !== "UNUSED"; });
+            var ecuLeds = used.some(function (m) { return m.colors !== "UNUSED"; });
+            var cnt = function (f) { return used.filter(f).length; };
+            var parts = [];
+            if (cnt(function (m) { return m.steps === "MOMENTARY"; })) parts.push(cnt(function (m) { return m.steps === "MOMENTARY"; }) + " momentary");
+            if (cnt(function (m) { return m.steps === 2; })) parts.push(cnt(function (m) { return m.steps === 2; }) + " on/off");
+            if (cnt(function (m) { return typeof m.steps === "number" && m.steps > 2; })) parts.push(cnt(function (m) { return typeof m.steps === "number" && m.steps > 2; }) + " multi-position");
+            h += "<div class='kpb-sec'>What Studio will set</div><table class='kpb-facts'><tbody>" +
+                "<tr><td class='k'>Keypad</td><td>J1939, address " + kpHex(kp.sa) + ", " + kp.baud + "k</td></tr>" +
+                "<tr><td class='k'>Dash</td><td>Listens at " + kp.baud + "k, same bus as the MaxxECU</td></tr>" +
+                "<tr><td class='k'>Buttons</td><td>" + (used.length ? used.length + " in use: " + parts.join(", ") : "None in use yet") + "</td></tr>" +
+                "<tr><td class='k'>Rings</td><td>" + (ecuLeds ? "Lit by the MaxxECU, so Studio and the dash leave them alone" : "Not used by the MaxxECU") + "</td></tr>" +
+                "<tr><td class='k'>Backlight</td><td>" + (kp.blBright ? kp.blColor.charAt(0).toUpperCase() + kp.blColor.slice(1) : "Off") + "</td></tr>" +
+                "<tr><td class='k'>Brightness</td><td>" + kpfxPct(kp.ledBright) + "</td></tr>" +
+                "<tr><td class='k'>At power-up</td><td>" + (["Nothing", "Its own full show", "A quick flash"][kp.startShow] || "Nothing") + "</td></tr>" +
+                "</tbody></table>" +
+                "<div class='kpmx-go'><button class='kpb-act red' onclick='kpwOpen()'>Set it up for me</button>" +
+                "<button class='kpb-act ghost' onclick='kpwMxTestOpen()'>Check the buttons</button></div>";
+            col.innerHTML = h;
+            col.querySelectorAll("[data-mx]").forEach(function (el) {
+                el.addEventListener("change", function () {
+                    var f = el.getAttribute("data-mx"), i = el.getAttribute("data-i"), v = el.value;
+                    kpUndoPush("a MaxxECU setting");
+                    if (f === "model") {
+                        kp.model = kpModelOf(v);
+                        if (kp.selected >= kp.model.rows * kp.model.cols) kp.selected = 0;
+                        if (!kp.name || MODELS.some(function (x) { return x.name === kp.name; })) kp.name = kp.model.name;
+                    } else if (i != null) {
+                        var m = kp.mx.keys[+i];
+                        if (f === "steps") m.steps = /^\d+$/.test(v) ? +v : v;
+                        else if (f === "fn") { m.fn = v.trim().toUpperCase(); if (!m.desc && m.fn) m.desc = m.fn.split(/[,(]/)[0].trim(); }
+                        else m[f] = v;
+                    } else if (f === "baud") kp.mx.baud = +v;
+                    else if (f === "brightness") kp.mx.brightness = Math.max(0, Math.min(63, Math.round(+v) || 0));
+                    else kp.mx[f] = v;
+                    kpmxApply(); kpSaveCfg(); kpAfterKeypadChange();
+                });
+            });
+        }
+
         /* The ECU page. What used to be a rail dropdown plus a paragraph, plus
            a second copy of the same explanation inside every key's inspector,
            plus a modal. One page, one table. */
@@ -12448,6 +13359,12 @@
                 }).join("") +
                 "</select>" +
                 "<div class='kp-bus-note' style='margin-top:8px'>" + _kpEcuLine(b) + "</div>";
+            col.classList.toggle("kpmx", kp.ecuBrand === "maxxecu");
+            if (kp.ecuBrand === "maxxecu") {
+                h = h.replace(_kpEcuLine(b), "Copy each value across from MTune, CAN Bus &#8250; CAN Keypad.");
+                kpmxRender(col, h);
+                return;
+            }
 
             /* The frame, as a table. This is the whole of what an ECU
                integrator needs from us, and it was previously five sentences
@@ -12512,7 +13429,10 @@
            where LIBRARY / LIVE / ANALYSE / DRIFT need no numbering either. */
         var KP_SECS = [
             { id: "design",     label: "Design",     view: "kpViewDesign" },
-            { id: "show",       label: "Lights",     view: "kpViewShow" },
+            /* "Start-up", not "Lights": what this page makes is what the keypad
+               does when the ignition comes on, and "Lights" read as a colour
+               editor. The id stays "show" so saved views still land here. */
+            { id: "show",       label: "Start-up",   view: "kpViewShow" },
             { id: "connection", label: "Connection", view: "kpViewConnection" },
             { id: "ecu",        label: "ECU",        view: "kpViewEcu" }
         ];
@@ -12602,8 +13522,10 @@
                        kind of duplication this pass exists to remove. */
                     break;
                 case "show":
-                    name = "Lights";
-                    meta = kpfxHeadMeta();
+                    name = "Start-up";
+                    meta = kpfxEcuOwns()
+                        ? "at ignition: " + kpfxStartupDef(kp.startShow).name.toLowerCase() + ", then the MaxxECU lights the rings"
+                        : kpfxHeadMeta();
                     break;
                 case "ecu":
                     name = "ECU";
@@ -12727,7 +13649,12 @@
                     (kpIsJ() ? "0x21" : "0x15") + " and there is no way to tell them apart.</div>";
             }
             h += "<div class='kpb-sec' style='margin-top:20px'>How it connects</div><div class='kp-buscards'>" +
-                KP_PRESETS.map(function (p) {
+                /* MaxxECU decides this: its keypad speaks J1939 at the ECU's
+                   rate. Offering the other cards here would only offer a way
+                   to break it. */
+                (kpmxOn()
+                ? "<button class='kp-bus-card on' onclick=\"kpSetView('ecu')\"><b>Your MaxxECU <i>&#10003;</i></b><span>J1939 at " + kp.baud + "k, from the ECU tab</span></button>"
+                : KP_PRESETS.map(function (p) {
                     var on = pm && pm.id === p.id;
                     /* only nudge toward the safe default when the user is on a CUSTOM
                        (unmatched) connection — never second-guess a deliberate valid
@@ -12735,7 +13662,7 @@
                     var isReco = ecu.id !== "generic" && p.id === reco && !pm;
                     return "<button class='kp-bus-card" + (on ? " on" : "") + "' onclick=\"kpApplyPreset('" + p.id + "')\" title='" + p.note + "'>" +
                         "<b>" + p.name + (on ? " <i>&#10003;</i>" : (isReco ? " <i class='kp-reco'>&#9733; suits " + ecu.name.split(" ")[0] + "</i>" : "")) + "</b><span>" + p.blurb + "</span></button>";
-                }).join("") + "</div>";
+                }).join("")) + "</div>";
             /* What that choice means, as labelled facts rather than prose. */
             h += "<table class='kpb-facts' style='margin-top:14px'><tbody>" +
                 "<tr><td class='k'>Protocol</td><td>" + (kpIsJ() ? "J1939" : "CANopen") + "</td></tr>" +
@@ -12743,7 +13670,7 @@
                 (kpIsJ() ? "<tr><td class='k'>Address</td><td class='mono'>" + kpHex(kp.sa) + "</td></tr>"
                          : "<tr><td class='k'>Node ID</td><td class='mono'>" + kpHex(kp.node) + "</td></tr>") +
                 "<tr><td class='k'>Keys frame</td><td class='mono'>" + kpFmtId(ids.keys, ids.ext) + "</td></tr>" +
-                (pm ? "" : "<tr><td class='k'>Preset</td><td>Custom, set under Advanced.</td></tr>") +
+                (pm || kpmxOn() ? "" : "<tr><td class='k'>Preset</td><td>Custom, set under Advanced.</td></tr>") +
                 "</tbody></table>";
             /* One action, and it is the wizard whenever a dash can do the job. */
             h += "<div class='kpb-sec'>Programme the keypad</div>";
@@ -12760,8 +13687,8 @@
                 "<button class='kpb-act ghost' style='margin-left:8px' onclick='kpExportDbc()'>DBC</button>" +
                 "<button class='kpb-act ghost' style='margin-left:8px' onclick='kpCopyProvision()'>Copy frames</button>" +
                 "<div class='kp-bus-note' style='margin-top:8px'>The CSV loads into SavvyCAN&#8217;s Send Frames. The DBC names every button and LED.</div>";
-            h += "<button class='kp-adv-toggle' style='margin-top:22px' onclick='kpToggleAdv()'>" + (kp._busAdv ? "&#9662;" : "&#9656;") + " Advanced</button>";
-            if (kp._busAdv) {
+            if (!kpmxOn()) h += "<button class='kp-adv-toggle' style='margin-top:22px' onclick='kpToggleAdv()'>" + (kp._busAdv ? "&#9662;" : "&#9656;") + " Advanced</button>";
+            if (kp._busAdv && !kpmxOn()) {
                 h += "<div class='kp-adv'>";
                 h += "<div class='kp-bus-row'><label>Protocol</label><div class='kp-seg2'>" +
                     "<button class='" + (!kpIsJ() ? "on" : "") + "' onclick=\"kpSetProto('canopen')\">CANopen</button>" +
@@ -12846,11 +13773,13 @@
             kpUpdateChip(); kpRenderInspector(); kpRenderStage();
         }
         window.kpSetProto = function (p) {
+            if (kpmxOn()) return;   /* the ECU tab decides, see kpmx* */
             kp.proto = p;
             if (p === "j1939" && [500, 250].indexOf(kp.baud) < 0) kp.baud = 250;
             kpBusChanged();
         };
         window.kpApplyPreset = function (id) {
+            if (kpmxOn()) return;   /* the ECU tab decides, see kpmx* */
             var p = null; KP_PRESETS.forEach(function (x) { if (x.id === id) p = x; });
             if (!p) return;
             kp.proto = p.proto; kp.baud = p.baud;

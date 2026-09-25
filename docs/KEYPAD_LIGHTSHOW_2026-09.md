@@ -6,7 +6,7 @@ reactions added 2026-09-03 (§1.2) — third shape in one day, see §7.
 came onto this page (§1.2, §1.3); the legends joined the show (§3.1); the
 keypad's own start-up show came out of hiding (§1.0); and **the dash plays the
 file** (§6), which is what the whole page was waiting for
-**Where:** RDM Studio → Keypad → **Lights**
+**Where:** RDM Studio → Keypad → **Start-up** (called Lights until 2026-09-25; see §1.4)
 **Code:** `src/tauri-overlay.html`, `kpfx*`, one contiguous block
 **Tests:** `tools/check_lightshow.js`
 **Decision:** ADR-0058 — *Render in colour the hardware does not have*, and its five addenda
@@ -136,6 +136,21 @@ Both panels read the levels as a **percentage**. The part stores 0-63; every
 other place in Studio that reports these — the wizard, the change list, the
 setup file's comments — already said "76%", and the rail was the only thing
 still showing "48".
+
+## 1.4 Start-up, and the key
+
+2026-09-25. The tab was "Lights" and the preview looped, so the page read as a
+colour editor. It is **Start-up** now, and every pass of the preview begins
+with the key off: a dark beat ("Ignition off"), then the sequence from the top.
+**Turn the key** replaces From the top and does the same on demand. The row
+carries two labels, **Ignition on** at its left edge and **Normal use** where
+the steps hand over to the rest.
+
+With a MaxxECU lighting the rings (the ECU tab's MaxxECU page), the page is
+only the keypad's own start-up, MTune's STARTUP LED SHOW: the three choices,
+then "the MaxxECU lights the rings". No steps, no effects, nothing to send,
+because a second sender would only fight the ECU. An old boot on the dash is
+still found there so it can be forgotten.
 
 ## 2. What the hardware can actually do
 
