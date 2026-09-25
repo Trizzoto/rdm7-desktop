@@ -1946,13 +1946,28 @@
         .kpfx-mineadd button:hover { border-color: var(--gpb-ink); }
         .kpfx-railnote { font-size: 10.5px; color: var(--gpb-muted); line-height: 1.45; margin-top: 8px; }
         /* the inspector's own bits */
-        .kpfx-play { width: 100%; margin-bottom: 6px; }
-        /* "Put it on the dash" sits under Play and is the same size: they are
-           the same decision at two levels of commitment — play it now, or
-           leave it there. */
+        /* "Put it on the dash" is the page's one action; playing it live and
+           the files fold away under More. */
         .kpfx-todash { width: 100%; margin-bottom: 4px; }
         #kpWorkspace .kpfx-todash:disabled { opacity: 0.35; cursor: default; }
-        .kpfx-play.on { background: var(--gpb-red-600); border-color: var(--gpb-red-600); }
+        .kpfx-more { margin-top: 6px; }
+        .kpfx-more summary {
+            cursor: pointer; font-family: var(--gpb-head); font-weight: 600; font-size: 11px;
+            letter-spacing: 0.09em; text-transform: uppercase; color: var(--gpb-muted); padding: 4px 0;
+        }
+        .kpfx-more summary:hover { color: var(--gpb-ink); }
+        .kpfx-more summary:focus-visible { outline: 2px solid var(--gpb-red); outline-offset: 2px; }
+        .kpfx-more[open] summary { margin-bottom: 6px; }
+        #kpWorkspace .kp-keyacts button.on { background: var(--gpb-red-600); border-color: var(--gpb-red-600); color: #fff; }
+        /* what the car does at power-up, right now: the page's headline fact */
+        .kpfx-car {
+            margin-left: auto; padding: 3px 10px; border: 1px solid rgba(255,255,255,0.2); white-space: nowrap;
+            font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 600; font-size: 12.5px;
+            letter-spacing: 0.05em; text-transform: uppercase; color: rgba(233,235,237,0.6);
+        }
+        .kpfx-car:empty { display: none; }
+        .kpfx-car.ok { color: #52c46a; border-color: #52c46a; }
+        .kpfx-car.warn { color: #E0A24E; border-color: #E0A24E; }
         /* the 5-step flow strip under the keypad render (Design mode only) */
         .kp-steps { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 12px; }
         .kp-step { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); color: var(--text-muted); font-family: 'Sora', sans-serif; font-size: 10.5px; font-weight: 600; }
@@ -12078,7 +12093,9 @@
                 " title='" + kpfxEsc(kpfxCanStream() || "Read the real keypad's key frame through your dash, so pressing a key on the KEYPAD is what you see here") + "'>" +
                 (kpfxWatch.on ? "&#9673; Watching the keypad" : "&#9678; Watch the keypad") + "</button>" +
                 "<span class='kpfx-now' id='kpFxNow'></span>" +
-                "<span class='kpfx-lit' id='kpFxWatchLine'></span>";
+                "<span class='kpfx-lit' id='kpFxWatchLine'></span>" +
+                "<span class='kpfx-car' id='kpFxCar'></span>";
+            kpfxRenderCar();
         }
 
         /* ---- the sequence, laid out in time --------------------------------
@@ -12447,6 +12464,7 @@
         function kpfxRenderProps() {
             var box = document.getElementById("kpFxInsp");
             if (!box) return;
+            kpfxRenderCar();   /* an edit can make the car's copy out of date */
             var show = kpfxShow(), sel = kpfxSel(), h = "";
             if (kpfxOnStart()) { kpfxRenderStartProps(box, show); return; }
             if (kpfxOnRest()) { kpfxRenderRestProps(box, show); return; }
@@ -12771,32 +12789,38 @@
         }
 
         /* ---- send it ----------------------------------------------------------- */
+        window.kpfxMoreToggle = function (open) { kpfx._moreOpen = !!open; };
         function kpfxSendHtml() {
             var show = kpfxShow(), node = kp.node & 0x7F, baked = kpfxBakeBoot(show, node), peak = kpfxPeakRate(baked);
-            var why = kpfxCanStream();
+            var why = kpfxCanStream(), fits = kpfxDashFits(baked);
+            /* One button, because there is one thing to do: put it on the car.
+               Everything else (rehearse it live, files for a USB-CAN tool) is
+               for the rare day, and folds away under More. */
             return "<div class='kp-grp'><div class='kp-gt'>Send it</div>" +
-                "<button class='kpb-act red kpfx-play" + (kpfxLive.on ? " on" : "") + "'" + (why && !kpfxLive.on ? " disabled" : "") + " onclick='kpfxPlayLive()'>" +
-                (kpfxLive.on ? "Stop" : "Play it on the keypad") + "</button>" +
-                /* The one that makes the boot real: the tape goes ON the dash,
-                   and the dash plays it at every power-up with no laptop in
-                   the car. Everything above it is a rehearsal. */
-                "<button class='kpb-act kpfx-todash'" + (why || kpfxDashFits(baked) ? " disabled" : "") + " onclick='kpfxSendToDash()'" +
-                " title='" + kpfxEsc(why || kpfxDashFits(baked) || "Store this boot on the dash. It plays it at every power-up, with Studio shut.") + "'>" +
+                "<button class='kpb-act red kpfx-todash'" + (why || fits ? " disabled" : "") + " onclick='kpfxSendToDash()'" +
+                " title='" + kpfxEsc(why || fits || "Store this start-up on the dash. It plays it at every power-up, with Studio shut.") + "'>" +
                 "Put it on the dash</button>" +
+                /* the reason it cannot, said, not hidden in a tooltip */
+                ((why || fits) && !kpfxLive.on ? "<div class='kp-bus-note'>" + kpfxEsc(why || fits) + "</div>" : "") +
                 "<div class='kp-bus-note' id='kpFxDashLine'>" + kpfxEsc(kpfxDashLine()) + "</div>" +
                 /* only once there is something there to act on */
                 (kpfxDash.st && kpfxDash.st.present
                     ? "<div class='kp-keyacts'>" +
-                      "<button onclick='kpfxDashPlay()' title='Play the boot the dash is holding, now'>Play it there</button>" +
+                      "<button onclick='kpfxDashPlay()' title='Play the start-up the dash is holding, now'>Play it there</button>" +
                       "<button onclick='kpfxDashForget()' title='Remove it from the dash, so power-up does nothing'>Forget it</button></div>"
                     : "") +
+                "<details class='kpfx-more'" + (kpfx._moreOpen || kpfxLive.on ? " open" : "") +
+                " ontoggle='kpfxMoreToggle(this.open)'><summary>More</summary>" +
                 "<div class='kp-keyacts'>" +
-                "<button onclick='kpfxExportShow()' title='The boot as a small readable file.'>Save</button>" +
-                "<button onclick='kpfxImportClick()' title='Load a boot file saved from Studio.'>Load</button>" +
+                "<button class='" + (kpfxLive.on ? "on" : "") + "'" + (why && !kpfxLive.on ? " disabled" : "") + " onclick='kpfxPlayLive()'" +
+                " title='Stream it to the keypad now, through the dash, while Studio is open'>" + (kpfxLive.on ? "Stop" : "Play it live") + "</button>" +
+                "<button onclick='kpfxExportShow()' title='The start-up as a small readable file.'>Save</button>" +
+                "<button onclick='kpfxImportClick()' title='Load a start-up file saved from Studio.'>Load</button>" +
                 "<button onclick='kpfxExportFrames()' title='Every frame with its timing, for a USB-CAN tool.'>Frames</button></div>" +
-                "<div class='kp-bus-note' id='kpFxLiveLine'>" + (kpfxLive.on ? "" : kpfxEsc(why)) + "</div>" +
+                "<div class='kp-bus-note' id='kpFxLiveLine'></div>" +
                 "<div class='kp-bus-note'>" + baked.length + " frames &middot; busiest second " + peak +
                 (peak > KPFX_BUDGET ? " — over the dash's limit" : "") + " &middot; rings on " + kpHex(0x200 + node) + "</div>" +
+                "</details>" +
                 "<input type='file' id='kpFxFile' accept='.json,application/json' style='display:none' onchange='kpfxImportShow(event)'>" +
                 "</div>";
         }
@@ -12816,14 +12840,39 @@
             if (kpfxDash.err) return kpfxDash.err;
             var s = kpfxDash.st;
             if (!s) return "";
-            if (!s.present) return kpmxOwnsRings() ? "" : "No boot on the dash yet.";
+            if (!s.present) return kpfxEcuOwns() ? "" : "No boot on the dash yet.";
             /* A tape from before the MaxxECU took the rings still plays at
                every power-up, onto the ECU's bus. */
-            if (kpmxOwnsRings() && s.at_boot) return "The dash still plays an old boot at power-up. Forget it so only the MaxxECU lights the rings.";
+            if (kpfxEcuOwns() && s.at_boot) return "The dash still plays an old boot at power-up. Forget it so only the MaxxECU lights the rings.";
             return "On the dash: " + (s.frames || 0) + " frames" +
                 (s.keypad ? " for " + s.keypad : "") +
                 (s.at_boot ? ", played at every power-up" : ", but not at power-up") +
                 (s.reason ? " – " + s.reason : "");
+        }
+        /* The one fact this page is for, at the top of it: what the car does
+           at power-up right now. [text, state] where state is ok | warn | "". */
+        function kpfxCarLine() {
+            if (kpfxCanWatch()) return ["No dash connected", ""];
+            var s = kpfxDash.st;
+            if (!s) return ["", ""];
+            if (kpfxEcuOwns())
+                return s.present && s.at_boot ? ["The dash still plays an old start-up", "warn"] : ["", ""];
+            if (!s.present) return ["Not on the car yet", "warn"];
+            if (!s.at_boot) return ["On the dash, but not played at power-up", "warn"];
+            /* Only a frame count to compare, so only a difference is a fact:
+               equal counts could still be a different boot, and it says so
+               by not claiming anything either way. */
+            var here = kpfxBakeBoot(kpfxShow(), kp.node & 0x7F).length;
+            return s.frames && s.frames !== here
+                ? ["On the car: an older version of this", "warn"]
+                : ["On the car: plays at every power-up", "ok"];
+        }
+        function kpfxRenderCar() {
+            var el = document.getElementById("kpFxCar");
+            if (!el) return;
+            var c = kpfxCarLine();
+            el.textContent = c[0];
+            el.className = "kpfx-car" + (c[1] ? " " + c[1] : "");
         }
         /* Will the dash hold this one? "" if it will. */
         function kpfxDashFits(baked) {
@@ -12889,6 +12938,7 @@
             if (r.ok && r.body) { kpfxDash.st = r.body; kpfxDash.err = ""; }
             var el = document.getElementById("kpFxDashLine");
             if (el) el.textContent = kpfxDashLine();
+            kpfxRenderCar();
         }
         window.kpfxImportClick = function () { var el = document.getElementById("kpFxFile"); if (el) el.click(); };
 
